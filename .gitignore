@@ -1,0 +1,47 @@
+# --- Secrets ---------------------------------------------------------------
+# Real credentials live here (Neon password, Cloudinary keys). backend/.gitignore
+# already covers it; repeated at root as a second line of defence, because a single
+# accidental `git add -f` or a moved file is all it takes.
+application-local.yml
+**/application-local.yml
+.env
+.env.*
+!.env.example
+
+# Signing material — never commit these, even for debug builds.
+*.keystore
+*.jks
+*.p12
+*.pem
+key.properties
+
+# --- Build output ----------------------------------------------------------
+node_modules/
+dist/
+build/
+target/
+.gradle/
+local.properties
+*.apk
+*.aab
+
+# --- Expo / React Native ---------------------------------------------------
+.expo/
+.expo-shared/
+web-build/
+*.tsbuildinfo
+
+# --- Editors / OS ----------------------------------------------------------
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# --- Logs ------------------------------------------------------------------
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# --- Device debugging artefacts --------------------------------------------
+# uiautomator dumps captured while driving the emulator; not project files.
+dump*.xml

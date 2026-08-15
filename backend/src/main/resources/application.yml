@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: sarkaritaiyaari-backend
+
+  config:
+    import: optional:file:./application-local.yml
+
+  servlet:
+    multipart:
+      # Spring's 1MB default rejects ordinary exam artwork, and the overflow surfaces
+      # as an unmapped 500 rather than a readable error.
+      max-file-size: 5MB
+      max-request-size: 10MB
+
+  datasource:
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+      max-lifetime: 240000
+      idle-timeout: 120000
+      keepalive-time: 120000
+      connection-timeout: 20000
+      validation-timeout: 5000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+        # Without this, syncing N questions issues ~5 lazy-load queries per question
+        # (topic, subject, exams, translations, each translation's language) — against
+        # a remote Neon DB that's ~500+ round trips for ~112 rows. This batches those
+        # proxy/collection loads into `WHERE id IN (...)` chunks instead.
+        default_batch_fetch_size: 50
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: 8080

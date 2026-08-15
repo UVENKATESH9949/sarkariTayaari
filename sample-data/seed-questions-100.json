@@ -1,0 +1,407 @@
+[
+  {"correctAnswer":"A","topic":"Quantitative Aptitude","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"What is 25% of 80?","options":["20","15","18","24"],"explanation":"25% of 80 = (25/100) x 80 = 20."},
+    {"languageCode":"hi","questionText":"80 का 25% कितना है?","options":["20","15","18","24"],"explanation":"80 का 25% = (25/100) x 80 = 20।"}
+  ]},
+  {"correctAnswer":"B","topic":"Quantitative Aptitude","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Simplify: 12 + 8 x 2","options":["24","28","30","32"],"explanation":"By order of operations, multiply first: 8x2=16, then add: 12+16=28."},
+    {"languageCode":"hi","questionText":"12 + 8 x 2 को सरल करें।","options":["24","28","30","32"],"explanation":"पहले गुणा करें: 8x2=16, फिर जोड़ें: 12+16=28।"}
+  ]},
+  {"correctAnswer":"C","topic":"Quantitative Aptitude","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Find the average of 10, 20, 30 and 40.","options":["20","30","25","35"],"explanation":"Average = (10+20+30+40)/4 = 100/4 = 25."},
+    {"languageCode":"hi","questionText":"10, 20, 30 और 40 का औसत ज्ञात करें।","options":["20","30","25","35"],"explanation":"औसत = (10+20+30+40)/4 = 100/4 = 25।"}
+  ]},
+  {"correctAnswer":"D","topic":"Quantitative Aptitude","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"A pen costs Rs.15 and a notebook costs Rs.45. What is the total cost of 2 pens and 1 notebook?","options":["60","70","65","75"],"explanation":"2 pens = 2x15=30, 1 notebook=45, total = 30+45=75."},
+    {"languageCode":"hi","questionText":"एक पेन की कीमत ₹15 है और एक नोटबुक की कीमत ₹45 है। 2 पेन और 1 नोटबुक की कुल कीमत क्या होगी?","options":["60","70","65","75"],"explanation":"2 पेन = 2x15=30, 1 नोटबुक=45, कुल = 30+45=75।"}
+  ]},
+  {"correctAnswer":"A","topic":"Quantitative Aptitude","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"A shopkeeper buys an item for Rs.200 and sells it for Rs.250. Find the profit percentage.","options":["25%","20%","30%","35%"],"explanation":"Profit = 250-200=50, Profit% = (50/200)x100 = 25%."},
+    {"languageCode":"hi","questionText":"एक दुकानदार किसी वस्तु को ₹200 में खरीदता है और ₹250 में बेचता है। लाभ प्रतिशत ज्ञात करें।","options":["25%","20%","30%","35%"],"explanation":"लाभ = 250-200=50, लाभ% = (50/200)x100 = 25%।"}
+  ]},
+  {"correctAnswer":"B","topic":"Quantitative Aptitude","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Find the simple interest on Rs.1000 at 10% per annum for 2 years.","options":["100","200","150","250"],"explanation":"SI = (P x R x T)/100 = (1000x10x2)/100 = 200."},
+    {"languageCode":"hi","questionText":"₹1000 पर 10% वार्षिक दर से 2 वर्षों का साधारण ब्याज ज्ञात करें।","options":["100","200","150","250"],"explanation":"साधारण ब्याज = (मूलधन x दर x समय)/100 = (1000x10x2)/100 = 200।"}
+  ]},
+  {"correctAnswer":"C","topic":"Quantitative Aptitude","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"A train travels 300 km in 5 hours. Find its speed.","options":["50","55","60","65"],"explanation":"Speed = Distance/Time = 300/5 = 60 km/h."},
+    {"languageCode":"hi","questionText":"एक ट्रेन 5 घंटे में 300 किमी की यात्रा करती है। इसकी गति ज्ञात करें।","options":["50","55","60","65"],"explanation":"गति = दूरी/समय = 300/5 = 60 किमी/घंटा।"}
+  ]},
+  {"correctAnswer":"D","topic":"Quantitative Aptitude","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"In a class, the ratio of boys to girls is 4:5 and there are 36 students in total. Find the number of girls.","options":["16","18","24","20"],"explanation":"Total parts = 4+5=9, 1 part = 36/9=4, girls = 5x4=20."},
+    {"languageCode":"hi","questionText":"एक कक्षा में लड़कों और लड़कियों का अनुपात 4:5 है और कुल 36 छात्र हैं। लड़कियों की संख्या ज्ञात करें।","options":["16","18","24","20"],"explanation":"कुल भाग = 4+5=9, 1 भाग=36/9=4, लड़कियां=5x4=20।"}
+  ]},
+  {"correctAnswer":"A","topic":"Quantitative Aptitude","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"What is 3/4 of 96?","options":["72","64","68","76"],"explanation":"3/4 of 96 = (3/4)x96 = 72."},
+    {"languageCode":"hi","questionText":"96 का 3/4 भाग कितना है?","options":["72","64","68","76"],"explanation":"96 का 3/4 = (3/4)x96 = 72।"}
+  ]},
+  {"correctAnswer":"B","topic":"Quantitative Aptitude","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"A number increased by 20% becomes 60. Find the original number.","options":["45","50","48","55"],"explanation":"Original x 1.2 = 60, so original = 60/1.2 = 50."},
+    {"languageCode":"hi","questionText":"एक संख्या में 20% की वृद्धि करने पर वह 60 हो जाती है। मूल संख्या ज्ञात करें।","options":["45","50","48","55"],"explanation":"मूल संख्या x 1.2 = 60, इसलिए मूल संख्या = 60/1.2 = 50।"}
+  ]},
+  {"correctAnswer":"C","topic":"Quantitative Aptitude","difficulty":"hard","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Find the compound interest on Rs.2000 at 10% per annum for 2 years, compounded annually.","options":["400","410","420","430"],"explanation":"Amount = 2000x(1.1)^2 = 2420, CI = 2420-2000 = 420."},
+    {"languageCode":"hi","questionText":"₹2000 पर 10% वार्षिक दर से 2 वर्षों के लिए चक्रवृद्धि ब्याज ज्ञात करें (वार्षिक संयोजन)।","options":["400","410","420","430"],"explanation":"राशि = 2000x(1.1)^2 = 2420, ब्याज = 2420-2000 = 420।"}
+  ]},
+  {"correctAnswer":"D","topic":"Quantitative Aptitude","difficulty":"hard","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Two pipes can fill a tank in 4 hours and 6 hours respectively. How long will both take together?","options":["2","3","3.5","2.4"],"explanation":"Combined rate = 1/4+1/6 = 5/12 per hour, time = 12/5 = 2.4 hours."},
+    {"languageCode":"hi","questionText":"दो पाइप एक टैंक को क्रमशः 4 घंटे और 6 घंटे में भर सकते हैं। दोनों मिलकर कितने समय में टैंक भरेंगे?","options":["2","3","3.5","2.4"],"explanation":"दोनों की मिलाकर दर = 1/4+1/6 = 5/12 प्रति घंटा, समय = 12/5 = 2.4 घंटे।"}
+  ]},
+  {"correctAnswer":"C","topic":"Quantitative Aptitude","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"If x + 5 = 12, find x.","options":["6","8","7","5"],"explanation":"x = 12 - 5 = 7."},
+    {"languageCode":"hi","questionText":"यदि x + 5 = 12 है, तो x ज्ञात करें।","options":["6","8","7","5"],"explanation":"x = 12 - 5 = 7।"}
+  ]},
+  {"correctAnswer":"B","topic":"Quantitative Aptitude","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"What is 9 squared?","options":["63","81","72","90"],"explanation":"9 squared = 9x9 = 81."},
+    {"languageCode":"hi","questionText":"9 का वर्ग क्या है?","options":["63","81","72","90"],"explanation":"9 का वर्ग = 9x9 = 81।"}
+  ]},
+  {"correctAnswer":"B","topic":"Quantitative Aptitude","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"What is the square root of 144?","options":["11","12","13","10"],"explanation":"Square root of 144 is 12, since 12x12=144."},
+    {"languageCode":"hi","questionText":"144 का वर्गमूल क्या है?","options":["11","12","13","10"],"explanation":"144 का वर्गमूल 12 है, क्योंकि 12x12=144।"}
+  ]},
+  {"correctAnswer":"D","topic":"Quantitative Aptitude","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Rs.500 is divided between A and B in the ratio 2:3. Find B's share.","options":["250","350","200","300"],"explanation":"Total parts = 2+3=5, 1 part = 500/5=100, B's share = 3x100=300."},
+    {"languageCode":"hi","questionText":"₹500 की राशि A और B के बीच 2:3 के अनुपात में बांटी जाती है। B का हिस्सा ज्ञात करें।","options":["250","350","200","300"],"explanation":"कुल भाग = 2+3=5, 1 भाग=500/5=100, B का हिस्सा=3x100=300।"}
+  ]},
+  {"correctAnswer":"A","topic":"Quantitative Aptitude","difficulty":"hard","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"The average of 5 numbers is 20. If one number is removed, the average of the remaining 4 becomes 18. Find the removed number.","options":["28","24","26","30"],"explanation":"Sum of 5 numbers=100, sum of 4 numbers=72, removed number=100-72=28."},
+    {"languageCode":"hi","questionText":"5 संख्याओं का औसत 20 है। यदि एक संख्या हटा दी जाए, तो शेष 4 संख्याओं का औसत 18 हो जाता है। हटाई गई संख्या ज्ञात करें।","options":["28","24","26","30"],"explanation":"5 संख्याओं का योग=5x20=100, 4 संख्याओं का योग=4x18=72, हटाई गई संख्या=100-72=28।"}
+  ]},
+  {"correctAnswer":"B","topic":"Quantitative Aptitude","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"A car covers a distance in 4 hours at 50 km/h. What distance did it cover?","options":["180","200","190","210"],"explanation":"Distance = Speed x Time = 50x4=200 km."},
+    {"languageCode":"hi","questionText":"एक कार 50 किमी/घंटा की गति से 4 घंटे में कितनी दूरी तय करेगी?","options":["180","200","190","210"],"explanation":"दूरी = गति x समय = 50x4=200 किमी।"}
+  ]},
+  {"correctAnswer":"C","topic":"Quantitative Aptitude","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"What is 7 x 8?","options":["54","58","56","60"],"explanation":"7 x 8 = 56."},
+    {"languageCode":"hi","questionText":"7 x 8 कितना है?","options":["54","58","56","60"],"explanation":"7 x 8 = 56।"}
+  ]},
+  {"correctAnswer":"D","topic":"Quantitative Aptitude","difficulty":"hard","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"A is twice as old as B. Five years ago, A was three times as old as B. Find B's current age.","options":["8","12","15","10"],"explanation":"Let B=x, A=2x. Five years ago: 2x-5=3(x-5), which gives x=10. So B's age is 10."},
+    {"languageCode":"hi","questionText":"A की आयु B से दोगुनी है। 5 वर्ष पहले, A की आयु B से तीन गुना थी। B की वर्तमान आयु ज्ञात करें।","options":["8","12","15","10"],"explanation":"मान लीजिए B=x, A=2x। 5 वर्ष पहले: 2x-5=3(x-5), जिससे x=10 मिलता है। इसलिए B की आयु 10 वर्ष है।"}
+  ]},
+
+  {"correctAnswer":"A","topic":"Reasoning","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Find the odd one out.","options":["Carrot","Apple","Banana","Mango"],"explanation":"Carrot is a vegetable, while the others are fruits."},
+    {"languageCode":"hi","questionText":"विषम शब्द चुनें।","options":["गाजर","सेब","केला","आम"],"explanation":"गाजर एक सब्जी है, जबकि अन्य सभी फल हैं।"}
+  ]},
+  {"correctAnswer":"B","topic":"Reasoning","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Find the next number in the series: 5, 10, 15, 20, ?","options":["22","25","24","28"],"explanation":"Each number increases by 5: 20+5=25."},
+    {"languageCode":"hi","questionText":"श्रृंखला में अगली संख्या ज्ञात करें: 5, 10, 15, 20, ?","options":["22","25","24","28"],"explanation":"प्रत्येक संख्या में 5 जोड़ा जा रहा है: 20+5=25।"}
+  ]},
+  {"correctAnswer":"C","topic":"Reasoning","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"If A=1, B=2, C=3 and so on, what does E stand for?","options":["4","6","5","7"],"explanation":"E is the 5th letter of the alphabet."},
+    {"languageCode":"hi","questionText":"यदि A=1, B=2, C=3... तो E किसके बराबर है?","options":["4","6","5","7"],"explanation":"E वर्णमाला का 5वां अक्षर है।"}
+  ]},
+  {"correctAnswer":"D","topic":"Reasoning","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Find the odd one out.","options":["Circle","Square","Triangle","Red"],"explanation":"Red is a colour, while the others are shapes."},
+    {"languageCode":"hi","questionText":"विषम शब्द चुनें।","options":["वृत्त","वर्ग","त्रिभुज","लाल"],"explanation":"लाल एक रंग है, जबकि अन्य सभी आकृतियाँ हैं।"}
+  ]},
+  {"correctAnswer":"A","topic":"Reasoning","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Find the next number in the series: 3, 6, 12, 24, ?","options":["48","36","42","54"],"explanation":"Each number is double the previous one: 24x2=48."},
+    {"languageCode":"hi","questionText":"श्रृंखला में अगली संख्या ज्ञात करें: 3, 6, 12, 24, ?","options":["48","36","42","54"],"explanation":"प्रत्येक संख्या पिछली संख्या से दोगुनी है: 24x2=48।"}
+  ]},
+  {"correctAnswer":"B","topic":"Reasoning","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"If Monday is the 1st day, what day is the 10th day?","options":["Tuesday","Wednesday","Thursday","Friday"],"explanation":"Day 1=Monday, day 8=Monday, day 9=Tuesday, day 10=Wednesday."},
+    {"languageCode":"hi","questionText":"यदि सोमवार को पहला दिन माना जाए, तो 10वां दिन कौन सा होगा?","options":["मंगलवार","बुधवार","गुरुवार","शुक्रवार"],"explanation":"दिन 1=सोमवार, दिन 8=सोमवार, दिन 9=मंगलवार, दिन 10=बुधवार।"}
+  ]},
+  {"correctAnswer":"C","topic":"Reasoning","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Pointing to a boy, Rita said, 'He is the son of my mother's only daughter.' How is the boy related to Rita?","options":["Brother","Nephew","Son","Cousin"],"explanation":"My mother's only daughter is Rita herself, so the boy is Rita's son."},
+    {"languageCode":"hi","questionText":"एक लड़के की ओर इशारा करते हुए रीता कहती है, 'वह मेरी माँ की एकमात्र बेटी का बेटा है।' लड़के का रीता से क्या संबंध है?","options":["भाई","भांजा","बेटा","कज़िन"],"explanation":"माँ की एकमात्र बेटी रीता स्वयं है, इसलिए लड़का रीता का बेटा है।"}
+  ]},
+  {"correctAnswer":"D","topic":"Reasoning","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Find the missing number: 7, 14, 21, ?, 35","options":["26","27","29","28"],"explanation":"Each number increases by 7: 21+7=28."},
+    {"languageCode":"hi","questionText":"लुप्त संख्या ज्ञात करें: 7, 14, 21, ?, 35","options":["26","27","29","28"],"explanation":"प्रत्येक संख्या में 7 जोड़ा जा रहा है: 21+7=28।"}
+  ]},
+  {"correctAnswer":"A","topic":"Reasoning","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"If 'BOOK' is coded as 'CPPL', how is 'PEN' coded?","options":["QFO","QFP","PFO","QGO"],"explanation":"Each letter is shifted forward by 1: P->Q, E->F, N->O = QFO."},
+    {"languageCode":"hi","questionText":"यदि 'BOOK' को 'CPPL' के रूप में कोडित किया जाता है, तो 'PEN' को कैसे कोडित किया जाएगा?","options":["QFO","QFP","PFO","QGO"],"explanation":"प्रत्येक अक्षर को 1 आगे बढ़ाया गया है: P->Q, E->F, N->O = QFO।"}
+  ]},
+  {"correctAnswer":"B","topic":"Reasoning","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"A is the brother of B. B is the sister of C. C is the father of D. How is A related to D?","options":["Father","Uncle","Grandfather","Brother"],"explanation":"B and C are siblings, and C is D's father, so A (B's brother) is D's uncle."},
+    {"languageCode":"hi","questionText":"A, B का भाई है। B, C की बहन है। C, D का पिता है। A का D से क्या संबंध है?","options":["पिता","चाचा","दादा","भाई"],"explanation":"B और C भाई-बहन हैं, और C, D का पिता है, इसलिए A (B का भाई) D का चाचा है।"}
+  ]},
+  {"correctAnswer":"C","topic":"Reasoning","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Find the odd number: 2, 4, 6, 9","options":["2","4","9","6"],"explanation":"9 is the only odd number; the rest are even."},
+    {"languageCode":"hi","questionText":"विषम संख्या चुनें: 2, 4, 6, 9","options":["2","4","9","6"],"explanation":"9 एकमात्र विषम संख्या है, बाकी सम हैं।"}
+  ]},
+  {"correctAnswer":"D","topic":"Reasoning","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Complete the analogy: Doctor is to Hospital as Teacher is to ____?","options":["Hospital","Clinic","Office","School"],"explanation":"Just as a doctor works in a hospital, a teacher works in a school."},
+    {"languageCode":"hi","questionText":"सादृश्य पूरा करें: डॉक्टर का संबंध अस्पताल से है, जैसे शिक्षक का संबंध ____ से है।","options":["अस्पताल","क्लीनिक","कार्यालय","स्कूल"],"explanation":"जैसे डॉक्टर अस्पताल में काम करता है, वैसे ही शिक्षक स्कूल में काम करता है।"}
+  ]},
+  {"correctAnswer":"A","topic":"Reasoning","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Complete the series: 1, 4, 9, 16, ?","options":["25","20","23","27"],"explanation":"This is a series of squares: 1,4,9,16,25 (1x1,2x2,3x3,4x4,5x5)."},
+    {"languageCode":"hi","questionText":"श्रृंखला पूरी करें: 1, 4, 9, 16, ?","options":["25","20","23","27"],"explanation":"यह वर्गों की श्रृंखला है: 1,4,9,16,25 (1x1,2x2,3x3,4x4,5x5)।"}
+  ]},
+  {"correctAnswer":"B","topic":"Reasoning","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"If North becomes East, East becomes South, South becomes West and West becomes North, where does a person facing North end up facing?","options":["North","East","South","West"],"explanation":"A 90-degree clockwise rotation turns North into East."},
+    {"languageCode":"hi","questionText":"यदि उत्तर पूर्व बन जाए, पूर्व दक्षिण बन जाए, दक्षिण पश्चिम बन जाए और पश्चिम उत्तर बन जाए, तो उत्तर की ओर मुख किए व्यक्ति का मुख अब किस दिशा में होगा?","options":["उत्तर","पूर्व","दक्षिण","पश्चिम"],"explanation":"90 डिग्री दक्षिणावर्त घूमने पर उत्तर, पूर्व बन जाता है।"}
+  ]},
+  {"correctAnswer":"C","topic":"Reasoning","difficulty":"hard","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"If 'RAIN' is written as 'SBJO', how is 'SNOW' written?","options":["TPOX","SOPX","TOPX","TOPY"],"explanation":"Each letter is shifted forward by 1: S->T, N->O, O->P, W->X = TOPX."},
+    {"languageCode":"hi","questionText":"यदि 'RAIN' को 'SBJO' के रूप में लिखा जाता है, तो 'SNOW' को कैसे लिखा जाएगा?","options":["TPOX","SOPX","TOPX","TOPY"],"explanation":"प्रत्येक अक्षर को 1 आगे बढ़ाया गया है: S->T, N->O, O->P, W->X = TOPX।"}
+  ]},
+  {"correctAnswer":"D","topic":"Reasoning","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Find the odd one out.","options":["Delhi","Mumbai","Chennai","India"],"explanation":"India is a country, while the others are cities."},
+    {"languageCode":"hi","questionText":"विषम शब्द चुनें।","options":["दिल्ली","मुंबई","चेन्नई","भारत"],"explanation":"भारत एक देश है, जबकि अन्य सभी शहर हैं।"}
+  ]},
+  {"correctAnswer":"A","topic":"Reasoning","difficulty":"hard","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"A is taller than B but shorter than C. D is taller than C. Who is the tallest?","options":["D","A","B","C"],"explanation":"D is taller than C, and C is taller than A, so D is the tallest."},
+    {"languageCode":"hi","questionText":"A, B से लंबा है लेकिन C से छोटा है। D, C से लंबा है। सबसे लंबा कौन है?","options":["D","A","B","C"],"explanation":"D, C से लंबा है और C, A से लंबा है, इसलिए D सबसे लंबा है।"}
+  ]},
+  {"correctAnswer":"B","topic":"Reasoning","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"If 'FRIEND' is written as 'HTKGPF', how is 'CANDLE' written?","options":["ECPFNH","ECPFNG","DCPFNG","ECPGNG"],"explanation":"Each letter is shifted forward by 2: C->E, A->C, N->P, D->F, L->N, E->G = ECPFNG."},
+    {"languageCode":"hi","questionText":"यदि 'FRIEND' को 'HTKGPF' के रूप में लिखा जाता है, तो 'CANDLE' को कैसे लिखा जाएगा?","options":["ECPFNH","ECPFNG","DCPFNG","ECPGNG"],"explanation":"प्रत्येक अक्षर को 2 आगे बढ़ाया गया है: C->E, A->C, N->P, D->F, L->N, E->G = ECPFNG।"}
+  ]},
+  {"correctAnswer":"C","topic":"Reasoning","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Complete the series: A, C, E, G, ?","options":["H","J","I","K"],"explanation":"Every alternate letter is skipped: after A,C,E,G comes I."},
+    {"languageCode":"hi","questionText":"श्रृंखला पूरी करें: A, C, E, G, ?","options":["H","J","I","K"],"explanation":"प्रत्येक बार एक अक्षर छोड़ा जा रहा है: A,C,E,G के बाद I आता है।"}
+  ]},
+  {"correctAnswer":"D","topic":"Reasoning","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Find the odd one out.","options":["Rose","Lotus","Jasmine","Thorn"],"explanation":"Thorn is not a flower, while the others are flowers."},
+    {"languageCode":"hi","questionText":"विषम शब्द चुनें।","options":["गुलाब","कमल","चमेली","कांटा"],"explanation":"कांटा एक फूल नहीं है, जबकि बाकी सभी फूल हैं।"}
+  ]},
+
+  {"correctAnswer":"A","topic":"English","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Choose the correct synonym of 'Happy'.","options":["Joyful","Sad","Angry","Tired"],"explanation":"'Joyful' means feeling great happiness, similar to 'Happy'."},
+    {"languageCode":"hi","questionText":"'Happy' का समानार्थी शब्द चुनें।","options":["Joyful","Sad","Angry","Tired"],"explanation":"'Joyful' का अर्थ है बहुत खुश होना, जो 'Happy' के समान है।"}
+  ]},
+  {"correctAnswer":"B","topic":"English","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Choose the correct antonym of 'Big'.","options":["Large","Small","Huge","Tall"],"explanation":"'Small' means little in size, the opposite of 'Big'."},
+    {"languageCode":"hi","questionText":"'Big' का विलोम शब्द चुनें।","options":["Large","Small","Huge","Tall"],"explanation":"'Small' का अर्थ है छोटा, जो 'Big' का विलोम है।"}
+  ]},
+  {"correctAnswer":"C","topic":"English","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Choose the correctly spelled word.","options":["Recieve","Receeve","Receive","Receve"],"explanation":"'Receive' is the correct spelling."},
+    {"languageCode":"hi","questionText":"सही ढंग से लिखा गया शब्द चुनें।","options":["Recieve","Receeve","Receive","Receve"],"explanation":"'Receive' सही स्पेलिंग है।"}
+  ]},
+  {"correctAnswer":"D","topic":"English","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Choose the correct synonym of 'Quick'.","options":["Slow","Lazy","Late","Fast"],"explanation":"'Fast' means moving with speed, similar to 'Quick'."},
+    {"languageCode":"hi","questionText":"'Quick' का समानार्थी शब्द चुनें।","options":["Slow","Lazy","Late","Fast"],"explanation":"'Fast' का अर्थ है तेज़, जो 'Quick' के समान है।"}
+  ]},
+  {"correctAnswer":"A","topic":"English","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Choose the correct antonym of 'Ancient'.","options":["Modern","Old","Historic","Aged"],"explanation":"'Modern' means recent or current, the opposite of 'Ancient'."},
+    {"languageCode":"hi","questionText":"'Ancient' का विलोम शब्द चुनें।","options":["Modern","Old","Historic","Aged"],"explanation":"'Modern' का अर्थ है आधुनिक, जो 'Ancient' का विलोम है।"}
+  ]},
+  {"correctAnswer":"B","topic":"English","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"One-word substitution: 'A person who cannot read or write'.","options":["Literate","Illiterate","Educated","Scholar"],"explanation":"'Illiterate' means a person who cannot read or write."},
+    {"languageCode":"hi","questionText":"एक शब्द में बताएं: 'जो व्यक्ति पढ़ या लिख नहीं सकता'।","options":["Literate","Illiterate","Educated","Scholar"],"explanation":"'Illiterate' का अर्थ है वह व्यक्ति जो पढ़-लिख नहीं सकता।"}
+  ]},
+  {"correctAnswer":"C","topic":"English","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Choose the correct meaning of the idiom 'Break the ice'.","options":["To break something","To end a fight","To start a conversation","To feel cold"],"explanation":"'Break the ice' means to start a conversation, especially with strangers."},
+    {"languageCode":"hi","questionText":"मुहावरे 'Break the ice' का सही अर्थ चुनें।","options":["कुछ तोड़ना","लड़ाई खत्म करना","बातचीत शुरू करना","ठंड लगना"],"explanation":"'Break the ice' का अर्थ है बातचीत शुरू करना।"}
+  ]},
+  {"correctAnswer":"D","topic":"English","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Choose the correct synonym of 'Brave'.","options":["Fearful","Weak","Timid","Courageous"],"explanation":"'Courageous' means brave, similar to 'Brave'."},
+    {"languageCode":"hi","questionText":"'Brave' का समानार्थी शब्द चुनें।","options":["Fearful","Weak","Timid","Courageous"],"explanation":"'Courageous' का अर्थ है बहादुर, जो 'Brave' के समान है।"}
+  ]},
+  {"correctAnswer":"A","topic":"English","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Choose the correct antonym of 'Generous'.","options":["Stingy","Kind","Helpful","Caring"],"explanation":"'Stingy' means unwilling to give, the opposite of 'Generous'."},
+    {"languageCode":"hi","questionText":"'Generous' का विलोम शब्द चुनें।","options":["Stingy","Kind","Helpful","Caring"],"explanation":"'Stingy' का अर्थ है कंजूस, जो 'Generous' का विलोम है।"}
+  ]},
+  {"correctAnswer":"B","topic":"English","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Choose the correctly spelled word.","options":["Definately","Definitely","Definitly","Deffinitely"],"explanation":"'Definitely' is the correct spelling."},
+    {"languageCode":"hi","questionText":"सही ढंग से लिखा गया शब्द चुनें।","options":["Definately","Definitely","Definitly","Deffinitely"],"explanation":"'Definitely' सही स्पेलिंग है।"}
+  ]},
+  {"correctAnswer":"C","topic":"English","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Choose the correct synonym of 'Begin'.","options":["End","Stop","Start","Finish"],"explanation":"'Start' means to begin, similar to 'Begin'."},
+    {"languageCode":"hi","questionText":"'Begin' का समानार्थी शब्द चुनें।","options":["End","Stop","Start","Finish"],"explanation":"'Start' का अर्थ है शुरू करना, जो 'Begin' के समान है।"}
+  ]},
+  {"correctAnswer":"D","topic":"English","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"One-word substitution: 'A place where books are kept'.","options":["Museum","Gallery","Archive","Library"],"explanation":"'Library' means a place where books are kept."},
+    {"languageCode":"hi","questionText":"एक शब्द में बताएं: 'वह स्थान जहाँ किताबें रखी जाती हैं'।","options":["Museum","Gallery","Archive","Library"],"explanation":"'Library' का अर्थ है पुस्तकालय।"}
+  ]},
+  {"correctAnswer":"A","topic":"English","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Choose the correct antonym of 'Victory'.","options":["Defeat","Success","Win","Triumph"],"explanation":"'Defeat' means losing, the opposite of 'Victory'."},
+    {"languageCode":"hi","questionText":"'Victory' का विलोम शब्द चुनें।","options":["Defeat","Success","Win","Triumph"],"explanation":"'Defeat' का अर्थ है हार, जो 'Victory' का विलोम है।"}
+  ]},
+  {"correctAnswer":"B","topic":"English","difficulty":"hard","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Choose the correct meaning of the idiom 'Once in a blue moon'.","options":["Very often","Very rarely","Every month","At night"],"explanation":"'Once in a blue moon' means something that happens very rarely."},
+    {"languageCode":"hi","questionText":"मुहावरे 'Once in a blue moon' का सही अर्थ चुनें।","options":["बहुत बार","बहुत कम ही","हर महीने","रात में"],"explanation":"'Once in a blue moon' का अर्थ है बहुत कम ही।"}
+  ]},
+  {"correctAnswer":"C","topic":"English","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Choose the correct synonym of 'Enormous'.","options":["Tiny","Small","Huge","Little"],"explanation":"'Huge' means very large, similar to 'Enormous'."},
+    {"languageCode":"hi","questionText":"'Enormous' का समानार्थी शब्द चुनें।","options":["Tiny","Small","Huge","Little"],"explanation":"'Huge' का अर्थ है बहुत बड़ा, जो 'Enormous' के समान है।"}
+  ]},
+
+  {"correctAnswer":"A","topic":"General Awareness","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Who is known as the Father of the Nation in India?","options":["Mahatma Gandhi","Jawaharlal Nehru","Sardar Patel","Subhas Chandra Bose"],"explanation":"Mahatma Gandhi is known as the Father of the Nation in India."},
+    {"languageCode":"hi","questionText":"भारत के राष्ट्रपिता के रूप में किसे जाना जाता है?","options":["महात्मा गांधी","जवाहरलाल नेहरू","सरदार पटेल","सुभाष चंद्र बोस"],"explanation":"महात्मा गांधी को भारत का राष्ट्रपिता कहा जाता है।"}
+  ]},
+  {"correctAnswer":"B","topic":"General Awareness","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"What is the capital of India?","options":["Mumbai","New Delhi","Kolkata","Chennai"],"explanation":"New Delhi is the capital of India."},
+    {"languageCode":"hi","questionText":"भारत की राजधानी क्या है?","options":["मुंबई","नई दिल्ली","कोलकाता","चेन्नई"],"explanation":"नई दिल्ली भारत की राजधानी है।"}
+  ]},
+  {"correctAnswer":"C","topic":"General Awareness","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Which is the national bird of India?","options":["Sparrow","Eagle","Peacock","Parrot"],"explanation":"The peacock is the national bird of India."},
+    {"languageCode":"hi","questionText":"भारत का राष्ट्रीय पक्षी कौन सा है?","options":["गौरैया","बाज़","मोर","तोता"],"explanation":"मोर भारत का राष्ट्रीय पक्षी है।"}
+  ]},
+  {"correctAnswer":"D","topic":"General Awareness","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Which is the largest planet in the solar system?","options":["Earth","Mars","Saturn","Jupiter"],"explanation":"Jupiter is the largest planet in the solar system."},
+    {"languageCode":"hi","questionText":"सौरमंडल का सबसे बड़ा ग्रह कौन सा है?","options":["पृथ्वी","मंगल","शनि","बृहस्पति"],"explanation":"बृहस्पति सौरमंडल का सबसे बड़ा ग्रह है।"}
+  ]},
+  {"correctAnswer":"A","topic":"General Awareness","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Who wrote the Indian national anthem 'Jana Gana Mana'?","options":["Rabindranath Tagore","Bankim Chandra Chattopadhyay","Sarojini Naidu","Subramania Bharati"],"explanation":"Rabindranath Tagore wrote 'Jana Gana Mana'."},
+    {"languageCode":"hi","questionText":"भारत का राष्ट्रगान 'जन गण मन' किसने लिखा?","options":["रवींद्रनाथ टैगोर","बंकिम चंद्र चट्टोपाध्याय","सरोजिनी नायडू","सुब्रमण्य भारती"],"explanation":"रवींद्रनाथ टैगोर ने 'जन गण मन' लिखा।"}
+  ]},
+  {"correctAnswer":"B","topic":"General Awareness","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"What is the currency of India?","options":["Dollar","Indian Rupee","Pound","Euro"],"explanation":"The Indian Rupee is the currency of India."},
+    {"languageCode":"hi","questionText":"भारत की मुद्रा क्या है?","options":["डॉलर","भारतीय रुपया","पाउंड","यूरो"],"explanation":"भारतीय रुपया भारत की मुद्रा है।"}
+  ]},
+  {"correctAnswer":"C","topic":"General Awareness","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Which is the longest river in India?","options":["Yamuna","Godavari","Ganga","Brahmaputra"],"explanation":"The Ganga is the longest river in India."},
+    {"languageCode":"hi","questionText":"भारत की सबसे लंबी नदी कौन सी है?","options":["यमुना","गोदावरी","गंगा","ब्रह्मपुत्र"],"explanation":"गंगा भारत की सबसे लंबी नदी है।"}
+  ]},
+  {"correctAnswer":"D","topic":"General Awareness","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"In which year did India gain independence?","options":["1930","1942","1950","1947"],"explanation":"India gained independence in 1947."},
+    {"languageCode":"hi","questionText":"भारत को स्वतंत्रता किस वर्ष मिली?","options":["1930","1942","1950","1947"],"explanation":"भारत को 1947 में स्वतंत्रता मिली।"}
+  ]},
+  {"correctAnswer":"A","topic":"General Awareness","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Who was the first Prime Minister of India?","options":["Jawaharlal Nehru","Mahatma Gandhi","Sardar Patel","Rajendra Prasad"],"explanation":"Jawaharlal Nehru was the first Prime Minister of India."},
+    {"languageCode":"hi","questionText":"भारत के पहले प्रधानमंत्री कौन थे?","options":["जवाहरलाल नेहरू","महात्मा गांधी","सरदार पटेल","राजेंद्र प्रसाद"],"explanation":"जवाहरलाल नेहरू भारत के पहले प्रधानमंत्री थे।"}
+  ]},
+  {"correctAnswer":"B","topic":"General Awareness","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Which is the smallest state in India by area?","options":["Sikkim","Goa","Kerala","Tripura"],"explanation":"Goa is the smallest state in India by area."},
+    {"languageCode":"hi","questionText":"क्षेत्रफल के अनुसार भारत का सबसे छोटा राज्य कौन सा है?","options":["सिक्किम","गोवा","केरल","त्रिपुरा"],"explanation":"गोवा क्षेत्रफल के अनुसार भारत का सबसे छोटा राज्य है।"}
+  ]},
+  {"correctAnswer":"C","topic":"General Awareness","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"What is the national animal of India?","options":["Lion","Elephant","Tiger","Leopard"],"explanation":"The tiger is the national animal of India."},
+    {"languageCode":"hi","questionText":"भारत का राष्ट्रीय पशु कौन सा है?","options":["शेर","हाथी","बाघ","तेंदुआ"],"explanation":"बाघ भारत का राष्ट्रीय पशु है।"}
+  ]},
+  {"correctAnswer":"D","topic":"General Awareness","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Which gas do plants absorb from the atmosphere for photosynthesis?","options":["Oxygen","Nitrogen","Hydrogen","Carbon dioxide"],"explanation":"Plants absorb carbon dioxide from the atmosphere for photosynthesis."},
+    {"languageCode":"hi","questionText":"पौधे प्रकाश संश्लेषण के लिए वातावरण से कौन सी गैस अवशोषित करते हैं?","options":["ऑक्सीजन","नाइट्रोजन","हाइड्रोजन","कार्बन डाइऑक्साइड"],"explanation":"पौधे प्रकाश संश्लेषण के लिए कार्बन डाइऑक्साइड अवशोषित करते हैं।"}
+  ]},
+  {"correctAnswer":"A","topic":"General Awareness","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Who is known as the Missile Man of India?","options":["A.P.J. Abdul Kalam","Vikram Sarabhai","Homi Bhabha","C.V. Raman"],"explanation":"A.P.J. Abdul Kalam is known as the Missile Man of India."},
+    {"languageCode":"hi","questionText":"भारत के मिसाइल मैन के रूप में किसे जाना जाता है?","options":["ए.पी.जे. अब्दुल कलाम","विक्रम साराभाई","होमी भाभा","सी.वी. रामन"],"explanation":"ए.पी.जे. अब्दुल कलाम को भारत का मिसाइल मैन कहा जाता है।"}
+  ]},
+  {"correctAnswer":"B","topic":"General Awareness","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Which is the highest mountain peak in the world?","options":["K2","Mount Everest","Kangchenjunga","Nanga Parbat"],"explanation":"Mount Everest is the highest mountain peak in the world."},
+    {"languageCode":"hi","questionText":"विश्व की सबसे ऊंची पर्वत चोटी कौन सी है?","options":["के2","माउंट एवरेस्ट","कंचनजंगा","नंगा पर्वत"],"explanation":"माउंट एवरेस्ट विश्व की सबसे ऊंची पर्वत चोटी है।"}
+  ]},
+  {"correctAnswer":"C","topic":"General Awareness","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"What is the national flower of India?","options":["Rose","Sunflower","Lotus","Jasmine"],"explanation":"The lotus is the national flower of India."},
+    {"languageCode":"hi","questionText":"भारत का राष्ट्रीय फूल कौन सा है?","options":["गुलाब","सूरजमुखी","कमल","चमेली"],"explanation":"कमल भारत का राष्ट्रीय फूल है।"}
+  ]},
+  {"correctAnswer":"D","topic":"General Awareness","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Which is the largest continent by area?","options":["Africa","Europe","Australia","Asia"],"explanation":"Asia is the largest continent by area."},
+    {"languageCode":"hi","questionText":"क्षेत्रफल के अनुसार सबसे बड़ा महाद्वीप कौन सा है?","options":["अफ्रीका","यूरोप","ऑस्ट्रेलिया","एशिया"],"explanation":"एशिया क्षेत्रफल के अनुसार सबसे बड़ा महाद्वीप है।"}
+  ]},
+  {"correctAnswer":"A","topic":"General Awareness","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Who invented the telephone?","options":["Alexander Graham Bell","Thomas Edison","Nikola Tesla","James Watt"],"explanation":"Alexander Graham Bell invented the telephone."},
+    {"languageCode":"hi","questionText":"टेलीफोन का आविष्कार किसने किया?","options":["अलेक्जेंडर ग्राहम बेल","थॉमस एडिसन","निकोला टेस्ला","जेम्स वाट"],"explanation":"अलेक्जेंडर ग्राहम बेल ने टेलीफोन का आविष्कार किया।"}
+  ]},
+  {"correctAnswer":"B","topic":"General Awareness","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Which is the largest ocean in the world?","options":["Atlantic Ocean","Pacific Ocean","Indian Ocean","Arctic Ocean"],"explanation":"The Pacific Ocean is the largest ocean in the world."},
+    {"languageCode":"hi","questionText":"विश्व का सबसे बड़ा महासागर कौन सा है?","options":["अटलांटिक महासागर","प्रशांत महासागर","हिंद महासागर","आर्कटिक महासागर"],"explanation":"प्रशांत महासागर विश्व का सबसे बड़ा महासागर है।"}
+  ]},
+  {"correctAnswer":"C","topic":"General Awareness","difficulty":"hard","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"How many states are there in India (as commonly listed)?","options":["26","27","28","29"],"explanation":"India currently has 28 states."},
+    {"languageCode":"hi","questionText":"भारत में कुल कितने राज्य हैं (सामान्यतः)?","options":["26","27","28","29"],"explanation":"वर्तमान में भारत में 28 राज्य हैं।"}
+  ]},
+  {"correctAnswer":"D","topic":"General Awareness","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Which is the smallest planet in the solar system?","options":["Venus","Mars","Pluto","Mercury"],"explanation":"Mercury is the smallest planet in the solar system."},
+    {"languageCode":"hi","questionText":"सौरमंडल का सबसे छोटा ग्रह कौन सा है?","options":["शुक्र","मंगल","प्लूटो","बुध"],"explanation":"बुध सौरमंडल का सबसे छोटा ग्रह है।"}
+  ]},
+
+  {"correctAnswer":"A","topic":"Computer Knowledge","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"What does 'CPU' stand for?","options":["Central Processing Unit","Central Program Unit","Computer Processing Unit","Central Processor Utility"],"explanation":"CPU stands for Central Processing Unit."},
+    {"languageCode":"hi","questionText":"'CPU' का पूर्ण रूप क्या है?","options":["Central Processing Unit","Central Program Unit","Computer Processing Unit","Central Processor Utility"],"explanation":"CPU का पूर्ण रूप Central Processing Unit है।"}
+  ]},
+  {"correctAnswer":"B","topic":"Computer Knowledge","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"What does 'RAM' stand for?","options":["Read Access Memory","Random Access Memory","Random Active Memory","Rapid Access Memory"],"explanation":"RAM stands for Random Access Memory."},
+    {"languageCode":"hi","questionText":"'RAM' का पूर्ण रूप क्या है?","options":["Read Access Memory","Random Access Memory","Random Active Memory","Rapid Access Memory"],"explanation":"RAM का पूर्ण रूप Random Access Memory है।"}
+  ]},
+  {"correctAnswer":"C","topic":"Computer Knowledge","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Which key is used to delete a character to the left of the cursor?","options":["Delete","Enter","Backspace","Tab"],"explanation":"The Backspace key deletes the character to the left of the cursor."},
+    {"languageCode":"hi","questionText":"कर्सर के बाईं ओर के अक्षर को हटाने के लिए किस कुंजी का उपयोग किया जाता है?","options":["Delete","Enter","Backspace","Tab"],"explanation":"Backspace कुंजी कर्सर के बाईं ओर के अक्षर को हटाती है।"}
+  ]},
+  {"correctAnswer":"D","topic":"Computer Knowledge","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"What does 'WWW' stand for?","options":["World Wide Wire","Wide World Web","World Web Wide","World Wide Web"],"explanation":"WWW stands for World Wide Web."},
+    {"languageCode":"hi","questionText":"'WWW' का पूर्ण रूप क्या है?","options":["World Wide Wire","Wide World Web","World Web Wide","World Wide Web"],"explanation":"WWW का पूर्ण रूप World Wide Web है।"}
+  ]},
+  {"correctAnswer":"A","topic":"Computer Knowledge","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Which company developed the Windows operating system?","options":["Microsoft","Apple","Google","IBM"],"explanation":"Microsoft developed the Windows operating system."},
+    {"languageCode":"hi","questionText":"विंडोज ऑपरेटिंग सिस्टम किस कंपनी ने विकसित किया?","options":["Microsoft","Apple","Google","IBM"],"explanation":"माइक्रोसॉफ्ट ने विंडोज ऑपरेटिंग सिस्टम विकसित किया।"}
+  ]},
+  {"correctAnswer":"B","topic":"Computer Knowledge","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"What is the full form of 'URL'?","options":["Universal Resource Locator","Uniform Resource Locator","Uniform Resource Link","United Resource Locator"],"explanation":"URL stands for Uniform Resource Locator."},
+    {"languageCode":"hi","questionText":"'URL' का पूर्ण रूप क्या है?","options":["Universal Resource Locator","Uniform Resource Locator","Uniform Resource Link","United Resource Locator"],"explanation":"URL का पूर्ण रूप Uniform Resource Locator है।"}
+  ]},
+  {"correctAnswer":"C","topic":"Computer Knowledge","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Which of these is an input device?","options":["Monitor","Printer","Keyboard","Speaker"],"explanation":"The keyboard is an input device."},
+    {"languageCode":"hi","questionText":"इनमें से कौन सा एक इनपुट डिवाइस है?","options":["Monitor","Printer","Keyboard","Speaker"],"explanation":"कीबोर्ड एक इनपुट डिवाइस है।"}
+  ]},
+  {"correctAnswer":"D","topic":"Computer Knowledge","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"What does 'PDF' stand for?","options":["Personal Document File","Print Document Format","Portable Data Format","Portable Document Format"],"explanation":"PDF stands for Portable Document Format."},
+    {"languageCode":"hi","questionText":"'PDF' का पूर्ण रूप क्या है?","options":["Personal Document File","Print Document Format","Portable Data Format","Portable Document Format"],"explanation":"PDF का पूर्ण रूप Portable Document Format है।"}
+  ]},
+  {"correctAnswer":"A","topic":"Computer Knowledge","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Which shortcut key is used to copy selected text?","options":["Ctrl+C","Ctrl+V","Ctrl+X","Ctrl+Z"],"explanation":"Ctrl+C is used to copy selected text."},
+    {"languageCode":"hi","questionText":"चयनित टेक्स्ट को कॉपी करने के लिए किस शॉर्टकट कुंजी का उपयोग किया जाता है?","options":["Ctrl+C","Ctrl+V","Ctrl+X","Ctrl+Z"],"explanation":"Ctrl+C शॉर्टकट का उपयोग टेक्स्ट कॉपी करने के लिए किया जाता है।"}
+  ]},
+  {"correctAnswer":"B","topic":"Computer Knowledge","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"What does 'HTTP' stand for?","options":["HyperText Transmission Protocol","HyperText Transfer Protocol","High Text Transfer Protocol","HyperText Transfer Program"],"explanation":"HTTP stands for HyperText Transfer Protocol."},
+    {"languageCode":"hi","questionText":"'HTTP' का पूर्ण रूप क्या है?","options":["HyperText Transmission Protocol","HyperText Transfer Protocol","High Text Transfer Protocol","HyperText Transfer Program"],"explanation":"HTTP का पूर्ण रूप HyperText Transfer Protocol है।"}
+  ]},
+  {"correctAnswer":"C","topic":"Computer Knowledge","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Which of these is an output device?","options":["Keyboard","Mouse","Monitor","Scanner"],"explanation":"The monitor is an output device."},
+    {"languageCode":"hi","questionText":"इनमें से कौन सा एक आउटपुट डिवाइस है?","options":["Keyboard","Mouse","Monitor","Scanner"],"explanation":"मॉनिटर एक आउटपुट डिवाइस है।"}
+  ]},
+  {"correctAnswer":"D","topic":"Computer Knowledge","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"What is the full form of 'USB'?","options":["Universal System Bus","United Serial Bus","Universal Serial Byte","Universal Serial Bus"],"explanation":"USB stands for Universal Serial Bus."},
+    {"languageCode":"hi","questionText":"'USB' का पूर्ण रूप क्या है?","options":["Universal System Bus","United Serial Bus","Universal Serial Byte","Universal Serial Bus"],"explanation":"USB का पूर्ण रूप Universal Serial Bus है।"}
+  ]},
+  {"correctAnswer":"A","topic":"Computer Knowledge","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Which company developed the Android operating system?","options":["Google","Apple","Microsoft","Samsung"],"explanation":"Google developed the Android operating system."},
+    {"languageCode":"hi","questionText":"एंड्रॉइड ऑपरेटिंग सिस्टम किस कंपनी ने विकसित किया?","options":["Google","Apple","Microsoft","Samsung"],"explanation":"गूगल ने एंड्रॉइड ऑपरेटिंग सिस्टम विकसित किया।"}
+  ]},
+  {"correctAnswer":"B","topic":"Computer Knowledge","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"What does 'GB' stand for in computer storage?","options":["Gigabit","Gigabyte","Great Byte","General Byte"],"explanation":"GB stands for Gigabyte, a unit of digital storage."},
+    {"languageCode":"hi","questionText":"कंप्यूटर स्टोरेज में 'GB' का क्या अर्थ है?","options":["Gigabit","Gigabyte","Great Byte","General Byte"],"explanation":"GB का अर्थ है Gigabyte, जो डेटा मापने की एक इकाई है।"}
+  ]},
+  {"correctAnswer":"C","topic":"Computer Knowledge","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Which shortcut key is used to undo an action?","options":["Ctrl+Y","Ctrl+X","Ctrl+Z","Ctrl+A"],"explanation":"Ctrl+Z is used to undo an action."},
+    {"languageCode":"hi","questionText":"किसी कार्य को अनडू (पूर्ववत) करने के लिए किस शॉर्टकट कुंजी का उपयोग किया जाता है?","options":["Ctrl+Y","Ctrl+X","Ctrl+Z","Ctrl+A"],"explanation":"Ctrl+Z शॉर्टकट का उपयोग किसी कार्य को पूर्ववत करने के लिए किया जाता है।"}
+  ]},
+
+  {"correctAnswer":"A","topic":"General Science","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"What is the chemical symbol for water?","options":["H2O","CO2","O2","H2"],"explanation":"The chemical symbol for water is H2O."},
+    {"languageCode":"hi","questionText":"पानी का रासायनिक सूत्र क्या है?","options":["H2O","CO2","O2","H2"],"explanation":"पानी का रासायनिक सूत्र H2O है।"}
+  ]},
+  {"correctAnswer":"B","topic":"General Science","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Which organ pumps blood throughout the human body?","options":["Lungs","Heart","Kidney","Liver"],"explanation":"The heart pumps blood throughout the human body."},
+    {"languageCode":"hi","questionText":"मानव शरीर में रक्त पंप करने वाला अंग कौन सा है?","options":["फेफड़े","हृदय","किडनी","लिवर"],"explanation":"हृदय मानव शरीर में रक्त पंप करता है।"}
+  ]},
+  {"correctAnswer":"C","topic":"General Science","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"What is the SI unit of force?","options":["Joule","Pascal","Newton","Watt"],"explanation":"Newton is the SI unit of force."},
+    {"languageCode":"hi","questionText":"बल का SI मात्रक क्या है?","options":["जूल","पास्कल","न्यूटन","वाट"],"explanation":"न्यूटन बल का SI मात्रक है।"}
+  ]},
+  {"correctAnswer":"D","topic":"General Science","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Which gas is most abundant in Earth's atmosphere?","options":["Oxygen","Carbon Dioxide","Hydrogen","Nitrogen"],"explanation":"Nitrogen is the most abundant gas in Earth's atmosphere."},
+    {"languageCode":"hi","questionText":"पृथ्वी के वातावरण में सबसे अधिक मात्रा में कौन सी गैस पाई जाती है?","options":["ऑक्सीजन","कार्बन डाइऑक्साइड","हाइड्रोजन","नाइट्रोजन"],"explanation":"पृथ्वी के वातावरण में नाइट्रोजन सबसे अधिक मात्रा में पाई जाती है।"}
+  ]},
+  {"correctAnswer":"A","topic":"General Science","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"How many bones are there in an adult human body?","options":["206","200","210","220"],"explanation":"An adult human body has 206 bones."},
+    {"languageCode":"hi","questionText":"एक वयस्क मानव शरीर में कितनी हड्डियां होती हैं?","options":["206","200","210","220"],"explanation":"एक वयस्क मानव शरीर में 206 हड्डियां होती हैं।"}
+  ]},
+  {"correctAnswer":"B","topic":"General Science","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"What is the chemical symbol for gold?","options":["Ag","Au","Fe","Cu"],"explanation":"The chemical symbol for gold is Au."},
+    {"languageCode":"hi","questionText":"सोने का रासायनिक चिन्ह क्या है?","options":["Ag","Au","Fe","Cu"],"explanation":"सोने का रासायनिक चिन्ह Au है।"}
+  ]},
+  {"correctAnswer":"C","topic":"General Science","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Which part of the plant absorbs water from the soil?","options":["Leaves","Stem","Roots","Flower"],"explanation":"Roots absorb water from the soil."},
+    {"languageCode":"hi","questionText":"पौधे का कौन सा भाग मिट्टी से पानी अवशोषित करता है?","options":["पत्तियां","तना","जड़ें","फूल"],"explanation":"जड़ें मिट्टी से पानी अवशोषित करती हैं।"}
+  ]},
+  {"correctAnswer":"D","topic":"General Science","difficulty":"easy","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"What is the boiling point of water at sea level, in Celsius?","options":["90","95","110","100"],"explanation":"Water boils at 100 degrees Celsius at sea level."},
+    {"languageCode":"hi","questionText":"समुद्र तल पर पानी का क्वथनांक सेल्सियस में कितना होता है?","options":["90","95","110","100"],"explanation":"समुद्र तल पर पानी का क्वथनांक 100 डिग्री सेल्सियस होता है।"}
+  ]},
+  {"correctAnswer":"A","topic":"General Science","difficulty":"hard","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"Which blood group is known as the universal donor?","options":["O negative","O positive","AB negative","A positive"],"explanation":"O negative blood is known as the universal donor because it can be given to almost anyone."},
+    {"languageCode":"hi","questionText":"किस रक्त समूह को सार्वभौमिक दाता (universal donor) कहा जाता है?","options":["O negative","O positive","AB negative","A positive"],"explanation":"O negative रक्त समूह को सार्वभौमिक दाता कहा जाता है क्योंकि इसे लगभग किसी को भी दिया जा सकता है।"}
+  ]},
+  {"correctAnswer":"B","topic":"General Science","difficulty":"medium","examType":"SSC_CGL","translations":[
+    {"languageCode":"en","questionText":"What is the powerhouse of the cell called?","options":["Nucleus","Mitochondria","Ribosome","Golgi body"],"explanation":"Mitochondria are called the powerhouse of the cell because they produce energy."},
+    {"languageCode":"hi","questionText":"कोशिका का पावरहाउस किसे कहा जाता है?","options":["नाभिक","माइटोकॉन्ड्रिया","राइबोसोम","गॉल्जी बॉडी"],"explanation":"माइटोकॉन्ड्रिया को कोशिका का पावरहाउस कहा जाता है क्योंकि यह ऊर्जा उत्पन्न करता है।"}
+  ]}
+]

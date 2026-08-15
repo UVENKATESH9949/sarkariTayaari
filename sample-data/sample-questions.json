@@ -1,0 +1,122 @@
+[
+  {
+    "correctAnswer": "C",
+    "topic": "Quantitative Aptitude",
+    "difficulty": "easy",
+    "examType": "SSC_CGL",
+    "translations": [
+      {
+        "languageCode": "en",
+        "questionText": "What is 15% of 200?",
+        "options": ["20", "25", "30", "35"],
+        "explanation": "15% of 200 = (15/100) x 200 = 30."
+      },
+      {
+        "languageCode": "hi",
+        "questionText": "200 का 15% कितना है?",
+        "options": ["20", "25", "30", "35"],
+        "explanation": "200 का 15% = (15/100) x 200 = 30."
+      }
+    ]
+  },
+  {
+    "correctAnswer": "B",
+    "topic": "Quantitative Aptitude",
+    "difficulty": "medium",
+    "examType": "SSC_CGL",
+    "translations": [
+      {
+        "languageCode": "en",
+        "questionText": "If the ratio of two numbers is 3:5 and their sum is 96, find the smaller number.",
+        "options": ["30", "36", "40", "45"],
+        "explanation": "3+5=8 parts. Each part = 96/8 = 12. Smaller number = 3 x 12 = 36."
+      },
+      {
+        "languageCode": "hi",
+        "questionText": "यदि दो संख्याओं का अनुपात 3:5 है और उनका योग 96 है, तो छोटी संख्या ज्ञात करें।",
+        "options": ["30", "36", "40", "45"],
+        "explanation": "3+5=8 भाग। प्रत्येक भाग = 96/8 = 12। छोटी संख्या = 3 x 12 = 36।"
+      }
+    ]
+  },
+  {
+    "correctAnswer": "D",
+    "topic": "Reasoning",
+    "difficulty": "easy",
+    "examType": "IBPS_PO",
+    "translations": [
+      {
+        "languageCode": "en",
+        "questionText": "Find the odd one out: Dog, Cat, Lion, Table",
+        "options": ["Dog", "Cat", "Lion", "Table"],
+        "explanation": "Dog, Cat, and Lion are animals; Table is not."
+      },
+      {
+        "languageCode": "hi",
+        "questionText": "विषम शब्द चुनें: कुत्ता, बिल्ली, शेर, मेज़",
+        "options": ["कुत्ता", "बिल्ली", "शेर", "मेज़"],
+        "explanation": "कुत्ता, बिल्ली और शेर जानवर हैं; मेज़ नहीं है।"
+      }
+    ]
+  },
+  {
+    "correctAnswer": "C",
+    "topic": "Reasoning",
+    "difficulty": "medium",
+    "examType": "IBPS_PO",
+    "translations": [
+      {
+        "languageCode": "en",
+        "questionText": "Find the next number in the series: 2, 4, 8, 16, ?",
+        "options": ["24", "30", "32", "36"],
+        "explanation": "Each number is double the previous one: 16 x 2 = 32."
+      },
+      {
+        "languageCode": "hi",
+        "questionText": "श्रृंखला में अगली संख्या ज्ञात करें: 2, 4, 8, 16, ?",
+        "options": ["24", "30", "32", "36"],
+        "explanation": "प्रत्येक संख्या पिछली संख्या से दोगुनी है: 16 x 2 = 32।"
+      }
+    ]
+  },
+  {
+    "correctAnswer": "B",
+    "topic": "English",
+    "difficulty": "easy",
+    "examType": "RRB_NTPC",
+    "translations": [
+      {
+        "languageCode": "en",
+        "questionText": "Choose the correct synonym of 'Happy'.",
+        "options": ["Sad", "Joyful", "Angry", "Tired"],
+        "explanation": "'Joyful' means feeling or expressing great happiness, same as 'Happy'."
+      },
+      {
+        "languageCode": "hi",
+        "questionText": "'Happy' का सही समानार्थी (synonym) शब्द चुनें।",
+        "options": ["Sad", "Joyful", "Angry", "Tired"],
+        "explanation": "'Joyful' का अर्थ है बहुत खुश होना, जो 'Happy' के समान है।"
+      }
+    ]
+  },
+  {
+    "correctAnswer": "B",
+    "topic": "General Awareness",
+    "difficulty": "hard",
+    "examType": "SSC_CGL",
+    "translations": [
+      {
+        "languageCode": "en",
+        "questionText": "Who is known as the 'Iron Man of India'?",
+        "options": ["Jawaharlal Nehru", "Sardar Vallabhbhai Patel", "Mahatma Gandhi", "Subhas Chandra Bose"],
+        "explanation": "Sardar Vallabhbhai Patel is known as the 'Iron Man of India' for unifying princely states after independence."
+      },
+      {
+        "languageCode": "hi",
+        "questionText": "भारत के 'लौह पुरुष' के रूप में किसे जाना जाता है?",
+        "options": ["जवाहरलाल नेहरू", "सरदार वल्लभभाई पटेल", "महात्मा गांधी", "सुभाष चंद्र बोस"],
+        "explanation": "सरदार वल्लभभाई पटेल को स्वतंत्रता के बाद रियासतों को एकीकृत करने के लिए 'लौह पुरुष' कहा जाता है।"
+      }
+    ]
+  }
+]

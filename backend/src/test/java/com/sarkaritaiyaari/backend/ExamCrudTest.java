@@ -1,0 +1,112 @@
+package com.sarkaritaiyaari.backend;
+
+import com.sarkaritaiyaari.backend.dto.ExamRequest;
+import com.sarkaritaiyaari.backend.dto.ExamResponse;
+import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class ExamCrudTest extends AbstractIntegrationTest {
+
+    @Test
+    void createThenGet_returnsSameData() {
+        ExamResponse created = createExam("CRUD_TEST_EXAM", "CRUD Test Exam", true, 50);
+
+        ResponseEntity<ExamResponse> response =
+                restTemplate.getForEntity("/api/exams/" + created.getCode(), ExamResponse.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().getName()).isEqualTo("CRUD Test Exam");
+        assertThat(response.getBody().isActive()).isTrue();
+    }
+
+    @Test
+    void listActive_onlyIncludesActiveExams() {
+        createExam("CRUD_ACTIVE_EXAM", "Active", true, 51);
+        createExam("CRUD_INACTIVE_EXAM", "Inactive", false, 52);
+
+        ResponseEntity<ExamResponse[]> response = restTemplate.getForEntity("/api/exams", ExamResponse[].class);
+        List<String> codes = Arrays.stream(response.getBody()).map(ExamResponse::getCode).toList();
+
+        assertThat(codes).contains("CRUD_ACTIVE_EXAM");
+        assertThat(codes).doesNotContain("CRUD_INACTIVE_EXAM");
+    }
+
+    @Test
+    void listAll_includesInactiveExams() {
+        createExam("CRUD_ALL_INACTIVE_EXAM", "Inactive", false, 53);
+
+        ResponseEntity<ExamResponse[]> response = restTemplate.getForEntity("/api/exams/all", ExamResponse[].class);
+        List<String> codes = Arrays.stream(response.getBody()).map(ExamResponse::getCode).toList();
+
+        assertThat(codes).contains("CRUD_ALL_INACTIVE_EXAM");
+    }
+
+    @Test
+    void update_changesFields() {
+        ExamResponse created = createExam("CRUD_UPDATE_EXAM", "Original", false, 54);
+
+        ExamRequest update = new ExamRequest();
+        update.setCode(created.getCode());
+        update.setName("Updated Name");
+        update.setActive(true);
+        update.setDisplayOrder(55);
+
+        ResponseEntity<ExamResponse> response = restTemplate.exchange(
+                "/api/exams/" + created.getCode(), HttpMethod.PUT, new HttpEntity<>(update), ExamResponse.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().getName()).isEqualTo("Updated Name");
+        assertThat(response.getBody().isActive()).isTrue();
+    }
+
+    @Test
+    void delete_removesExam() {
+        ExamRequest request = new ExamRequest();
+        request.setCode("CRUD_DELETE_EXAM");
+        request.setName("To Delete");
+        request.setActive(false);
+        request.setDisplayOrder(56);
+        restTemplate.postForEntity("/api/exams", request, ExamResponse.class);
+
+        restTemplate.delete("/api/exams/CRUD_DELETE_EXAM");
+
+        ResponseEntity<ExamResponse> response = restTemplate.getForEntity("/api/exams/CRUD_DELETE_EXAM", ExamResponse.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void duplicateCode_returns400() {
+        createExam("CRUD_DUP_EXAM", "First", false, 57);
+
+        ExamRequest duplicate = new ExamRequest();
+        duplicate.setCode("CRUD_DUP_EXAM");
+        duplicate.setName("Second");
+        duplicate.setActive(false);
+        duplicate.setDisplayOrder(58);
+
+        ResponseEntity<Map> response = restTemplate.postForEntity("/api/exams", duplicate, Map.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    private ExamResponse createExam(String code, String name, boolean active, int displayOrder) {
+        ExamRequest request = new ExamRequest();
+        request.setCode(code);
+        request.setName(name);
+        request.setActive(active);
+        request.setDisplayOrder(displayOrder);
+
+        ResponseEntity<ExamResponse> response = restTemplate.postForEntity("/api/exams", request, ExamResponse.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        createdExamCodes.add(response.getBody().getCode());
+        return response.getBody();
+    }
+}

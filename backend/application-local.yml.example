@@ -1,0 +1,10 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://<your-neon-host>/<your-db-name>?sslmode=require
+    username: <your-neon-username>
+    password: <your-neon-password>
+
+cloudinary:
+  cloud-name: FILL_ME_IN
+  api-key: FILL_ME_IN
+  api-secret: FILL_ME_IN

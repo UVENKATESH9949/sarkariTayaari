@@ -1,0 +1,48 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1786519706705,
+      "tag": "0000_happy_ser_duncan",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1786521949256,
+      "tag": "0001_striped_scarlet_spider",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1786606015482,
+      "tag": "0002_noisy_riptide",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1786790433757,
+      "tag": "0003_lying_revanche",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1786794537515,
+      "tag": "0004_perfect_micromacro",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1786802132152,
+      "tag": "0005_aromatic_supernaut",
+      "breakpoints": true
+    }
+  ]
+}
