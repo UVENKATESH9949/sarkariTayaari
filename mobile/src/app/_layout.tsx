@@ -9,6 +9,7 @@ import { SyncBanner } from "../sync/SyncBanner";
 import { SessionHistoryProvider } from "../practice/sessionHistory";
 import { BookmarksProvider } from "../practice/bookmarks";
 import { AppLanguageProvider } from "../practice/appLanguage";
+import { AuthProvider } from "../practice/authContext";
 
 export default function RootLayout() {
   const { success, error } = useMigrations(db, migrations);
@@ -31,13 +32,17 @@ export default function RootLayout() {
 
   return (
     <SyncProvider>
-      <SessionHistoryProvider>
-        <BookmarksProvider>
-          <AppLanguageProvider>
-            <RootNavigator />
-          </AppLanguageProvider>
-        </BookmarksProvider>
-      </SessionHistoryProvider>
+      {/* Outside SessionHistory/Bookmarks: signing in restores history into SQLite,
+          which those providers then read on their own next load. */}
+      <AuthProvider>
+        <SessionHistoryProvider>
+          <BookmarksProvider>
+            <AppLanguageProvider>
+              <RootNavigator />
+            </AppLanguageProvider>
+          </BookmarksProvider>
+        </SessionHistoryProvider>
+      </AuthProvider>
     </SyncProvider>
   );
 }
@@ -54,6 +59,7 @@ function RootNavigator() {
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="revise" options={{ title: "Revise" }} />
+        <Stack.Screen name="account" options={{ title: "Your account" }} />
       </Stack>
       <SyncBanner />
     </>

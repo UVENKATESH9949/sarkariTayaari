@@ -217,6 +217,23 @@ export const syncMeta = sqliteTable("sync_meta", {
   resumeStartedAt: integer("resume_started_at", { mode: "timestamp_ms" }),
 });
 
+/**
+ * The signed-in session. Single row, keyed "current".
+ *
+ * Kept in app-private SQLite rather than expo-secure-store to avoid adding a native
+ * module mid-stream. Android app storage is already sandboxed from other apps, which is
+ * adequate for a token that only grants access to a student's own practice history —
+ * but SecureStore is the right upgrade before anything more sensitive lives here.
+ */
+export const authSession = sqliteTable("auth_session", {
+  key: text("key").primaryKey(),
+  token: text("token").notNull(),
+  userId: text("user_id").notNull(),
+  email: text("email").notNull(),
+  displayName: text("display_name"),
+  expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
+});
+
 // Local-only — which exam(s) the user is preparing for. Feeds Home's
 // "Preparing for <exam>" card and a future countdown-to-exam-date feature.
 export const followedExams = sqliteTable("followed_exams", {
@@ -239,8 +256,14 @@ export const practiceSessions = sqliteTable(
     levelLabel: text("level_label").notNull(),
     correctCount: integer("correct_count").notNull(),
     totalCount: integer("total_count").notNull(),
+    // false until this session has been accepted by the server. Written locally first
+    // and uploaded afterwards, so finishing a session never waits on the network.
+    isSynced: integer("is_synced", { mode: "boolean" }).notNull().default(false),
   },
-  (table) => [index("idx_practice_sessions_completed_at").on(table.completedAt)],
+  (table) => [
+    index("idx_practice_sessions_completed_at").on(table.completedAt),
+    index("idx_practice_sessions_is_synced").on(table.isSynced),
+  ],
 );
 
 // One row per question answered in a session — the per-question detail shown
@@ -284,8 +307,12 @@ export const mockTestAttempts = sqliteTable(
     wrongCount: integer("wrong_count").notNull(),
     unattemptedCount: integer("unattempted_count").notNull(),
     totalQuestions: integer("total_questions").notNull(),
+    isSynced: integer("is_synced", { mode: "boolean" }).notNull().default(false),
   },
-  (table) => [index("idx_mock_test_attempts_completed_at").on(table.completedAt)],
+  (table) => [
+    index("idx_mock_test_attempts_completed_at").on(table.completedAt),
+    index("idx_mock_test_attempts_is_synced").on(table.isSynced),
+  ],
 );
 
 // One row per question in a mock test attempt — selectedIndex is nullable

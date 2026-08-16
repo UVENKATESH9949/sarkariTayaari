@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
+import { useAuth } from "./authContext";
 import type { ReactNode } from "react";
 import {
   clearAllSessions,
@@ -39,10 +40,13 @@ export function useSessionHistory() {
  */
 export function SessionHistoryProvider({ children }: { children: ReactNode }) {
   const [sessions, setSessions] = useState<SessionRecord[]>([]);
+  // Signing in restores history into SQLite after this provider has already loaded.
+  // Without re-reading, a student signs in on a new phone and still sees nothing.
+  const { progressVersion } = useAuth();
 
   useEffect(() => {
     loadSessions().then(setSessions);
-  }, []);
+  }, [progressVersion]);
 
   const addSession = (session: SessionRecord) => {
     setSessions((prev) => [session, ...prev].slice(0, MAX_SESSIONS));

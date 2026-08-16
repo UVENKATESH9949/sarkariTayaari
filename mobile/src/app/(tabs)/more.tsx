@@ -1,11 +1,15 @@
 import { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { Alert, Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
+import { useAuth } from "../../practice/authContext";
 import { useSessionHistory } from "../../practice/sessionHistory";
 import { LANGUAGES, useAppLanguage } from "../../practice/appLanguage";
 import { LanguagePickerModal } from "../../practice/LanguagePickerModal";
 
 export default function More() {
+  const router = useRouter();
+  const { user } = useAuth();
   const { clearSessions } = useSessionHistory();
   const { defaultLanguageCode, setDefaultLanguageCode } = useAppLanguage();
   const [languagePickerVisible, setLanguagePickerVisible] = useState(false);
@@ -26,6 +30,24 @@ export default function More() {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>More</Text>
+
+      <Text style={styles.sectionTitle}>Account</Text>
+      <View style={styles.card}>
+        <Pressable style={styles.row} onPress={() => router.push("/account")}>
+          <View style={styles.rowIconCircle}>
+            <Ionicons name={user ? "person-circle-outline" : "cloud-upload-outline"} size={18} color="#1a2b4a" />
+          </View>
+          <View style={styles.rowInfo}>
+            <Text style={styles.rowLabel}>{user ? "Your account" : "Save your progress"}</Text>
+            <Text style={styles.rowValue}>
+              {user
+                ? user.email
+                : "Not signed in — progress is only on this phone"}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#c7cee0" />
+        </Pressable>
+      </View>
 
       <Text style={styles.sectionTitle}>Preferences</Text>
       <View style={styles.card}>

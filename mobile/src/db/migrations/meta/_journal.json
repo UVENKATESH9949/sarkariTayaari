@@ -43,6 +43,13 @@
       "when": 1786802132152,
       "tag": "0005_aromatic_supernaut",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1786882699378,
+      "tag": "0006_good_christian_walker",
+      "breakpoints": true
     }
   ]
 }
