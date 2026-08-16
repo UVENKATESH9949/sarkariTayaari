@@ -11,6 +11,11 @@ offline, pulling only what changed on subsequent opens.
 | `admin/` | React 19, Vite | Content admin — questions, exams, structure, syllabus, reference data |
 | `mobile/` | Expo SDK 57, Expo Router, expo-sqlite + Drizzle | The app: Practice, Mock Test, Progress |
 
+**New to the project, or coming back after a break?** Start with
+[`system-design/`](system-design/) — plain-language notes on how the pieces fit
+together, what's in the database, how content reaches a phone, and which file to open
+when you want to change something.
+
 Detailed history, decisions and verification results live in
 [`offline-exam-app-requirements.md`](offline-exam-app-requirements.md) and
 [`reports/`](reports/). Current state and next steps are in
