@@ -34,6 +34,16 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
+        <!--
+            Password hashing only. Deliberately NOT spring-boot-starter-security: that
+            auto-configures a filter chain which locks down every existing endpoint by
+            default, breaking the admin app and the mobile sync. This module is just
+            the crypto utilities (BCrypt) with no auto-configuration.
+        -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-crypto</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>

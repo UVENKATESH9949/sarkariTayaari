@@ -43,6 +43,12 @@ server:
   port: 8080
 
 app:
+  auth:
+    # Long-lived deliberately: this is a study app people open daily, and forcing a
+    # re-login every few weeks is friction with no security benefit while tokens are
+    # revocable server-side.
+    token-ttl-days: 365
+
   # Folder served at /downloads — drop an APK in and it is immediately downloadable.
   # Relative to the backend module's directory. Deliberately outside src/ so builds are
   # never packaged into the jar.
