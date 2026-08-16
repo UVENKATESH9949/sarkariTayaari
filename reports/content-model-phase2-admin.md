@@ -62,9 +62,9 @@ This validator earns its keep for a specific reason: the backend's bean validati
 
 The credentials initially landed in `application-local.yml.example` — the shared template — rather than `application-local.yml`, the gitignored file the backend actually reads. Moved to the correct file and the template restored to placeholders.
 
-The value itself was also wrong: `api-secret` had been copied as `REDACTED@dqrxzbfdu`, which is the tail of a `CLOUDINARY_URL` (`cloudinary://<key>:<secret>@<cloud_name>`) rather than the secret alone, and `cloud-name` was set to the product-environment name. Cloudinary rejected this with `Invalid Signature`. Correct values confirmed via the ping endpoint: cloud name `dqrxzbfdu`, secret `REDACTED`.
+The value itself was also wrong. The `api-secret` had been copied as `<secret>@<cloud-name>` — the tail of a `CLOUDINARY_URL` (`cloudinary://<key>:<secret>@<cloud_name>`) rather than the secret on its own — and `cloud-name` had been set to the product-environment name instead of the actual cloud name. Cloudinary rejected that with `Invalid Signature`. The correct split was confirmed against Cloudinary's ping endpoint before changing any config.
 
-Because the real secret was briefly written into the template file, **rotating it in the Cloudinary dashboard is worth doing** even though this project root is not a git repository and it was never committed.
+**Rotate the Cloudinary secret.** It was briefly written into the template file, which is the file meant to be shared, and it appeared in an earlier revision of this report. Actual credential values are deliberately not recorded here — they belong only in `application-local.yml`, which is gitignored.
 
 ---
 
