@@ -107,6 +107,25 @@ The app talks to the backend over plain HTTP, so `usesCleartextTraffic` is enabl
 the `expo-build-properties` plugin. Move the backend to HTTPS and remove that before
 any public release.
 
+### Getting a build onto a phone
+
+Drop the APK into `backend/downloads/` and it is served immediately — no restart:
+
+```
+http://<your-lan-ip>:8080/downloads
+```
+
+Open that on the phone's browser and tap the build. It is served with the correct APK
+content type, so Android offers to install rather than just saving a file, and range
+requests are supported so a dropped download resumes.
+
+The phone must be on the same network as the backend, and the machine's firewall must
+allow inbound TCP 8080 — the same requirement as the app reaching the API at all.
+
+This is a development convenience only. For anything beyond your own testing, use
+Firebase App Distribution or Play internal testing, which handle versioning and update
+notifications.
+
 ---
 
 ## CI

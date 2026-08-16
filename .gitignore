@@ -24,6 +24,8 @@ target/
 local.properties
 *.apk
 *.aab
+# Build artefacts served over HTTP for device testing — never committed.
+downloads/
 
 # --- Expo / React Native ---------------------------------------------------
 .expo/
