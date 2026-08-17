@@ -10,6 +10,7 @@ import { SessionHistoryProvider } from "../practice/sessionHistory";
 import { BookmarksProvider } from "../practice/bookmarks";
 import { AppLanguageProvider } from "../practice/appLanguage";
 import { AuthProvider } from "../practice/authContext";
+import { STACK_SCREEN_OPTIONS } from "../ui/navigation";
 
 export default function RootLayout() {
   const { success, error } = useMigrations(db, migrations);
@@ -56,7 +57,7 @@ function RootNavigator() {
 
   return (
     <>
-      <Stack>
+      <Stack screenOptions={STACK_SCREEN_OPTIONS}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="revise" options={{ title: "Revise" }} />
         <Stack.Screen name="account" options={{ title: "Your account" }} />

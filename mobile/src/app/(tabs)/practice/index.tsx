@@ -4,6 +4,8 @@ import { useRouter } from "expo-router";
 import { Pressable, ScrollView, Text, TextInput, View, StyleSheet } from "react-native";
 import { getSyncedExams, type ExamOption } from "../../../db/practiceContent";
 import { useSyncStatus } from "../../../sync/SyncContext";
+import { PressableScale } from "../../../ui/PressableScale";
+import { FadeInItem } from "../../../ui/FadeInList";
 
 // Every exam here is real, locally-synced data — no hardcoded "coming soon" exams.
 // Adding a new exam on the backend makes it appear here automatically on next sync.
@@ -37,8 +39,8 @@ export default function Practice() {
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={styles.sectionLabel}>Recommended</Text>
-        <Pressable
-          style={({ pressed }) => [styles.allExamsCard, pressed && styles.allExamsCardPressed]}
+        <PressableScale
+          style={styles.allExamsCard}
           onPress={() => openSubjects("ALL", "All Government Exams")}
         >
           <View style={[styles.iconCircle, styles.allExamsIconCircle]}>
@@ -49,21 +51,22 @@ export default function Practice() {
             <Text style={styles.allExamsSubtitle}>Common Quant, Reasoning, English & GA content</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color="#c3cadb" />
-        </Pressable>
+        </PressableScale>
 
         <Text style={styles.sectionLabel}>Browse by exam</Text>
         <View style={styles.grid}>
-          {exams.map((exam) => (
-            <Pressable
-              key={exam.code}
-              onPress={() => openSubjects(exam.code, exam.name)}
-              style={({ pressed }) => [styles.examCard, pressed && styles.examCardPressed]}
-            >
-              <View style={styles.iconCircle}>
-                <Ionicons name="document-text-outline" size={24} color="#1a2b4a" />
-              </View>
-              <Text style={styles.examLabel}>{exam.name}</Text>
-            </Pressable>
+          {exams.map((exam, index) => (
+            <FadeInItem key={exam.code} index={index}>
+              <PressableScale
+                onPress={() => openSubjects(exam.code, exam.name)}
+                style={styles.examCard}
+              >
+                <View style={styles.iconCircle}>
+                  <Ionicons name="document-text-outline" size={24} color="#1a2b4a" />
+                </View>
+                <Text style={styles.examLabel}>{exam.name}</Text>
+              </PressableScale>
+            </FadeInItem>
           ))}
           {exams.length === 0 && (
             <Text style={styles.emptyText}>More exams are added as they're synced.</Text>

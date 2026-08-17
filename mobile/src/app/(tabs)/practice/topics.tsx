@@ -6,6 +6,8 @@ import { toSubjectMeta } from "../../../constants/subjects";
 import { getTopicStats, type TopicStat } from "../../../db/practiceContent";
 import { getSubjectMetaByName, type SubjectMetaRow } from "../../../db/subjectMeta";
 import { useSyncStatus } from "../../../sync/SyncContext";
+import { PressableScale } from "../../../ui/PressableScale";
+import { FadeInItem } from "../../../ui/FadeInList";
 
 function questionsLabel(count: number): string {
   return count === 1 ? "1 question" : `${count} questions`;
@@ -71,18 +73,14 @@ export default function Topics() {
           <Text style={styles.subheading}>{topics.length} topics under {subjectName}</Text>
 
           <View style={styles.list}>
-            {filteredTopics.map((topic) => {
+            {filteredTopics.map((topic, index) => {
               const disabled = topic.questionCount === 0;
               return (
-                <Pressable
-                  key={topic.id}
+                <FadeInItem key={topic.id} index={index}>
+                <PressableScale
                   disabled={disabled}
                   onPress={() => openLevels(topic)}
-                  style={({ pressed }) => [
-                    styles.card,
-                    disabled && styles.cardDisabled,
-                    !disabled && pressed && styles.cardPressed,
-                  ]}
+                  style={[styles.card, disabled && styles.cardDisabled]}
                 >
                   <View style={[styles.iconCircle, { backgroundColor: subjectMeta.iconBg }]}>
                     <Ionicons name="document-text-outline" size={18} color={subjectMeta.iconColor} />
@@ -94,7 +92,8 @@ export default function Topics() {
                     </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color="#c3cadb" />
-                </Pressable>
+                </PressableScale>
+                </FadeInItem>
               );
             })}
 

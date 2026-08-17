@@ -6,6 +6,7 @@ import { useSessionHistory } from "../../../practice/sessionHistory";
 import { useBookmarks } from "../../../practice/bookmarks";
 import { LANGUAGES, useAppLanguage } from "../../../practice/appLanguage";
 import { LanguagePickerModal } from "../../../practice/LanguagePickerModal";
+import { AnimatedProgressBar } from "../../../ui/AnimatedProgressBar";
 import { getPracticeQuestions, type PracticeQuestion } from "../../../db/practiceContent";
 
 export default function Quiz() {
@@ -140,9 +141,7 @@ export default function Quiz() {
       <Stack.Screen options={{ title: `${topicName} · ${levelLabel}` }} />
       <View style={styles.screen}>
         <View style={styles.progressRow}>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${((currentIndex + 1) / total) * 100}%` }]} />
-          </View>
+          <AnimatedProgressBar progress={(currentIndex + 1) / total} style={styles.progressTrack} />
           <Text style={styles.progressText}>
             Question {currentIndex + 1} of {total}
           </Text>

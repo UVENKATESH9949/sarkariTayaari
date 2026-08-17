@@ -4,6 +4,8 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { Pressable, ScrollView, Text, TextInput, View, StyleSheet } from "react-native";
 import { toSubjectMeta } from "../../../constants/subjects";
 import { useSyncStatus } from "../../../sync/SyncContext";
+import { PressableScale } from "../../../ui/PressableScale";
+import { FadeInItem } from "../../../ui/FadeInList";
 import { getSubjectStats, type SubjectStat } from "../../../db/practiceContent";
 
 function questionsLabel(count: number): string {
@@ -52,19 +54,15 @@ export default function Subjects() {
           <Text style={styles.subheading}>Shared across every exam you're preparing for</Text>
 
           <View style={styles.list}>
-            {filteredSubjects.map((subject) => {
+            {filteredSubjects.map((subject, index) => {
               const meta = toSubjectMeta(subject);
               const disabled = subject.questionCount === 0;
               return (
-                <Pressable
-                  key={subject.id}
+                <FadeInItem key={subject.id} index={index}>
+                <PressableScale
                   disabled={disabled}
                   onPress={() => openTopics(subject.id, subject.name)}
-                  style={({ pressed }) => [
-                    styles.card,
-                    disabled && styles.cardDisabled,
-                    !disabled && pressed && styles.cardPressed,
-                  ]}
+                  style={[styles.card, disabled && styles.cardDisabled]}
                 >
                   <View style={[styles.iconCircle, { backgroundColor: meta.iconBg }]}>
                     <Ionicons name={meta.icon} size={22} color={meta.iconColor} />
@@ -76,7 +74,8 @@ export default function Subjects() {
                     </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color="#c3cadb" />
-                </Pressable>
+                </PressableScale>
+                </FadeInItem>
               );
             })}
 

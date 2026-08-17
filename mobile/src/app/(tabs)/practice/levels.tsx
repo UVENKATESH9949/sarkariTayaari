@@ -6,6 +6,8 @@ import { Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
 import { getDifficultyCounts, type DifficultyCounts } from "../../../db/practiceContent";
 import { getDifficultyLevels, type DifficultyLevel } from "../../../db/examStructure";
 import { useSyncStatus } from "../../../sync/SyncContext";
+import { PressableScale } from "../../../ui/PressableScale";
+import { FadeInItem } from "../../../ui/FadeInList";
 
 type IoniconName = ComponentProps<typeof Ionicons>["name"];
 
@@ -80,14 +82,10 @@ export default function Levels() {
         <Text style={styles.heading}>Choose a level</Text>
         <Text style={styles.subheading}>{topicName}</Text>
 
-        <Pressable
+        <PressableScale
           disabled={allLevelsTotal === 0}
           onPress={() => openQuiz("all", "All Levels")}
-          style={({ pressed }) => [
-            styles.allLevelsCard,
-            allLevelsTotal === 0 && styles.allLevelsCardDisabled,
-            allLevelsTotal > 0 && pressed && styles.allLevelsCardPressed,
-          ]}
+          style={[styles.allLevelsCard, allLevelsTotal === 0 && styles.allLevelsCardDisabled]}
         >
           <View style={[styles.iconCircle, styles.allLevelsIconCircle]}>
             <Ionicons name="layers-outline" size={24} color="#ffffff" />
@@ -99,22 +97,18 @@ export default function Levels() {
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.7)" />
-        </Pressable>
+        </PressableScale>
 
         <Text style={styles.sectionLabel}>Practice by difficulty</Text>
         <View style={styles.list}>
-          {levels.map((level) => {
+          {levels.map((level, index) => {
             const disabled = level.count === 0;
             return (
-              <Pressable
-                key={level.key}
+              <FadeInItem key={level.key} index={index}>
+              <PressableScale
                 disabled={disabled}
                 onPress={() => openQuiz(level.key, level.label)}
-                style={({ pressed }) => [
-                  styles.card,
-                  disabled && styles.cardDisabled,
-                  !disabled && pressed && styles.cardPressed,
-                ]}
+                style={[styles.card, disabled && styles.cardDisabled]}
               >
                 <View style={[styles.iconCircle, { backgroundColor: level.bg }]}>
                   <Ionicons name={level.icon} size={22} color={level.color} />
@@ -124,7 +118,8 @@ export default function Levels() {
                   <Text style={styles.levelStats}>{disabled ? "No questions yet" : questionsLabel(level.count)}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color="#c3cadb" />
-              </Pressable>
+              </PressableScale>
+              </FadeInItem>
             );
           })}
         </View>

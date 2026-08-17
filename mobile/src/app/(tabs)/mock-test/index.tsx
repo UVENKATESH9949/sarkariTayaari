@@ -5,6 +5,8 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View, StyleSheet } from
 import { getSyncedExams } from "../../../db/practiceContent";
 import { getMockablePapers, type SyncedPaper } from "../../../db/examStructure";
 import { useSyncStatus } from "../../../sync/SyncContext";
+import { PressableScale } from "../../../ui/PressableScale";
+import { FadeInItem } from "../../../ui/FadeInList";
 
 type ListedPaper = SyncedPaper & { examName: string };
 
@@ -55,15 +57,15 @@ export default function MockTestLanding() {
 
       {!loading && (
         <View style={styles.list}>
-          {papers.map((paper) => {
+          {papers.map((paper, index) => {
             const totalQuestions = paper.sections.reduce((sum, s) => sum + s.questionCount, 0);
             const marking =
               paper.marksCorrect != null ? ` · +${paper.marksCorrect}/-${paper.marksWrong ?? 0} marking` : "";
             return (
-              <Pressable
-                key={paper.id}
+              <FadeInItem key={paper.id} index={index}>
+              <PressableScale
                 onPress={() => openStart(paper)}
-                style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+                style={styles.card}
               >
                 <View style={styles.cardIconCircle}>
                   <Ionicons name="timer-outline" size={24} color="#ffffff" />
@@ -79,7 +81,8 @@ export default function MockTestLanding() {
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color="#c3cadb" />
-              </Pressable>
+              </PressableScale>
+              </FadeInItem>
             );
           })}
 
