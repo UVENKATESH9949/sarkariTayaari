@@ -75,12 +75,22 @@ Everything except syncing keeps working:
 | Works offline | Needs internet |
 |---|---|
 | Practice questions | Getting new content |
-| Mock tests | — |
-| Progress and history | — |
+| Mock tests | Signing in / creating an account |
+| Progress and history | Backing progress up to an account (queues locally instead) |
 | Bookmarks and revision | — |
 
-The app never blocks on the network after the first sync. If a background check fails,
-it shows a small banner and carries on with the content already on the phone.
+The app never blocks on the network after the first sync. It also **knows when it's
+offline**, rather than only finding out when a sync fails: a small banner
+("You're offline — using downloaded content") appears the moment connectivity drops, and
+a sync isn't even attempted while it's showing — attempting one and reporting a failure
+would make an entirely normal situation look like something broke. The moment
+connectivity returns, a sync runs immediately rather than waiting for the next scheduled
+check, since reconnecting is exactly when a student is most likely waiting on something
+new.
+
+That's a different, calmer banner from "a background check failed while you're actually
+online" — those two situations look similar but mean different things, so they're never
+shown as the same message.
 
 ---
 

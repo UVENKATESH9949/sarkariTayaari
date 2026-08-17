@@ -8,7 +8,18 @@
 things that only exist on that phone (which questions this student bookmarked, their
 past sessions).
 
-The phone never sends content back. Content only travels server → phone.
+**Content** (questions, exams, subjects, structure) only ever travels server → phone.
+The phone never edits or sends back anything an admin authored.
+
+**A signed-in student's own activity is different — it travels both ways**, and it's
+worth knowing there are two different shapes of that, not one:
+
+- *Practice sessions and mock attempts* are write-once: they're created, uploaded, and
+  never edited again. Uploading twice by accident is harmless because the phone's own
+  id is reused, so a retry just overwrites the same row.
+- *Bookmarks* are not write-once — the same question can be bookmarked and
+  un-bookmarked repeatedly, from more than one phone. That needed a real rule for "whose
+  change wins," covered below.
 
 ---
 
@@ -95,6 +106,26 @@ Small tables that exist so these things aren't hardcoded in the apps:
 | `paper_types` | kinds of paper, and whether a mock test can be made from it | objective (yes), descriptive (no) |
 | `exam_subjects` | which subjects an exam covers | see below |
 
+### Group 5: student accounts and their activity
+
+```
+users                one row per signed-in student (email, password hash)
+  |
+  +-- user_tokens             a sign-in session (opaque, revocable — not a JWT)
+  |
+  +-- user_practice_sessions       + user_practice_session_results
+  +-- user_mock_attempts           + user_mock_attempt_results
+  +-- user_bookmarks
+```
+
+Accounts are optional — the app works fully signed out. Signing in only adds one
+thing: this activity now survives losing the phone, because it's also stored here.
+
+`user_practice_sessions`/`user_mock_attempts` only ever grow — a session is uploaded
+once, finished, never edited. `user_bookmarks` is different: it's the *current state* of
+one (student, question) pair, not a log — see "Why bookmark sync needed its own rule"
+in [05-why-its-built-this-way.md](05-why-its-built-this-way.md).
+
 ---
 
 ## The two subject links — the confusing bit
@@ -150,8 +181,14 @@ phone and are never uploaded:
 | `mock_test_attempts` + `mock_test_attempt_results` | past mock tests, with scores |
 | `bookmarks` | questions the student saved |
 
-If the student uninstalls the app, this is all lost. Syncing progress to the server is
-planned but not built yet (that's v1.1 in the requirements doc).
+**If the student is signed out, all of this is local-only** — uninstalling the app loses
+it, same as day one. **If signed in, it's backed up automatically**: each of these rows
+carries an `isSynced` flag, set to false the moment it's created, and flipped to true
+once the server has confirmed it. A background flush pushes anything still `false`
+whenever the app foregrounds, backgrounds, or the student signs out — the student never
+has to do anything for it to happen. Signing into a *new* phone pulls all of it back
+down. Verified for real, once, by wiping a test device and confirming history came back
+after signing in again.
 
 ---
 
@@ -166,6 +203,9 @@ backend/src/main/resources/db/migration/
     V2__content_model_redesign.sql   subjects/topics/exams
     V3__exam_structure.sql           stages/papers/sections
     V4__exam_subjects.sql            the syllabus link
+    V5__users_and_tokens.sql         accounts and sign-in sessions
+    V6__user_progress.sql            practice sessions and mock attempts
+    V7__user_bookmarks.sql           synced bookmarks
 ```
 
 Rules: **never edit a migration that has already run** — write a new one. They run in

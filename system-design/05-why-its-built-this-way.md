@@ -96,6 +96,22 @@ silent, permanent data loss.
 
 ---
 
+## Why bookmark sync needed its own rule
+
+Practice sessions and mock attempts are easy to sync: they're written once and never
+edited, so a device just uploads whatever it hasn't uploaded yet, keyed by its own id.
+Uploading the same one twice by accident does nothing extra.
+
+A bookmark isn't like that. The *same* question can be bookmarked, then un-bookmarked,
+then bookmarked again — possibly from two different phones signed into the same
+account. There's no "upload it once" here; there's only "what's the current truth."
+
+The rule: whichever change has the newer timestamp wins, and un-bookmarking is a marker,
+not a delete. Without the marker, a phone that removed a bookmark while offline would
+see it silently reappear the next time it restored from the server — the server would
+have no record a removal ever happened, so it would look like the un-bookmark had never
+worked.
+
 ## Why screens watch a sync counter
 
 React screens load their data when they open. Tab and back-stack state is preserved, so
@@ -136,9 +152,13 @@ Being honest about what's not finished, so you don't assume it's done:
   section locking isn't built.
 - **Release APKs are signed with a debug key.** Fine for internal testing, not for the
   Play Store, and an APK built on a different machine won't install over one built here.
-- **Progress lives only on the phone.** Uninstall and it's gone. Syncing it up needs
-  user accounts, which is planned for v1.1.
-- **No offline indicator.** A failed sync shows a banner, but the app never tells the
-  student they're offline.
+- **An interrupted first sync resumes, but that resume was never fault-tested for real.**
+  The checkpointing logic is built (`sync_meta.resume_page`) and the normal path works;
+  simulating a genuine mid-sync network drop to prove the resume itself needs a
+  deliberate setup that hasn't been done.
+- **No account deletion.** Signing up and syncing progress both work; there's no way for
+  a student to ask for their account and data to be removed.
+- **No admin authentication has been confirmed.** Not verified either way — flagged as
+  the single highest-priority open question in `reports/open-questions.md`.
 - **Content is thin.** Every subject still has one topic called "General". The structure
   supports real sub-topics; nobody has written them yet.

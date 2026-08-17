@@ -1,16 +1,36 @@
 # Project Status — Resume Point
 
-**Last updated:** 2026-08-15. Exam Structure Phases A (backend), B (admin UI) and C (mobile) are all complete and verified.
+**Last updated:** 2026-08-17. Accounts + progress sync (v1.1) shipped, bookmark sync shipped, offline indicator shipped. The product-facing feature set for V1.0/V1.1 is essentially complete; what's left is Sprint 5 (QA/perf/release prep) — see `reports/TICKET-STATUS.md`.
 
 This file exists so any future session (or teammate) can pick up exactly where things stopped, without re-reading the entire `offline-exam-app-requirements.md` history. Update this file every time work pauses for more than a few minutes, or at the end of a work session.
 
+**Related, newer files worth knowing about:** `reports/TICKET-STATUS.md` (every ticket ever, one file, with status), `reports/architecture-decisions.md` (ADRs), `reports/open-questions.md` (consolidated open business/technical decisions). This file stays the single "where do I resume" entry point; those three hold the detail so this one doesn't have to.
+
 ## Right now — no work in progress
 
-**Delta sync is wired up and the Exam Structure phases (A, B, C) are complete.** Nothing is mid-flight.
-
-**Content now actually reaches installed devices** — that was the blocker behind three phases of work, and it's closed.
+**Accounts, progress sync, and bookmark sync are all built and tested. The offline connectivity indicator is built.** Nothing is mid-flight. Nothing from today's session has been committed to git yet — that hasn't been requested.
 
 ### What's done and verified (most recent first)
+
+- **Bookmark sync** — no report yet (see `reports/TICKET-STATUS.md`, "This session"). Bookmarks (add/remove) now sync across devices for signed-in users, resolved by last-write-wins on a timestamp — the first per-user data type in this project that isn't append-only, so it needed real conflict resolution instead of just an idempotent upload.
+  - Backend: `V7__user_bookmarks.sql`, `UserBookmark` entity, `BookmarkService`, `BookmarkController`, 5 passing integration tests against the real Neon DB.
+  - **Real bug hit and fixed:** a JPA `@IdClass` composite primary key (`user_id` + `question_id`) caused genuine 500 errors under test (Hibernate's `isNew()` entity-state detection misbehaves for a derived composite id). Switched to a synthetic string id (`userId:questionId`), matching the existing convention already used for `user_practice_session_results` — see `reports/architecture-decisions.md` ADR-005.
+  - **Real bug hit and fixed, unrelated to the app itself:** editing a migration file *after* it had already been applied once during testing caused a Flyway checksum-mismatch error on every subsequent boot. Fixed by connecting directly to the dev Postgres instance (a throwaway JDBC one-off, since `psql` isn't installed) and reverting the bad migration application, then letting Flyway re-apply the corrected file cleanly.
+  - Mobile: `bookmarks` table gained `isDeleted`/`isSynced`/`updatedAt` columns (tombstone soft-delete, not a hard delete, so an offline removal still has something to upload later). The generated Drizzle migration needed a manual fix — `updated_at NOT NULL` with no default would fail on any device with existing bookmark rows.
+  - Wired into `authContext.tsx` (full sync on sign-in, upload-only flush on backgrounding/sign-out) and `BookmarksProvider` — which had the *exact same* staleness bug fixed for session history months ago (never re-read after a restore); fixed the same way, with `progressVersion` in its effect deps.
+
+- **Offline connectivity indicator — closes TICKET-405.** No report yet. `NetworkStatusContext` wraps `@react-native-community/netinfo`; a persistent, calm top banner ("You're offline — using downloaded content") shows only while genuinely offline. `SyncContext.refresh()` now returns immediately without attempting a network call while offline (previously it would attempt and then report a confusing "sync failed" for a fully-expected condition), and fires an immediate forced sync the moment connectivity returns rather than waiting for the next scheduled check.
+  - **Real detour:** verifying this required a live-reloadable build, and the emulator turned out to be running a stale, fully-disconnected **release** APK the whole time (JS bundle baked in, no Metro connection at all) — every earlier "verification" in the same sitting had actually been checking a dev-client bundle that later got silently replaced. Built a debug dev-client via `npx expo run:android` (~24 min native build) to get real verification back. Worth remembering: if on-device verification ever looks like it's "not picking up changes," check `dumpsys package <app> | grep -i debuggable` and whether `assets/index.android.bundle` exists in the installed APK before assuming the code is wrong.
+
+- **Practice screen redesign** — the 2-column exam grid was replaced with a single-column list (matching every other list in the app), the previously-decorative search box now actually filters, and each row shows a real "X questions synced" subtitle instead of just a name.
+  - **Regression fixed along the way:** the TICKET-941 animation wrapper (`FadeInItem`) had silently broken the grid's `width: "48%"` sizing, because the wrapper — not the card — became the grid's direct child. `FadeInItem` now takes a `style` prop so layout stays on the right node; this is a real, easy-to-repeat trap for any future wrapper component.
+
+- **Motion system extended to Home and Progress** — both had shipped with plain `Pressable` and a raw-width progress bar even after TICKET-941 landed elsewhere. Now use `PressableScale`/`AnimatedProgressBar` like every other screen.
+
+- **Accounts + progress sync (v1.1, TICKET-601–605)** — see git commits "Add user accounts and token auth (step 1)", "Add progress upload and restore (step 2)", "Add accounts and progress backup (step 3)". No dedicated report file. Opaque revocable bearer tokens (not JWT — see ADR-001); practice sessions and mock attempts upload/restore correctly, verified via a real device wipe.
+  - **Two real bugs found and fixed** while building this: `GET /api/auth/me` 500'd for every valid token (a `LazyInitializationException` on `UserToken.user`, since `open-in-view: false`) — fixed with a join-fetch query. And `login()` was timing-unsafe (only hashed a password when the user existed) — fixed with a dummy-hash comparison so failure timing is identical either way.
+
+- **Documentation reorganized.** `reports/` split into sprint/phase subfolders (`01-sprint-1-backend-foundation/` through `05-exam-structure-model/`), plus `TICKET-STATUS.md` (every ticket, one file), `architecture-decisions.md` (8 ADRs), and `open-questions.md` (consolidated TBDs). A `sdlc-documentation.md` was briefly created at the project root, found to be ~80% a restatement of `offline-exam-app-requirements.md`/`preparation-os-requirements.md` in a different shape, and deleted — only its genuinely new content (the ADRs and gaps list) survived, in the two files just named. A `reports/SESSION-LOG.md` was also briefly created duplicating *this file*, and was deleted the same way once this file was rediscovered.
 
 - **Exam ↔ Subject syllabus made explicit** — full report: `reports/exam-subject-syllabus.md`. The many-to-many already existed, but **only as a derivation through paper sections**, so an exam had no syllabus until someone authored its full pattern — SSC CHSL was active with zero subjects and Practice showed all seven for it.
   - New `exam_subjects` table (migration `V4`, backfilled from sections). The two mappings now answer different questions and both are kept: `exam_subjects` = what the exam covers (Practice browsing); `section_subjects` = what a section draws from (mock-test selection).
@@ -63,15 +83,17 @@ This file exists so any future session (or teammate) can pick up exactly where t
 
 ## Next up (in recommended order)
 
-1. **Author real content.** The whole pipeline now works end to end — admin authoring → backend → delta sync → device. Real sub-topics per subject are the remaining bottleneck; every subject still has exactly one topic called "General".
-2. **TICKET-405 (offline indicator) and TICKET-307 (partial-data guard).** Nothing in the app detects connectivity yet: a failed refresh shows a banner, but there's no explicit offline state.
-3. **Define structures for the other exams.** SSC_CHSL is active with no structure (its Mock Test can't be built, and Practice falls back to all subjects). IBPS_PO has a structure but is inactive.
-4. **Optional now-cheap wins:** enforce per-section timers in Mock Test (needs section locking + auto-advance), and Phase D's Exam Pattern screen (the whole tree is already synced locally).
-5. **Then:** TICKET-501 load test at 10k+ questions, v1.1 (write-back sync + auth), v1.2 (Readiness Score/Persona, images, iOS).
-3. **Delta sync is dead code and must be wired up.** `runDeltaSync()` in `mobile/src/sync/deltaSync.ts` is fully built and verified but **never called anywhere**; `SyncContext.tsx` returns early if `lastSyncedAt` exists. There is no `AppState` listener, no pull-to-refresh and no network detection in the app at all. **Any device that has completed its first sync will never see new content** — which makes all the admin/authoring work undeliverable until it is fixed. Outstanding tickets: TICKET-305 (sync on launch/foreground), TICKET-306 (pull to refresh), TICKET-304 (resume/retry), TICKET-307 (partial-data guard), TICKET-405 (offline indicator).
-4. **Author real content** — real sub-topics per subject, and questions tagged to the exams they belong to.
-5. **Activate more exams** — 5 of the 6 exist but are inactive, which is why mobile only shows SSC CGL. Note each needs a structure before its Mock Test tab can build a test (SSC_CGL and IBPS_PO have one; the other four do not).
-6. **TICKET-501: load test with 10k+ questions**, then **v1.1** (write-back sync + auth) and **v1.2** (Readiness Score/Persona, images, iOS).
+*(Cleaned up 2026-08-17 — this section previously had two overlapping, partly-stale numbered lists merged together. Rewritten as one, current as of today.)*
+
+1. **Confirm whether the admin console has any authentication at all.** Not verified either way — it manages real content and image uploads, so this is the single highest-priority open question. See `reports/open-questions.md`.
+2. **Rotate the Cloudinary secret** that was briefly exposed in git history earlier in the project (already scrubbed from history; rotation is the only fully safe remediation left).
+3. **Sprint 5 — QA, performance, release prep (TICKET-501–506).** Nothing in it has been started: load test at 10k+ questions, low-end device testing, crash reporting/analytics, a real signed release build, beta recruitment. This is the real next block of work on the shipped product, ahead of anything below.
+4. **Decide production hosting** (cloud provider + database strategy — the backend currently only runs on a developer laptop).
+5. **Reconcile TICKET-702/703 (port BrainBlitz's Readiness Score/Persona) against the Future Vision doc's Epic C (Preparation Twin & Readiness v2)** — very likely the same feature described in two different documents; building both independently would duplicate work.
+6. **Author real content.** The whole pipeline works end to end — admin authoring → backend → delta sync → device. Real sub-topics per subject are the remaining bottleneck; every subject still has exactly one topic called "General".
+7. **Define structures for the other exams.** SSC_CHSL is active with no structure (its Mock Test can't be built, and Practice falls back to all subjects). Several exams exist but are inactive, which is why mobile mainly shows SSC CGL and IBPS PO.
+8. **Optional now-cheap wins:** enforce per-section timers in Mock Test (needs section locking + auto-advance), and Phase D's Exam Pattern screen (the whole tree is already synced locally).
+9. **Only after Sprint 5**, start on the Future Vision epics — in the order that document itself recommends: A → B → C → D (the dependent "coach" line), since C and D both need real signal that only exists once A and B are producing it.
 
 ## Deferred / known leftovers
 
