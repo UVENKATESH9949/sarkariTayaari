@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
+import { ScrollView, Text, View, StyleSheet } from "react-native";
 import { useSessionHistory } from "../../practice/sessionHistory";
 import { toSubjectMeta } from "../../constants/subjects";
 import { getAllSubjects, type SubjectMetaRow } from "../../db/subjectMeta";
+import { PressableScale } from "../../ui/PressableScale";
+import { AnimatedProgressBar } from "../../ui/AnimatedProgressBar";
+import { FadeInItem } from "../../ui/FadeInList";
 
 function scoreColor(percent: number) {
   if (percent >= 70) return "#2f9e64";
@@ -86,42 +89,40 @@ export default function Progress() {
 
       <Text style={styles.sectionTitle}>Subject-wise accuracy</Text>
       <View style={styles.subjectList}>
-        {stats.subjectBreakdown.map((subject) => (
-          <View key={subject.name} style={styles.subjectRow}>
-            <View style={[styles.subjectIconCircle, { backgroundColor: subject.iconBg }]}>
-              <Ionicons name={subject.icon} size={18} color={subject.iconColor} />
-            </View>
-            <View style={styles.subjectInfo}>
-              <Text style={styles.subjectName}>{subject.name}</Text>
-              {subject.accuracyPercent === null ? (
-                <Text style={styles.subjectEmpty}>Not attempted yet</Text>
-              ) : (
-                <View style={styles.subjectBarTrack}>
-                  <View
-                    style={[
-                      styles.subjectBarFill,
-                      { width: `${subject.accuracyPercent}%`, backgroundColor: scoreColor(subject.accuracyPercent) },
-                    ]}
+        {stats.subjectBreakdown.map((subject, index) => (
+          <FadeInItem key={subject.name} index={index}>
+            <View style={styles.subjectRow}>
+              <View style={[styles.subjectIconCircle, { backgroundColor: subject.iconBg }]}>
+                <Ionicons name={subject.icon} size={18} color={subject.iconColor} />
+              </View>
+              <View style={styles.subjectInfo}>
+                <Text style={styles.subjectName}>{subject.name}</Text>
+                {subject.accuracyPercent === null ? (
+                  <Text style={styles.subjectEmpty}>Not attempted yet</Text>
+                ) : (
+                  <AnimatedProgressBar
+                    progress={subject.accuracyPercent / 100}
+                    fillColor={scoreColor(subject.accuracyPercent)}
                   />
-                </View>
-              )}
+                )}
+              </View>
+              <Text
+                style={[
+                  styles.subjectPercent,
+                  subject.accuracyPercent !== null && { color: scoreColor(subject.accuracyPercent) },
+                ]}
+              >
+                {subject.accuracyPercent === null ? "—" : `${subject.accuracyPercent}%`}
+              </Text>
             </View>
-            <Text
-              style={[
-                styles.subjectPercent,
-                subject.accuracyPercent !== null && { color: scoreColor(subject.accuracyPercent) },
-              ]}
-            >
-              {subject.accuracyPercent === null ? "—" : `${subject.accuracyPercent}%`}
-            </Text>
-          </View>
+          </FadeInItem>
         ))}
       </View>
 
-      <Pressable style={styles.historyLink} onPress={() => router.push("/practice/history")}>
+      <PressableScale style={styles.historyLink} onPress={() => router.push("/practice/history")}>
         <Text style={styles.historyLinkText}>View full session history</Text>
         <Ionicons name="chevron-forward" size={16} color="#1a2b4a" />
-      </Pressable>
+      </PressableScale>
     </ScrollView>
   );
 }
@@ -229,16 +230,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#8a94a6",
     fontStyle: "italic",
-  },
-  subjectBarTrack: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#e2e6ee",
-    overflow: "hidden",
-  },
-  subjectBarFill: {
-    height: 6,
-    borderRadius: 3,
   },
   subjectPercent: {
     fontSize: 13,

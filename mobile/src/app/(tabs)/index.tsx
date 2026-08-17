@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Pressable, RefreshControl, ScrollView, Text, View, StyleSheet } from "react-native";
+import { RefreshControl, ScrollView, Text, View, StyleSheet } from "react-native";
 import { getFollowedExam } from "../../db/followedExams";
 import { useBookmarks } from "../../practice/bookmarks";
 import { useSessionHistory } from "../../practice/sessionHistory";
 import { getWrongAnswers } from "../../practice/wrongAnswers";
 import { useSyncStatus } from "../../sync/SyncContext";
+import { PressableScale } from "../../ui/PressableScale";
+import { FadeInItem } from "../../ui/FadeInList";
 
 // Streak/readiness are still mock — real streak computation and the final
 // readiness formula haven't been decided yet (see Progress for the real,
@@ -55,11 +57,11 @@ export default function Home() {
         <Text style={styles.examName}>{followedExamName ?? " "}</Text>
       </View>
 
-      <Pressable style={styles.continueButton} onPress={() => router.push("/practice")}>
+      <PressableScale style={styles.continueButton} onPress={() => router.push("/practice")}>
         <Text style={styles.continueButtonText}>Continue Practice</Text>
-      </Pressable>
+      </PressableScale>
 
-      <Pressable style={styles.readinessCard} onPress={() => router.push("/progress")}>
+      <PressableScale style={styles.readinessCard} onPress={() => router.push("/progress")}>
         <View>
           <Text style={styles.readinessLabel}>Your readiness</Text>
           <Text style={styles.readinessPercent}>{MOCK.readinessPercent}%</Text>
@@ -68,26 +70,30 @@ export default function Home() {
           <Text style={styles.readinessCtaText}>View progress</Text>
           <Ionicons name="chevron-forward" size={16} color="#1a2b4a" />
         </View>
-      </Pressable>
+      </PressableScale>
 
       <Text style={styles.sectionLabel}>Revise</Text>
       <View style={styles.reviseRow}>
-        <Pressable
-          style={({ pressed }) => [styles.reviseCard, pressed && styles.reviseCardPressed]}
-          onPress={() => router.push({ pathname: "/revise", params: { initialTab: "bookmarks" } })}
-        >
-          <Ionicons name="star" size={20} color="#e8a63c" />
-          <Text style={styles.reviseCount}>{bookmarks.length}</Text>
-          <Text style={styles.reviseLabel}>Bookmarked</Text>
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [styles.reviseCard, pressed && styles.reviseCardPressed]}
-          onPress={() => router.push({ pathname: "/revise", params: { initialTab: "wrong" } })}
-        >
-          <Ionicons name="close-circle" size={20} color="#c94f4f" />
-          <Text style={styles.reviseCount}>{wrongAnswerCount}</Text>
-          <Text style={styles.reviseLabel}>Wrong Answers</Text>
-        </Pressable>
+        <FadeInItem index={0} style={styles.reviseItem}>
+          <PressableScale
+            style={styles.reviseCard}
+            onPress={() => router.push({ pathname: "/revise", params: { initialTab: "bookmarks" } })}
+          >
+            <Ionicons name="star" size={20} color="#e8a63c" />
+            <Text style={styles.reviseCount}>{bookmarks.length}</Text>
+            <Text style={styles.reviseLabel}>Bookmarked</Text>
+          </PressableScale>
+        </FadeInItem>
+        <FadeInItem index={1} style={styles.reviseItem}>
+          <PressableScale
+            style={styles.reviseCard}
+            onPress={() => router.push({ pathname: "/revise", params: { initialTab: "wrong" } })}
+          >
+            <Ionicons name="close-circle" size={20} color="#c94f4f" />
+            <Text style={styles.reviseCount}>{wrongAnswerCount}</Text>
+            <Text style={styles.reviseLabel}>Wrong Answers</Text>
+          </PressableScale>
+        </FadeInItem>
       </View>
     </ScrollView>
   );
@@ -193,16 +199,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 12,
   },
-  reviseCard: {
+  // Carries the flex share; reviseCard fills whatever width that gives it. Same
+  // wrapper-vs-child sizing trap as the Practice grid — see FadeInItem's own comment.
+  reviseItem: {
     flex: 1,
+  },
+  reviseCard: {
     backgroundColor: "#ffffff",
     borderWidth: 1,
     borderColor: "#e2e6ee",
     borderRadius: 14,
     padding: 16,
-  },
-  reviseCardPressed: {
-    backgroundColor: "#f5f6f9",
   },
   reviseCount: {
     fontSize: 20,
