@@ -33,6 +33,7 @@ Screens live in `mobile/src/app/`. The folder structure *is* the navigation: a f
 mobile/src/app/
   _layout.tsx              app-wide setup (sync, providers)
   revise.tsx               Revise screen (pushed, not a tab)
+  account.tsx              sign in / sign up / signed-in view (pushed, not a tab)
   (tabs)/
     _layout.tsx            the bottom tab bar
     index.tsx              Home
@@ -58,9 +59,9 @@ mobile/src/app/
 | Folder | What lives there |
 |---|---|
 | `mobile/src/db/` | reading and writing the phone's database |
-| `mobile/src/sync/` | downloading content from the backend |
+| `mobile/src/sync/` | downloading content from the backend, and syncing a signed-in user's own activity back up |
 | `mobile/src/api/` | calling backend endpoints |
-| `mobile/src/practice/` | shared state (bookmarks, session history, language) |
+| `mobile/src/practice/` | shared state (bookmarks, session history, language, sign-in) |
 | `mobile/src/constants/` | small display helpers |
 
 Useful specifics:
@@ -70,8 +71,11 @@ Useful specifics:
 | Change how questions are picked for Practice | `mobile/src/db/practiceContent.ts` |
 | Change how a mock test is assembled or scored | `mobile/src/db/mockTest.ts` |
 | Change how exam structure is read | `mobile/src/db/examStructure.ts` |
-| Change when syncing happens | `mobile/src/sync/SyncContext.tsx` |
-| Change what a sync writes | `mobile/src/sync/writeQuestions.ts` |
+| Change when content syncing happens | `mobile/src/sync/SyncContext.tsx` |
+| Change what a content sync writes | `mobile/src/sync/writeQuestions.ts` |
+| Change how the app knows it's offline | `mobile/src/sync/NetworkStatusContext.tsx` (detection) + `OfflineBanner.tsx` (the message shown) |
+| Change how bookmarks sync to the server | `mobile/src/sync/bookmarkSync.ts` (the sync logic), `mobile/src/db/bookmarks.ts` (local reads/writes), `mobile/src/api/bookmarks.ts` (the network calls) |
+| Change how progress (practice/mock history) syncs | `mobile/src/sync/progressSync.ts`, `mobile/src/practice/authContext.tsx` (when it runs — sign-in, background, sign-out) |
 | Add a table to the phone database | `mobile/src/db/schema.ts` then run `npx drizzle-kit generate` |
 
 ---
@@ -159,3 +163,17 @@ useEffect(() => {
 
 **Never edit anything inside `mobile/android/`.** That whole folder is generated from
 `mobile/app.json` and is wiped and rebuilt on the next build. Change `app.json` instead.
+
+**Wrapping a list row breaks any percentage width on it.** `FadeInItem` (the fade-in
+animation wrapper used on every list) inserts a view between the list container and the
+row. A percentage width like `width: "48%"` on the row now measures against the
+wrapper, not the container — the row silently stops being the size you told it to be.
+This is exactly the bug that broke the Practice exam grid once already. `FadeInItem`
+takes a `style` prop for exactly this reason — give *it* the percentage width, and let
+the row inside fill 100% of that:
+
+```tsx
+<FadeInItem index={i} style={styles.gridItem}>   {/* the 48% goes here */}
+  <PressableScale style={styles.card}>...</PressableScale>   {/* this is width: "100%" */}
+</FadeInItem>
+```

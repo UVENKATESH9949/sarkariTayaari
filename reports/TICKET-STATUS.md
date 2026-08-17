@@ -75,15 +75,15 @@
 
 ## Sprint 4 — Practice Flow
 
-*No dedicated report file exists for this sprint — status below is reconstructed from `offline-exam-app-requirements.md` §"Sprint 4" and confirmed directly against the current code.*
+Now documented — see [04-content-model-redesign/content-model-phase3-mobile-foundation.md](./04-content-model-redesign/content-model-phase3-mobile-foundation.md), which absorbed most of this sprint, and [06-bookmark-sync-and-offline-indicator/offline-indicator.md](./06-bookmark-sync-and-offline-indicator/offline-indicator.md) for 405.
 
 | Ticket | Task | Status | Report |
 |---|---|---|---|
-| 401 | Question list screen, filtered by exam/topic | ✅ (superseded) | none — absorbed into the Content Model Redesign's Subject→Topic→Level drill-down, not built as originally scoped |
-| 402 | Quiz/practice screen (show, submit, reveal explanation) | ✅ | none |
-| 403 | Topic/difficulty filter UI | ✅ (superseded) | none — each drill-down screen (Subject/Topic/Level) *is* the filter now |
-| 404 | Store user attempts locally | ✅ | none — this is `practice_sessions`/`practice_session_results` |
-| 405 | Basic offline mode banner/indicator | ✅ **(this session, 2026-08-17)** | none — see `mobile/src/sync/NetworkStatusContext.tsx`, `OfflineBanner.tsx` |
+| 401 | Question list screen, filtered by exam/topic | ✅ (superseded) | [content-model-phase3-mobile-foundation.md](./04-content-model-redesign/content-model-phase3-mobile-foundation.md) — absorbed into the Content Model Redesign's Subject→Topic→Level drill-down, not built as originally scoped |
+| 402 | Quiz/practice screen (show, submit, reveal explanation) | ✅ | [content-model-phase4-mobile-screens.md](./04-content-model-redesign/content-model-phase4-mobile-screens.md) |
+| 403 | Topic/difficulty filter UI | ✅ (superseded) | [content-model-phase3-mobile-foundation.md](./04-content-model-redesign/content-model-phase3-mobile-foundation.md) — each drill-down screen (Subject/Topic/Level) *is* the filter now |
+| 404 | Store user attempts locally | ✅ | [content-model-phase4-mobile-screens.md](./04-content-model-redesign/content-model-phase4-mobile-screens.md) — `practice_sessions`/`practice_session_results` |
+| 405 | Basic offline mode banner/indicator | ✅ **(this session, 2026-08-17)** | [06-bookmark-sync-and-offline-indicator/offline-indicator.md](./06-bookmark-sync-and-offline-indicator/offline-indicator.md) |
 
 ## Sprint 5 — QA, Performance, Release Prep
 
@@ -100,7 +100,7 @@
 
 ## V1.1 — Write-Back Sync + Progress
 
-*No dedicated report file — see git commits "Add user accounts and token auth (step 1)", "Add progress upload and restore (step 2)", "Add accounts and progress backup (step 3)".*
+Now documented — see [08-v1.1-accounts-and-progress-sync/accounts-and-progress-sync.md](./08-v1.1-accounts-and-progress-sync/accounts-and-progress-sync.md).
 
 | Ticket | Task | Status |
 |---|---|---|
@@ -115,7 +115,7 @@
 | Ticket | Task | Status |
 |---|---|---|
 | 701 | Load full production question bank (20k–50k+) | ⬜ Not started |
-| 702 | Port BrainBlitz's Exam Readiness Score to mobile | ⬜ Not started — likely the same feature as the Future Vision doc's Epic C (Preparation Twin & Readiness v2); not yet reconciled as one piece of work, see `sdlc-documentation.md` Next Steps |
+| 702 | Port BrainBlitz's Exam Readiness Score to mobile | ⬜ Not started — likely the same feature as the Future Vision doc's Epic C (Preparation Twin & Readiness v2); not yet reconciled as one piece of work, see `reports/open-questions.md` |
 | 703 | Port BrainBlitz's Exam Persona feature | ⬜ Not started |
 | 704 | Image support for questions/explanations with diagrams | ⚠️ Partial — Cloudinary image upload exists (used for exam card art), but question-body diagram support specifically is untouched |
 | 705 | Push notification setup | ⬜ Not started |
@@ -127,8 +127,8 @@
 |---|---|---|---|
 | Phase 1 | Backend schema/API rework (flat topic/exam_type → normalized Exam/Subject/Topic) | ✅ | [content-model-phase1-backend.md](./04-content-model-redesign/content-model-phase1-backend.md) |
 | Phase 2 (801–810) | Admin UI rework onto the new content model | ✅ | [content-model-phase2-admin.md](./04-content-model-redesign/content-model-phase2-admin.md) |
-| Phase 3 | Mobile foundation (local schema rework) + Practice wired to real synced data | ✅ | **no report** — see `offline-exam-app-requirements.md` §5, "Phase 3" and "Phase 3 continued" |
-| Phase 4 | 11 real mobile screens (Home, Practice landing, Subject/Topic/Level, Quiz, Session Summary/History, Progress, Revise, More) | ✅ | **no report** — see same document, "Phase 4" |
+| Phase 3 | Mobile foundation (local schema rework) + Practice wired to real synced data | ✅ | [content-model-phase3-mobile-foundation.md](./04-content-model-redesign/content-model-phase3-mobile-foundation.md) |
+| Phase 4 | 11 real mobile screens (Home, Practice landing, Subject/Topic/Level, Quiz, Session Summary/History, Progress, Revise, More) | ✅ | [content-model-phase4-mobile-screens.md](./04-content-model-redesign/content-model-phase4-mobile-screens.md) |
 
 ## Exam Structure Model
 
@@ -142,7 +142,7 @@
 
 ## Mock Test Engine (un-ticketed)
 
-*No dedicated report file — see `offline-exam-app-requirements.md` §6, "Mock Tests — New Navigation Pillar."*
+Now documented — see [07-mock-test-engine/mock-test-engine.md](./07-mock-test-engine/mock-test-engine.md).
 
 | Task | Status |
 |---|---|
@@ -154,23 +154,23 @@
 
 | Ticket | Task | Status | Report |
 |---|---|---|---|
-| 941 | Shared animation tokens, press feedback, staggered list entrance, stack transitions | ✅ | **no report** — see git commits `6958225`, `e1bb245`, `d66022b` |
+| 941 | Shared animation tokens, press feedback, staggered list entrance, stack transitions | ✅ | [09-motion-system-and-ui-polish/motion-system-and-ui-polish.md](./09-motion-system-and-ui-polish/motion-system-and-ui-polish.md) |
 
 ## This session (2026-08-17) — no ticket numbers assigned yet
 
 | Task | Status | Report |
 |---|---|---|
-| Bookmark sync (backend: migration/entity/service/controller/tests; mobile: schema/api/sync logic/wiring) | ✅ — 5 passing integration tests against the real Neon DB | none yet |
-| Offline connectivity indicator (`NetworkStatusContext`, `OfflineBanner`, sync suppression while offline, reconnect catch-up) | ✅ — closes out TICKET-405 above | none yet |
-| Practice screen redesign (exam grid → list, live search, question-count subtitles) | ✅ | none yet |
-| Motion system extended to Home + Progress screens | ✅ | none yet |
+| Bookmark sync (backend: migration/entity/service/controller/tests; mobile: schema/api/sync logic/wiring) | ✅ backend; 🔵 mobile (never verified live on-device) | [06-bookmark-sync-and-offline-indicator/bookmark-sync.md](./06-bookmark-sync-and-offline-indicator/bookmark-sync.md) |
+| Offline connectivity indicator (`NetworkStatusContext`, `OfflineBanner`, sync suppression while offline, reconnect catch-up) | ✅ — closes out TICKET-405 above | [06-bookmark-sync-and-offline-indicator/offline-indicator.md](./06-bookmark-sync-and-offline-indicator/offline-indicator.md) |
+| Practice screen redesign (exam grid regression fix, list redesign, live search, question-count subtitles) | ✅ | [09-motion-system-and-ui-polish/motion-system-and-ui-polish.md](./09-motion-system-and-ui-polish/motion-system-and-ui-polish.md) |
+| Motion system extended to Home + Progress screens | ✅ | same report |
 | Reports folder reorganized + this file created | ✅ | this file |
 
 ---
 
 ## Future Vision — "Personal Preparation OS" (nothing started)
 
-Full detail lives in `preparation-os-requirements.md` and `sdlc-documentation.md` Part I. Summarized here only to keep the total ticket count honest — every single one of these 63 tickets is **⬜ not started**, by design (the source document's own status is "draft — feasibility/priority not yet decided").
+Full detail lives in `preparation-os-requirements.md`. Summarized here only to keep the total ticket count honest — every single one of these 63 tickets is **⬜ not started**, by design (the source document's own status is "draft — feasibility/priority not yet decided").
 
 | Epic | Tickets | Feasibility |
 |---|---|---|

@@ -15,8 +15,12 @@
 | `01-sprint-1-backend-foundation/` | Backend scaffold, questions/languages schema, CRUD API, admin app v1, bulk import | TICKET-101–110 |
 | `02-sprint-2-mobile-scaffold/` | Expo app init, local SQLite schema, sync_meta, app shell, API client | TICKET-201–205 |
 | `03-sprint-3-sync-engine/` | Initial sync, sync progress UI, delta sync, resume-on-interrupt, foreground/pull-to-refresh triggers | TICKET-301–307 |
-| `04-content-model-redesign/` | Flat topic/exam_type → normalized Exam/Subject/Topic model; admin CRUD rework | Phase 1 (backend), Phase 2 = TICKET-801–810 (admin) |
+| `04-content-model-redesign/` | Flat topic/exam_type → normalized Exam/Subject/Topic model; admin CRUD rework; mobile foundation + the 11 real mobile screens | Phase 1 (backend), Phase 2 = TICKET-801–810 (admin), Phases 3–4 (mobile) |
 | `05-exam-structure-model/` | Exam → Stage → Paper → Section → Subject tree; difficulty levels/paper types as data; exam↔subject syllabus | Phase A = TICKET-901–908, Phase B = 911–916, Phase C = 921–928, Syllabus = 931–936 |
+| `06-bookmark-sync-and-offline-indicator/` | Cross-device bookmark sync (last-write-wins) and the offline connectivity indicator | Un-ticketed / TICKET-405 |
+| `07-mock-test-engine/` | Blueprint-driven, on-the-fly generated timed mock tests with negative marking | Un-ticketed |
+| `08-v1.1-accounts-and-progress-sync/` | Accounts, opaque tokens, practice/mock history upload + restore | TICKET-601–605 |
+| `09-motion-system-and-ui-polish/` | Shared animation tokens, the exam-grid regression it caused, Home/Progress extension | TICKET-941 |
 
 ## Two source-of-truth documents live at the project root, not here
 
@@ -27,13 +31,6 @@
 
 ## What's genuinely missing
 
-Not every completed piece of work has a report file in these folders. Real, shipped, working features with **no dedicated report** (documented only in the base requirements doc's narrative, or in git commit messages):
+As of 2026-08-17, nothing shipped is undocumented — every real, working feature has a dedicated report backfilled into one of the folders above (bookmark sync, the offline indicator, the Mock Test engine, V1.1 accounts/progress sync, the Content Model Redesign's mobile phases, and the motion system + its regression fix all previously had no report file; they do now).
 
-- Sprint 4 — Practice Flow (TICKET-401–405)
-- V1.1 — Accounts + Progress Sync (TICKET-601–605) — see git commits "step 1/2/3 of progress sync"
-- Mock Test engine (its own full build, `offline-exam-app-requirements.md` §6)
-- Content Model Redesign Phases 3–4 (mobile foundation + the 11 mobile screens)
-- The motion/animation system (TICKET-941) — see git commits `6958225`, `e1bb245`, `d66022b`
-- Bookmark sync + the offline connectivity indicator (this session, no ticket number assigned yet)
-
-`TICKET-STATUS.md` tracks all of these anyway, with an honest "no report" note instead of a link. Backfilling proper reports for these is a reasonable future task, not done yet.
+What's still genuinely missing is **verification**, not documentation — each backfilled report says so plainly in its own "Honest gaps in verification" section rather than claiming more than was actually proven. The one that matters most: bookmark sync's mobile side has never been exercised live on a real device (bookmark → background → sign in elsewhere → confirm it appears) — see [06-bookmark-sync-and-offline-indicator/bookmark-sync.md](./06-bookmark-sync-and-offline-indicator/bookmark-sync.md).
