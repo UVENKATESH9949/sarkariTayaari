@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { Pressable, ScrollView, Text, TextInput, View, StyleSheet } from "react-native";
@@ -24,52 +24,97 @@ export default function Practice() {
     router.push({ pathname: "/practice/subjects", params: { examCode, examLabel } });
   };
 
+  // This box used to be decorative — it accepted text and changed nothing, which is
+  // worse than having no search at all, because it reads as broken rather than absent.
+  const query = search.trim().toLowerCase();
+  const filteredExams = useMemo(
+    () => (query ? exams.filter((exam) => exam.name.toLowerCase().includes(query)) : exams),
+    [exams, query],
+  );
+  const searching = query.length > 0;
+
   return (
     <View style={styles.screen}>
       <View style={styles.searchBar}>
         <Ionicons name="search" size={18} color="#8a94a6" />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search exams, subjects, topics..."
+          placeholder="Search exams..."
           placeholderTextColor="#8a94a6"
           value={search}
           onChangeText={setSearch}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
         />
+        {searching && (
+          <Pressable onPress={() => setSearch("")} hitSlop={10}>
+            <Ionicons name="close-circle" size={18} color="#c3cadb" />
+          </Pressable>
+        )}
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.sectionLabel}>Recommended</Text>
-        <PressableScale
-          style={styles.allExamsCard}
-          onPress={() => openSubjects("ALL", "All Government Exams")}
-        >
-          <View style={[styles.iconCircle, styles.allExamsIconCircle]}>
-            <Ionicons name="earth" size={26} color="#ffffff" />
-          </View>
-          <View style={styles.allExamsTextBlock}>
-            <Text style={styles.allExamsTitle}>All Government Exams</Text>
-            <Text style={styles.allExamsSubtitle}>Common Quant, Reasoning, English & GA content</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color="#c3cadb" />
-        </PressableScale>
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        {/* While searching, the "All Government Exams" shortcut is noise — the user has
+            told us what they are looking for. */}
+        {!searching && (
+          <>
+            <Text style={styles.sectionLabel}>Recommended</Text>
+            <PressableScale
+              style={styles.allExamsCard}
+              onPress={() => openSubjects("ALL", "All Government Exams")}
+            >
+              <View style={[styles.iconCircle, styles.allExamsIconCircle]}>
+                <Ionicons name="earth" size={26} color="#ffffff" />
+              </View>
+              <View style={styles.allExamsTextBlock}>
+                <Text style={styles.allExamsTitle}>All Government Exams</Text>
+                <Text style={styles.allExamsSubtitle}>Common Quant, Reasoning, English & GA content</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#c3cadb" />
+            </PressableScale>
+          </>
+        )}
 
-        <Text style={styles.sectionLabel}>Browse by exam</Text>
-        <View style={styles.grid}>
-          {exams.map((exam, index) => (
+        <Text style={styles.sectionLabel}>
+          {searching ? `${filteredExams.length} result${filteredExams.length === 1 ? "" : "s"}` : "Browse by exam"}
+        </Text>
+        {/*
+          A single-column list rather than a two-up grid: exam names range from "GK"
+          to "RRB NTPC (Graduate Level)", and a fixed-width tile either wastes space on
+          short names or forces long ones onto three lines. A full-width row also has
+          room for a second line, so the count of what's actually synced is visible
+          without a tap — the thing an aspirant most wants to know before diving in.
+        */}
+        <View style={styles.list}>
+          {filteredExams.map((exam, index) => (
             <FadeInItem key={exam.code} index={index}>
-              <PressableScale
-                onPress={() => openSubjects(exam.code, exam.name)}
-                style={styles.examCard}
-              >
+              <PressableScale onPress={() => openSubjects(exam.code, exam.name)} style={styles.examCard}>
                 <View style={styles.iconCircle}>
-                  <Ionicons name="document-text-outline" size={24} color="#1a2b4a" />
+                  <Ionicons name="document-text-outline" size={22} color="#1a2b4a" />
                 </View>
-                <Text style={styles.examLabel}>{exam.name}</Text>
+                <View style={styles.examTextBlock}>
+                  <Text style={styles.examLabel} numberOfLines={2}>
+                    {exam.name}
+                  </Text>
+                  <Text style={styles.examMeta}>
+                    {exam.questionCount === 0
+                      ? "Not synced yet"
+                      : `${exam.questionCount.toLocaleString()} question${exam.questionCount === 1 ? "" : "s"}`}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#c3cadb" />
               </PressableScale>
             </FadeInItem>
           ))}
-          {exams.length === 0 && (
-            <Text style={styles.emptyText}>More exams are added as they're synced.</Text>
+          {/* Two different empty states: nothing synced yet is a content gap, while a
+              search that found nothing is a dead end the user can back out of. */}
+          {filteredExams.length === 0 && (
+            <Text style={styles.emptyText}>
+              {searching
+                ? `No exams match "${search.trim()}"`
+                : "More exams are added as they're synced."}
+            </Text>
           )}
         </View>
       </ScrollView>
@@ -151,34 +196,37 @@ const styles = StyleSheet.create({
     color: "#c3cadb",
     marginTop: 2,
   },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
+  list: {
+    gap: 12,
   },
   examCard: {
-    width: "48%",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
     backgroundColor: "#ffffff",
     borderWidth: 1,
     borderColor: "#e2e6ee",
     borderRadius: 14,
-    padding: 16,
-    alignItems: "center",
-    marginBottom: 14,
+    padding: 14,
   },
   examCardPressed: {
     backgroundColor: "#eef1f8",
     borderColor: "#1a2b4a",
   },
+  examTextBlock: {
+    flex: 1,
+  },
   examLabel: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "600",
     color: "#1a2b4a",
-    marginTop: 10,
-    textAlign: "center",
+  },
+  examMeta: {
+    fontSize: 12,
+    color: "#8a94a6",
+    marginTop: 2,
   },
   emptyText: {
-    width: "100%",
     fontSize: 13,
     color: "#8a94a6",
     textAlign: "center",

@@ -9,10 +9,28 @@ function examFilter(examCode: string | null) {
   return examCode && examCode !== ALL_EXAMS ? examCode : null;
 }
 
-export type ExamOption = { code: string; name: string };
+export type ExamOption = { code: string; name: string; questionCount: number };
 
 export async function getSyncedExams(): Promise<ExamOption[]> {
-  return db.select({ code: exams.code, name: exams.name }).from(exams).orderBy(asc(exams.displayOrder)).all();
+  const list = await db
+    .select({ code: exams.code, name: exams.name })
+    .from(exams)
+    .orderBy(asc(exams.displayOrder))
+    .all();
+
+  // One extra count query, not N — the Practice list shows how much is actually
+  // synced per exam, which is a truer "is this ready to practice?" signal than a
+  // bare name and matters most for an exam that was just added and has nothing yet.
+  const rows = await db
+    .select({ examCode: questionExams.examCode, cnt: sql<number>`count(*)` })
+    .from(questionExams)
+    .innerJoin(questions, eq(questions.id, questionExams.questionId))
+    .where(eq(questions.isDeleted, false))
+    .groupBy(questionExams.examCode)
+    .all();
+  const countByExam = new Map(rows.map((r) => [r.examCode, r.cnt]));
+
+  return list.map((e) => ({ ...e, questionCount: countByExam.get(e.code) ?? 0 }));
 }
 
 export type SubjectStat = {
