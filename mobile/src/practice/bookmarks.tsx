@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { deleteBookmark, insertBookmark, loadBookmarks, type BookmarkedQuestion } from "../db/bookmarks";
+import { useAuth } from "./authContext";
 
 export type { BookmarkedQuestion };
 
@@ -28,10 +29,14 @@ export function useBookmarks() {
  */
 export function BookmarksProvider({ children }: { children: ReactNode }) {
   const [bookmarks, setBookmarks] = useState<BookmarkedQuestion[]>([]);
+  const { progressVersion } = useAuth();
 
+  // progressVersion in the deps: a restore on sign-in writes bookmarks straight into
+  // SQLite without going through toggleBookmark, so without this the Revise tab would
+  // keep showing whatever it had at mount until the app happened to remount.
   useEffect(() => {
     loadBookmarks().then(setBookmarks);
-  }, []);
+  }, [progressVersion]);
 
   const isBookmarked = (questionId: string) => bookmarks.some((b) => b.questionId === questionId);
 

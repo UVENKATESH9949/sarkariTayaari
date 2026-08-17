@@ -14,6 +14,7 @@ import {
   StyleSheet,
 } from "react-native";
 import { useAuth } from "../practice/authContext";
+import { useNetworkStatus } from "../sync/NetworkStatusContext";
 
 /**
  * Sign in / sign up, and the signed-in account view.
@@ -24,6 +25,7 @@ import { useAuth } from "../practice/authContext";
 export default function Account() {
   const router = useRouter();
   const { user, loading, syncing, signIn, signUp, signOut } = useAuth();
+  const { isOnline } = useNetworkStatus();
 
   const [mode, setMode] = useState<"signin" | "signup">("signup");
   const [email, setEmail] = useState("");
@@ -111,6 +113,12 @@ export default function Account() {
     setError(null);
     if (!email.trim() || !password) {
       setError("Enter your email and password.");
+      return;
+    }
+    // Signing in/up needs the server, unlike everything else in this app — worth
+    // saying so up front rather than letting the request fail with a raw network error.
+    if (isOnline === false) {
+      setError("You're offline. Connect to the internet to sign in.");
       return;
     }
     setBusy(true);

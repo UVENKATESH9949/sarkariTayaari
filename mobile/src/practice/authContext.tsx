@@ -3,6 +3,7 @@ import { AppState } from "react-native";
 import { clearSession, loadSession, saveSession } from "../db/authSession";
 import { login as apiLogin, logout as apiLogout, register as apiRegister, type AuthUser } from "../api/auth";
 import { syncProgress, uploadPendingProgress } from "../sync/progressSync";
+import { syncBookmarks, uploadPendingBookmarks } from "../sync/bookmarkSync";
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -77,13 +78,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLastError(null);
     try {
       if (full) {
-        const result = await syncProgress(activeToken);
+        const [progressResult, bookmarkResult] = await Promise.all([
+          syncProgress(activeToken),
+          syncBookmarks(activeToken),
+        ]);
         // Only nudge the UI when something actually landed locally.
-        if (result.restoredSessions > 0 || result.restoredAttempts > 0) {
+        if (progressResult.restoredSessions > 0 || progressResult.restoredAttempts > 0 || bookmarkResult.restored > 0) {
           setProgressVersion((v) => v + 1);
         }
       } else {
-        await uploadPendingProgress(activeToken);
+        await Promise.all([uploadPendingProgress(activeToken), uploadPendingBookmarks(activeToken)]);
       }
     } catch (err) {
       // Never surfaced as a blocking error: the history is safe locally either way,
@@ -137,7 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Last chance to save anything pending before the token goes away.
     if (current) {
       try {
-        await uploadPendingProgress(current);
+        await Promise.all([uploadPendingProgress(current), uploadPendingBookmarks(current)]);
       } catch {
         // Best effort — signing out must not be blocked by a bad connection.
       }

@@ -4,6 +4,7 @@ import { getLastSyncedAt } from "../db/syncMeta";
 import { ensureExamFollowed } from "../db/followedExams";
 import { runInitialSync, type SyncProgress } from "./initialSync";
 import { runDeltaSync } from "./deltaSync";
+import { useNetworkStatus } from "./NetworkStatusContext";
 
 /**
  * How recent a sync has to be for an automatic check to be skipped. Foregrounding the
@@ -65,13 +66,23 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [syncVersion, setSyncVersion] = useState(0);
 
+  const { isOnline } = useNetworkStatus();
   const started = useRef(false);
   // A ref, not state: two triggers can fire in the same tick (launch + foreground),
   // and a state flag would not have updated in time to stop the second one.
   const refreshing = useRef(false);
+  // Read inside refresh() without making isOnline a dependency — refresh is captured
+  // by AppState/foreground listeners set up once, and a stale isOnline there would
+  // mean a phone that went offline mid-session keeps trying delta syncs forever.
+  const isOnlineRef = useRef(isOnline);
+  isOnlineRef.current = isOnline;
 
   const refresh = useCallback(async (options?: { force?: boolean }) => {
     if (refreshing.current) return;
+    // No point attempting and then reporting a fetch failure that was never in doubt.
+    // `null` (not yet known) is treated as online so a cold start doesn't skip its
+    // first check.
+    if (isOnlineRef.current === false) return;
 
     const last = await getLastSyncedAt();
     // Never synced: the initial sync owns that path, and a delta sync here would race it.
@@ -129,6 +140,17 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     });
     return () => subscription.remove();
   }, [refresh]);
+
+  // Coming back online is exactly when a student is most likely waiting on new
+  // content — don't make them wait for the next foreground event or the 15-minute
+  // staleness window on top of the outage they just sat through.
+  const wasOnline = useRef(isOnline);
+  useEffect(() => {
+    if (isOnline && wasOnline.current === false) {
+      refresh({ force: true }).catch((err) => console.warn("Delta sync on reconnect failed", err));
+    }
+    wasOnline.current = isOnline;
+  }, [isOnline, refresh]);
 
   return (
     <SyncContext.Provider

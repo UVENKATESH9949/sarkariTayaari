@@ -4,8 +4,10 @@ import { useMigrations } from "drizzle-orm/expo-sqlite/migrator";
 import { db } from "../db/client";
 import migrations from "../db/migrations/migrations";
 import { SyncProvider, useSyncStatus } from "../sync/SyncContext";
+import { NetworkStatusProvider } from "../sync/NetworkStatusContext";
 import { SyncProgressScreen } from "../sync/SyncProgressScreen";
 import { SyncBanner } from "../sync/SyncBanner";
+import { OfflineBanner } from "../sync/OfflineBanner";
 import { SessionHistoryProvider } from "../practice/sessionHistory";
 import { BookmarksProvider } from "../practice/bookmarks";
 import { AppLanguageProvider } from "../practice/appLanguage";
@@ -32,19 +34,21 @@ export default function RootLayout() {
   }
 
   return (
-    <SyncProvider>
-      {/* Outside SessionHistory/Bookmarks: signing in restores history into SQLite,
-          which those providers then read on their own next load. */}
-      <AuthProvider>
-        <SessionHistoryProvider>
-          <BookmarksProvider>
-            <AppLanguageProvider>
-              <RootNavigator />
-            </AppLanguageProvider>
-          </BookmarksProvider>
-        </SessionHistoryProvider>
-      </AuthProvider>
-    </SyncProvider>
+    <NetworkStatusProvider>
+      <SyncProvider>
+        {/* Outside SessionHistory/Bookmarks: signing in restores history into SQLite,
+            which those providers then read on their own next load. */}
+        <AuthProvider>
+          <SessionHistoryProvider>
+            <BookmarksProvider>
+              <AppLanguageProvider>
+                <RootNavigator />
+              </AppLanguageProvider>
+            </BookmarksProvider>
+          </SessionHistoryProvider>
+        </AuthProvider>
+      </SyncProvider>
+    </NetworkStatusProvider>
   );
 }
 
@@ -62,6 +66,7 @@ function RootNavigator() {
         <Stack.Screen name="revise" options={{ title: "Revise" }} />
         <Stack.Screen name="account" options={{ title: "Your account" }} />
       </Stack>
+      <OfflineBanner />
       <SyncBanner />
     </>
   );

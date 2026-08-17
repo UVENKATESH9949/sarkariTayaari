@@ -336,9 +336,15 @@ export const mockTestAttemptResults = sqliteTable(
   (table) => [index("idx_mock_test_attempt_results_attempt_id").on(table.attemptId)],
 );
 
-// Local-only bookmarked questions (Revise tab). Stores a full content
-// snapshot rather than just a question_id, same rationale as before: nothing
-// elsewhere guarantees the synced question row still exists/matches later.
+// Bookmarked questions (Revise tab). Stores a full content snapshot rather than just a
+// question_id, same rationale as before: nothing elsewhere guarantees the synced
+// question row still exists/matches later.
+//
+// isDeleted is a tombstone, not a hard delete: un-bookmarking while offline still needs
+// to reach the server on the next sync, and a hard-deleted row leaves nothing to upload.
+// isSynced/updatedAt mirror the practice/mock sync columns — same pending-queue and
+// last-write-wins pattern, because unlike those append-only tables a bookmark is mutable
+// state that can be toggled from more than one device.
 export const bookmarks = sqliteTable("bookmarks", {
   questionId: text("question_id").primaryKey(),
   questionText: text("question_text").notNull(),
@@ -349,4 +355,7 @@ export const bookmarks = sqliteTable("bookmarks", {
   topicName: text("topic_name").notNull(),
   examLabel: text("exam_label").notNull(),
   bookmarkedAt: integer("bookmarked_at", { mode: "timestamp_ms" }).notNull(),
+  isDeleted: integer("is_deleted", { mode: "boolean" }).notNull().default(false),
+  isSynced: integer("is_synced", { mode: "boolean" }).notNull().default(false),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
 });
