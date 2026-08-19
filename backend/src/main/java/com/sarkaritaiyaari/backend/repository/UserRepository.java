@@ -1,5 +1,6 @@
 package com.sarkaritaiyaari.backend.repository;
 
+import com.sarkaritaiyaari.backend.entity.Role;
 import com.sarkaritaiyaari.backend.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -12,4 +13,6 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByEmail(String email);
 
     boolean existsByEmail(String email);
+
+    boolean existsByRole(Role role);
 }

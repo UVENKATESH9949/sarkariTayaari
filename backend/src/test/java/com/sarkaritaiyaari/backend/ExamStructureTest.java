@@ -113,16 +113,16 @@ class ExamStructureTest extends AbstractIntegrationTest {
         createSection(paper.id(), "Cascade Section", 10, null, null, null, 1);
 
         ResponseEntity<Void> deleted = restTemplate.exchange(
-                "/api/exam-stages/" + stage.id(), HttpMethod.DELETE, null, Void.class);
+                "/api/exam-stages/" + stage.id(), HttpMethod.DELETE, adminAuth(), Void.class);
         assertThat(deleted.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
         createdStageIds.remove(stage.id());
 
-        ResponseEntity<ExamPaperResponse[]> papers = restTemplate.getForEntity(
-                "/api/exam-papers?stageId=" + stage.id(), ExamPaperResponse[].class);
+        ResponseEntity<ExamPaperResponse[]> papers = restTemplate.exchange(
+                "/api/exam-papers?stageId=" + stage.id(), HttpMethod.GET, adminAuth(), ExamPaperResponse[].class);
         assertThat(papers.getBody()).isEmpty();
 
-        ResponseEntity<PaperSectionResponse[]> sections = restTemplate.getForEntity(
-                "/api/paper-sections?paperId=" + paper.id(), PaperSectionResponse[].class);
+        ResponseEntity<PaperSectionResponse[]> sections = restTemplate.exchange(
+                "/api/paper-sections?paperId=" + paper.id(), HttpMethod.GET, adminAuth(), PaperSectionResponse[].class);
         assertThat(sections.getBody()).isEmpty();
     }
 
@@ -134,7 +134,7 @@ class ExamStructureTest extends AbstractIntegrationTest {
         duplicate.setExamCode(TEST_EXAM_CODE);
         duplicate.setName("Duplicate Stage Name");
 
-        ResponseEntity<Map> response = restTemplate.postForEntity("/api/exam-stages", duplicate, Map.class);
+        ResponseEntity<Map> response = restTemplate.exchange("/api/exam-stages", HttpMethod.POST, adminAuth(duplicate), Map.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
@@ -147,7 +147,7 @@ class ExamStructureTest extends AbstractIntegrationTest {
         request.setName("Bad Type Paper");
         request.setPaperType("not-a-real-type");
 
-        ResponseEntity<Map> response = restTemplate.postForEntity("/api/exam-papers", request, Map.class);
+        ResponseEntity<Map> response = restTemplate.exchange("/api/exam-papers", HttpMethod.POST, adminAuth(request), Map.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
@@ -163,15 +163,15 @@ class ExamStructureTest extends AbstractIntegrationTest {
         request.setQuestionCount(10);
         request.setSubjectIds(List.of());
 
-        ResponseEntity<Map> response = restTemplate.postForEntity("/api/paper-sections", request, Map.class);
+        ResponseEntity<Map> response = restTemplate.exchange("/api/paper-sections", HttpMethod.POST, adminAuth(request), Map.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
     /* ------------------------------------------------------------------- helpers */
 
     private ExamStructureResponse getStructure() {
-        ResponseEntity<ExamStructureResponse> response = restTemplate.getForEntity(
-                "/api/exams/" + TEST_EXAM_CODE + "/structure", ExamStructureResponse.class);
+        ResponseEntity<ExamStructureResponse> response = restTemplate.exchange(
+                "/api/exams/" + TEST_EXAM_CODE + "/structure", HttpMethod.GET, adminAuth(), ExamStructureResponse.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         return response.getBody();
     }
@@ -195,8 +195,8 @@ class ExamStructureTest extends AbstractIntegrationTest {
         request.setName(name);
         request.setDisplayOrder(displayOrder);
 
-        ResponseEntity<ExamStageResponse> response =
-                restTemplate.postForEntity("/api/exam-stages", request, ExamStageResponse.class);
+        ResponseEntity<ExamStageResponse> response = restTemplate.exchange(
+                "/api/exam-stages", HttpMethod.POST, adminAuth(request), ExamStageResponse.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         createdStageIds.add(response.getBody().id());
         return response.getBody();
@@ -213,8 +213,8 @@ class ExamStructureTest extends AbstractIntegrationTest {
         request.setMarksWrong(marksWrong);
         request.setDisplayOrder(1);
 
-        ResponseEntity<ExamPaperResponse> response =
-                restTemplate.postForEntity("/api/exam-papers", request, ExamPaperResponse.class);
+        ResponseEntity<ExamPaperResponse> response = restTemplate.exchange(
+                "/api/exam-papers", HttpMethod.POST, adminAuth(request), ExamPaperResponse.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         return response.getBody();
     }
@@ -233,8 +233,8 @@ class ExamStructureTest extends AbstractIntegrationTest {
         request.setDisplayOrder(displayOrder);
         request.setSubjectIds(List.of(subject.getId()));
 
-        ResponseEntity<PaperSectionResponse> response =
-                restTemplate.postForEntity("/api/paper-sections", request, PaperSectionResponse.class);
+        ResponseEntity<PaperSectionResponse> response = restTemplate.exchange(
+                "/api/paper-sections", HttpMethod.POST, adminAuth(request), PaperSectionResponse.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         return response.getBody();
     }

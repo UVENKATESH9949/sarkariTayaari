@@ -8,3 +8,12 @@ cloudinary:
   cloud-name: FILL_ME_IN
   api-key: FILL_ME_IN
   api-secret: FILL_ME_IN
+
+# Optional. Creates a single ADMIN-role user on startup if no admin exists yet — this is
+# how the very first admin account gets created (public sign-up always creates a
+# STUDENT). Leave both blank/omitted to skip bootstrap; safe to leave set afterwards,
+# since it's a no-op once any admin exists. Once you have one admin, sign in to the
+# admin console and use it to create teammates via POST /api/auth/admin/register.
+admin:
+  bootstrap-email:
+  bootstrap-password:

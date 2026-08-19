@@ -1,5 +1,19 @@
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
+// Set by AuthContext on login/logout/initial load — kept here (rather than threaded
+// through every call site) since every admin request needs it and this is the one place
+// all of them already pass through.
+let authToken = null;
+let onUnauthorized = () => {};
+
+export function setAuthToken(token) {
+  authToken = token;
+}
+
+export function setOnUnauthorized(handler) {
+  onUnauthorized = handler;
+}
+
 async function readError(response) {
   const body = await response.json().catch(() => ({}));
   // Handled errors use {error}; unhandled 500s fall back to Spring's {error, message} shape.
@@ -7,11 +21,12 @@ async function readError(response) {
 }
 
 async function request(path, options = {}) {
-  const response = await fetch(`${BASE_URL}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
+  const headers = { "Content-Type": "application/json", ...options.headers };
+  if (authToken) headers.Authorization = `Bearer ${authToken}`;
 
+  const response = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+
+  if (response.status === 401) onUnauthorized();
   if (!response.ok) {
     throw new Error(await readError(response));
   }
@@ -276,9 +291,25 @@ export async function uploadImage(file) {
   const form = new FormData();
   form.append("file", file);
 
-  const response = await fetch(`${BASE_URL}/api/images`, { method: "POST", body: form });
+  const headers = authToken ? { Authorization: `Bearer ${authToken}` } : {};
+  const response = await fetch(`${BASE_URL}/api/images`, { method: "POST", body: form, headers });
+  if (response.status === 401) onUnauthorized();
   if (!response.ok) {
     throw new Error(await readError(response));
   }
   return response.json();
+}
+
+/* --------------------------------------------------------------------- Auth */
+
+export function login(email, password) {
+  return request(`/api/auth/login`, jsonBody("POST", { email, password }));
+}
+
+export function getMe() {
+  return request(`/api/auth/me`);
+}
+
+export function logoutRequest() {
+  return request(`/api/auth/logout`, { method: "POST" });
 }

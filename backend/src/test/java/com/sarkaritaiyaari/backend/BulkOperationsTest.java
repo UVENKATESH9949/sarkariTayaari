@@ -10,6 +10,7 @@ import com.sarkaritaiyaari.backend.dto.QuestionResponse;
 import com.sarkaritaiyaari.backend.dto.TranslationRequest;
 import com.sarkaritaiyaari.backend.entity.Question;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -24,8 +25,8 @@ class BulkOperationsTest extends AbstractIntegrationTest {
         BulkImportRequest request = new BulkImportRequest();
         request.setQuestions(List.of(sampleBulkRequest("Bulk A?"), sampleBulkRequest("Bulk B?")));
 
-        ResponseEntity<BulkImportResponse> response =
-                restTemplate.postForEntity("/api/questions/bulk-import", request, BulkImportResponse.class);
+        ResponseEntity<BulkImportResponse> response = restTemplate.exchange(
+                "/api/questions/bulk-import", HttpMethod.POST, adminAuth(request), BulkImportResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         BulkImportResponse body = response.getBody();
@@ -44,8 +45,8 @@ class BulkOperationsTest extends AbstractIntegrationTest {
         BulkImportRequest request = new BulkImportRequest();
         request.setQuestions(List.of(sampleBulkRequest("Bulk Reuse?")));
 
-        ResponseEntity<BulkImportResponse> response =
-                restTemplate.postForEntity("/api/questions/bulk-import", request, BulkImportResponse.class);
+        ResponseEntity<BulkImportResponse> response = restTemplate.exchange(
+                "/api/questions/bulk-import", HttpMethod.POST, adminAuth(request), BulkImportResponse.class);
 
         assertThat(response.getBody().getCreatedCount()).isEqualTo(1);
         createdIds.addAll(response.getBody().getIds());
@@ -68,8 +69,8 @@ class BulkOperationsTest extends AbstractIntegrationTest {
         BulkImportRequest request = new BulkImportRequest();
         request.setQuestions(List.of(good, bad));
 
-        ResponseEntity<BulkImportResponse> response =
-                restTemplate.postForEntity("/api/questions/bulk-import", request, BulkImportResponse.class);
+        ResponseEntity<BulkImportResponse> response = restTemplate.exchange(
+                "/api/questions/bulk-import", HttpMethod.POST, adminAuth(request), BulkImportResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         BulkImportResponse body = response.getBody();
@@ -88,8 +89,8 @@ class BulkOperationsTest extends AbstractIntegrationTest {
         BulkImportRequest request = new BulkImportRequest();
         request.setQuestions(List.of(badExam));
 
-        ResponseEntity<BulkImportResponse> response =
-                restTemplate.postForEntity("/api/questions/bulk-import", request, BulkImportResponse.class);
+        ResponseEntity<BulkImportResponse> response = restTemplate.exchange(
+                "/api/questions/bulk-import", HttpMethod.POST, adminAuth(request), BulkImportResponse.class);
 
         assertThat(response.getBody().getCreatedCount()).isEqualTo(0);
         assertThat(response.getBody().getFailures()).hasSize(1);
@@ -104,8 +105,8 @@ class BulkOperationsTest extends AbstractIntegrationTest {
         BulkDeleteRequest request = new BulkDeleteRequest();
         request.setIds(List.of(first.getId(), second.getId()));
 
-        ResponseEntity<BulkDeleteResponse> response =
-                restTemplate.postForEntity("/api/questions/bulk-delete", request, BulkDeleteResponse.class);
+        ResponseEntity<BulkDeleteResponse> response = restTemplate.exchange(
+                "/api/questions/bulk-delete", HttpMethod.POST, adminAuth(request), BulkDeleteResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().getDeletedCount()).isEqualTo(2);
@@ -133,7 +134,7 @@ class BulkOperationsTest extends AbstractIntegrationTest {
 
     private QuestionResponse createQuestion(CreateQuestionRequest request) {
         ResponseEntity<QuestionResponse> response =
-                restTemplate.postForEntity("/api/questions", request, QuestionResponse.class);
+                restTemplate.exchange("/api/questions", HttpMethod.POST, adminAuth(request), QuestionResponse.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         QuestionResponse created = response.getBody();
         createdIds.add(created.getId());

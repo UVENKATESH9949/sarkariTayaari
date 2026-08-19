@@ -3,7 +3,6 @@ package com.sarkaritaiyaari.backend;
 import com.sarkaritaiyaari.backend.dto.ExamRequest;
 import com.sarkaritaiyaari.backend.dto.ExamResponse;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,8 +19,8 @@ class ExamCrudTest extends AbstractIntegrationTest {
     void createThenGet_returnsSameData() {
         ExamResponse created = createExam("CRUD_TEST_EXAM", "CRUD Test Exam", true, 50);
 
-        ResponseEntity<ExamResponse> response =
-                restTemplate.getForEntity("/api/exams/" + created.getCode(), ExamResponse.class);
+        ResponseEntity<ExamResponse> response = restTemplate.exchange(
+                "/api/exams/" + created.getCode(), HttpMethod.GET, adminAuth(), ExamResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().getName()).isEqualTo("CRUD Test Exam");
@@ -44,7 +43,8 @@ class ExamCrudTest extends AbstractIntegrationTest {
     void listAll_includesInactiveExams() {
         createExam("CRUD_ALL_INACTIVE_EXAM", "Inactive", false, 53);
 
-        ResponseEntity<ExamResponse[]> response = restTemplate.getForEntity("/api/exams/all", ExamResponse[].class);
+        ResponseEntity<ExamResponse[]> response = restTemplate.exchange(
+                "/api/exams/all", HttpMethod.GET, adminAuth(), ExamResponse[].class);
         List<String> codes = Arrays.stream(response.getBody()).map(ExamResponse::getCode).toList();
 
         assertThat(codes).contains("CRUD_ALL_INACTIVE_EXAM");
@@ -61,7 +61,7 @@ class ExamCrudTest extends AbstractIntegrationTest {
         update.setDisplayOrder(55);
 
         ResponseEntity<ExamResponse> response = restTemplate.exchange(
-                "/api/exams/" + created.getCode(), HttpMethod.PUT, new HttpEntity<>(update), ExamResponse.class);
+                "/api/exams/" + created.getCode(), HttpMethod.PUT, adminAuth(update), ExamResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().getName()).isEqualTo("Updated Name");
@@ -75,11 +75,12 @@ class ExamCrudTest extends AbstractIntegrationTest {
         request.setName("To Delete");
         request.setActive(false);
         request.setDisplayOrder(56);
-        restTemplate.postForEntity("/api/exams", request, ExamResponse.class);
+        restTemplate.exchange("/api/exams", HttpMethod.POST, adminAuth(request), ExamResponse.class);
 
-        restTemplate.delete("/api/exams/CRUD_DELETE_EXAM");
+        restTemplate.exchange("/api/exams/CRUD_DELETE_EXAM", HttpMethod.DELETE, adminAuth(), Void.class);
 
-        ResponseEntity<ExamResponse> response = restTemplate.getForEntity("/api/exams/CRUD_DELETE_EXAM", ExamResponse.class);
+        ResponseEntity<ExamResponse> response = restTemplate.exchange(
+                "/api/exams/CRUD_DELETE_EXAM", HttpMethod.GET, adminAuth(), ExamResponse.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
@@ -93,7 +94,7 @@ class ExamCrudTest extends AbstractIntegrationTest {
         duplicate.setActive(false);
         duplicate.setDisplayOrder(58);
 
-        ResponseEntity<Map> response = restTemplate.postForEntity("/api/exams", duplicate, Map.class);
+        ResponseEntity<Map> response = restTemplate.exchange("/api/exams", HttpMethod.POST, adminAuth(duplicate), Map.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
@@ -104,7 +105,8 @@ class ExamCrudTest extends AbstractIntegrationTest {
         request.setActive(active);
         request.setDisplayOrder(displayOrder);
 
-        ResponseEntity<ExamResponse> response = restTemplate.postForEntity("/api/exams", request, ExamResponse.class);
+        ResponseEntity<ExamResponse> response = restTemplate.exchange(
+                "/api/exams", HttpMethod.POST, adminAuth(request), ExamResponse.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         createdExamCodes.add(response.getBody().getCode());
         return response.getBody();

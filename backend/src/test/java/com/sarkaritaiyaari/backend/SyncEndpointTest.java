@@ -3,6 +3,7 @@ package com.sarkaritaiyaari.backend;
 import com.sarkaritaiyaari.backend.dto.CreateQuestionRequest;
 import com.sarkaritaiyaari.backend.dto.QuestionResponse;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -47,7 +48,7 @@ class SyncEndpointTest extends AbstractIntegrationTest {
     void deletedQuestions_areIncludedInSyncResults() {
         OffsetDateTime before = OffsetDateTime.now();
         QuestionResponse created = createQuestion(sampleRequest());
-        restTemplate.delete("/api/questions/" + created.getId());
+        restTemplate.exchange("/api/questions/" + created.getId(), HttpMethod.DELETE, adminAuth(), Void.class);
 
         Map<?, ?> body = sync(before.toString(), 0, 500);
         List<Map<?, ?>> content = (List<Map<?, ?>>) body.get("content");
@@ -95,7 +96,7 @@ class SyncEndpointTest extends AbstractIntegrationTest {
 
     private QuestionResponse createQuestion(CreateQuestionRequest request) {
         ResponseEntity<QuestionResponse> response =
-                restTemplate.postForEntity("/api/questions", request, QuestionResponse.class);
+                restTemplate.exchange("/api/questions", HttpMethod.POST, adminAuth(request), QuestionResponse.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         QuestionResponse created = response.getBody();
         createdIds.add(created.getId());

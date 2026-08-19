@@ -9,6 +9,8 @@ import ExamStructure from "./pages/ExamStructure.jsx";
 import Languages from "./pages/Languages.jsx";
 import DifficultyLevels from "./pages/DifficultyLevels.jsx";
 import PaperTypes from "./pages/PaperTypes.jsx";
+import Login from "./pages/Login.jsx";
+import { useAuth } from "./auth/AuthContext.jsx";
 import {
   ListIcon,
   PlusIcon,
@@ -23,6 +25,37 @@ import {
 import "./App.css";
 
 export default function App() {
+  const { user, loading, logout } = useAuth();
+
+  if (loading) return null;
+
+  if (!user || user.role !== "ADMIN") {
+    return (
+      <>
+        {user && (
+          <div className="login-page">
+            <div className="login-card">
+              <div className="sidebar-brand">
+                <div className="logo">ST</div>
+                <div>
+                  <div className="name">SarkariTaiyaari</div>
+                  <div className="subtitle">Content Admin</div>
+                </div>
+              </div>
+              <div className="banner banner-error">
+                {user.email} is signed in but is not an admin account.
+              </div>
+              <button className="btn btn-primary" onClick={logout}>
+                Sign out
+              </button>
+            </div>
+          </div>
+        )}
+        {!user && <Login />}
+      </>
+    );
+  }
+
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -48,6 +81,11 @@ export default function App() {
           <NavLink to="/difficulty-levels"><LevelIcon /> Difficulty Levels</NavLink>
           <NavLink to="/paper-types"><PaperTypeIcon /> Paper Types</NavLink>
         </nav>
+
+        <div className="sidebar-account">
+          <div className="email">{user.email}</div>
+          <button className="btn btn-sm" onClick={logout}>Sign out</button>
+        </div>
       </aside>
 
       <div className="main">

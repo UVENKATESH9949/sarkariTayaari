@@ -7,7 +7,6 @@ import com.sarkaritaiyaari.backend.dto.UpdateQuestionRequest;
 import com.sarkaritaiyaari.backend.dto.UpsertTranslationRequest;
 import com.sarkaritaiyaari.backend.entity.Topic;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -24,8 +23,8 @@ class QuestionCrudTest extends AbstractIntegrationTest {
     void createThenGet_returnsSameData() {
         QuestionResponse created = createQuestion(sampleRequest());
 
-        ResponseEntity<QuestionResponse> getResponse =
-                restTemplate.getForEntity("/api/questions/" + created.getId(), QuestionResponse.class);
+        ResponseEntity<QuestionResponse> getResponse = restTemplate.exchange(
+                "/api/questions/" + created.getId(), HttpMethod.GET, adminAuth(), QuestionResponse.class);
 
         assertThat(getResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(getResponse.getBody().getTopicName()).isEqualTo(TEST_TOPIC_NAME);
@@ -52,7 +51,7 @@ class QuestionCrudTest extends AbstractIntegrationTest {
         update.setExamCodes(List.of(TEST_EXAM_CODE));
 
         ResponseEntity<QuestionResponse> response = restTemplate.exchange(
-                "/api/questions/" + created.getId(), HttpMethod.PUT, new HttpEntity<>(update), QuestionResponse.class);
+                "/api/questions/" + created.getId(), HttpMethod.PUT, adminAuth(update), QuestionResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().getTopicId()).isEqualTo(otherTopic.getId());
@@ -71,7 +70,7 @@ class QuestionCrudTest extends AbstractIntegrationTest {
 
         ResponseEntity<QuestionResponse> response = restTemplate.exchange(
                 "/api/questions/" + created.getId() + "/translations/hi",
-                HttpMethod.PUT, new HttpEntity<>(hi), QuestionResponse.class);
+                HttpMethod.PUT, adminAuth(hi), QuestionResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().getTranslations()).hasSize(2);
@@ -84,10 +83,10 @@ class QuestionCrudTest extends AbstractIntegrationTest {
     void delete_softDeletes_stillReadableAsDeleted() {
         QuestionResponse created = createQuestion(sampleRequest());
 
-        restTemplate.delete("/api/questions/" + created.getId());
+        restTemplate.exchange("/api/questions/" + created.getId(), HttpMethod.DELETE, adminAuth(), Void.class);
 
-        ResponseEntity<QuestionResponse> getResponse =
-                restTemplate.getForEntity("/api/questions/" + created.getId(), QuestionResponse.class);
+        ResponseEntity<QuestionResponse> getResponse = restTemplate.exchange(
+                "/api/questions/" + created.getId(), HttpMethod.GET, adminAuth(), QuestionResponse.class);
 
         assertThat(getResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(getResponse.getBody().isDeleted()).isTrue();
@@ -102,7 +101,7 @@ class QuestionCrudTest extends AbstractIntegrationTest {
         hiOnly.setOptions(List.of("1", "2", "3", "4"));
         request.setTranslations(List.of(hiOnly));
 
-        ResponseEntity<Map> response = restTemplate.postForEntity("/api/questions", request, Map.class);
+        ResponseEntity<Map> response = restTemplate.exchange("/api/questions", HttpMethod.POST, adminAuth(request), Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody().get("error").toString()).contains("root language");
@@ -120,7 +119,7 @@ class QuestionCrudTest extends AbstractIntegrationTest {
         translations.add(unknown);
         request.setTranslations(translations);
 
-        ResponseEntity<Map> response = restTemplate.postForEntity("/api/questions", request, Map.class);
+        ResponseEntity<Map> response = restTemplate.exchange("/api/questions", HttpMethod.POST, adminAuth(request), Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody().get("error").toString()).contains("zz");
@@ -131,7 +130,7 @@ class QuestionCrudTest extends AbstractIntegrationTest {
         CreateQuestionRequest request = sampleRequest();
         request.setExamCodes(List.of("NOT_A_REAL_EXAM"));
 
-        ResponseEntity<Map> response = restTemplate.postForEntity("/api/questions", request, Map.class);
+        ResponseEntity<Map> response = restTemplate.exchange("/api/questions", HttpMethod.POST, adminAuth(request), Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody().get("error").toString()).contains("NOT_A_REAL_EXAM");
@@ -141,8 +140,8 @@ class QuestionCrudTest extends AbstractIntegrationTest {
     void list_filtersByExamCode() {
         createQuestion(sampleRequest());
 
-        ResponseEntity<Map> response = restTemplate.getForEntity(
-                "/api/questions?examCode=" + TEST_EXAM_CODE + "&size=200", Map.class);
+        ResponseEntity<Map> response = restTemplate.exchange(
+                "/api/questions?examCode=" + TEST_EXAM_CODE + "&size=200", HttpMethod.GET, adminAuth(), Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         List<?> content = (List<?>) response.getBody().get("content");
@@ -151,7 +150,7 @@ class QuestionCrudTest extends AbstractIntegrationTest {
 
     private QuestionResponse createQuestion(CreateQuestionRequest request) {
         ResponseEntity<QuestionResponse> response =
-                restTemplate.postForEntity("/api/questions", request, QuestionResponse.class);
+                restTemplate.exchange("/api/questions", HttpMethod.POST, adminAuth(request), QuestionResponse.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         QuestionResponse created = response.getBody();
         createdIds.add(created.getId());

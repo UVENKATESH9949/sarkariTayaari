@@ -7,7 +7,6 @@ import com.sarkaritaiyaari.backend.repository.DifficultyLevelRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -56,7 +55,7 @@ class DifficultyLevelTest extends AbstractIntegrationTest {
         CreateQuestionRequest request = sampleRequest();
         request.setDifficulty("verify-extreme");
 
-        ResponseEntity<Map> response = restTemplate.postForEntity("/api/questions", request, Map.class);
+        ResponseEntity<Map> response = restTemplate.exchange("/api/questions", HttpMethod.POST, adminAuth(request), Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         createdIds.add(java.util.UUID.fromString((String) response.getBody().get("id")));
@@ -67,7 +66,7 @@ class DifficultyLevelTest extends AbstractIntegrationTest {
         CreateQuestionRequest request = sampleRequest();
         request.setDifficulty("not-a-real-level");
 
-        ResponseEntity<Map> response = restTemplate.postForEntity("/api/questions", request, Map.class);
+        ResponseEntity<Map> response = restTemplate.exchange("/api/questions", HttpMethod.POST, adminAuth(request), Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat((String) response.getBody().get("error")).contains("Unknown difficulty");
@@ -81,7 +80,7 @@ class DifficultyLevelTest extends AbstractIntegrationTest {
                 .getForEntity("/api/difficulty-levels", DifficultyLevelResponse[].class).getBody())
                 .stream().map(DifficultyLevelResponse::code).toList();
         List<String> all = List.of(restTemplate
-                .getForEntity("/api/difficulty-levels/all", DifficultyLevelResponse[].class).getBody())
+                .exchange("/api/difficulty-levels/all", HttpMethod.GET, adminAuth(), DifficultyLevelResponse[].class).getBody())
                 .stream().map(DifficultyLevelResponse::code).toList();
 
         assertThat(active).doesNotContain("verify-hidden");
@@ -100,7 +99,7 @@ class DifficultyLevelTest extends AbstractIntegrationTest {
 
         ResponseEntity<DifficultyLevelResponse> response = restTemplate.exchange(
                 "/api/difficulty-levels/verify-update", HttpMethod.PUT,
-                new HttpEntity<>(update), DifficultyLevelResponse.class);
+                adminAuth(update), DifficultyLevelResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().label()).isEqualTo("After");
@@ -114,8 +113,8 @@ class DifficultyLevelTest extends AbstractIntegrationTest {
         request.setDisplayOrder(displayOrder);
         request.setActive(active);
 
-        ResponseEntity<DifficultyLevelResponse> response =
-                restTemplate.postForEntity("/api/difficulty-levels", request, DifficultyLevelResponse.class);
+        ResponseEntity<DifficultyLevelResponse> response = restTemplate.exchange(
+                "/api/difficulty-levels", HttpMethod.POST, adminAuth(request), DifficultyLevelResponse.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         createdCodes.add(code);
         return response.getBody();

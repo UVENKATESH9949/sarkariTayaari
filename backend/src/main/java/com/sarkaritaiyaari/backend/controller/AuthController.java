@@ -47,4 +47,17 @@ public class AuthController {
     public AuthResponse.UserResponse me(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization) {
         return authService.describe(authService.requireUser(authorization));
     }
+
+    /**
+     * Creates another admin account. Only an existing admin can call this — the very
+     * first admin is created by {@code AdminBootstrapRunner} on startup instead, since
+     * nobody has a token yet at that point.
+     */
+    @PostMapping("/admin/register")
+    public ResponseEntity<AuthResponse.UserResponse> registerAdmin(
+            @RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
+            @Valid @RequestBody RegisterRequest request) {
+        authService.requireAdmin(authorization);
+        return ResponseEntity.status(HttpStatus.CREATED).body(authService.registerAdmin(request));
+    }
 }

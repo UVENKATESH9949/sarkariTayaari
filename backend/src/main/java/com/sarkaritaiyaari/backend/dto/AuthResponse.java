@@ -18,7 +18,8 @@ public record AuthResponse(
     public record UserResponse(
             UUID id,
             String email,
-            String displayName
+            String displayName,
+            String role
     ) {
     }
 }

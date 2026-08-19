@@ -4,8 +4,10 @@ import com.sarkaritaiyaari.backend.dto.ExamRequest;
 import com.sarkaritaiyaari.backend.dto.ExamResponse;
 import com.sarkaritaiyaari.backend.dto.SubjectResponse;
 import com.sarkaritaiyaari.backend.dto.SyllabusRequest;
+import com.sarkaritaiyaari.backend.service.AuthService;
 import com.sarkaritaiyaari.backend.service.ExamService;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -24,22 +27,27 @@ import java.util.List;
 public class ExamController {
 
     private final ExamService examService;
+    private final AuthService authService;
 
-    public ExamController(ExamService examService) {
+    public ExamController(ExamService examService, AuthService authService) {
         this.examService = examService;
+        this.authService = authService;
     }
 
     @PostMapping
-    public ResponseEntity<ExamResponse> create(@Valid @RequestBody ExamRequest request) {
+    public ResponseEntity<ExamResponse> create(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
+                                                @Valid @RequestBody ExamRequest request) {
+        authService.requireAdmin(authorization);
         return ResponseEntity.status(HttpStatus.CREATED).body(examService.create(request));
     }
 
     @GetMapping("/{code}")
-    public ExamResponse get(@PathVariable String code) {
+    public ExamResponse get(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization, @PathVariable String code) {
+        authService.requireAdmin(authorization);
         return examService.get(code);
     }
 
-    /** Active-only — this is the mobile-facing list (Home screen exam cards). */
+    /** Active-only — this is the mobile-facing list (Home screen exam cards). Deliberately public. */
     @GetMapping
     public List<ExamResponse> listActive() {
         return examService.listActive();
@@ -47,29 +55,37 @@ public class ExamController {
 
     /** Everything, including inactive exams — for the admin management screen. */
     @GetMapping("/all")
-    public List<ExamResponse> listAll() {
+    public List<ExamResponse> listAll(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization) {
+        authService.requireAdmin(authorization);
         return examService.listAll();
     }
 
     /** The subjects this exam's syllabus covers — one subject can belong to many exams. */
     @GetMapping("/{code}/subjects")
-    public List<SubjectResponse> getSyllabus(@PathVariable String code) {
+    public List<SubjectResponse> getSyllabus(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
+                                              @PathVariable String code) {
+        authService.requireAdmin(authorization);
         return examService.getSyllabus(code);
     }
 
     /** Replaces the syllabus with exactly the subjects supplied. */
     @PutMapping("/{code}/subjects")
-    public List<SubjectResponse> setSyllabus(@PathVariable String code, @Valid @RequestBody SyllabusRequest request) {
+    public List<SubjectResponse> setSyllabus(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
+                                              @PathVariable String code, @Valid @RequestBody SyllabusRequest request) {
+        authService.requireAdmin(authorization);
         return examService.setSyllabus(code, request.getSubjectIds());
     }
 
     @PutMapping("/{code}")
-    public ExamResponse update(@PathVariable String code, @Valid @RequestBody ExamRequest request) {
+    public ExamResponse update(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
+                                @PathVariable String code, @Valid @RequestBody ExamRequest request) {
+        authService.requireAdmin(authorization);
         return examService.update(code, request);
     }
 
     @DeleteMapping("/{code}")
-    public ResponseEntity<Void> delete(@PathVariable String code) {
+    public ResponseEntity<Void> delete(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization, @PathVariable String code) {
+        authService.requireAdmin(authorization);
         examService.delete(code);
         return ResponseEntity.noContent().build();
     }

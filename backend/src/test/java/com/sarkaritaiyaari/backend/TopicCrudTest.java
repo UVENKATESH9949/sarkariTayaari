@@ -5,7 +5,6 @@ import com.sarkaritaiyaari.backend.dto.SubjectResponse;
 import com.sarkaritaiyaari.backend.dto.TopicRequest;
 import com.sarkaritaiyaari.backend.dto.TopicResponse;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,8 +21,8 @@ class TopicCrudTest extends AbstractIntegrationTest {
         UUID subjectId = createSubject("CRUD Topic Parent Subject A");
         TopicResponse created = createTopic(subjectId, "Percentages A");
 
-        ResponseEntity<TopicResponse> response =
-                restTemplate.getForEntity("/api/topics/" + created.getId(), TopicResponse.class);
+        ResponseEntity<TopicResponse> response = restTemplate.exchange(
+                "/api/topics/" + created.getId(), HttpMethod.GET, adminAuth(), TopicResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().getName()).isEqualTo("Percentages A");
@@ -56,7 +55,7 @@ class TopicCrudTest extends AbstractIntegrationTest {
         update.setName("Moved Topic");
 
         ResponseEntity<TopicResponse> response = restTemplate.exchange(
-                "/api/topics/" + created.getId(), HttpMethod.PUT, new HttpEntity<>(update), TopicResponse.class);
+                "/api/topics/" + created.getId(), HttpMethod.PUT, adminAuth(update), TopicResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().getName()).isEqualTo("Moved Topic");
@@ -69,14 +68,15 @@ class TopicCrudTest extends AbstractIntegrationTest {
         request.setSubjectId(UUID.randomUUID());
         request.setName("Orphan Topic");
 
-        ResponseEntity<?> response = restTemplate.postForEntity("/api/topics", request, Object.class);
+        ResponseEntity<?> response = restTemplate.exchange("/api/topics", HttpMethod.POST, adminAuth(request), Object.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
     private UUID createSubject(String name) {
         SubjectRequest request = new SubjectRequest();
         request.setName(name);
-        ResponseEntity<SubjectResponse> response = restTemplate.postForEntity("/api/subjects", request, SubjectResponse.class);
+        ResponseEntity<SubjectResponse> response = restTemplate.exchange(
+                "/api/subjects", HttpMethod.POST, adminAuth(request), SubjectResponse.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         UUID id = response.getBody().getId();
         createdSubjectIds.add(id);
@@ -88,7 +88,8 @@ class TopicCrudTest extends AbstractIntegrationTest {
         request.setSubjectId(subjectId);
         request.setName(name);
 
-        ResponseEntity<TopicResponse> response = restTemplate.postForEntity("/api/topics", request, TopicResponse.class);
+        ResponseEntity<TopicResponse> response = restTemplate.exchange(
+                "/api/topics", HttpMethod.POST, adminAuth(request), TopicResponse.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         createdTopicIds.add(response.getBody().getId());
         return response.getBody();

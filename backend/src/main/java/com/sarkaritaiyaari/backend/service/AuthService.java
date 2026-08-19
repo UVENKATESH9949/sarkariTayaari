@@ -3,6 +3,7 @@ package com.sarkaritaiyaari.backend.service;
 import com.sarkaritaiyaari.backend.dto.AuthResponse;
 import com.sarkaritaiyaari.backend.dto.LoginRequest;
 import com.sarkaritaiyaari.backend.dto.RegisterRequest;
+import com.sarkaritaiyaari.backend.entity.Role;
 import com.sarkaritaiyaari.backend.entity.User;
 import com.sarkaritaiyaari.backend.entity.UserToken;
 import com.sarkaritaiyaari.backend.repository.UserRepository;
@@ -44,6 +45,22 @@ public class AuthService {
     }
 
     public AuthResponse register(RegisterRequest request) {
+        User user = createUser(request, Role.STUDENT);
+        return issueToken(user, request.getDeviceLabel());
+    }
+
+    /**
+     * Creates another admin account. Only reachable by an existing admin
+     * (see {@link com.sarkaritaiyaari.backend.controller.AuthController}), so this
+     * deliberately does not issue a token — the new admin signs themselves in via the
+     * normal {@link #login} flow rather than the creator ever holding their credential.
+     */
+    public AuthResponse.UserResponse registerAdmin(RegisterRequest request) {
+        User user = createUser(request, Role.ADMIN);
+        return describe(user);
+    }
+
+    private User createUser(RegisterRequest request, Role role) {
         String email = normalise(request.getEmail());
 
         if (userRepository.existsByEmail(email)) {
@@ -57,9 +74,9 @@ public class AuthService {
         user.setEmail(email);
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         user.setDisplayName(trimToNull(request.getDisplayName()));
+        user.setRole(role);
         userRepository.save(user);
-
-        return issueToken(user, request.getDeviceLabel());
+        return user;
     }
 
     public AuthResponse login(LoginRequest request) {
@@ -111,9 +128,19 @@ public class AuthService {
         return stored.getUser();
     }
 
+    /** Same as {@link #requireUser}, plus a role check. Used by admin-only endpoints. */
+    @Transactional(readOnly = true)
+    public User requireAdmin(String authorizationHeader) {
+        User user = requireUser(authorizationHeader);
+        if (user.getRole() != Role.ADMIN) {
+            throw new ForbiddenException("Admin access required");
+        }
+        return user;
+    }
+
     @Transactional(readOnly = true)
     public AuthResponse.UserResponse describe(User user) {
-        return new AuthResponse.UserResponse(user.getId(), user.getEmail(), user.getDisplayName());
+        return new AuthResponse.UserResponse(user.getId(), user.getEmail(), user.getDisplayName(), user.getRole().name());
     }
 
     /* ------------------------------------------------------------------- internals */

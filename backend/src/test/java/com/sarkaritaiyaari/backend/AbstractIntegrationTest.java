@@ -3,18 +3,26 @@ package com.sarkaritaiyaari.backend;
 import com.sarkaritaiyaari.backend.dto.CreateQuestionRequest;
 import com.sarkaritaiyaari.backend.dto.TranslationRequest;
 import com.sarkaritaiyaari.backend.entity.Exam;
+import com.sarkaritaiyaari.backend.entity.Role;
 import com.sarkaritaiyaari.backend.entity.Subject;
 import com.sarkaritaiyaari.backend.entity.Topic;
+import com.sarkaritaiyaari.backend.entity.User;
+import com.sarkaritaiyaari.backend.entity.UserToken;
 import com.sarkaritaiyaari.backend.repository.ExamRepository;
 import com.sarkaritaiyaari.backend.repository.QuestionRepository;
 import com.sarkaritaiyaari.backend.repository.SubjectRepository;
 import com.sarkaritaiyaari.backend.repository.TopicRepository;
+import com.sarkaritaiyaari.backend.repository.UserRepository;
+import com.sarkaritaiyaari.backend.repository.UserTokenRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -32,6 +40,7 @@ abstract class AbstractIntegrationTest {
     protected static final String TEST_EXAM_CODE = "AUTOMATED_TEST";
     protected static final String TEST_SUBJECT_NAME = "Automated Test Subject";
     protected static final String TEST_TOPIC_NAME = "Automated Test Topic";
+    protected static final String TEST_ADMIN_EMAIL = "automated-test-admin@sarkaritaiyaari.internal";
 
     @Autowired
     protected TestRestTemplate restTemplate;
@@ -48,12 +57,19 @@ abstract class AbstractIntegrationTest {
     @Autowired
     protected TopicRepository topicRepository;
 
+    @Autowired
+    protected UserRepository userRepository;
+
+    @Autowired
+    protected UserTokenRepository userTokenRepository;
+
     protected final List<UUID> createdIds = new ArrayList<>();
     protected final List<UUID> createdTopicIds = new ArrayList<>();
     protected final List<UUID> createdSubjectIds = new ArrayList<>();
     protected final List<String> createdExamCodes = new ArrayList<>();
 
     protected UUID testTopicId;
+    private String adminToken;
 
     @BeforeEach
     void ensureTestFixtures() {
@@ -82,10 +98,29 @@ abstract class AbstractIntegrationTest {
                 });
 
         testTopicId = topic.getId();
+
+        User admin = userRepository.findByEmail(TEST_ADMIN_EMAIL).orElseGet(() -> {
+            User u = new User();
+            u.setEmail(TEST_ADMIN_EMAIL);
+            u.setPasswordHash("unused-in-tests"); // tests authenticate via a fabricated token, never a password
+            u.setRole(Role.ADMIN);
+            return userRepository.save(u);
+        });
+
+        UserToken token = new UserToken();
+        token.setToken("test-admin-token-" + UUID.randomUUID());
+        token.setUser(admin);
+        token.setExpiresAt(OffsetDateTime.now().plusHours(1));
+        userTokenRepository.save(token);
+        adminToken = token.getToken();
     }
 
     @AfterEach
     void cleanup() {
+        if (adminToken != null) {
+            userTokenRepository.deleteById(adminToken);
+            adminToken = null;
+        }
         if (!createdIds.isEmpty()) {
             questionRepository.deleteAllById(createdIds);
             createdIds.clear();
@@ -102,6 +137,18 @@ abstract class AbstractIntegrationTest {
             examRepository.deleteAllById(createdExamCodes);
             createdExamCodes.clear();
         }
+    }
+
+    /** An `Authorization: Bearer <admin token>` header with no body — for GET/DELETE. */
+    protected HttpEntity<Void> adminAuth() {
+        return adminAuth(null);
+    }
+
+    /** An `Authorization: Bearer <admin token>` header wrapping the given body — for POST/PUT. */
+    protected <T> HttpEntity<T> adminAuth(T body) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken);
+        return new HttpEntity<>(body, headers);
     }
 
     protected CreateQuestionRequest sampleRequest() {
