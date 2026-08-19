@@ -20,15 +20,16 @@
 | Sprint 2 — Mobile Scaffold | 201–205 | 5 | 0 | 0 |
 | Sprint 3 — Sync Engine | 301–307 | 7 | 0 | 0 |
 | Sprint 4 — Practice Flow | 401–405 | 5 | 0 | 0 |
-| Sprint 5 — QA/Perf/Release | 501–506 | 0 | 0 | 6 |
+| Sprint 5 — QA/Perf/Release | 501–506 | 2 | 0 | 4 |
 | V1.1 — Accounts + Progress Sync | 601–605 | 5 | 0 | 0 |
-| V1.2 — Scale & Polish | 701–706 | 0 | 1 | 5 |
+| V1.2 — Scale & Polish | 701–706 | 0 | 2 | 4 |
 | Content Model Redesign (801–810 + 2 un-ticketed phases) | — | 4 phases | 0 | 0 |
 | Exam Structure Model | 901–936 | 34 | 0 | 0 |
 | Mock Test Engine (un-ticketed) | — | 1 | 0 | 0 |
 | Motion System (941) | 941 | 1 | 0 | 0 |
 | Bookmark Sync + Offline Indicator (this session, unticketed) | — | 2 | 0 | 0 |
-| **Current product total** | | **~74** | **1** | **11** |
+| Admin Authentication (this session, unticketed) | — | 1 | 0 | 0 |
+| **Current product total** | | **~77** | **1** | **9** |
 | Future Vision — Personal Preparation OS | 1001–2003 (11 epics) | 0 | 0 | 63 |
 
 **Bottom line: the shipped product is essentially feature-complete for V1.0/V1.1. What's left before it's release-ready is entirely Sprint 5 (QA/perf/release prep) — nothing there has been started. The Future Vision document (63 tickets) hasn't been touched at all, by design — it's explicitly a draft awaiting a greenlight.**
@@ -87,13 +88,13 @@ Now documented — see [04-content-model-redesign/content-model-phase3-mobile-fo
 
 ## Sprint 5 — QA, Performance, Release Prep
 
-**Nothing in this sprint has been started.** This is the real next block of work on the shipped product before it can go to real users.
+**501 and 503 are done.** This is the real next block of work on the shipped product before it can go to real users.
 
-| Ticket | Task | Status |
-|---|---|---|
-| 501 | Load test with 10,000+ seeded questions | ⬜ Not started — real content is ~113 questions today |
-| 502 | Test on low-end/throttled device | ⬜ Not started |
-| 503 | Crash reporting (Sentry) + basic analytics events | ⬜ Not started |
+| Ticket | Task | Status | Report |
+|---|---|---|---|
+| 501 | Load test with 10,000+ seeded questions | 🔵 Done, real bugs found and fixed; full-sync timing improved but not fully optimized — see report | [12-load-test-data-seeding/load-test-data-seeding.md](./12-load-test-data-seeding/load-test-data-seeding.md) |
+| 502 | Test on low-end/throttled device | ⬜ Not started | |
+| 503 | Crash reporting (Sentry) + basic analytics events | 🔵 Done, real crash upload not yet verified live — see report | [11-crash-reporting-and-analytics/crash-reporting-and-analytics.md](./11-crash-reporting-and-analytics/crash-reporting-and-analytics.md) |
 | 504 | App icon, splash screen, branding polish | ⬜ Status unverified — not confirmed either way this pass |
 | 505 | Signed APK/AAB, Play Console internal testing track | ⬜ Not started — debug-signed only |
 | 506 | Recruit 10–20 beta testers (Telegram/coaching groups) | ⬜ Not started — the "earlier distribution plan" it references isn't in any available document |
@@ -114,7 +115,7 @@ Now documented — see [08-v1.1-accounts-and-progress-sync/accounts-and-progress
 
 | Ticket | Task | Status |
 |---|---|---|
-| 701 | Load full production question bank (20k–50k+) | ⬜ Not started |
+| 701 | Load full production question bank (20k–50k+) | ⚠️ Partial — the *volume* target is met (~37,900 questions, 2026-08-19 load test), but it's synthetic/templated load-test content (see TICKET-501), not real editorial/licensed production content. The scale is proven; the content itself still needs authoring. |
 | 702 | Port BrainBlitz's Exam Readiness Score to mobile | ⬜ Not started — likely the same feature as the Future Vision doc's Epic C (Preparation Twin & Readiness v2); not yet reconciled as one piece of work, see `reports/open-questions.md` |
 | 703 | Port BrainBlitz's Exam Persona feature | ⬜ Not started |
 | 704 | Image support for questions/explanations with diagrams | ⚠️ Partial — Cloudinary image upload exists (used for exam card art), but question-body diagram support specifically is untouched |
@@ -165,6 +166,19 @@ Now documented — see [07-mock-test-engine/mock-test-engine.md](./07-mock-test-
 | Practice screen redesign (exam grid regression fix, list redesign, live search, question-count subtitles) | ✅ | [09-motion-system-and-ui-polish/motion-system-and-ui-polish.md](./09-motion-system-and-ui-polish/motion-system-and-ui-polish.md) |
 | Motion system extended to Home + Progress screens | ✅ | same report |
 | Reports folder reorganized + this file created | ✅ | this file |
+
+## This session (2026-08-18) — no ticket numbers assigned yet
+
+| Task | Status | Report |
+|---|---|---|
+| Admin authentication — role-based accounts, `requireAdmin()` on every content-management endpoint, bootstrap + admin-invites-admin flow, admin console login | ✅ | [10-admin-authentication/admin-auth.md](./10-admin-authentication/admin-auth.md) |
+| Crash reporting + basic analytics (TICKET-503) — Sentry wired up with a real DSN, breadcrumb-based event tracking, error capture at existing catch sites | ✅ done, confirmed live — a real test event was seen landing in the Sentry dashboard after a native rebuild | [11-crash-reporting-and-analytics/crash-reporting-and-analytics.md](./11-crash-reporting-and-analytics/crash-reporting-and-analytics.md) |
+
+## This session (2026-08-19) — no ticket numbers assigned yet
+
+| Task | Status | Report |
+|---|---|---|
+| Load-test data seeding (TICKET-501) — 11 active exams, ~37,900 questions (round 2, pushed toward V1.2's 20k-50k target), a real demo account with practice/mock history (350 sessions/85 attempts); found and fixed 4 backend + 1 mobile performance bug along the way | 🔵 done, full-sync timing improved but not fully optimized | [12-load-test-data-seeding/load-test-data-seeding.md](./12-load-test-data-seeding/load-test-data-seeding.md) |
 
 ---
 

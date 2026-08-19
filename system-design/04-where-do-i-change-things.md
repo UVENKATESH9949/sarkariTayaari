@@ -80,6 +80,18 @@ Useful specifics:
 
 ---
 
+## Admin accounts
+
+The admin console requires signing in. To create the **first** admin, set
+`admin.bootstrap-email` / `admin.bootstrap-password` in `application-local.yml` and start
+the backend once — it creates that account if no admin exists yet, then does nothing on
+every later boot. To add a **teammate**, sign in as an existing admin and call
+`POST /api/auth/admin/register` (no UI for this yet — it's a backend-only endpoint).
+
+Every content-management endpoint requires an admin token
+(`authService.requireAdmin(authorization)`); the mobile-facing read endpoints used for
+content sync stay public on purpose — see ADR-009 in `reports/architecture-decisions.md`.
+
 ## Backend
 
 Every feature is the same four layers. Follow them in order:

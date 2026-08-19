@@ -64,6 +64,12 @@ npm --prefix admin run dev                       # http://localhost:5173
 Serve it from `localhost:5173` exactly — backend CORS is pinned to that single origin,
 and `127.0.0.1:5173` counts as a different one.
 
+The admin console requires signing in as an admin account. To get the first one, set
+`admin.bootstrap-email` and `admin.bootstrap-password` in `backend/application-local.yml`
+before starting the backend — it creates that account on boot if no admin exists yet, and
+is a no-op on every boot after. Further admins are created by an existing admin via
+`POST /api/auth/admin/register`. See `system-design/04-where-do-i-change-things.md`.
+
 ### Mobile
 
 ```bash
@@ -73,6 +79,9 @@ cd mobile && npx expo start
 
 In development the API URL is derived from Metro's host, so it follows your machine's
 LAN IP automatically. See below for standalone builds, where it can't be.
+
+Crash reporting (Sentry) is wired up but inactive by default — no Sentry project exists
+yet. Set `EXPO_PUBLIC_SENTRY_DSN` (see `mobile/README.md`) once one does.
 
 ---
 

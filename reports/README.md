@@ -4,7 +4,7 @@
 
 1. **[../memory/STATUS.md](../memory/STATUS.md)** — what happened last session, and what's next. Read this first, every time you come back to the project. (This lives in `memory/`, not here — that folder is the project's own persistent resume-point, and predates this `reports/` reorganization. A `SESSION-LOG.md` briefly existed here today, duplicating it, and was deleted.)
 2. **[TICKET-STATUS.md](./TICKET-STATUS.md)** — every ticket that has ever existed for this project, one file, with its real status (done / not done / partial) and a link to whatever report documents it, if one exists.
-3. **[architecture-decisions.md](./architecture-decisions.md)** — the real "why we built it this way" record (8 ADRs).
+3. **[architecture-decisions.md](./architecture-decisions.md)** — the real "why we built it this way" record (10 ADRs).
 4. **[open-questions.md](./open-questions.md)** — every unresolved business/technical decision, one file.
 5. The dated subfolders below — the actual detailed build reports, one folder per sprint/phase.
 
@@ -21,6 +21,9 @@
 | `07-mock-test-engine/` | Blueprint-driven, on-the-fly generated timed mock tests with negative marking | Un-ticketed |
 | `08-v1.1-accounts-and-progress-sync/` | Accounts, opaque tokens, practice/mock history upload + restore | TICKET-601–605 |
 | `09-motion-system-and-ui-polish/` | Shared animation tokens, the exam-grid regression it caused, Home/Progress extension | TICKET-941 |
+| `10-admin-authentication/` | Role-based admin accounts, `requireAdmin()` on every content-management endpoint, bootstrap + admin-invites-admin flow, admin console login | Un-ticketed |
+| `11-crash-reporting-and-analytics/` | Sentry crash reporting (inactive, no DSN yet) and breadcrumb-based basic analytics | TICKET-503 |
+| `12-load-test-data-seeding/` | 11 active exams, ~14,000 questions, a real demo account with practice/mock history; 3 real backend performance bugs found and fixed | TICKET-501 |
 
 ## Two source-of-truth documents live at the project root, not here
 
@@ -31,6 +34,6 @@
 
 ## What's genuinely missing
 
-As of 2026-08-17, nothing shipped is undocumented — every real, working feature has a dedicated report backfilled into one of the folders above (bookmark sync, the offline indicator, the Mock Test engine, V1.1 accounts/progress sync, the Content Model Redesign's mobile phases, and the motion system + its regression fix all previously had no report file; they do now).
+As of 2026-08-19, nothing shipped is undocumented — every real, working feature has a dedicated report backfilled into one of the folders above (bookmark sync, the offline indicator, the Mock Test engine, V1.1 accounts/progress sync, the Content Model Redesign's mobile phases, and the motion system + its regression fix all previously had no report file; they do now).
 
-What's still genuinely missing is **verification**, not documentation — each backfilled report says so plainly in its own "Honest gaps in verification" section rather than claiming more than was actually proven. The one that matters most: bookmark sync's mobile side has never been exercised live on a real device (bookmark → background → sign in elsewhere → confirm it appears) — see [06-bookmark-sync-and-offline-indicator/bookmark-sync.md](./06-bookmark-sync-and-offline-indicator/bookmark-sync.md).
+What's still genuinely missing is **verification**, not documentation — each backfilled report says so plainly in its own "Honest gaps in verification" section rather than claiming more than was actually proven. Three gaps stand out: bookmark sync's mobile side has never been exercised live on a real device (bookmark → background → sign in elsewhere → confirm it appears) — see [06-bookmark-sync-and-offline-indicator/bookmark-sync.md](./06-bookmark-sync-and-offline-indicator/bookmark-sync.md); crash reporting has never actually uploaded a real event, since no Sentry project exists yet — see [11-crash-reporting-and-analytics/crash-reporting-and-analytics.md](./11-crash-reporting-and-analytics/crash-reporting-and-analytics.md); and the load-test work found real backend performance bugs and fixed two of them, but a full sync at 10,000+ questions (~118s) still isn't fully optimized, and no on-device verification was possible — see [12-load-test-data-seeding/load-test-data-seeding.md](./12-load-test-data-seeding/load-test-data-seeding.md).
