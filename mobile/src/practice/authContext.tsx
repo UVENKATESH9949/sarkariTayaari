@@ -4,6 +4,7 @@ import { clearSession, loadSession, saveSession } from "../db/authSession";
 import { login as apiLogin, logout as apiLogout, register as apiRegister, type AuthUser } from "../api/auth";
 import { syncProgress, uploadPendingProgress } from "../sync/progressSync";
 import { syncBookmarks, uploadPendingBookmarks } from "../sync/bookmarkSync";
+import { captureError, trackEvent } from "../telemetry/analytics";
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -92,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       // Never surfaced as a blocking error: the history is safe locally either way,
       // and it will go up on the next attempt.
+      captureError(err, { context: "authContext.runSync", full });
       setLastError((err as Error).message);
     } finally {
       inFlight.current = false;
@@ -119,25 +121,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.remove();
   }, [token, runSync]);
 
-  const adopt = useCallback(async (result: Awaited<ReturnType<typeof apiLogin>>) => {
+  const adopt = useCallback(async (result: Awaited<ReturnType<typeof apiLogin>>, source: "sign_up" | "sign_in") => {
     await saveSession(result);
     setToken(result.token);
     setUser(result.user);
+    trackEvent(source);
     // Full sync on sign-in: upload what this device has, then pull down anything it
     // is missing. This is the moment a new phone gets its history back.
     await runSync(result.token, true);
   }, [runSync]);
 
   const signUp = useCallback(async (email: string, password: string, displayName?: string) => {
-    adoptOrThrow(await apiRegister(email, password, displayName), adopt);
+    adoptOrThrow(await apiRegister(email, password, displayName), (result) => adopt(result, "sign_up"));
   }, [adopt]);
 
   const signIn = useCallback(async (email: string, password: string) => {
-    adoptOrThrow(await apiLogin(email, password), adopt);
+    adoptOrThrow(await apiLogin(email, password), (result) => adopt(result, "sign_in"));
   }, [adopt]);
 
   const signOut = useCallback(async () => {
     const current = token;
+    trackEvent("sign_out");
     // Last chance to save anything pending before the token goes away.
     if (current) {
       try {

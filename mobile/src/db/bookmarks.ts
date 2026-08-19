@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "./client";
 import { bookmarks } from "./schema";
+import { trackEvent } from "../telemetry/analytics";
 
 export type BookmarkedQuestion = {
   questionId: string;
@@ -45,6 +46,7 @@ export async function insertBookmark(bookmark: BookmarkedQuestion): Promise<void
       // rather than leaving a dead row that onConflictDoNothing would have ignored.
       set: { isDeleted: false, isSynced: false, updatedAt: now, bookmarkedAt: now },
     });
+  trackEvent("bookmark_added", { questionId: bookmark.questionId });
 }
 
 /**
@@ -57,6 +59,7 @@ export async function deleteBookmark(questionId: string): Promise<void> {
     .update(bookmarks)
     .set({ isDeleted: true, isSynced: false, updatedAt: new Date() })
     .where(eq(bookmarks.questionId, questionId));
+  trackEvent("bookmark_removed", { questionId });
 }
 
 export type PendingBookmark = {

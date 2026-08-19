@@ -2,6 +2,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "./client";
 import { mockTestAttemptResults, mockTestAttempts, questionExams, questions, questionTranslations } from "./schema";
 import type { SyncedPaper } from "./examStructure";
+import { trackEvent } from "../telemetry/analytics";
 
 export type MockTestQuestion = {
   id: string;
@@ -189,6 +190,12 @@ export async function insertMockTestAttempt(attempt: MockTestAttemptRecord): Pro
         markedForReview: result.markedForReview,
       })),
     );
+  });
+
+  trackEvent("mock_attempt_completed", {
+    examCode: attempt.examCode,
+    totalMarksScored: attempt.totalMarksScored,
+    totalQuestions: attempt.totalQuestions,
   });
 }
 

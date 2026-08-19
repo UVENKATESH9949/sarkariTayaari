@@ -1,6 +1,7 @@
 import { asc, desc, eq, lt } from "drizzle-orm";
 import { db } from "./client";
 import { practiceSessionResults, practiceSessions } from "./schema";
+import { trackEvent } from "../telemetry/analytics";
 
 export type QuestionResult = {
   questionId: string;
@@ -111,6 +112,8 @@ export async function insertSession(session: SessionRecord): Promise<void> {
       }
     }
   });
+
+  trackEvent("practice_session_completed", { correctCount: session.correctCount, totalCount: session.totalCount });
 }
 
 export async function clearAllSessions(): Promise<void> {

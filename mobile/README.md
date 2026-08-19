@@ -2,6 +2,17 @@
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
+## Environment variables
+
+All read via `process.env.EXPO_PUBLIC_*` (Expo's standard inlining — no `.env` file exists
+in this repo; set these in your shell, an `.env.local` you create yourself, or your build
+profile's env config).
+
+| Variable | Purpose | If unset |
+|---|---|---|
+| `EXPO_PUBLIC_API_BASE_URL` | Backend URL for a standalone build (dev derives it from Metro's host automatically). | Falls back to Metro's host, then `localhost` — see the root `README.md`'s "Building an Android APK" section. |
+| `EXPO_PUBLIC_SENTRY_DSN` | Crash reporting (`@sentry/react-native`, wired in `src/app/_layout.tsx`). Set in `.env.local` (gitignored, not committed). | Sentry initializes but sends nothing — this is Sentry's documented behavior for a missing DSN, e.g. for a contributor without their own `.env.local`; see `reports/11-crash-reporting-and-analytics/`. |
+
 ## Get started
 
 1. Install dependencies

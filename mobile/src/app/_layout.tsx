@@ -1,6 +1,7 @@
 import { Stack } from "expo-router";
 import { Text, View } from "react-native";
 import { useMigrations } from "drizzle-orm/expo-sqlite/migrator";
+import * as Sentry from "@sentry/react-native";
 import { db } from "../db/client";
 import migrations from "../db/migrations/migrations";
 import { SyncProvider, useSyncStatus } from "../sync/SyncContext";
@@ -13,8 +14,18 @@ import { BookmarksProvider } from "../practice/bookmarks";
 import { AppLanguageProvider } from "../practice/appLanguage";
 import { AuthProvider } from "../practice/authContext";
 import { STACK_SCREEN_OPTIONS } from "../ui/navigation";
+import { useScreenViewTracking } from "../telemetry/analytics";
 
-export default function RootLayout() {
+// Module scope, before anything renders — including the migration-loading/error
+// screens below, which happen before any provider mounts. If EXPO_PUBLIC_SENTRY_DSN
+// is unset (e.g. a contributor without their own .env.local), the SDK initializes
+// but sends nothing, which is Sentry's own documented behavior for a missing dsn.
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  environment: __DEV__ ? "development" : "production",
+});
+
+function RootLayout() {
   const { success, error } = useMigrations(db, migrations);
 
   if (error) {
@@ -54,6 +65,7 @@ export default function RootLayout() {
 
 function RootNavigator() {
   const { status } = useSyncStatus();
+  useScreenViewTracking();
 
   if (status === "checking" || status === "syncing") {
     return <SyncProgressScreen />;
@@ -71,3 +83,5 @@ function RootNavigator() {
     </>
   );
 }
+
+export default Sentry.wrap(RootLayout);

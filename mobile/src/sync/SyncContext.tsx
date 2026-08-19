@@ -5,6 +5,7 @@ import { ensureExamFollowed } from "../db/followedExams";
 import { runInitialSync, type SyncProgress } from "./initialSync";
 import { runDeltaSync } from "./deltaSync";
 import { useNetworkStatus } from "./NetworkStatusContext";
+import { captureError } from "../telemetry/analytics";
 
 /**
  * How recent a sync has to be for an automatic check to be skipped. Foregrounding the
@@ -115,9 +116,15 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       if (last) {
         setProgress({ status: "completed", synced: 0, total: 0 });
         setLastSyncedAt(last);
-        ensureExamFollowed().catch((err) => console.warn("Failed to auto-follow exam", err));
+        ensureExamFollowed().catch((err) => {
+          console.warn("Failed to auto-follow exam", err);
+          captureError(err, { context: "ensureExamFollowed (post-sync)" });
+        });
         // Already synced before — check for anything new without blocking the UI.
-        refresh().catch((err) => console.warn("Delta sync on launch failed", err));
+        refresh().catch((err) => {
+          console.warn("Delta sync on launch failed", err);
+          captureError(err, { context: "delta sync on launch" });
+        });
         return;
       }
 
@@ -126,8 +133,9 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         await ensureExamFollowed();
         setLastSyncedAt(await getLastSyncedAt());
         setSyncVersion((v) => v + 1);
-      } catch {
+      } catch (err) {
         // "error" status already published via the progress callback above.
+        captureError(err, { context: "initial sync" });
       }
     })();
   }, [refresh]);
@@ -135,7 +143,10 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") {
-        refresh().catch((err) => console.warn("Delta sync on foreground failed", err));
+        refresh().catch((err) => {
+          console.warn("Delta sync on foreground failed", err);
+          captureError(err, { context: "delta sync on foreground" });
+        });
       }
     });
     return () => subscription.remove();
@@ -147,7 +158,10 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const wasOnline = useRef(isOnline);
   useEffect(() => {
     if (isOnline && wasOnline.current === false) {
-      refresh({ force: true }).catch((err) => console.warn("Delta sync on reconnect failed", err));
+      refresh({ force: true }).catch((err) => {
+        console.warn("Delta sync on reconnect failed", err);
+        captureError(err, { context: "delta sync on reconnect" });
+      });
     }
     wasOnline.current = isOnline;
   }, [isOnline, refresh]);
