@@ -1,7 +1,7 @@
 import { db } from "../db/client";
 import { clearResumeState, getResumeState, setLastSyncedAt, setResumeState } from "../db/syncMeta";
 import { syncQuestions } from "../api/questions";
-import { writeLanguages, writeReferenceData, upsertQuestion } from "./writeQuestions";
+import { writeLanguages, writeReferenceData, upsertQuestionsBatch } from "./writeQuestions";
 
 const PAGE_SIZE = 500;
 const SOFT_TIMEOUT_MS = 2 * 60 * 1000;
@@ -52,9 +52,7 @@ export async function runInitialSync(onProgress?: OnProgress): Promise<{ status:
       total = result.totalElements;
 
       await db.transaction(async (tx) => {
-        for (const q of result.content) {
-          await upsertQuestion(tx, q);
-        }
+        await upsertQuestionsBatch(tx, result.content);
       });
       synced += result.content.length;
       // Checkpoint after the page is committed, so a crash here resumes at the next one.

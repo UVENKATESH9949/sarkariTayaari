@@ -1,7 +1,7 @@
 import { db } from "../db/client";
 import { getLastSyncedAt, setLastSyncedAt } from "../db/syncMeta";
 import { syncQuestions } from "../api/questions";
-import { writeLanguages, writeReferenceData, upsertQuestion, deleteQuestionLocally } from "./writeQuestions";
+import { writeLanguages, writeReferenceData, upsertQuestionsBatch, deleteQuestionLocally } from "./writeQuestions";
 
 const PAGE_SIZE = 500;
 
@@ -38,15 +38,16 @@ export async function runDeltaSync(): Promise<DeltaSyncResult> {
       const result = await syncQuestions(since, page, PAGE_SIZE);
 
       await db.transaction(async (tx) => {
-        for (const q of result.content) {
-          if (q.deleted) {
-            await deleteQuestionLocally(tx, q.id);
-            deleted += 1;
-          } else {
-            await upsertQuestion(tx, q);
-            upserted += 1;
-          }
+        const toDelete = result.content.filter((q) => q.deleted);
+        const toUpsert = result.content.filter((q) => !q.deleted);
+
+        for (const q of toDelete) {
+          await deleteQuestionLocally(tx, q.id);
         }
+        await upsertQuestionsBatch(tx, toUpsert);
+
+        deleted += toDelete.length;
+        upserted += toUpsert.length;
       });
 
       if (result.last) {

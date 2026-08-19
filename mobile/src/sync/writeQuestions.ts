@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db/client";
 import {
   difficultyLevels,
@@ -215,24 +215,37 @@ async function writeExamStructures(structures: Awaited<ReturnType<typeof getExam
   });
 }
 
-export async function upsertQuestion(tx: Tx, q: QuestionResponse) {
+/**
+ * Batches a whole page of questions into a handful of statements instead of
+ * awaiting one insert per row per table. At the original ~113-question scale
+ * that per-row pattern was invisible; at load-test scale (500/page) it meant
+ * thousands of blocked round trips through the SQLite JS bridge per page,
+ * stalling both initial and delta sync for minutes on a single page. Same
+ * fix already applied to {@link writeExamStructures} for the mock-test submit
+ * bug — this path just hadn't been hit at volume until the load test.
+ *
+ * Children (questionExams, questionTranslations) are cleared and reinserted
+ * wholesale per batch, same as writeExamStructures — cheap for a pure join/
+ * leaf table and avoids needing `excluded.*` upsert syntax. `questions`
+ * itself is upserted, not replaced, since it's the row identity other local
+ * tables (bookmarks, practice results) reference by id.
+ */
+export async function upsertQuestionsBatch(tx: Tx, qs: QuestionResponse[]) {
+  if (qs.length === 0) return;
+
+  const ids = qs.map((q) => q.id);
+
+  await tx.delete(questionExams).where(inArray(questionExams.questionId, ids));
+  await tx.delete(questionTranslations).where(inArray(questionTranslations.questionId, ids));
+
+  // A single bulk upsert, not one insert per row: onConflictDoUpdate's `set` runs the
+  // same clause for every conflicting row, so it references SQLite's `excluded.*`
+  // pseudo-table (the incoming row's own values) rather than the closed-over `q`.
   await tx
     .insert(questions)
-    .values({
-      id: q.id,
-      correctAnswer: q.correctAnswer,
-      subjectId: q.subjectId,
-      subjectName: q.subjectName,
-      topicId: q.topicId,
-      topicName: q.topicName,
-      difficulty: q.difficulty,
-      isPremium: q.premium,
-      updatedAt: new Date(q.updatedAt),
-      isDeleted: q.deleted,
-    })
-    .onConflictDoUpdate({
-      target: questions.id,
-      set: {
+    .values(
+      qs.map((q) => ({
+        id: q.id,
         correctAnswer: q.correctAnswer,
         subjectId: q.subjectId,
         subjectName: q.subjectName,
@@ -242,36 +255,40 @@ export async function upsertQuestion(tx: Tx, q: QuestionResponse) {
         isPremium: q.premium,
         updatedAt: new Date(q.updatedAt),
         isDeleted: q.deleted,
+      })),
+    )
+    .onConflictDoUpdate({
+      target: questions.id,
+      set: {
+        correctAnswer: sql`excluded.correct_answer`,
+        subjectId: sql`excluded.subject_id`,
+        subjectName: sql`excluded.subject_name`,
+        topicId: sql`excluded.topic_id`,
+        topicName: sql`excluded.topic_name`,
+        difficulty: sql`excluded.difficulty`,
+        isPremium: sql`excluded.is_premium`,
+        updatedAt: sql`excluded.updated_at`,
+        isDeleted: sql`excluded.is_deleted`,
       },
     });
 
-  // The server always sends the full exam_codes list for a question, so it's
-  // simplest (and correct) to replace this question's join rows wholesale
-  // rather than diff against what's already stored locally.
-  await tx.delete(questionExams).where(eq(questionExams.questionId, q.id));
-  for (const examCode of q.examCodes) {
-    await tx.insert(questionExams).values({ questionId: q.id, examCode });
+  const examRows = qs.flatMap((q) => q.examCodes.map((examCode) => ({ questionId: q.id, examCode })));
+  if (examRows.length > 0) {
+    await tx.insert(questionExams).values(examRows);
   }
 
-  for (const t of q.translations) {
-    await tx
-      .insert(questionTranslations)
-      .values({
-        id: `${q.id}:${t.languageCode}`,
-        questionId: q.id,
-        languageCode: t.languageCode,
-        questionText: t.questionText,
-        options: t.options,
-        explanation: t.explanation,
-      })
-      .onConflictDoUpdate({
-        target: questionTranslations.id,
-        set: {
-          questionText: t.questionText,
-          options: t.options,
-          explanation: t.explanation,
-        },
-      });
+  const translationRows = qs.flatMap((q) =>
+    q.translations.map((t) => ({
+      id: `${q.id}:${t.languageCode}`,
+      questionId: q.id,
+      languageCode: t.languageCode,
+      questionText: t.questionText,
+      options: t.options,
+      explanation: t.explanation,
+    })),
+  );
+  if (translationRows.length > 0) {
+    await tx.insert(questionTranslations).values(translationRows);
   }
 }
 

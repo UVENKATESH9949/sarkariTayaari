@@ -21,6 +21,11 @@ spring:
       keepalive-time: 120000
       connection-timeout: 20000
       validation-timeout: 5000
+      # Lets the Postgres driver rewrite a batch of single-row INSERTs into one
+      # multi-row statement — without this, `hibernate.jdbc.batch_size` below still
+      # sends one round trip per row, since the driver never combines them on the wire.
+      data-source-properties:
+        reWriteBatchedInserts: true
 
   jpa:
     hibernate:
@@ -32,7 +37,25 @@ spring:
         # (topic, subject, exams, translations, each translation's language) — against
         # a remote Neon DB that's ~500+ round trips for ~112 rows. This batches those
         # proxy/collection loads into `WHERE id IN (...)` chunks instead.
-        default_batch_fetch_size: 50
+        #
+        # Matched to the sync page size (500, see QuestionService.MAX_SYNC_PAGE_SIZE /
+        # the mobile client's page size), not left at the original 50 — 50 was sized for
+        # the ~112-question dev dataset (one page covered everything, so it barely
+        # mattered), but at a full page of 500 rows it meant ~10 batched round trips per
+        # lazy relationship instead of 1, which is exactly what load-testing 10,000+
+        # questions for TICKET-501 surfaced (a full sync went from ~3.5s to ~198s before
+        # this). See reports/12-load-test-data-seeding/.
+        default_batch_fetch_size: 500
+        # Question/Subject/Topic all use client-generated UUID keys (not IDENTITY), so
+        # Hibernate can safely batch their inserts without needing a DB round trip per
+        # row to get a generated key back first. order_inserts/order_updates group
+        # same-table statements together so the batch above actually forms, instead of
+        # alternating tables defeating it. Found and fixed while seeding load-test data
+        # for TICKET-501 — see reports/12-load-test-data-seeding/.
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
     open-in-view: false
 
   flyway:

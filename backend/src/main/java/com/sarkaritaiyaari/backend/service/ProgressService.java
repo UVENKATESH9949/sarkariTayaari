@@ -8,11 +8,15 @@ import com.sarkaritaiyaari.backend.entity.UserPracticeSession;
 import com.sarkaritaiyaari.backend.entity.UserPracticeSessionResult;
 import com.sarkaritaiyaari.backend.repository.UserMockAttemptRepository;
 import com.sarkaritaiyaari.backend.repository.UserPracticeSessionRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Uploading and restoring a student's history.
@@ -28,24 +32,55 @@ public class ProgressService {
     private final UserPracticeSessionRepository practiceSessions;
     private final UserMockAttemptRepository mockAttempts;
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
     public ProgressService(UserPracticeSessionRepository practiceSessions,
                            UserMockAttemptRepository mockAttempts) {
         this.practiceSessions = practiceSessions;
         this.mockAttempts = mockAttempts;
     }
 
+    /**
+     * IDs here are assigned by the device, not the database, so Spring Data's {@code
+     * save()} can't tell a brand-new row from an existing one without a lookup — for an
+     * entity with an assigned (non-generated) id, {@code save()} always takes the
+     * {@code merge()} path, which does its own {@code SELECT} first. Uploading many
+     * sessions at once (a new phone restoring a long history, or exactly the load-test
+     * seeding this was found during — see reports/12-load-test-data-seeding/) turned that
+     * into one round trip per row, including every cascaded result row. Checking which
+     * ids already exist once, up front, and calling {@code persist()} directly for the
+     * (usual) brand-new ones skips that lookup entirely; only genuine retries — the
+     * actual reason this needs to be idempotent — pay for a {@code merge()}.
+     */
     public ProgressDtos.SyncResponse upload(User user, ProgressDtos.SyncRequest request) {
+        List<String> sessionIds = request.getPracticeSessions().stream().map(ProgressDtos.PracticeSession::getId).toList();
+        Set<String> existingSessionIds = practiceSessions.findAllById(sessionIds).stream()
+                .map(UserPracticeSession::getId).collect(Collectors.toSet());
+
         int sessions = 0;
         for (ProgressDtos.PracticeSession dto : request.getPracticeSessions()) {
-            // save() on an existing id replaces it, which is what makes a retried upload
-            // harmless rather than a source of duplicate history.
-            practiceSessions.save(toEntity(user, dto));
+            UserPracticeSession entity = toEntity(user, dto);
+            if (existingSessionIds.contains(dto.getId())) {
+                entityManager.merge(entity);
+            } else {
+                entityManager.persist(entity);
+            }
             sessions++;
         }
 
+        List<String> attemptIds = request.getMockAttempts().stream().map(ProgressDtos.MockAttempt::getId).toList();
+        Set<String> existingAttemptIds = mockAttempts.findAllById(attemptIds).stream()
+                .map(UserMockAttempt::getId).collect(Collectors.toSet());
+
         int attempts = 0;
         for (ProgressDtos.MockAttempt dto : request.getMockAttempts()) {
-            mockAttempts.save(toEntity(user, dto));
+            UserMockAttempt entity = toEntity(user, dto);
+            if (existingAttemptIds.contains(dto.getId())) {
+                entityManager.merge(entity);
+            } else {
+                entityManager.persist(entity);
+            }
             attempts++;
         }
 
