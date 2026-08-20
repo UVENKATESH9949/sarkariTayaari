@@ -2,11 +2,14 @@ import { useEffect, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { ActivityIndicator, Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
-import { getSyncedExams } from "../../../db/practiceContent";
+import { getSyncedExams } from "../../../data/practiceData";
+import { getMockablePapersLive } from "../../../data/mockTestStructureData";
+import { useHybridMode } from "../../../data/hybridSource";
 import { getMockablePapers, type SyncedPaper } from "../../../db/examStructure";
 import { useSyncStatus } from "../../../sync/SyncContext";
 import { PressableScale } from "../../../ui/PressableScale";
 import { FadeInItem } from "../../../ui/FadeInList";
+import { OfflineNoDataNotice } from "../../../ui/OfflineNoDataNotice";
 
 type ListedPaper = SyncedPaper & { examName: string };
 
@@ -15,16 +18,17 @@ export default function MockTestLanding() {
   const [papers, setPapers] = useState<ListedPaper[]>([]);
   const [loading, setLoading] = useState(true);
   const { syncVersion } = useSyncStatus();
+  const mode = useHybridMode();
 
   // One entry per mock-testable paper, not per exam: an exam can have several
   // (Prelims and Mains), and descriptive or interview papers are excluded entirely.
   useEffect(() => {
     (async () => {
       try {
-        const exams = await getSyncedExams();
+        const exams = await getSyncedExams(mode);
         const collected: ListedPaper[] = [];
         for (const exam of exams) {
-          const mockable = await getMockablePapers(exam.code);
+          const mockable = mode === "local" ? await getMockablePapers(exam.code) : await getMockablePapersLive(exam.code);
           mockable.forEach((paper) => collected.push({ ...paper, examName: exam.name }));
         }
         setPapers(collected);
@@ -32,7 +36,7 @@ export default function MockTestLanding() {
         setLoading(false);
       }
     })();
-  }, [syncVersion]);
+  }, [syncVersion, mode]);
 
   const openStart = (paper: ListedPaper) => {
     router.push({
@@ -86,7 +90,8 @@ export default function MockTestLanding() {
             );
           })}
 
-          {papers.length === 0 && (
+          {papers.length === 0 && mode === "unavailable" && <OfflineNoDataNotice />}
+          {papers.length === 0 && mode !== "unavailable" && (
             <Text style={styles.emptyText}>
               No mock tests yet. An exam needs a paper defined in its structure before a test can be built from it.
             </Text>

@@ -7,7 +7,8 @@ import { useBookmarks } from "../../../practice/bookmarks";
 import { LANGUAGES, useAppLanguage } from "../../../practice/appLanguage";
 import { LanguagePickerModal } from "../../../practice/LanguagePickerModal";
 import { AnimatedProgressBar } from "../../../ui/AnimatedProgressBar";
-import { getPracticeQuestions, type PracticeQuestion } from "../../../db/practiceContent";
+import { getPracticeQuestions, type PracticeQuestion } from "../../../data/practiceData";
+import { useHybridMode } from "../../../data/hybridSource";
 
 export default function Quiz() {
   const router = useRouter();
@@ -32,11 +33,13 @@ export default function Quiz() {
   const [languageCode, setLanguageCode] = useState(defaultLanguageCode);
   const [languagePickerVisible, setLanguagePickerVisible] = useState(false);
 
+  const mode = useHybridMode();
+
   useEffect(() => {
     if (!topicId || !levelKey) return;
     const difficulty = levelKey as "all" | "easy" | "medium" | "hard";
-    getPracticeQuestions(topicId, difficulty, examCode ?? null).then(setQuestions);
-  }, [topicId, levelKey, examCode]);
+    getPracticeQuestions(topicId, difficulty, examCode ?? null, mode).then(setQuestions);
+  }, [topicId, levelKey, examCode, mode]);
 
   const total = questions?.length ?? 0;
   const question = questions?.[currentIndex];
@@ -127,7 +130,11 @@ export default function Quiz() {
         <View style={styles.centeredScreen}>
           <Ionicons name="alert-circle-outline" size={40} color="#c7cee0" />
           <Text style={styles.emptyTitle}>No questions available</Text>
-          <Text style={styles.emptyText}>There's nothing synced for this selection yet.</Text>
+          <Text style={styles.emptyText}>
+            {mode === "unavailable"
+              ? "You're offline and this content hasn't downloaded yet. Connect to the internet once to download it."
+              : "There's nothing synced for this selection yet."}
+          </Text>
           <Pressable style={styles.emptyButton} onPress={() => router.back()}>
             <Text style={styles.emptyButtonText}>Go back</Text>
           </Pressable>

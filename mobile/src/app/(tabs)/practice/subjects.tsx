@@ -6,7 +6,9 @@ import { toSubjectMeta } from "../../../constants/subjects";
 import { useSyncStatus } from "../../../sync/SyncContext";
 import { PressableScale } from "../../../ui/PressableScale";
 import { FadeInItem } from "../../../ui/FadeInList";
-import { getSubjectStats, type SubjectStat } from "../../../db/practiceContent";
+import { OfflineNoDataNotice } from "../../../ui/OfflineNoDataNotice";
+import { getSubjectStats, type SubjectStat } from "../../../data/practiceData";
+import { useHybridMode } from "../../../data/hybridSource";
 
 function questionsLabel(count: number): string {
   return count === 1 ? "1 question" : `${count} questions`;
@@ -19,10 +21,11 @@ export default function Subjects() {
   const [subjects, setSubjects] = useState<SubjectStat[]>([]);
 
   const { syncVersion } = useSyncStatus();
+  const mode = useHybridMode();
 
   useEffect(() => {
-    getSubjectStats(examCode ?? null).then(setSubjects);
-  }, [examCode, syncVersion]);
+    getSubjectStats(examCode ?? null, mode).then(setSubjects);
+  }, [examCode, syncVersion, mode]);
 
   const filteredSubjects = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -82,6 +85,7 @@ export default function Subjects() {
             {filteredSubjects.length === 0 && subjects.length > 0 && (
               <Text style={styles.emptyText}>No subjects match "{search}"</Text>
             )}
+            {subjects.length === 0 && mode === "unavailable" && <OfflineNoDataNotice />}
           </View>
         </ScrollView>
       </View>

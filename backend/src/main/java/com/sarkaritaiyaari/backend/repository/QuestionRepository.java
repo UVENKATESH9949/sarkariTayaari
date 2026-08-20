@@ -11,7 +11,8 @@ import org.springframework.data.repository.query.Param;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-public interface QuestionRepository extends JpaRepository<Question, UUID>, JpaSpecificationExecutor<Question> {
+public interface QuestionRepository extends JpaRepository<Question, UUID>, JpaSpecificationExecutor<Question>,
+        QuestionRepositoryCustom {
 
     // topic/subject are *-to-one, so joining them here is safe with pagination (no
     // row multiplication). exams/translations are *-to-many and stay lazy, handled

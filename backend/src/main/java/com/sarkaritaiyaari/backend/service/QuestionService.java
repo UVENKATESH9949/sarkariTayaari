@@ -142,6 +142,49 @@ public class QuestionService {
                 .map(QuestionMapper::toResponse);
     }
 
+    private static final int MAX_LIVE_PAGE_SIZE = 500;
+    private static final int MAX_MOCK_SAMPLE_SIZE = 200;
+
+    /**
+     * Backs the mobile app's hybrid online/local data layer: while a device's first-ever
+     * sync is still catching up (or if it's never completed), screens read live from here
+     * instead of local SQLite. Same filter predicate as the admin CRUD list ({@link #list}),
+     * but student-facing, so soft-deleted questions are excluded — {@link #list} deliberately
+     * doesn't exclude them, since admins need to see/restore deleted rows.
+     */
+    @Transactional(readOnly = true)
+    public Page<QuestionResponse> listPublic(String examCode, UUID subjectId, UUID topicId, String difficulty, int page, int size) {
+        int clampedSize = Math.min(Math.max(size, 1), MAX_LIVE_PAGE_SIZE);
+        var spec = QuestionSpecifications.filter(examCode, subjectId, topicId, difficulty)
+                .and(QuestionSpecifications.notDeleted());
+        return questionRepository.findAll(spec, PageRequest.of(page, clampedSize)).map(QuestionMapper::toResponse);
+    }
+
+    /**
+     * Grouped counts (per exam/subject/topic/difficulty) for the hybrid layer's "how many
+     * questions does this subject/topic have" screens — the live equivalent of the local
+     * SQLite joins in mobile/src/db/practiceContent.ts (getSubjectStats/getTopicStats/etc).
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Long> countsGroupedBy(String groupBy, String examCode, UUID subjectId, UUID topicId, String difficulty) {
+        return questionRepository.countGroupedBy(groupBy, examCode, subjectId, topicId, difficulty);
+    }
+
+    /** Live equivalent of mobile/src/db/mockTest.ts's countAvailable() — per-section question availability before local sync completes. */
+    @Transactional(readOnly = true)
+    public long countForMock(String examCode, List<UUID> subjectIds) {
+        return questionRepository.countForMock(examCode, subjectIds);
+    }
+
+    /** Live equivalent of mobile/src/db/mockTest.ts's buildMockTestQuestions() per-section query — a genuinely random sample, not just the first N matches. */
+    @Transactional(readOnly = true)
+    public List<QuestionResponse> sampleForMock(String examCode, List<UUID> subjectIds, int limit) {
+        int clampedLimit = Math.min(Math.max(limit, 1), MAX_MOCK_SAMPLE_SIZE);
+        return questionRepository.sampleForMock(examCode, subjectIds, clampedLimit).stream()
+                .map(QuestionMapper::toResponse)
+                .toList();
+    }
+
     private OffsetDateTime parseSince(String since) {
         if (since == null || since.isBlank() || since.equals("0")) {
             return EPOCH;

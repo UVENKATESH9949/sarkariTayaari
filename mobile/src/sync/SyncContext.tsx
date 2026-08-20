@@ -22,6 +22,12 @@ type SyncContextValue = (SyncProgress | { status: "checking"; synced: 0; total: 
   refreshError: string | null;
   refresh: (options?: { force?: boolean }) => Promise<void>;
   /**
+   * The More screen's single "Sync Now"/"Retry" action — picks initial vs. delta sync
+   * depending on whether this device has ever completed one, so the screen doesn't need
+   * to know which path applies.
+   */
+  syncNow: () => Promise<void>;
+  /**
    * Bumped after every sync that wrote something. Screens that read from SQLite put
    * this in their effect deps so they re-query: tab and stack state is preserved
    * across navigation, so a screen mounted before a sync would otherwise keep showing
@@ -38,6 +44,7 @@ const SyncContext = createContext<SyncContextValue>({
   lastSyncedAt: null,
   refreshError: null,
   refresh: async () => {},
+  syncNow: async () => {},
   syncVersion: 0,
 });
 
@@ -46,15 +53,18 @@ export function useSyncStatus() {
 }
 
 /**
- * Owns both syncs.
+ * Owns both syncs. Neither one blocks navigation — the app is usable immediately on
+ * every launch, including the very first one. While a device's first-ever sync (or a
+ * sync that's never completed at all) is still in flight, screens read live from the
+ * backend via the hybrid data layer (`mobile/src/data/`) instead of local SQLite; see
+ * `useHybridMode()`. `status`/`synced`/`total` still publish real progress for the
+ * non-blocking `SyncBanner` and the More screen, they just no longer gate the `<Stack>`.
  *
- * The initial full sync runs once, on first mount, if this device has never synced —
- * that one blocks navigation until the 2-minute soft timeout, via `status`.
- *
+ * The initial full sync runs once, on first mount, if this device has never synced.
  * After that, a delta sync runs on launch and whenever the app returns to the
  * foreground. It reports through `isRefreshing` rather than `status` precisely so it
- * never puts the blocking progress screen back up: picking up new content should be
- * invisible unless it fails.
+ * never implies the app is blocked: picking up new content should be invisible unless
+ * it fails.
  */
 export function SyncProvider({ children }: { children: ReactNode }) {
   const [progress, setProgress] = useState<SyncProgress | { status: "checking"; synced: 0; total: 0 }>({
@@ -128,17 +138,37 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // Never synced before: fire the initial sync the same non-blocking way `refresh()`
+      // fires a delta sync above — the app is usable immediately either way. Screens
+      // read live from the backend (via useHybridMode()) until this resolves.
+      runInitialSync(setProgress)
+        .then(async () => {
+          await ensureExamFollowed();
+          setLastSyncedAt(await getLastSyncedAt());
+          setSyncVersion((v) => v + 1);
+        })
+        .catch((err) => {
+          // "error" status already published via the progress callback inside runInitialSync.
+          console.warn("Initial sync failed", err);
+          captureError(err, { context: "initial sync" });
+        });
+    })();
+  }, [refresh]);
+
+  const syncNow = useCallback(async () => {
+    if (lastSyncedAt === null) {
       try {
         await runInitialSync(setProgress);
         await ensureExamFollowed();
         setLastSyncedAt(await getLastSyncedAt());
         setSyncVersion((v) => v + 1);
       } catch (err) {
-        // "error" status already published via the progress callback above.
-        captureError(err, { context: "initial sync" });
+        captureError(err, { context: "initial sync (manual)" });
       }
-    })();
-  }, [refresh]);
+    } else {
+      await refresh({ force: true });
+    }
+  }, [lastSyncedAt, refresh]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
@@ -168,7 +198,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
   return (
     <SyncContext.Provider
-      value={{ ...progress, isRefreshing, lastSyncedAt, refreshError, refresh, syncVersion }}
+      value={{ ...progress, isRefreshing, lastSyncedAt, refreshError, refresh, syncNow, syncVersion }}
     >
       {children}
     </SyncContext.Provider>

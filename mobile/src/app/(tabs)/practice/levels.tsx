@@ -3,8 +3,8 @@ import type { ComponentProps } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
-import { getDifficultyCounts, type DifficultyCounts } from "../../../db/practiceContent";
-import { getDifficultyLevels, type DifficultyLevel } from "../../../db/examStructure";
+import { getDifficultyCounts, getDifficultyLevels, type DifficultyCounts, type DifficultyLevel } from "../../../data/practiceData";
+import { useHybridMode } from "../../../data/hybridSource";
 import { useSyncStatus } from "../../../sync/SyncContext";
 import { PressableScale } from "../../../ui/PressableScale";
 import { FadeInItem } from "../../../ui/FadeInList";
@@ -41,15 +41,16 @@ export default function Levels() {
   const [syncedLevels, setSyncedLevels] = useState<DifficultyLevel[]>([]);
 
   const { syncVersion } = useSyncStatus();
+  const mode = useHybridMode();
 
   useEffect(() => {
     if (!topicId) return;
-    getDifficultyCounts(topicId, examCode ?? null).then(setCounts);
-  }, [topicId, examCode, syncVersion]);
+    getDifficultyCounts(topicId, examCode ?? null, mode).then(setCounts);
+  }, [topicId, examCode, syncVersion, mode]);
 
   useEffect(() => {
-    getDifficultyLevels().then(setSyncedLevels).catch(() => setSyncedLevels([]));
-  }, [syncVersion]);
+    getDifficultyLevels(mode).then(setSyncedLevels).catch(() => setSyncedLevels([]));
+  }, [syncVersion, mode]);
 
   const levels = useMemo<Level[]>(
     () =>

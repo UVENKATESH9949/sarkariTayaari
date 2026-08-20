@@ -27,6 +27,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -76,6 +78,51 @@ public class QuestionController {
                                         @RequestParam(defaultValue = "0") int page,
                                         @RequestParam(defaultValue = "500") int size) {
         return questionService.sync(since, page, size);
+    }
+
+    /**
+     * Public, filterable, non-timestamp-cursor read for the mobile app's hybrid
+     * online/local data layer — used while a device's first-ever sync hasn't finished
+     * yet (or has never run), so browsing isn't gated on local SQLite being populated.
+     * Unlike /sync, this is filterable by topic/subject/difficulty and excludes
+     * soft-deleted questions, since it's meant to be read directly by screens, not
+     * paged through wholesale.
+     */
+    @GetMapping("/live")
+    public Page<QuestionResponse> live(@RequestParam(required = false) String examCode,
+                                        @RequestParam(required = false) UUID subjectId,
+                                        @RequestParam(required = false) UUID topicId,
+                                        @RequestParam(required = false) String difficulty,
+                                        @RequestParam(defaultValue = "0") int page,
+                                        @RequestParam(defaultValue = "200") int size) {
+        return questionService.listPublic(examCode, subjectId, topicId, difficulty, page, size);
+    }
+
+    /**
+     * Grouped question counts (by exam/subject/topic/difficulty) for the hybrid data
+     * layer's "how many questions does X have" screens — public, same reasoning as /live.
+     */
+    @GetMapping("/counts")
+    public Map<String, Long> counts(@RequestParam String groupBy,
+                                     @RequestParam(required = false) String examCode,
+                                     @RequestParam(required = false) UUID subjectId,
+                                     @RequestParam(required = false) UUID topicId,
+                                     @RequestParam(required = false) String difficulty) {
+        return questionService.countsGroupedBy(groupBy, examCode, subjectId, topicId, difficulty);
+    }
+
+    /** Mock Test's per-section availability, live — how many non-deleted questions exist across this set of subjects for this exam. */
+    @GetMapping("/mock-count")
+    public Map<String, Long> mockCount(@RequestParam String examCode, @RequestParam List<UUID> subjectIds) {
+        return Map.of("count", questionService.countForMock(examCode, subjectIds));
+    }
+
+    /** Mock Test's attempt assembly, live — a genuinely random sample across this set of subjects for this exam. */
+    @GetMapping("/mock-sample")
+    public List<QuestionResponse> mockSample(@RequestParam String examCode,
+                                              @RequestParam List<UUID> subjectIds,
+                                              @RequestParam(defaultValue = "50") int limit) {
+        return questionService.sampleForMock(examCode, subjectIds, limit);
     }
 
     @PutMapping("/{id}")

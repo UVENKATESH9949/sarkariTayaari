@@ -4,9 +4,8 @@ import { useMigrations } from "drizzle-orm/expo-sqlite/migrator";
 import * as Sentry from "@sentry/react-native";
 import { db } from "../db/client";
 import migrations from "../db/migrations/migrations";
-import { SyncProvider, useSyncStatus } from "../sync/SyncContext";
+import { SyncProvider } from "../sync/SyncContext";
 import { NetworkStatusProvider } from "../sync/NetworkStatusContext";
-import { SyncProgressScreen } from "../sync/SyncProgressScreen";
 import { SyncBanner } from "../sync/SyncBanner";
 import { OfflineBanner } from "../sync/OfflineBanner";
 import { SessionHistoryProvider } from "../practice/sessionHistory";
@@ -64,12 +63,7 @@ function RootLayout() {
 }
 
 function RootNavigator() {
-  const { status } = useSyncStatus();
   useScreenViewTracking();
-
-  if (status === "checking" || status === "syncing") {
-    return <SyncProgressScreen />;
-  }
 
   return (
     <>

@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "./client";
 import { exams, questionExams, questions, questionTranslations, subjects, topics } from "./schema";
 import { getSyllabusSubjectIds } from "./examStructure";
+import { resolveCorrectIndex } from "./answerResolution";
 
 const ALL_EXAMS = "ALL";
 
@@ -160,27 +161,6 @@ export type PracticeQuestion = {
   correctIndex: number;
   translations: Record<string, PracticeQuestionTranslation>;
 };
-
-/**
- * correctAnswer is meant to be a letter ("A"/"B"/"C"/"D") — options are in the
- * same order across every language's translation, so the letter maps to the
- * same index regardless of language. Some content has it stored as the
- * literal answer value instead (a real data-quality inconsistency found in
- * the seed data, e.g. "12" instead of "B") — fall back to matching against
- * the English options in that case rather than showing no correct answer at all.
- */
-function resolveCorrectIndex(correctAnswer: string, englishOptions: string[]): number {
-  const letterIndex = correctAnswer.trim().toUpperCase().charCodeAt(0) - "A".charCodeAt(0);
-  if (letterIndex >= 0 && letterIndex < englishOptions.length) {
-    return letterIndex;
-  }
-  const valueIndex = englishOptions.findIndex((option) => option.trim() === correctAnswer.trim());
-  if (valueIndex !== -1) {
-    return valueIndex;
-  }
-  console.warn(`Could not resolve correctAnswer "${correctAnswer}" against options`, englishOptions);
-  return 0;
-}
 
 export async function getPracticeQuestions(
   /** A synced difficulty code, or "all" for a mixed set. */

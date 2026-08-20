@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { Pressable, ScrollView, Text, TextInput, View, StyleSheet } from "react-native";
-import { getSyncedExams, type ExamOption } from "../../../db/practiceContent";
+import { getSyncedExams, type ExamOption } from "../../../data/practiceData";
+import { useHybridMode } from "../../../data/hybridSource";
 import { useSyncStatus } from "../../../sync/SyncContext";
 import { PressableScale } from "../../../ui/PressableScale";
 import { FadeInItem } from "../../../ui/FadeInList";
+import { OfflineNoDataNotice } from "../../../ui/OfflineNoDataNotice";
 
 // Every exam here is real, locally-synced data — no hardcoded "coming soon" exams.
 // Adding a new exam on the backend makes it appear here automatically on next sync.
@@ -15,10 +17,11 @@ export default function Practice() {
   const [exams, setExams] = useState<ExamOption[]>([]);
 
   const { syncVersion } = useSyncStatus();
+  const mode = useHybridMode();
 
   useEffect(() => {
-    getSyncedExams().then(setExams);
-  }, [syncVersion]);
+    getSyncedExams(mode).then(setExams);
+  }, [syncVersion, mode]);
 
   const openSubjects = (examCode: string, examLabel: string) => {
     router.push({ pathname: "/practice/subjects", params: { examCode, examLabel } });
@@ -109,7 +112,8 @@ export default function Practice() {
           ))}
           {/* Two different empty states: nothing synced yet is a content gap, while a
               search that found nothing is a dead end the user can back out of. */}
-          {filteredExams.length === 0 && (
+          {filteredExams.length === 0 && mode === "unavailable" && <OfflineNoDataNotice />}
+          {filteredExams.length === 0 && mode !== "unavailable" && (
             <Text style={styles.emptyText}>
               {searching
                 ? `No exams match "${search.trim()}"`

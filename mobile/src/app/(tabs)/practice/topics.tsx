@@ -3,11 +3,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { Pressable, ScrollView, Text, TextInput, View, StyleSheet } from "react-native";
 import { toSubjectMeta } from "../../../constants/subjects";
-import { getTopicStats, type TopicStat } from "../../../db/practiceContent";
+import { getTopicStats, type TopicStat } from "../../../data/practiceData";
+import { useHybridMode } from "../../../data/hybridSource";
 import { getSubjectMetaByName, type SubjectMetaRow } from "../../../db/subjectMeta";
 import { useSyncStatus } from "../../../sync/SyncContext";
 import { PressableScale } from "../../../ui/PressableScale";
 import { FadeInItem } from "../../../ui/FadeInList";
+import { OfflineNoDataNotice } from "../../../ui/OfflineNoDataNotice";
 
 function questionsLabel(count: number): string {
   return count === 1 ? "1 question" : `${count} questions`;
@@ -26,11 +28,12 @@ export default function Topics() {
   const [subjectStyle, setSubjectStyle] = useState<SubjectMetaRow | null>(null);
 
   const { syncVersion } = useSyncStatus();
+  const mode = useHybridMode();
 
   useEffect(() => {
     if (!subjectId) return;
-    getTopicStats(subjectId, examCode ?? null).then(setTopics);
-  }, [subjectId, examCode, syncVersion]);
+    getTopicStats(subjectId, examCode ?? null, mode).then(setTopics);
+  }, [subjectId, examCode, syncVersion, mode]);
 
   // Styling is synced per subject rather than looked up from a hardcoded table.
   useEffect(() => {
@@ -100,6 +103,7 @@ export default function Topics() {
             {filteredTopics.length === 0 && topics.length > 0 && (
               <Text style={styles.emptyText}>No topics match "{search}"</Text>
             )}
+            {topics.length === 0 && mode === "unavailable" && <OfflineNoDataNotice />}
           </View>
         </ScrollView>
       </View>

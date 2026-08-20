@@ -4,6 +4,9 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
 import { buildMockTestQuestions, insertMockTestAttempt, type MockTestQuestion } from "../../../db/mockTest";
 import { getPaperById, type SyncedPaper } from "../../../db/examStructure";
+import { getPaperByIdLive } from "../../../data/mockTestStructureData";
+import { buildMockTestQuestionsLive } from "../../../data/mockTestData";
+import { useHybridMode } from "../../../data/hybridSource";
 import { LANGUAGES, useAppLanguage } from "../../../practice/appLanguage";
 import { LanguagePickerModal } from "../../../practice/LanguagePickerModal";
 
@@ -50,19 +53,29 @@ export default function MockTestTaking() {
   const endTimeRef = useRef<number | null>(null);
   const submittedRef = useRef(false);
   const startedAtRef = useRef(Date.now());
+  const mode = useHybridMode();
+  // Captured once, deliberately not a dependency below: once an attempt has started, a
+  // sync completing mid-test must not flip the data source and refetch a *different*
+  // question set out from under the student — see the effect's own comment.
+  const modeAtStartRef = useRef(mode);
 
   useEffect(() => {
     if (!paperId) return;
+    const startMode = modeAtStartRef.current;
     (async () => {
-      const loaded = await getPaperById(paperId);
-      if (!loaded) return;
-      setPaper(loaded);
-      const qs = await buildMockTestQuestions(loaded);
-      const minutes = totalDurationMinutes(loaded);
-      setQuestions(qs);
-      startedAtRef.current = Date.now();
-      endTimeRef.current = Date.now() + minutes * 60 * 1000;
-      setRemainingSeconds(minutes * 60);
+      try {
+        const loaded = startMode === "local" ? await getPaperById(paperId) : await getPaperByIdLive(paperId);
+        if (!loaded) return;
+        setPaper(loaded);
+        const qs = startMode === "local" ? await buildMockTestQuestions(loaded) : await buildMockTestQuestionsLive(loaded);
+        const minutes = totalDurationMinutes(loaded);
+        setQuestions(qs);
+        startedAtRef.current = Date.now();
+        endTimeRef.current = Date.now() + minutes * 60 * 1000;
+        setRemainingSeconds(minutes * 60);
+      } catch (err) {
+        console.warn("Failed to load mock test questions", err);
+      }
     })();
   }, [paperId]);
 

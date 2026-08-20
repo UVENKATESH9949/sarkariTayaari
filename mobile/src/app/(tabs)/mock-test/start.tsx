@@ -4,6 +4,9 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { ActivityIndicator, Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
 import { getSectionAvailability, type SectionAvailability } from "../../../db/mockTest";
 import { getPaperById, type SyncedPaper } from "../../../db/examStructure";
+import { getPaperByIdLive } from "../../../data/mockTestStructureData";
+import { getSectionAvailabilityLive } from "../../../data/mockTestData";
+import { useHybridMode } from "../../../data/hybridSource";
 
 export default function MockTestStart() {
   const router = useRouter();
@@ -16,19 +19,29 @@ export default function MockTestStart() {
   const [paper, setPaper] = useState<SyncedPaper | null>(null);
   const [sections, setSections] = useState<SectionAvailability[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const mode = useHybridMode();
 
   useEffect(() => {
     if (!paperId) return;
     (async () => {
+      setLoading(true);
       try {
-        const loaded = await getPaperById(paperId);
+        const loaded = mode === "local" ? await getPaperById(paperId) : await getPaperByIdLive(paperId);
         setPaper(loaded);
-        if (loaded) setSections(await getSectionAvailability(loaded));
+        if (loaded) {
+          setSections(mode === "local" ? await getSectionAvailability(loaded) : await getSectionAvailabilityLive(loaded));
+        }
+      } catch (err) {
+        // A live fetch can fail (connectivity dropped between screens) where the local
+        // read never could — treat it the same as "paper not found" rather than an
+        // unhandled rejection, since this screen already has a graceful empty state for that.
+        console.warn("Failed to load mock test paper", err);
+        setPaper(null);
       } finally {
         setLoading(false);
       }
     })();
-  }, [paperId]);
+  }, [paperId, mode]);
 
   if (loading) {
     return (

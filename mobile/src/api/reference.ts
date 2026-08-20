@@ -102,8 +102,9 @@ export function getSubjects() {
   return apiFetch<SubjectResponse[]>("/subjects");
 }
 
-export function getTopics() {
-  return apiFetch<TopicResponse[]>("/topics");
+export function getTopics(params?: { subjectId?: string }) {
+  const query = params?.subjectId ? `?subjectId=${encodeURIComponent(params.subjectId)}` : "";
+  return apiFetch<TopicResponse[]>(`/topics${query}`);
 }
 
 /** Active-only. Drives the Level screen, which renders whatever it receives. */

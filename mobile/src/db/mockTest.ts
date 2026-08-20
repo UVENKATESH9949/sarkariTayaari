@@ -3,6 +3,7 @@ import { db } from "./client";
 import { mockTestAttemptResults, mockTestAttempts, questionExams, questions, questionTranslations } from "./schema";
 import type { SyncedPaper } from "./examStructure";
 import { trackEvent } from "../telemetry/analytics";
+import { resolveCorrectIndex } from "./answerResolution";
 
 export type MockTestQuestion = {
   id: string;
@@ -104,11 +105,7 @@ export async function buildMockTestQuestions(paper: SyncedPaper): Promise<MockTe
     for (const q of matched) {
       const translations = translationsByQuestion.get(q.id) ?? {};
       const englishOptions = translations.en?.options ?? Object.values(translations)[0]?.options ?? [];
-      const letterIndex = q.correctAnswer.trim().toUpperCase().charCodeAt(0) - "A".charCodeAt(0);
-      const correctIndex =
-        letterIndex >= 0 && letterIndex < englishOptions.length
-          ? letterIndex
-          : Math.max(0, englishOptions.findIndex((o) => o.trim() === q.correctAnswer.trim()));
+      const correctIndex = resolveCorrectIndex(q.correctAnswer, englishOptions);
 
       all.push({
         id: q.id,
