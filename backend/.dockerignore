@@ -1,0 +1,5 @@
+target
+application-local.yml
+application-local.yml.example
+downloads
+*.md
