@@ -23,7 +23,8 @@
 | `09-motion-system-and-ui-polish/` | Shared animation tokens, the exam-grid regression it caused, Home/Progress extension | TICKET-941 |
 | `10-admin-authentication/` | Role-based admin accounts, `requireAdmin()` on every content-management endpoint, bootstrap + admin-invites-admin flow, admin console login | Un-ticketed |
 | `11-crash-reporting-and-analytics/` | Sentry crash reporting (inactive, no DSN yet) and breadcrumb-based basic analytics | TICKET-503 |
-| `12-load-test-data-seeding/` | 11 active exams, ~14,000 questions, a real demo account with practice/mock history; 3 real backend performance bugs found and fixed | TICKET-501 |
+| `12-load-test-data-seeding/` | 11 active exams, ~37,900 questions, a real demo account with practice/mock history; 5 real performance bugs found and fixed | TICKET-501 |
+| `13-hybrid-online-sync/` | Non-blocking startup + hybrid online/local data layer — screens read live from the backend while first sync is still running, full Mock Test parity, real sync status in More | Un-ticketed (user-provided spec) |
 
 ## Two source-of-truth documents live at the project root, not here
 

@@ -29,7 +29,8 @@
 | Motion System (941) | 941 | 1 | 0 | 0 |
 | Bookmark Sync + Offline Indicator (this session, unticketed) | — | 2 | 0 | 0 |
 | Admin Authentication (this session, unticketed) | — | 1 | 0 | 0 |
-| **Current product total** | | **~77** | **1** | **9** |
+| Non-Blocking Startup + Hybrid Online/Local Sync (this session, unticketed) | — | 1 | 0 | 0 |
+| **Current product total** | | **~78** | **1** | **9** |
 | Future Vision — Personal Preparation OS | 1001–2003 (11 epics) | 0 | 0 | 63 |
 
 **Bottom line: the shipped product is essentially feature-complete for V1.0/V1.1. What's left before it's release-ready is entirely Sprint 5 (QA/perf/release prep) — nothing there has been started. The Future Vision document (63 tickets) hasn't been touched at all, by design — it's explicitly a draft awaiting a greenlight.**
@@ -179,6 +180,7 @@ Now documented — see [07-mock-test-engine/mock-test-engine.md](./07-mock-test-
 | Task | Status | Report |
 |---|---|---|
 | Load-test data seeding (TICKET-501) — 11 active exams, ~37,900 questions (round 2, pushed toward V1.2's 20k-50k target), a real demo account with practice/mock history (350 sessions/85 attempts); found and fixed 4 backend + 1 mobile performance bug along the way | 🔵 done, full-sync timing improved but not fully optimized | [12-load-test-data-seeding/load-test-data-seeding.md](./12-load-test-data-seeding/load-test-data-seeding.md) |
+| Non-blocking startup + hybrid online/local data layer (user-provided spec) — the blocking first-sync screen is gone, Practice/Mock Test read live from the backend while sync is still running (full Mock Test parity, including live-sampled timed attempts), real sync status in More/Settings | ✅ done, verified live on-device at both live-mode and post-sync-completion | [13-hybrid-online-sync/hybrid-online-sync.md](./13-hybrid-online-sync/hybrid-online-sync.md) |
 
 ---
 
