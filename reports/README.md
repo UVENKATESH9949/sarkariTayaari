@@ -25,6 +25,8 @@
 | `11-crash-reporting-and-analytics/` | Sentry crash reporting (inactive, no DSN yet) and breadcrumb-based basic analytics | TICKET-503 |
 | `12-load-test-data-seeding/` | 11 active exams, ~37,900 questions, a real demo account with practice/mock history; 5 real performance bugs found and fixed | TICKET-501 |
 | `13-hybrid-online-sync/` | Non-blocking startup + hybrid online/local data layer — screens read live from the backend while first sync is still running, full Mock Test parity, real sync status in More | Un-ticketed (user-provided spec) |
+| `14-cloud-run-deployment/` | Backend deployed to Google Cloud Run — configurable CORS, Cloud Run `PORT`, Artifact Registry + Secret Manager, and the public-credentials exposure the deployment created and closed | Un-ticketed |
+| `15-github-actions-apk-builds/` | Signed release APKs built by GitHub Actions — a real upload keystore, an Expo config plugin that survives `prebuild`, `run_number`-derived `versionCode`, and a signer-fingerprint check that makes shipping a debug-signed APK impossible | TICKET-505 (partial) |
 
 ## Two source-of-truth documents live at the project root, not here
 

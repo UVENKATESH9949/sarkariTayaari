@@ -87,9 +87,16 @@ yet. Set `EXPO_PUBLIC_SENTRY_DSN` (see `mobile/README.md`) once one does.
 
 ## Building an Android APK
 
-The native `android/` project is **not committed**. It is regenerated from `app.json`
-by `expo prebuild` (Continuous Native Generation), so edits made directly inside
-`android/` are discarded on the next build — change `app.json` instead.
+**Normally you don't.** GitHub Actions builds a signed APK on every push to `main`, and
+attaches a permanent one to a GitHub Release for every `v*` tag — see
+[`ANDROID-BUILDS.md`](ANDROID-BUILDS.md) for how to get a build, retrieve an old one, and
+the one-time secret setup. The rest of this section is the manual path, for when you need
+to build locally.
+
+The native `android/` project is **not committed**. It is regenerated from `app.json` and
+[`app.config.js`](mobile/app.config.js) by `expo prebuild` (Continuous Native Generation),
+so edits made directly inside `android/` are discarded on the next build — change
+`app.json` instead, or add a config plugin under `mobile/plugins/`.
 
 ```bash
 cd mobile
@@ -106,11 +113,13 @@ infer it from, and the fallback is `localhost`, which on a phone means the phone
 itself. Use `10.0.2.2` for an emulator, a LAN IP for a device on the same network, or
 a real domain for anything else.
 
-**Release builds are currently signed with the debug key.** That is what makes an
-installable APK possible without managing a keystore, and it is fine for internal
-testing — but it cannot go to the Play Store, and a debug key regenerated on another
-machine produces a signature mismatch that blocks upgrade-in-place. Add a real
-keystore before distributing.
+**A plain local `assembleRelease` is still signed with the debug key**, and says so in a
+Gradle warning. That keeps an installable APK possible without handling the keystore, but
+it cannot go to the Play Store, and a debug key regenerated on another machine produces a
+signature mismatch that blocks upgrade-in-place. A real upload keystore now exists —
+**CI signs with it, and fails the build if the finished APK's signer certificate doesn't
+match**. To sign locally, pass the same four Gradle properties CI does; see
+[`ANDROID-BUILDS.md`](ANDROID-BUILDS.md).
 
 The app talks to the backend over plain HTTP, so `usesCleartextTraffic` is enabled via
 the `expo-build-properties` plugin. Move the backend to HTTPS and remove that before
@@ -139,10 +148,16 @@ notifications.
 
 ## CI
 
-[`Jenkinsfile`](Jenkinsfile) defines the pipeline: backend build, optional backend
-tests, admin lint/build, mobile typecheck, and APK. It assumes a Linux agent with
-JDK 21, Node 20+, Maven and the Android SDK; the file's header comments list the
-Jenkins credentials it expects and what to change for a Windows agent.
+**Android builds — [`.github/workflows/android-build.yml`](.github/workflows/android-build.yml).**
+The live one. Signed APK on every push to `main` (artifact, 30 days) and on every `v*` tag
+(GitHub Release, permanent). Full documentation in [`ANDROID-BUILDS.md`](ANDROID-BUILDS.md).
+
+**Everything else — [`Jenkinsfile`](Jenkinsfile).** Backend build, optional backend tests,
+admin lint/build, mobile typecheck, and an APK stage that predates the GitHub Actions one.
+It assumes a Linux agent with JDK 21, Node 20+, Maven and the Android SDK; the file's
+header comments list the Jenkins credentials it expects and what to change for a Windows
+agent. No Jenkins instance is currently known to be running, and its APK stage is
+debug-signed — prefer the GitHub Actions workflow for builds you intend to hand to anyone.
 
 Backend integration tests are **off by default**. They run against a real database and
 clean up after themselves, so two concurrent builds would collide — point them at a

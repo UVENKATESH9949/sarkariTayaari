@@ -1,6 +1,6 @@
 # Ticket Status — every ticket, one file
 
-**Last updated:** 2026-08-17
+**Last updated:** 2026-08-21
 **Purpose:** answer "where are we" in one place, without opening five different documents.
 
 **Legend**
@@ -20,7 +20,7 @@
 | Sprint 2 — Mobile Scaffold | 201–205 | 5 | 0 | 0 |
 | Sprint 3 — Sync Engine | 301–307 | 7 | 0 | 0 |
 | Sprint 4 — Practice Flow | 401–405 | 5 | 0 | 0 |
-| Sprint 5 — QA/Perf/Release | 501–506 | 2 | 0 | 4 |
+| Sprint 5 — QA/Perf/Release | 501–506 | 2 | 1 | 3 |
 | V1.1 — Accounts + Progress Sync | 601–605 | 5 | 0 | 0 |
 | V1.2 — Scale & Polish | 701–706 | 0 | 2 | 4 |
 | Content Model Redesign (801–810 + 2 un-ticketed phases) | — | 4 phases | 0 | 0 |
@@ -30,10 +30,12 @@
 | Bookmark Sync + Offline Indicator (this session, unticketed) | — | 2 | 0 | 0 |
 | Admin Authentication (this session, unticketed) | — | 1 | 0 | 0 |
 | Non-Blocking Startup + Hybrid Online/Local Sync (this session, unticketed) | — | 1 | 0 | 0 |
-| **Current product total** | | **~78** | **1** | **9** |
+| Cloud Run Backend Deployment (unticketed) | — | 1 | 0 | 0 |
+| GitHub Actions APK Builds (unticketed; also moves TICKET-505 to partial) | — | 1 | 0 | 0 |
+| **Current product total** | | **~80** | **2** | **8** |
 | Future Vision — Personal Preparation OS | 1001–2003 (11 epics) | 0 | 0 | 63 |
 
-**Bottom line: the shipped product is essentially feature-complete for V1.0/V1.1. What's left before it's release-ready is entirely Sprint 5 (QA/perf/release prep) — nothing there has been started. The Future Vision document (63 tickets) hasn't been touched at all, by design — it's explicitly a draft awaiting a greenlight.**
+**Bottom line: the shipped product is essentially feature-complete for V1.0/V1.1. What's left before it's release-ready is entirely Sprint 5 (QA/perf/release prep), where 501 and 503 are done and 505 is now half done — a real upload keystore and a signed-build pipeline exist; Play Console does not. Still untouched in Sprint 5: low-end device testing (502), branding confirmation (504), and beta recruitment (506). The Future Vision document (63 tickets) hasn't been touched at all, by design — it's explicitly a draft awaiting a greenlight.**
 
 ---
 
@@ -97,7 +99,7 @@ Now documented — see [04-content-model-redesign/content-model-phase3-mobile-fo
 | 502 | Test on low-end/throttled device | ⬜ Not started | |
 | 503 | Crash reporting (Sentry) + basic analytics events | 🔵 Done, real crash upload not yet verified live — see report | [11-crash-reporting-and-analytics/crash-reporting-and-analytics.md](./11-crash-reporting-and-analytics/crash-reporting-and-analytics.md) |
 | 504 | App icon, splash screen, branding polish | ⬜ Status unverified — not confirmed either way this pass |
-| 505 | Signed APK/AAB, Play Console internal testing track | ⬜ Not started — debug-signed only |
+| 505 | Signed APK/AAB, Play Console internal testing track | ⚠️ Partial — the **signing** half is done: a real RSA-4096 upload keystore exists, GitHub Actions signs with it, and the build fails if the finished APK's signer certificate doesn't match. The **Play Console** half is untouched: no AAB (`bundleRelease`), no developer account, no internal track, no Play App Signing. The workflow has also never run on GitHub yet. | [15-github-actions-apk-builds/github-actions-apk-builds.md](./15-github-actions-apk-builds/github-actions-apk-builds.md) |
 | 506 | Recruit 10–20 beta testers (Telegram/coaching groups) | ⬜ Not started — the "earlier distribution plan" it references isn't in any available document |
 
 ## V1.1 — Write-Back Sync + Progress
@@ -181,6 +183,15 @@ Now documented — see [07-mock-test-engine/mock-test-engine.md](./07-mock-test-
 |---|---|---|
 | Load-test data seeding (TICKET-501) — 11 active exams, ~37,900 questions (round 2, pushed toward V1.2's 20k-50k target), a real demo account with practice/mock history (350 sessions/85 attempts); found and fixed 4 backend + 1 mobile performance bug along the way | 🔵 done, full-sync timing improved but not fully optimized | [12-load-test-data-seeding/load-test-data-seeding.md](./12-load-test-data-seeding/load-test-data-seeding.md) |
 | Non-blocking startup + hybrid online/local data layer (user-provided spec) — the blocking first-sync screen is gone, Practice/Mock Test read live from the backend while sync is still running (full Mock Test parity, including live-sampled timed attempts), real sync status in More/Settings | ✅ done, verified live on-device at both live-mode and post-sync-completion | [13-hybrid-online-sync/hybrid-online-sync.md](./13-hybrid-online-sync/hybrid-online-sync.md) |
+
+## This session (2026-08-20 / 2026-08-21) — no ticket numbers assigned yet
+
+| Task | Status | Report |
+|---|---|---|
+| Backend deployed to Google Cloud Run — configurable CORS origins, `${PORT:8080}`, Artifact Registry + Cloud Build image, Secret Manager, scale-to-zero with `--max-instances=3` | ✅ done, verified live (`/api/health` UP, `/api/questions/live` serving 35,958 real questions from Neon) | [14-cloud-run-deployment/cloud-run-deployment.md](./14-cloud-run-deployment/cloud-run-deployment.md) |
+| Security: plaintext admin credentials in a public repo became exploitable the moment the backend went public — confirmed by a real login returning ADMIN, then closed by demoting the account and issuing a new admin | ✅ remediated and verified (old account now returns STUDENT; new admin confirmed ADMIN) | same report |
+| Android release APK rebuilt against the deployed HTTPS backend | ⚠️ in progress — two builds failed on a ninja "manifest still dirty" loop caused by OneDrive syncing files mid-build; resolved by building from a non-OneDrive workspace. **Superseded by the GitHub Actions workflow below**, which builds on a Linux runner where OneDrive cannot interfere. | same report |
+| Signed APK builds via GitHub Actions — real RSA-4096 upload keystore, an Expo config plugin so the signing survives `expo prebuild`, `versionCode` from `run_number`, artifact on `main` / permanent Release on a `v*` tag, and an `apksigner` signer-fingerprint check that makes shipping a debug-signed APK impossible. Moves TICKET-505 to partial. | 🔵 built and verified locally end to end (`gradlew :app:signingReport` resolves the release variant to the upload keystore; the fingerprint tripwire accepts our key and rejects a foreign one) — **but the workflow has never run on GitHub**, the four repo secrets aren't added, and no full `assembleRelease` completed with the upload key | [15-github-actions-apk-builds/github-actions-apk-builds.md](./15-github-actions-apk-builds/github-actions-apk-builds.md) |
 
 ---
 

@@ -1,0 +1,276 @@
+# Builds a signed Android release APK.
+#
+# WHAT TRIGGERS WHAT
+#   push to main      -> APK as a workflow artifact (30-day retention). Throwaway.
+#   push a tag v*     -> APK attached to a GitHub Release. Permanent, never expires.
+#   manual dispatch   -> APK as an artifact, with a chooseable backend URL.
+#
+# Artifacts expire; Release assets do not. That split is deliberate: frequent disposable
+# builds during development, and a permanent archive only for versions you actually name.
+# To keep a build forever, tag it:
+#
+#   git tag v1.0.1 && git push origin v1.0.1
+#
+# SETUP REQUIRED (once) — see ANDROID-BUILDS.md for the walkthrough.
+#   Secrets:  ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD,
+#             ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
+#   Variable: API_BASE_URL (optional; falls back to DEFAULT_API_BASE_URL below)
+
+name: Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: "Backend URL baked into the APK (must be reachable from the device)"
+        required: false
+        default: "https://sarkaritaiyaari-backend-815653276881.asia-south1.run.app/api"
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+# A second push supersedes the first: cancel the older run so the newest commit is always
+# the one that produces the latest APK. Without this, a slow earlier build can finish
+# *after* a faster later one and publish a stale artifact as the most recent.
+# Keyed per-ref, so main and a tag never cancel each other.
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write # required only to create a Release on a tag push
+
+env:
+  # Used when neither the dispatch input nor the API_BASE_URL repo variable is set.
+  DEFAULT_API_BASE_URL: "https://sarkaritaiyaari-backend-815653276881.asia-south1.run.app/api"
+
+  # SHA-256 fingerprint of the upload certificate, normalised to lowercase hex with no
+  # separators. The build FAILS if the finished APK is not signed by this exact
+  # certificate — which is what makes it impossible to accidentally ship a debug-signed
+  # APK, the trap already documented in the project README.
+  #
+  # A public certificate fingerprint is not a secret. If you ever rotate the keystore,
+  # this must be updated by hand — on purpose, so a key change can never be silent.
+  EXPECTED_SIGNER_SHA256: "903706a2d8d3eb97dce55dec652f20357bb755596b216244e4e53e6059486883"
+
+  # @sentry/react-native's Gradle hook tries to upload source maps during a release
+  # build. No Sentry org/project/auth token is configured yet (see ADR-010), so this
+  # skips it rather than failing the build. Remove once a real Sentry project exists.
+  SENTRY_DISABLE_AUTO_UPLOAD: "true"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        # Shallow (depth 1) is fine: the version code comes from github.run_number, not
+        # from commit history.
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17" # Expo SDK 57 / React Native 0.86 target JDK 17.
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('mobile/package-lock.json') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Install dependencies
+        working-directory: mobile
+        run: npm ci
+
+      # Everything below the build is expensive. These two checks cost seconds and catch
+      # the most likely reasons a build would be wasted, so they run first.
+      - name: Check release-signing plugin
+        working-directory: mobile
+        run: node scripts/check-release-signing-plugin.js
+
+      - name: Typecheck
+        working-directory: mobile
+        run: npx tsc --noEmit
+
+      - name: Resolve build configuration
+        id: cfg
+        working-directory: mobile
+        env:
+          # Passed through env rather than expanded straight into the script, so a value
+          # containing shell metacharacters is data and not code.
+          API_URL_INPUT: ${{ github.event.inputs.api_base_url }}
+          API_URL_VAR: ${{ vars.API_BASE_URL }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+
+          API_URL="${API_URL_INPUT:-${API_URL_VAR:-$DEFAULT_API_BASE_URL}}"
+
+          # Android requires a strictly increasing versionCode. run_number is monotonic
+          # per workflow, so no committed counter and no race. The 1000 offset keeps CI
+          # builds permanently above locally-built ones, which default to 1.
+          VERSION_CODE=$(( 1000 + RUN_NUMBER ))
+
+          VERSION_NAME=$(node -p "require('./app.json').expo.version")
+          SHORT_SHA="${GITHUB_SHA::7}"
+
+          {
+            echo "EXPO_PUBLIC_API_BASE_URL=$API_URL"
+            echo "ANDROID_VERSION_CODE=$VERSION_CODE"
+            echo "ANDROID_VERSION_NAME=$VERSION_NAME"
+          } >> "$GITHUB_ENV"
+
+          echo "apk_name=sarkaritaiyaari-${VERSION_NAME}-${VERSION_CODE}-${SHORT_SHA}.apk" >> "$GITHUB_OUTPUT"
+
+          echo "### Build configuration" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Version | \`${VERSION_NAME}\` |"
+            echo "| versionCode | \`${VERSION_CODE}\` |"
+            echo "| Commit | \`${SHORT_SHA}\` |"
+            echo "| Backend URL | \`${API_URL}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Decode upload keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KEYSTORE_BASE64}" ]; then
+            echo "::error::Secret ANDROID_KEYSTORE_BASE64 is not set. See ANDROID-BUILDS.md."
+            exit 1
+          fi
+          # Written to RUNNER_TEMP, deliberately outside the workspace, so it can never be
+          # picked up by an artifact upload or committed by a later step.
+          printf '%s' "${KEYSTORE_BASE64}" | base64 -d > "${RUNNER_TEMP}/upload.jks"
+          echo "keystore: $(stat -c%s "${RUNNER_TEMP}/upload.jks") bytes"
+
+      - name: Generate native project
+        working-directory: mobile
+        run: |
+          set -euo pipefail
+          # android/ is not committed — it is regenerated from app.json + app.config.js on
+          # every build (Continuous Native Generation). This is also where
+          # plugins/withReleaseSigning.js patches the release signingConfig in.
+          npx expo prebuild --platform android --no-install --clean
+
+      - name: Verify signing config was injected
+        working-directory: mobile
+        run: |
+          set -euo pipefail
+          GRADLE_FILE=android/app/build.gradle
+          if ! grep -q "sarkaritaiyaari:release-signing" "$GRADLE_FILE"; then
+            echo "::error::withReleaseSigning did not patch $GRADLE_FILE. Refusing to build a debug-signed APK."
+            exit 1
+          fi
+          if ! grep -q "signingConfig signingConfigs.release" "$GRADLE_FILE"; then
+            echo "::error::The release buildType is not using the release signingConfig."
+            exit 1
+          fi
+          echo "Release signing config present."
+
+      - name: Build release APK
+        working-directory: mobile/android
+        env:
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          # Signing material is passed as Gradle properties, never written into
+          # gradle.properties, so it stays out of the workspace and out of any artifact.
+          ./gradlew assembleRelease \
+            --no-daemon \
+            --stacktrace \
+            -PST_UPLOAD_STORE_FILE="${RUNNER_TEMP}/upload.jks" \
+            -PST_UPLOAD_STORE_PASSWORD="$STORE_PASSWORD" \
+            -PST_UPLOAD_KEY_ALIAS="$KEY_ALIAS" \
+            -PST_UPLOAD_KEY_PASSWORD="$KEY_PASSWORD"
+
+      # The real safety net. Everything above could succeed while still producing a
+      # debug-signed APK; this compares the APK's actual signer certificate against the
+      # expected fingerprint and fails the build if they differ.
+      - name: Verify signer certificate
+        working-directory: mobile
+        run: |
+          set -euo pipefail
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
+          echo "using: $APKSIGNER"
+
+          ACTUAL=$("$APKSIGNER" verify --print-certs "$APK" \
+            | grep -im1 'certificate SHA-256 digest' \
+            | awk '{print $NF}' \
+            | tr 'A-Z' 'a-z')
+
+          echo "expected: $EXPECTED_SIGNER_SHA256"
+          echo "actual:   $ACTUAL"
+
+          if [ "$ACTUAL" != "$EXPECTED_SIGNER_SHA256" ]; then
+            echo "::error::APK is signed by an unexpected certificate. It may be DEBUG-signed and is not distributable."
+            exit 1
+          fi
+          echo "Signer verified — this APK is signed with the upload key."
+          echo "Signer certificate verified (\`${ACTUAL:0:16}…\`)." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Rename APK
+        id: apk
+        working-directory: mobile
+        run: |
+          set -euo pipefail
+          mkdir -p ../dist-apk
+          cp android/app/build/outputs/apk/release/app-release.apk \
+             "../dist-apk/${{ steps.cfg.outputs.apk_name }}"
+          ls -lh ../dist-apk
+          echo "path=dist-apk/${{ steps.cfg.outputs.apk_name }}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.cfg.outputs.apk_name }}
+          path: ${{ steps.apk.outputs.path }}
+          # Artifacts are the disposable tier. Tag a commit to keep a build permanently.
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APK_PATH: ${{ steps.apk.outputs.path }}
+        run: |
+          set -euo pipefail
+
+          NOTES=$(printf '%s\n' \
+            "**versionCode** \`${ANDROID_VERSION_CODE}\`" \
+            "**Commit** \`${GITHUB_SHA}\`" \
+            "**Backend** \`${EXPO_PUBLIC_API_BASE_URL}\`" \
+            "" \
+            "Signed with the SarkariTaiyaari upload key, verified against its certificate fingerprint in CI." \
+            "" \
+            "Install directly on an Android device: download the \`.apk\` below and open it." )
+
+          # Release assets never expire — this is the permanent build archive. Re-running
+          # a tag build updates the existing asset instead of failing on "already exists".
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" "${APK_PATH}" --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" "${APK_PATH}" \
+              --title "${GITHUB_REF_NAME}" \
+              --notes "${NOTES}"
+          fi

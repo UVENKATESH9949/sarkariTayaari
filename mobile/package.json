@@ -47,7 +47,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "check:signing": "node scripts/check-release-signing-plugin.js"
   },
   "private": true
 }
