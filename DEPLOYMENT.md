@@ -1,153 +1,110 @@
 # Backend Deployment — Google Cloud Run
 
-**Status as of 2026-08-20: not yet deployed.** GCP account and billing are set
-up; the Docker packaging is ready in this repo; everything from here on needs
-the `gcloud` CLI, which isn't installed on this machine (install restrictions)
-— continuing from a laptop that can install it.
+**Status as of 2026-08-21: DEPLOYED AND LIVE.**
 
-This file exists so a session on that laptop (with no memory of this one) can
-pick up exactly where this left off. Read this first, then follow "Exact next
-steps" in order.
+**Service URL:** `https://sarkaritaiyaari-backend-815653276881.asia-south1.run.app`
 
-## What's done
+Verified live: `GET /api/health` returns `{"status":"UP"}`, and
+`GET /api/questions/live?size=1` returns real bilingual content from Neon
+(`totalElements: 35958`). Full write-up, including what went wrong on the way:
+`reports/14-cloud-run-deployment/cloud-run-deployment.md`.
 
-- GCP account created, billing profile linked. A card was added and an RBI
-  e-mandate was authorized during setup — **this is just an authorization
-  ceiling (₹15,000), not a charge.** No money has moved.
-- Budget alert set: **₹500/month**, default 50/90/100% thresholds. This is an
-  email notification only — it does **not** automatically stop billing if
-  usage keeps climbing past it.
-- GCP project created via the console. **Fill in below — not recorded here on
-  purpose:**
-  - Project ID: `______________`
-  - Region chosen: `______________` (recommended: `asia-south1` / Mumbai, for
-    India-based users — used in all commands below, change if you picked
-    differently)
-- `backend/Dockerfile` and `backend/.dockerignore` added to this repo:
-  multi-stage build — a Maven build stage (tests skipped on purpose: several
-  tests, e.g. `LiveQuestionsTest`, hit the real Neon database and there are no
-  DB credentials available inside a Docker/Cloud Build context) followed by a
-  small `eclipse-temurin:21-jre-alpine` runtime image.
-- Confirmed the exact environment variables the app needs in production, from
-  `backend/application-local.yml.example` (the real file with real values is
-  gitignored and stays local-only):
-  - `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`
-  - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
-  - `ADMIN_BOOTSTRAP_EMAIL`, `ADMIN_BOOTSTRAP_PASSWORD` (optional — only
-    matters if no admin account exists yet; a no-op after that)
-  - Spring Boot maps these automatically (relaxed binding) — no code or config
-    file changes needed to support them.
+> **There is no page at the root URL.** This is an API — `/` and `/api` return
+> Spring's Whitelabel 404 by design. Use `/api/health` or `/api/exams`.
 
-## What's NOT done yet
+## What is actually deployed
 
-- `gcloud` CLI is not installed anywhere yet. Nothing past account/billing
-  setup has actually been run: no APIs enabled via CLI, no Artifact Registry
-  repo, no secrets stored, no image built, nothing deployed.
-- Real secrets (Neon DB password, Cloudinary API secret, admin bootstrap
-  password) exist only in the local, gitignored
-  `backend/application-local.yml` on this machine. They need to be typed
-  directly into terminal commands on whichever machine finishes deployment —
-  **never paste them into a chat with any assistant.**
+| Thing | Value |
+|---|---|
+| GCP project | `sarkaritayaari` (project number `815653276881`) |
+| Region | `asia-south1` (Mumbai) |
+| Cloud Run service | `sarkaritaiyaari-backend` |
+| Image | `asia-south1-docker.pkg.dev/sarkaritayaari/backend-repo/backend:latest` |
+| Secrets | `db-password`, `cloudinary-secret` (Secret Manager) |
+| Database | the **existing Neon dev database** — a deliberate choice, not an oversight |
 
-## Exact next steps (run on the laptop, in order)
+**Note the spelling.** The GCP project is `sarkaritayaari`; the Java package and repo
+are `sarkarita**i**yaari`. They genuinely differ — don't autocorrect one into the other.
 
-### Step 0 — Install gcloud CLI and authenticate
+**Locked decisions:**
+- **Scale to zero.** Never set `min-instances`. That is what keeps this inside the free
+  tier. The cost is a ~10-20s cold start on the first request after idle.
+- **`--max-instances=3`.** Cloud Run defaults to a ceiling of 100. The cap bounds the
+  worst case; the ₹500 budget alert only sends email and never stops spending.
+- **`--allow-unauthenticated`** is required — the mobile app and admin site call these
+  endpoints directly without a Google-issued token.
 
-Download from https://cloud.google.com/sdk/docs/install, run the installer,
-then in a fresh terminal:
+## Redeploying after a code change
+
+From `backend/`:
 
 ```
-gcloud --version
-gcloud auth login
-gcloud config set project YOUR_PROJECT_ID
-gcloud config set run/region asia-south1
-gcloud services enable run.googleapis.com artifactregistry.googleapis.com secretmanager.googleapis.com cloudbuild.googleapis.com
+gcloud builds submit --tag asia-south1-docker.pkg.dev/sarkaritayaari/backend-repo/backend:latest
+
+gcloud run deploy sarkaritaiyaari-backend --image=asia-south1-docker.pkg.dev/sarkaritayaari/backend-repo/backend:latest --region=asia-south1
 ```
 
-### Step 1 — Create the Artifact Registry repo (stores the Docker image)
+Environment variables and secrets persist across deploys — you only need to re-specify
+them when they change. Cloud Build builds server-side, so local Docker is not involved
+and `gcloud auth configure-docker` is unnecessary.
+
+To change allowed CORS origins (e.g. once the admin site is hosted somewhere):
 
 ```
-gcloud artifacts repositories create backend-repo \
-  --repository-format=docker \
-  --location=asia-south1 \
-  --description="SarkariTaiyaari backend images"
-
-gcloud artifacts repositories list --location=asia-south1
-
-gcloud auth configure-docker asia-south1-docker.pkg.dev
+gcloud run services update sarkaritaiyaari-backend --region=asia-south1 --update-env-vars="APP_CORS_ALLOWED_ORIGINS=https://your-admin-site,http://localhost:5173"
 ```
 
-### Step 2 — Store secrets in Secret Manager
+## Traps that cost real time — read before touching this again
 
-Run locally, typing the real values directly — never in chat:
+1. **A billing *account* is not a billed *project*.** The previous version of this file
+   claimed billing was linked. It wasn't: an open billing account existed, but the
+   project was never attached to it. GCP then refuses to enable Cloud Run, Artifact
+   Registry, Cloud Build or Secret Manager *even for their free tiers* — and
+   `gcloud services enable` fails in a way that's easy to miss. Check with
+   `gcloud billing projects describe <project> --format="value(billingEnabled)"`.
+2. **`--set-secrets` does not grant permission to read those secrets.** The runtime
+   service account (`<project-number>-compute@developer.gserviceaccount.com`) needs
+   `roles/secretmanager.secretAccessor` explicitly. Miss it and the deploy succeeds,
+   then the container dies on startup with something that reads like a database error.
+3. **Repointing the apps needs no code change.** An earlier version of this file said to
+   grep for `localhost:8080` and edit both apps. Wrong: `admin/src/api.js` already reads
+   `VITE_API_BASE_URL`, and `mobile/src/api/config.ts` already reads
+   `EXPO_PUBLIC_API_BASE_URL`. It is env configuration only.
+   - Admin: `admin/.env.local` → `VITE_API_BASE_URL=<service URL>` (no `/api` suffix)
+   - Mobile: `mobile/.env.local` → `EXPO_PUBLIC_API_BASE_URL=<service URL>/api`
+     (**the `/api` suffix IS required here** — `src/api/client.ts` appends paths like
+     `/exams` directly)
+4. **CORS was a hard blocker and is now configuration.** `CorsConfig` used to hardcode
+   `http://localhost:5173` as the only allowed origin. A deployed admin site would have
+   had every request rejected by the browser before reaching a controller.
+5. **Building the APK from inside OneDrive does not work.** OneDrive's Files-On-Demand
+   touches files mid-build, which leaves CMake regenerating forever and ninja failing
+   with `manifest 'build.ninja' still dirty after 100 tries`. Build from a path outside
+   OneDrive. A directory junction does **not** help — Windows resolves it back to the
+   real path.
 
-```
-echo -n "YOUR_NEON_PASSWORD" | gcloud secrets create db-password --data-file=-
-echo -n "YOUR_CLOUDINARY_API_SECRET" | gcloud secrets create cloudinary-secret --data-file=-
-echo -n "YOUR_ADMIN_BOOTSTRAP_PASSWORD" | gcloud secrets create admin-bootstrap-password --data-file=-
-```
+## Security note — learned the hard way here
 
-### Step 3 — Build and push the image
+`memory/STATUS.md` records live credentials in plain text, and this repo is public. That
+was low-risk while the backend only ran on a laptop. **Deploying it turned those
+credentials into a working key to a publicly reachable door** — confirmed by an actual
+login returning role ADMIN, not assumed.
 
-From the `backend/` folder:
+Remediated: `admin@sarkaritaiyaari.app` was demoted to STUDENT and its tokens deleted;
+a new admin was created and verified. The general lesson is worth keeping: **any
+credential written into this repo must be treated as public**, and the assumption that
+"it's only local anyway" expires the moment something is deployed.
 
-```
-gcloud builds submit --tag asia-south1-docker.pkg.dev/YOUR_PROJECT_ID/backend-repo/backend:latest
-```
+## Still open
 
-### Step 4 — Deploy to Cloud Run
-
-```
-gcloud run deploy sarkaritaiyaari-backend \
-  --image=asia-south1-docker.pkg.dev/YOUR_PROJECT_ID/backend-repo/backend:latest \
-  --region=asia-south1 \
-  --allow-unauthenticated \
-  --set-env-vars="SPRING_DATASOURCE_URL=jdbc:postgresql://YOUR_NEON_HOST/YOUR_DB?sslmode=require,SPRING_DATASOURCE_USERNAME=YOUR_NEON_USERNAME,CLOUDINARY_CLOUD_NAME=YOUR_CLOUD_NAME,CLOUDINARY_API_KEY=YOUR_API_KEY,ADMIN_BOOTSTRAP_EMAIL=your-admin@email.com" \
-  --set-secrets="SPRING_DATASOURCE_PASSWORD=db-password:latest,CLOUDINARY_API_SECRET=cloudinary-secret:latest,ADMIN_BOOTSTRAP_PASSWORD=admin-bootstrap-password:latest"
-```
-
-`--allow-unauthenticated` is required — the mobile app and admin site call
-these endpoints directly without a Google-issued token, same as local dev
-today.
-
-### Step 5 — Test it
-
-The deploy command prints a URL like
-`https://sarkaritaiyaari-backend-xxxxx-el.a.run.app`. Test it:
-
-```
-curl https://YOUR-CLOUD-RUN-URL/api/questions/live?size=1
-```
-
-### Step 6 — Point the apps at the new URL
-
-- Admin app's API base URL config (`admin/src/api.js` or wherever the base
-  URL constant/env var lives).
-- Mobile app's API base URL config (`mobile/src/api/client.ts` or
-  equivalent).
-
-Deploying doesn't automatically update these — a next session should grep for
-the current `localhost:8080` base URL and replace it in both places, then
-rebuild/redeploy the admin site and re-test the mobile app against the real
-URL.
-
-## Money safety notes (already covered earlier, repeated here for the record)
-
-- The ₹15,000 e-mandate is an RBI-mandated authorization ceiling, not a
-  charge — nothing was billed by authorizing it.
-- The ₹500 budget alert emails at roughly 50/90/100% of that amount — it does
-  **not** stop billing automatically. There is no hard cutoff configured.
-- Cloud Run's free tier (2M requests/month, 360k GB-seconds, 180k vCPU-seconds)
-  should comfortably cover current usage. Staying on the default
-  **scale-to-zero** (never setting `min-instances > 0`) is what keeps it free
-  — that's the one setting to leave alone.
-
-## Also included in this push
-
-Deploying needs the backend's latest code, so this push also carries the
-already-completed, already-tested **hybrid online/local sync feature** (see
-`reports/13-hybrid-online-sync/hybrid-online-sync.md`) — it adds the
-`/api/questions/live`, `/counts`, `/mock-count`, and `/mock-sample` endpoints
-the mobile app's hybrid data layer depends on. Whatever gets deployed from
-`backend/` already includes these; nothing further is needed on the backend
-side for that feature specifically.
+- The two backend config changes (`CorsConfig`, `application.yml`) are **uncommitted**,
+  and the 78-test suite has not been re-run against them — that needs a machine with
+  `backend/application-local.yml`.
+- Prod and dev share one Neon database. The integration suite writes to the same
+  database the deployed service serves.
+- `/downloads` APK hosting no longer works: `DownloadsConfig` serves from local disk,
+  which on Cloud Run is ephemeral and scales to zero. Use Firebase App Distribution or
+  Play internal testing instead.
+- No custom domain, no backend CI/CD. Deploys are manual `gcloud` commands; the
+  `Jenkinsfile` builds artefacts but has no deploy stage.
+- The admin site itself is **not deployed** — it still runs locally against this backend.

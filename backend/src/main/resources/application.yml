@@ -63,9 +63,17 @@ spring:
     locations: classpath:db/migration
 
 server:
-  port: 8080
+  # Cloud Run injects PORT and requires the container to listen on it. It happens to be
+  # 8080 today, so a hardcoded value would work by coincidence — this makes it correct
+  # rather than lucky, and changes nothing for local dev.
+  port: ${PORT:8080}
 
 app:
+  cors:
+    # Comma-separated. Dev default only — production sets APP_CORS_ALLOWED_ORIGINS to
+    # the deployed admin site's origin. See CorsConfig for why this is configuration.
+    allowed-origins: http://localhost:5173
+
   auth:
     # Long-lived deliberately: this is a study app people open daily, and forcing a
     # re-login every few weeks is friction with no security benefit while tokens are
