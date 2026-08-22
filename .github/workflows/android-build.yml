@@ -75,81 +75,6 @@ jobs:
           distribution: temurin
           java-version: "17" # Expo SDK 57 / React Native 0.86 target JDK 17.
 
-      - name: Set up Node 20
-        uses: actions/setup-node@v5
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: mobile/package-lock.json
-
-      # Restore and save are split deliberately. `actions/cache` only saves when the job
-      # SUCCEEDS, so run #1 failing at the packaging step threw away 23 minutes of native
-      # build output and left the next run just as cold. Saving with `if: always()` means a
-      # failed build still banks its progress, which matters most while debugging.
-      - name: Restore Gradle cache
-        id: gradle-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: gradle-${{ runner.os }}-${{ hashFiles('mobile/package-lock.json') }}
-          restore-keys: gradle-${{ runner.os }}-
-
-      - name: Install dependencies
-        working-directory: mobile
-        run: npm ci
-
-      # Everything below the build is expensive. These two checks cost seconds and catch
-      # the most likely reasons a build would be wasted, so they run first.
-      - name: Check release-signing plugin
-        working-directory: mobile
-        run: node scripts/check-release-signing-plugin.js
-
-      - name: Typecheck
-        working-directory: mobile
-        run: npx tsc --noEmit
-
-      - name: Resolve build configuration
-        id: cfg
-        working-directory: mobile
-        env:
-          # Passed through env rather than expanded straight into the script, so a value
-          # containing shell metacharacters is data and not code.
-          API_URL_INPUT: ${{ github.event.inputs.api_base_url }}
-          API_URL_VAR: ${{ vars.API_BASE_URL }}
-          RUN_NUMBER: ${{ github.run_number }}
-        run: |
-          set -euo pipefail
-
-          API_URL="${API_URL_INPUT:-${API_URL_VAR:-$DEFAULT_API_BASE_URL}}"
-
-          # Android requires a strictly increasing versionCode. run_number is monotonic
-          # per workflow, so no committed counter and no race. The 1000 offset keeps CI
-          # builds permanently above locally-built ones, which default to 1.
-          VERSION_CODE=$(( 1000 + RUN_NUMBER ))
-
-          VERSION_NAME=$(node -p "require('./app.json').expo.version")
-          SHORT_SHA="${GITHUB_SHA::7}"
-
-          {
-            echo "EXPO_PUBLIC_API_BASE_URL=$API_URL"
-            echo "ANDROID_VERSION_CODE=$VERSION_CODE"
-            echo "ANDROID_VERSION_NAME=$VERSION_NAME"
-          } >> "$GITHUB_ENV"
-
-          echo "apk_name=sarkaritaiyaari-${VERSION_NAME}-${VERSION_CODE}-${SHORT_SHA}.apk" >> "$GITHUB_OUTPUT"
-
-          echo "### Build configuration" >> "$GITHUB_STEP_SUMMARY"
-          {
-            echo "| Field | Value |"
-            echo "|---|---|"
-            echo "| Version | \`${VERSION_NAME}\` |"
-            echo "| versionCode | \`${VERSION_CODE}\` |"
-            echo "| Commit | \`${SHORT_SHA}\` |"
-            echo "| Backend URL | \`${API_URL}\` |"
-          } >> "$GITHUB_STEP_SUMMARY"
-
       # Every one of these four must be present AND actually work. A missing GitHub secret
       # expands to an EMPTY STRING, not an error — so without this step an unset password
       # sails through configuration and only fails 20+ minutes later inside
@@ -227,6 +152,81 @@ jobs:
           fi
 
           echo "Keystore verified: alias '${KEY_ALIAS}', both passwords work, fingerprint matches."
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      # Restore and save are split deliberately. `actions/cache` only saves when the job
+      # SUCCEEDS, so run #1 failing at the packaging step threw away 23 minutes of native
+      # build output and left the next run just as cold. Saving with `if: always()` means a
+      # failed build still banks its progress, which matters most while debugging.
+      - name: Restore Gradle cache
+        id: gradle-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('mobile/package-lock.json') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Install dependencies
+        working-directory: mobile
+        run: npm ci
+
+      # Everything below the build is expensive. These two checks cost seconds and catch
+      # the most likely reasons a build would be wasted, so they run first.
+      - name: Check release-signing plugin
+        working-directory: mobile
+        run: node scripts/check-release-signing-plugin.js
+
+      - name: Typecheck
+        working-directory: mobile
+        run: npx tsc --noEmit
+
+      - name: Resolve build configuration
+        id: cfg
+        working-directory: mobile
+        env:
+          # Passed through env rather than expanded straight into the script, so a value
+          # containing shell metacharacters is data and not code.
+          API_URL_INPUT: ${{ github.event.inputs.api_base_url }}
+          API_URL_VAR: ${{ vars.API_BASE_URL }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+
+          API_URL="${API_URL_INPUT:-${API_URL_VAR:-$DEFAULT_API_BASE_URL}}"
+
+          # Android requires a strictly increasing versionCode. run_number is monotonic
+          # per workflow, so no committed counter and no race. The 1000 offset keeps CI
+          # builds permanently above locally-built ones, which default to 1.
+          VERSION_CODE=$(( 1000 + RUN_NUMBER ))
+
+          VERSION_NAME=$(node -p "require('./app.json').expo.version")
+          SHORT_SHA="${GITHUB_SHA::7}"
+
+          {
+            echo "EXPO_PUBLIC_API_BASE_URL=$API_URL"
+            echo "ANDROID_VERSION_CODE=$VERSION_CODE"
+            echo "ANDROID_VERSION_NAME=$VERSION_NAME"
+          } >> "$GITHUB_ENV"
+
+          echo "apk_name=sarkaritaiyaari-${VERSION_NAME}-${VERSION_CODE}-${SHORT_SHA}.apk" >> "$GITHUB_OUTPUT"
+
+          echo "### Build configuration" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Version | \`${VERSION_NAME}\` |"
+            echo "| versionCode | \`${VERSION_CODE}\` |"
+            echo "| Commit | \`${SHORT_SHA}\` |"
+            echo "| Backend URL | \`${API_URL}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Generate native project
         working-directory: mobile
