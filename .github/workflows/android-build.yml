@@ -65,25 +65,30 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         # Shallow (depth 1) is fine: the version code comes from github.run_number, not
         # from commit history.
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17" # Expo SDK 57 / React Native 0.86 target JDK 17.
 
       - name: Set up Node 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "20"
           cache: npm
           cache-dependency-path: mobile/package-lock.json
 
-      - name: Cache Gradle
-        uses: actions/cache@v4
+      # Restore and save are split deliberately. `actions/cache` only saves when the job
+      # SUCCEEDS, so run #1 failing at the packaging step threw away 23 minutes of native
+      # build output and left the next run just as cold. Saving with `if: always()` means a
+      # failed build still banks its progress, which matters most while debugging.
+      - name: Restore Gradle cache
+        id: gradle-cache
+        uses: actions/cache/restore@v4
         with:
           path: |
             ~/.gradle/caches
@@ -145,19 +150,83 @@ jobs:
             echo "| Backend URL | \`${API_URL}\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Decode upload keystore
+      # Every one of these four must be present AND actually work. A missing GitHub secret
+      # expands to an EMPTY STRING, not an error — so without this step an unset password
+      # sails through configuration and only fails 20+ minutes later inside
+      # :app:packageRelease, with a misleading "keystore password was incorrect". That
+      # happened on run #1; this step exists so it can never cost that much time again.
+      - name: Decode and verify upload keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          set -euo pipefail
-          if [ -z "${KEYSTORE_BASE64}" ]; then
-            echo "::error::Secret ANDROID_KEYSTORE_BASE64 is not set. See ANDROID-BUILDS.md."
+          set -uo pipefail
+
+          missing=""
+          [ -n "${KEYSTORE_BASE64}" ] || missing="${missing} ANDROID_KEYSTORE_BASE64"
+          [ -n "${STORE_PASSWORD}" ]  || missing="${missing} ANDROID_KEYSTORE_PASSWORD"
+          [ -n "${KEY_ALIAS}" ]       || missing="${missing} ANDROID_KEY_ALIAS"
+          [ -n "${KEY_PASSWORD}" ]    || missing="${missing} ANDROID_KEY_PASSWORD"
+          if [ -n "${missing}" ]; then
+            echo "::error::Missing or empty repository secret(s):${missing}"
+            echo ""
+            echo "Add them under: Settings -> Secrets and variables -> Actions"
+            echo "               -> Repository secrets (NOT Variables, NOT Environment secrets)"
+            echo "Names must match EXACTLY - all capitals, underscores, no spaces."
+            echo "Walkthrough: ANDROID-BUILDS.md"
             exit 1
           fi
+
           # Written to RUNNER_TEMP, deliberately outside the workspace, so it can never be
           # picked up by an artifact upload or committed by a later step.
-          printf '%s' "${KEYSTORE_BASE64}" | base64 -d > "${RUNNER_TEMP}/upload.jks"
-          echo "keystore: $(stat -c%s "${RUNNER_TEMP}/upload.jks") bytes"
+          KS="${RUNNER_TEMP}/upload.jks"
+          printf '%s' "${KEYSTORE_BASE64}" | base64 -d > "${KS}" || {
+            echo "::error::ANDROID_KEYSTORE_BASE64 is not valid base64. Re-copy it as ONE line with no spaces or line breaks."
+            exit 1
+          }
+          echo "keystore decoded: $(stat -c%s "${KS}") bytes"
+
+          # Does the store password open it, and does the alias exist? ~1 second.
+          if ! keytool -list -keystore "${KS}" -storepass "${STORE_PASSWORD}" -alias "${KEY_ALIAS}" > /tmp/kt.out 2>&1; then
+            echo "::error::Cannot open the keystore with ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS."
+            echo "keytool said:"
+            sed -e 's/^/    /' /tmp/kt.out
+            echo ""
+            echo "Common causes: a trailing space or newline pasted into the password secret,"
+            echo "a wrong alias (this keystore uses 'upload'), or a truncated base64 value."
+            exit 1
+          fi
+
+          # The key password needs checking too, and there is no keytool command that
+          # validates it for a PKCS12 store: `keytool -certreq -keypass <wrong>` exits 0,
+          # which was verified rather than assumed. PKCS12 has no separate per-key
+          # password, so the only correct check is that the two secrets are equal — and
+          # they must be, because AGP calls getKey(alias, keyPassword) and that DOES throw
+          # when they differ.
+          STORE_TYPE=$(keytool -list -keystore "${KS}" -storepass "${STORE_PASSWORD}" 2>/dev/null \
+            | grep -i 'Keystore type' | awk '{print $NF}')
+          echo "keystore type: ${STORE_TYPE}"
+          if [ "${STORE_TYPE}" = "PKCS12" ] && [ "${STORE_PASSWORD}" != "${KEY_PASSWORD}" ]; then
+            echo "::error::ANDROID_KEY_PASSWORD must be identical to ANDROID_KEYSTORE_PASSWORD for this keystore."
+            echo "It is PKCS12, which has no separate key password. Set both secrets to the same value."
+            exit 1
+          fi
+
+          # Is it the keystore we expect? Catches a right-format-but-wrong-key upload
+          # before spending 20 minutes building with it.
+          ACTUAL=$(keytool -list -keystore "${KS}" -storepass "${STORE_PASSWORD}" -alias "${KEY_ALIAS}" \
+            | grep -i 'SHA-256' | awk '{print $NF}' | tr -d ':' | tr 'A-Z' 'a-z')
+          if [ "${ACTUAL}" != "${EXPECTED_SIGNER_SHA256}" ]; then
+            echo "::error::This keystore is not the expected one."
+            echo "  expected ${EXPECTED_SIGNER_SHA256}"
+            echo "  actual   ${ACTUAL}"
+            echo "If you deliberately rotated the keystore, update EXPECTED_SIGNER_SHA256 in this workflow."
+            exit 1
+          fi
+
+          echo "Keystore verified: alias '${KEY_ALIAS}', both passwords work, fingerprint matches."
 
       - name: Generate native project
         working-directory: mobile
@@ -238,6 +307,17 @@ jobs:
              "../dist-apk/${{ steps.cfg.outputs.apk_name }}"
           ls -lh ../dist-apk
           echo "path=dist-apk/${{ steps.cfg.outputs.apk_name }}" >> "$GITHUB_OUTPUT"
+
+      # `if: always()` is the whole point — a failed build has still done expensive work
+      # worth keeping. Skipped on a cache hit, since re-saving an identical key just warns.
+      - name: Save Gradle cache
+        if: always() && steps.gradle-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('mobile/package-lock.json') }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

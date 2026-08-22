@@ -185,13 +185,61 @@ public repo once (see `DEPLOYMENT.md`).
   directory carries the attribute either. This matters because of the documented
   Files-On-Demand build failure (`manifest 'build.ninja' still dirty after 100 tries`).
 
+## Run #1 on GitHub — failed, and what it taught
+
+Pushed as `f182057`; run #1 failed after 23m15s. Worth recording in full, because two of
+the three defects it exposed were mine, not the user's.
+
+**What passed** (so these are now proven on a real Ubuntu runner under JDK 17, not just
+locally on Windows/JDK 21): checkout, JDK 17, Node 20, `npm ci`, the plugin checks,
+`tsc --noEmit`, build-config resolution, keystore decode, `expo prebuild`, and the
+"verify signing config was injected" grep. The config plugin genuinely is portable.
+
+**What failed:** `:app:packageRelease` with
+`KeytoolException: Failed to read key  from store ".../upload.jks": keystore password was
+incorrect`, caused by `UnrecoverableKeyException` / `BadPaddingException`.
+
+**Real cause: three of the four repository secrets were empty.** The give-away is in the
+message itself — `Failed to read key  from store` has *two* spaces where the alias should
+be, because AGP formats the alias into that string and the alias was an empty string. A
+missing GitHub secret expands to `""` rather than failing, so `-PST_UPLOAD_STORE_PASSWORD=`
+and `-PST_UPLOAD_KEY_ALIAS=` were passed empty. `ST_UPLOAD_STORE_FILE` is *not* a secret,
+so `project.hasProperty(...)` was still true and the release signingConfig was still
+selected — exactly as designed, just with no credentials in it.
+
+**Three defects fixed as a result:**
+
+1. **My workflow validated only one of the four secrets** (`ANDROID_KEYSTORE_BASE64`) and
+   none of the other three. The same "fail fast, don't fail silently" reasoning applied to
+   the keystore was simply not applied to the passwords. Now all four are checked for
+   emptiness *and* the keystore is opened with `keytool` immediately after decoding, so
+   wrong credentials cost about a minute instead of 23.
+2. **`actions/cache` only saves on success**, so run #1's 23 minutes of native build output
+   was discarded and the next run would have started equally cold. Split into
+   `cache/restore` + `cache/save` with `if: always()`.
+3. **A check I wrote to validate the key password did not work.** `keytool -certreq
+   -keypass <wrong>` exits 0 for a PKCS12 keystore — confirmed by actually running it,
+   which is the only reason it was caught rather than shipped as false confidence. PKCS12
+   has no separate per-key password, so the correct check is that the two secrets are equal,
+   guarded on the detected store type. AGP's `getKey(alias, keyPassword)` *does* throw when
+   they differ, so the check is worth having.
+
+Also bumped `checkout`/`setup-java`/`setup-node` from v4 to v5 — GitHub's own annotations
+flagged them as deprecated and being force-run on Node 24.
+
+The new guard was simulated locally against six inputs — all four correct, run #1's exact
+state, a missing alias, a wrong password, a password with a trailing space, and mismatched
+key/store passwords — and rejects all five bad cases with a specific message while
+accepting the good one.
+
 ## Honest gaps
 
-- **The workflow has never run on GitHub.** Everything above was verified locally. The
-  runner environment specifically is unproven: JDK 17 (CI) versus JDK 21 (this machine),
-  `$ANDROID_HOME/build-tools/*/apksigner` discovery via `find` on the Ubuntu image, the
-  npm/Gradle cache keys, and `gh release create` behaviour on a real tag. **The first real
-  run is still a verification step, not a formality.**
+- **No build has yet produced an APK.** Run #1 died at packaging. Steps 12–17 (the actual
+  `assembleRelease` completing, the `apksigner` fingerprint check, rename, artifact upload,
+  and Release publication) have still never executed anywhere. `gh release create` on a real
+  tag also remains completely unexercised.
+- **The remaining blocker is entirely on the GitHub side:** three secrets to add. Nothing in
+  the repo is known to be wrong any more, but "not known to be wrong" is not "proven right".
 - **No full `assembleRelease` ever completed with the upload key.** `signingReport` proves
   the config resolves and the Groovy is valid; it does not prove the APK packaging and
   `apksigner` steps run inside a real Gradle build. The local attempt crashed the daemon on

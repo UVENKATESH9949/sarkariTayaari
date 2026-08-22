@@ -192,7 +192,10 @@ Note that **deleting a workflow run also deletes its artifacts**. Releases are u
 | Symptom | Cause |
 |---|---|
 | No run appeared at all | Pushed to a branch other than `main`. GitHub doesn't report a skipped trigger — the run simply never exists. |
-| `Secret ANDROID_KEYSTORE_BASE64 is not set` | Step 2 above wasn't done, or the secret was added to an environment rather than the repository. |
+| `Missing or empty repository secret(s): …` | Exactly what it says — that secret doesn't exist under **Repository secrets**, or its name differs. A missing GitHub secret expands to an *empty string*, not an error, so the workflow checks all four explicitly. |
+| `Cannot open the keystore with ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS` | Usually a trailing space or newline pasted into the password secret, a wrong alias (this keystore uses `upload`), or truncated base64. |
+| `keystore password was incorrect` / `BadPaddingException` inside `:app:packageRelease` | **This is what a missing password secret used to look like** — and it appeared only after 20+ minutes of building. Run #1 failed this way. The keystore is now verified with `keytool` immediately after decoding, so this should never surface from the build itself again. If it does, the store and key passwords genuinely differ. |
+| `ANDROID_KEYSTORE_BASE64 is not valid base64` | The value has spaces or line breaks in it. Re-copy it as one single line. |
 | `APK is signed by an unexpected certificate` | The keystore secrets don't match the keystore the fingerprint came from. Re-check all four, then `EXPECTED_SIGNER_SHA256`. |
 | `withReleaseSigning did not patch build.gradle` | An Expo SDK upgrade changed the template. Update the anchor constants in the plugin. |
 | Builds but the app can't reach the backend | `EXPO_PUBLIC_API_BASE_URL` is baked in at bundle time. Wrong value, missing `/api` suffix, or `localhost` — which on a phone means the phone itself. |
