@@ -1,6 +1,6 @@
 # Ticket Status — every ticket, one file
 
-**Last updated:** 2026-08-21
+**Last updated:** 2026-08-24
 **Purpose:** answer "where are we" in one place, without opening five different documents.
 
 **Legend**
@@ -32,7 +32,10 @@
 | Non-Blocking Startup + Hybrid Online/Local Sync (this session, unticketed) | — | 1 | 0 | 0 |
 | Cloud Run Backend Deployment (unticketed) | — | 1 | 0 | 0 |
 | GitHub Actions APK Builds (unticketed; also moves TICKET-505 to partial) | — | 1 | 0 | 0 |
-| **Current product total** | | **~80** | **2** | **8** |
+| Black + Blue Dark Theme (this session, unticketed) | — | 1 | 0 | 0 |
+| Resilient Initial Sync (this session, unticketed) | — | 1 | 0 | 0 |
+| Practice/Mock Test Exit Guard (this session, unticketed) | — | 1 | 0 | 0 |
+| **Current product total** | | **~83** | **2** | **8** |
 | Future Vision — Personal Preparation OS | 1001–2003 (11 epics) | 0 | 0 | 63 |
 
 **Bottom line: the shipped product is essentially feature-complete for V1.0/V1.1. What's left before it's release-ready is entirely Sprint 5 (QA/perf/release prep), where 501 and 503 are done and 505 is now half done — a real upload keystore and a signed-build pipeline exist; Play Console does not. Still untouched in Sprint 5: low-end device testing (502), branding confirmation (504), and beta recruitment (506). The Future Vision document (63 tickets) hasn't been touched at all, by design — it's explicitly a draft awaiting a greenlight.**
@@ -99,7 +102,7 @@ Now documented — see [04-content-model-redesign/content-model-phase3-mobile-fo
 | 502 | Test on low-end/throttled device | ⬜ Not started | |
 | 503 | Crash reporting (Sentry) + basic analytics events | 🔵 Done, real crash upload not yet verified live — see report | [11-crash-reporting-and-analytics/crash-reporting-and-analytics.md](./11-crash-reporting-and-analytics/crash-reporting-and-analytics.md) |
 | 504 | App icon, splash screen, branding polish | ⬜ Status unverified — not confirmed either way this pass |
-| 505 | Signed APK/AAB, Play Console internal testing track | ⚠️ Partial — the **signing** half is done: a real RSA-4096 upload keystore exists, GitHub Actions signs with it, and the build fails if the finished APK's signer certificate doesn't match. The **Play Console** half is untouched: no AAB (`bundleRelease`), no developer account, no internal track, no Play App Signing. The workflow has also never run on GitHub yet. | [15-github-actions-apk-builds/github-actions-apk-builds.md](./15-github-actions-apk-builds/github-actions-apk-builds.md) |
+| 505 | Signed APK/AAB, Play Console internal testing track | ⚠️ Partial — the **signing** half is done and now proven on GitHub: run #4 (2026-08-24) completed successfully and produced a real signed APK artifact. The **Play Console** half is still untouched: no AAB (`bundleRelease`), no developer account, no internal track, no Play App Signing. | [15-github-actions-apk-builds/github-actions-apk-builds.md](./15-github-actions-apk-builds/github-actions-apk-builds.md) |
 | 506 | Recruit 10–20 beta testers (Telegram/coaching groups) | ⬜ Not started — the "earlier distribution plan" it references isn't in any available document |
 
 ## V1.1 — Write-Back Sync + Progress
@@ -191,7 +194,16 @@ Now documented — see [07-mock-test-engine/mock-test-engine.md](./07-mock-test-
 | Backend deployed to Google Cloud Run — configurable CORS origins, `${PORT:8080}`, Artifact Registry + Cloud Build image, Secret Manager, scale-to-zero with `--max-instances=3` | ✅ done, verified live (`/api/health` UP, `/api/questions/live` serving 35,958 real questions from Neon) | [14-cloud-run-deployment/cloud-run-deployment.md](./14-cloud-run-deployment/cloud-run-deployment.md) |
 | Security: plaintext admin credentials in a public repo became exploitable the moment the backend went public — confirmed by a real login returning ADMIN, then closed by demoting the account and issuing a new admin | ✅ remediated and verified (old account now returns STUDENT; new admin confirmed ADMIN) | same report |
 | Android release APK rebuilt against the deployed HTTPS backend | ⚠️ in progress — two builds failed on a ninja "manifest still dirty" loop caused by OneDrive syncing files mid-build; resolved by building from a non-OneDrive workspace. **Superseded by the GitHub Actions workflow below**, which builds on a Linux runner where OneDrive cannot interfere. | same report |
-| Signed APK builds via GitHub Actions — real RSA-4096 upload keystore, an Expo config plugin so the signing survives `expo prebuild`, `versionCode` from `run_number`, artifact on `main` / permanent Release on a `v*` tag, and an `apksigner` signer-fingerprint check that makes shipping a debug-signed APK impossible. Moves TICKET-505 to partial. | 🔵 built and verified locally end to end (`gradlew :app:signingReport` resolves the release variant to the upload keystore; the fingerprint tripwire accepts our key and rejects a foreign one) — **but the workflow has never run on GitHub**, the four repo secrets aren't added, and no full `assembleRelease` completed with the upload key | [15-github-actions-apk-builds/github-actions-apk-builds.md](./15-github-actions-apk-builds/github-actions-apk-builds.md) |
+| Signed APK builds via GitHub Actions — real RSA-4096 upload keystore, an Expo config plugin so the signing survives `expo prebuild`, `versionCode` from `run_number`, artifact on `main` / permanent Release on a `v*` tag, and an `apksigner` signer-fingerprint check that makes shipping a debug-signed APK impossible. Moves TICKET-505 to partial. | 🔵 built and verified locally end to end at the time — **since proven on GitHub for real, see the 2026-08-24 session below** | [15-github-actions-apk-builds/github-actions-apk-builds.md](./15-github-actions-apk-builds/github-actions-apk-builds.md) |
+
+## This session (2026-08-24) — no ticket numbers assigned yet
+
+| Task | Status | Report |
+|---|---|---|
+| Black + Blue Dark Theme — new semantic token structure (`surface*` vs. `text.onAccent*` kept deliberately separate to avoid a light→dark collision bug), re-skinned `Card`/`Button`/`Skeleton`/`EmptyState`/`ErrorState` and every screen, approved via a demo Artifact before any code changed | ✅ done, verified on-device via emulator screenshots after each fixed bug (light-gray screen backgrounds; a status-bar overlap on Home/Progress/More) | [16-black-blue-dark-theme/black-blue-dark-theme.md](./16-black-blue-dark-theme/black-blue-dark-theme.md) |
+| Resilient initial sync — `runInitialSyncUntilDone()` retries indefinitely with exponential backoff instead of stranding the user on a transient backend 500; floating `SyncBanner` deleted, replaced by a real percentage bar on More | ✅ done, verified against the real deployed Cloud Run backend — observed retrying through real intermittent failures and completing; **root cause (likely Cloud Run OOM, no `--memory` flag + Hibernate batch size 500) diagnosed but not fixed server-side** — this is a resilience fix, not a root-cause fix | [17-resilient-initial-sync/resilient-initial-sync.md](./17-resilient-initial-sync/resilient-initial-sync.md) |
+| Practice/Mock Test exit guard — Mock Test restructured into Exam Selection → Mock List (matches Practice's flow); a "Leave this test?" confirmation guards a tab switch mid-quiz/mid-test and resets the abandoned module back to its home screen | ✅ done, verified end-to-end on-device across four iterations of a real bug each (see report) — `router.dismissAll()`/`dismissTo()` never worked in this expo-router version, a `key`-based remount didn't reset parent-owned navigation state, a navigation race stole tab focus back, and a stale `screenListeners` closure read outdated session state | [18-practice-mock-test-exit-guard/practice-mock-test-exit-guard.md](./18-practice-mock-test-exit-guard/practice-mock-test-exit-guard.md) |
+| GitHub Actions APK workflow's first real run on GitHub — run #4, triggered by the push containing the three rows above | ✅ succeeded: `completed`/`success`, ~16 minutes, produced a real signed artifact `sarkaritaiyaari-1.0.0-1004-8c5140e.apk` (57 MB). Confirmed via the GitHub Actions REST API, not assumed. Resolves the "workflow has never run on GitHub" gap in `reports/15-github-actions-apk-builds/`; does not close TICKET-505's Play Console half | [15-github-actions-apk-builds/github-actions-apk-builds.md](./15-github-actions-apk-builds/github-actions-apk-builds.md) (Update — 2026-08-24 section) |
 
 ---
 

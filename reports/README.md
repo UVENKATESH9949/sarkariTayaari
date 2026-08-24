@@ -27,6 +27,9 @@
 | `13-hybrid-online-sync/` | Non-blocking startup + hybrid online/local data layer — screens read live from the backend while first sync is still running, full Mock Test parity, real sync status in More | Un-ticketed (user-provided spec) |
 | `14-cloud-run-deployment/` | Backend deployed to Google Cloud Run — configurable CORS, Cloud Run `PORT`, Artifact Registry + Secret Manager, and the public-credentials exposure the deployment created and closed | Un-ticketed |
 | `15-github-actions-apk-builds/` | Signed release APKs built by GitHub Actions — a real upload keystore, an Expo config plugin that survives `prebuild`, `run_number`-derived `versionCode`, and a signer-fingerprint check that makes shipping a debug-signed APK impossible | TICKET-505 (partial) |
+| `16-black-blue-dark-theme/` | Full black+blue dark theme — new semantic token structure (`surface*` vs. `text.onAccent*` kept deliberately separate), re-skinned `Card`/`Button`/`Skeleton`/`EmptyState`/`ErrorState` and every screen, approved via a demo Artifact before any code changed | Un-ticketed |
+| `17-resilient-initial-sync/` | Initial sync retries indefinitely with backoff instead of stranding the user on a transient backend failure; the floating sync banner is removed in favor of a real percentage bar on More | Un-ticketed |
+| `18-practice-mock-test-exit-guard/` | Mock Test restructured into Exam Selection → Mock List (matching Practice's flow); a "Leave this test?" confirmation guards a tab switch mid-quiz/mid-test and resets the abandoned module back to its home screen | Un-ticketed |
 
 ## Two source-of-truth documents live at the project root, not here
 

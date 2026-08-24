@@ -22,11 +22,14 @@ are hard to force manually (network-drop timing, storage exhaustion) — mark
 those N/A with a note if you can't reproduce the trigger condition, rather than
 skipping them silently.
 
-**Scope:** the four modules delivered/changed this session:
+**Scope:** the four modules delivered/changed in the 2026-08-20 session, plus one
+added 2026-08-24 (the dark theme and sync-retry work from that later session were
+visual/resilience changes without new interactive behavior to test against):
 1. Admin Authentication
 2. Crash Reporting & Basic Analytics (TICKET-503)
 3. Load Testing / Data at Scale (TICKET-501)
 4. Non-Blocking Startup + Hybrid Online/Local Sync (user-provided spec)
+5. Practice/Mock Test Navigation + Exit Guard (2026-08-24, user-provided spec)
 
 ---
 
@@ -237,6 +240,58 @@ More/Settings.
 
 ---
 
+## Module 5 — Practice/Mock Test Navigation + Exit Guard
+
+**Requirement:** Mock Test follows the same Exam → List → Test flow shape as
+Practice, instead of showing a flat list of every mockable paper across every
+exam as its first screen. Switching to a different module while a Practice quiz
+or Mock Test is genuinely in progress shows a "Leave this test?" confirmation
+(exact copy: "You are moving to another module. Your current test state may be
+lost if you leave now.", buttons Stay/Leave). Stay changes nothing. Leave
+terminates the session and completes the navigation the user actually asked
+for; the abandoned module shows its home screen the next time it's opened, not
+the previous question. Merely browsing, with no session actually started, must
+never trigger the warning.
+
+### Positive
+
+| ID | Test Case | Steps | Expected Result | Result | Notes |
+|---|---|---|---|---|---|
+| 5.P1 | Mock Test tab opens to Exam Selection | Tap the Mock Test tab from a fresh app state | Shows a searchable exam list, not a flat list of papers | | |
+| 5.P2 | Selecting an exam shows only that exam's mock papers | From Exam Selection, tap one exam | Mock list shows only that exam's paper(s), not others' | | |
+| 5.P3 | Leave dialog appears mid-test | Start a mock test, then tap a different bottom tab | "Leave this test?" dialog appears with the exact specified copy and Stay/Leave buttons | | |
+| 5.P4 | Stay preserves the session | With the dialog showing, tap Stay | Dialog closes; same question, timer still counting down, nothing lost | | |
+| 5.P5 | Leave completes the requested navigation | With the dialog showing (triggered by tapping tab X), tap Leave | Lands on tab X — the tab the user actually tapped, not somewhere else | | |
+| 5.P6 | Reopening Mock Test after Leave shows Exam Selection | After 5.P5 (from a mock test), tap the Mock Test tab again | Shows Exam Selection, not the abandoned test — confirm via a different generated question/timer if starting again, not just visually | | |
+| 5.P7 | Leave dialog appears mid-quiz (Practice) | Start a Practice quiz, then tap a different bottom tab | Same dialog, same copy, same Stay/Leave behavior as Mock Test | | |
+| 5.P8 | Reopening Practice after Leave shows Practice's home | After leaving an in-progress Practice quiz, tap the Practice tab again | Shows Practice's Exam Selection, not the abandoned question | | |
+| 5.P9 | Normal quiz completion shows no dialog | Answer every question through to the last one and finish normally | Proceeds straight to the summary screen, no Leave dialog at any point | | |
+| 5.P10 | Normal mock test submission shows no dialog | Submit a mock test normally (via the Submit button) | Proceeds straight to the result screen, no Leave dialog at any point | | |
+
+### Negative
+
+| ID | Test Case | Steps | Expected Result | Result | Notes |
+|---|---|---|---|---|---|
+| 5.N1 | Browsing Exam Selection triggers no dialog | On Mock Test's Exam Selection screen (no test started), switch tabs | No dialog — switches immediately | | |
+| 5.N2 | Browsing a Mock List triggers no dialog | On a Mock List for one exam (no test started), switch tabs | No dialog | | |
+| 5.N3 | Viewing Test Details triggers no dialog | On the Test Details screen, before tapping Start Test, switch tabs | No dialog | | |
+| 5.N4 | Browsing Practice's picker screens triggers no dialog | On Practice's subject/topic/level screens (no quiz started), switch tabs | No dialog | | |
+| 5.N5 | Stay never escalates to a forced Leave | Trigger the dialog and tap Stay several times in a row across separate tab attempts | Each time, dialog closes and nothing changes — never auto-leaves | | |
+| 5.N6 | Switching directly between Practice and Mock Test also guards | With a Mock Test in progress, tap the Practice tab directly (not via Home) | Same Leave dialog appears — the guard isn't limited to Home-bound switches | | |
+
+### Edge
+
+| ID | Test Case | Steps | Expected Result | Result | Notes |
+|---|---|---|---|---|---|
+| 5.E1 | Both modules reset independently | Leave an in-progress Mock Test for Practice, immediately start and then leave a Practice quiz too | Both Mock Test and Practice independently show their own home screen afterward, not just the first one abandoned | | |
+| 5.E2 | Backgrounding while the dialog is showing | Trigger the dialog, background the app (home button), then return | App resolves to a sane state — dialog still showing or cleanly dismissed, not stuck | | |
+| 5.E3 | The pre-existing in-test "Exit" button still works standalone | Mid-test, use the test screen's own "Exit without submitting?" button (not a tab switch) | Behaves exactly as before this feature; a tab switch immediately afterward does not spuriously show a second Leave dialog for an already-ended session | | |
+| 5.E4 | Rapid double-tap on another tab doesn't double-show the dialog | Mid-session, tap a different tab twice in quick succession | Only one dialog appears, not two stacked alerts | | |
+| 5.E5 | Leaving right as the timer nears zero | Leave a mock test with only a few seconds left on the timer | Leaving works cleanly; the old timer doesn't keep running or auto-submit in the background afterward | | |
+| 5.E6 | Tapping the tab you're already on doesn't misfire | Mid-test, tap the Mock Test tab itself (the one currently showing the active test) | Either no-ops cleanly or shows the dialog consistently — does not crash or navigate somewhere unexpected | | |
+
+---
+
 ## Summary sheet
 
 | Module | Positive | Negative | Edge | Total | Passed | Failed | N/A |
@@ -245,4 +300,5 @@ More/Settings.
 | 2 — Crash Reporting & Analytics | 9 | 8 | 6 | 23 | | | |
 | 3 — Load Testing / Data at Scale | 10 | 8 | 8 | 26 | | | |
 | 4 — Non-Blocking Startup + Hybrid Sync | 12 | 11 | 11 | 34 | | | |
-| **Total** | **41** | **38** | **33** | **112** | | | |
+| 5 — Practice/Mock Test Navigation + Exit Guard | 10 | 6 | 6 | 22 | | | |
+| **Total** | **51** | **44** | **39** | **134** | | | |

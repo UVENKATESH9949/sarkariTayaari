@@ -264,3 +264,33 @@ accepting the good one.
   now HTTPS. Unrelated to builds, but it is app config that a release build bakes in.
 - **Nothing is committed.** Per this project's convention, no commit without an explicit
   request.
+
+## Update — 2026-08-24
+
+The workflow ran on GitHub for real, for the first time, and **succeeded**: run #4
+(`8c5140e`, triggered by an unrelated push containing the dark-theme/sync/exit-guard work
+from `reports/16-black-blue-dark-theme/`, `reports/17-resilient-initial-sync/`, and
+`reports/18-practice-mock-test-exit-guard/`), status `completed`, conclusion `success`,
+07:50:31–08:06:35 UTC (~16 minutes). Produced a real artifact,
+`sarkaritaiyaari-1.0.0-1004-8c5140e.apk` (57,011,889 bytes). Confirmed via the GitHub
+Actions REST API (`/repos/.../actions/runs/32703356364` and its `/artifacts` sub-resource),
+not assumed from the push succeeding.
+
+This means the four repository secrets referenced throughout this report **have since been
+added** (by the user, between run #1 and this run — the exact run history of #2/#3 wasn't
+reviewed), and every previously-"never proven" step — `assembleRelease` completing on the
+CI runner's memory settings, the `apksigner` fingerprint check passing for real, artifact
+upload — has now genuinely executed successfully at least once. This resolves the
+"Still unproven: the workflow has never run on GitHub" line in
+`reports/open-questions.md`'s **Already resolved** table.
+
+**What this does *not* close:** the APK produced is still only a debug-installable
+artifact, not a Play Console submission — TICKET-505's other half (AAB, Play developer
+account, internal testing track, Play App Signing decision) remains exactly as open as
+before. This single success also doesn't prove the pipeline is reliable across repeated
+runs, different commit shapes, or a cache-cold run — one green run is real evidence, not a
+guarantee.
+
+**Not yet verified:** whether the resulting APK actually installs and runs correctly on a
+real physical device — the user pushed specifically to test this themselves and had not
+yet reported back as of this update.
