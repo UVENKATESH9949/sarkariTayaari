@@ -3,6 +3,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInUp, FadeOutUp } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { useNetworkStatus } from "./NetworkStatusContext";
+import { colors } from "../ui/theme";
 
 /**
  * Sits at the very top of the app, above whatever screen is showing, whenever the
@@ -22,7 +23,7 @@ export function OfflineBanner() {
       exiting={FadeOutUp.duration(180)}
       style={[styles.banner, { paddingTop: insets.top + 8 }]}
     >
-      <Ionicons name="cloud-offline-outline" size={15} color="#ffffff" />
+      <Ionicons name="cloud-offline-outline" size={15} color={colors.text.onAccent} />
       <Text style={styles.text}>You&apos;re offline — using downloaded content</Text>
     </Animated.View>
   );
@@ -39,11 +40,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 7,
     paddingBottom: 8,
-    backgroundColor: "#5a6a85",
+    backgroundColor: colors.surfaceElevated2,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderAccent,
     zIndex: 50,
   },
   text: {
-    color: "#ffffff",
+    color: colors.text.onAccent,
     fontSize: 12.5,
     fontWeight: "600",
   },

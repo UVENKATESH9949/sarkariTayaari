@@ -5,6 +5,7 @@ export default function MockTestLayout() {
   return (
     <Stack screenOptions={STACK_SCREEN_OPTIONS}>
       <Stack.Screen name="index" options={{ title: "Mock Test" }} />
+      <Stack.Screen name="papers" options={{ title: "Mock Tests" }} />
       <Stack.Screen name="start" options={{ title: "Test Details" }} />
       {/* Entering a timed test is a mode change, not a drill-down. Fading into it (and
           keeping the swipe-back disabled) makes it feel like a room you commit to. */}

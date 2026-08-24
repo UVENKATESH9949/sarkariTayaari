@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { AppState } from "react-native";
 import { getLastSyncedAt } from "../db/syncMeta";
 import { ensureExamFollowed } from "../db/followedExams";
-import { runInitialSync, type SyncProgress } from "./initialSync";
+import { runInitialSyncUntilDone, type SyncProgress } from "./initialSync";
 import { runDeltaSync } from "./deltaSync";
 import { useNetworkStatus } from "./NetworkStatusContext";
 import { captureError } from "../telemetry/analytics";
@@ -58,7 +58,7 @@ export function useSyncStatus() {
  * sync that's never completed at all) is still in flight, screens read live from the
  * backend via the hybrid data layer (`mobile/src/data/`) instead of local SQLite; see
  * `useHybridMode()`. `status`/`synced`/`total` still publish real progress for the
- * non-blocking `SyncBanner` and the More screen, they just no longer gate the `<Stack>`.
+ * More screen's progress bar, they just no longer gate the `<Stack>`.
  *
  * The initial full sync runs once, on first mount, if this device has never synced.
  * After that, a delta sync runs on launch and whenever the app returns to the
@@ -141,30 +141,22 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       // Never synced before: fire the initial sync the same non-blocking way `refresh()`
       // fires a delta sync above — the app is usable immediately either way. Screens
       // read live from the backend (via useHybridMode()) until this resolves.
-      runInitialSync(setProgress)
-        .then(async () => {
-          await ensureExamFollowed();
-          setLastSyncedAt(await getLastSyncedAt());
-          setSyncVersion((v) => v + 1);
-        })
-        .catch((err) => {
-          // "error" status already published via the progress callback inside runInitialSync.
-          console.warn("Initial sync failed", err);
-          captureError(err, { context: "initial sync" });
-        });
+      // Retries indefinitely on failure (e.g. a transient backend error mid-download) —
+      // see runInitialSyncUntilDone's own comment for why that's safe to do.
+      runInitialSyncUntilDone(setProgress).then(async () => {
+        await ensureExamFollowed();
+        setLastSyncedAt(await getLastSyncedAt());
+        setSyncVersion((v) => v + 1);
+      });
     })();
   }, [refresh]);
 
   const syncNow = useCallback(async () => {
     if (lastSyncedAt === null) {
-      try {
-        await runInitialSync(setProgress);
-        await ensureExamFollowed();
-        setLastSyncedAt(await getLastSyncedAt());
-        setSyncVersion((v) => v + 1);
-      } catch (err) {
-        captureError(err, { context: "initial sync (manual)" });
-      }
+      await runInitialSyncUntilDone(setProgress);
+      await ensureExamFollowed();
+      setLastSyncedAt(await getLastSyncedAt());
+      setSyncVersion((v) => v + 1);
     } else {
       await refresh({ force: true });
     }

@@ -1,12 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { ActivityIndicator, Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
+import { Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
 import { useSessionHistory } from "../../../practice/sessionHistory";
 import { useBookmarks } from "../../../practice/bookmarks";
+import { useActiveSession } from "../../../practice/activeSessionContext";
 import { LANGUAGES, useAppLanguage } from "../../../practice/appLanguage";
 import { LanguagePickerModal } from "../../../practice/LanguagePickerModal";
 import { AnimatedProgressBar } from "../../../ui/AnimatedProgressBar";
+import { Button } from "../../../ui/Button";
+import { EmptyState } from "../../../ui/EmptyState";
+import { QuestionSkeleton } from "../../../ui/Skeleton";
+import { colors, radius, spacing } from "../../../ui/theme";
 import { getPracticeQuestions, type PracticeQuestion } from "../../../data/practiceData";
 import { useHybridMode } from "../../../data/hybridSource";
 
@@ -23,6 +28,7 @@ export default function Quiz() {
   }>();
   const { addSession } = useSessionHistory();
   const { isBookmarked, toggleBookmark } = useBookmarks();
+  const { beginSession, endSession, resetSignal, pendingDestinationRef } = useActiveSession();
   const { defaultLanguageCode } = useAppLanguage();
 
   const [questions, setQuestions] = useState<PracticeQuestion[] | null>(null);
@@ -34,12 +40,36 @@ export default function Quiz() {
   const [languagePickerVisible, setLanguagePickerVisible] = useState(false);
 
   const mode = useHybridMode();
+  // router.dismissAll() resolves "closest stack" against whichever tab currently
+  // has focus, not against this screen's own position in the tree, so it only
+  // works reliably while this screen is still focused — a plain replace() to
+  // Practice's own first screen (the same mechanism the quiz-completion path
+  // already uses) is what abandonment falls back to. The tab bar hands off the
+  // intended destination via pendingDestinationRef rather than navigating there
+  // itself, since doing that before this fixup runs races this same replace()
+  // call on the same router — see the longer note in mock-test/test.tsx.
+  const seenResetRef = useRef(resetSignal.practice);
+
+  useEffect(() => {
+    if (resetSignal.practice !== seenResetRef.current) {
+      seenResetRef.current = resetSignal.practice;
+      router.replace("/practice");
+      const destination = pendingDestinationRef.current;
+      if (destination) {
+        pendingDestinationRef.current = null;
+        router.replace(destination);
+      }
+    }
+  }, [resetSignal.practice, router, pendingDestinationRef]);
 
   useEffect(() => {
     if (!topicId || !levelKey) return;
     const difficulty = levelKey as "all" | "easy" | "medium" | "hard";
-    getPracticeQuestions(topicId, difficulty, examCode ?? null, mode).then(setQuestions);
-  }, [topicId, levelKey, examCode, mode]);
+    getPracticeQuestions(topicId, difficulty, examCode ?? null, mode).then((qs) => {
+      setQuestions(qs);
+      if (qs.length > 0) beginSession("practice");
+    });
+  }, [topicId, levelKey, examCode, mode, beginSession]);
 
   const total = questions?.length ?? 0;
   const question = questions?.[currentIndex];
@@ -104,6 +134,7 @@ export default function Quiz() {
         totalCount: total,
         results,
       });
+      endSession();
       router.replace({ pathname: "/practice/summary", params: { sessionId } });
       return;
     }
@@ -116,8 +147,8 @@ export default function Quiz() {
     return (
       <>
         <Stack.Screen options={{ title: `${topicName ?? ""} · ${levelLabel ?? ""}` }} />
-        <View style={styles.centeredScreen}>
-          <ActivityIndicator size="large" color="#1a2b4a" />
+        <View style={styles.loadingScreen}>
+          <QuestionSkeleton />
         </View>
       </>
     );
@@ -128,16 +159,16 @@ export default function Quiz() {
       <>
         <Stack.Screen options={{ title: topicName ?? "Quiz" }} />
         <View style={styles.centeredScreen}>
-          <Ionicons name="alert-circle-outline" size={40} color="#c7cee0" />
-          <Text style={styles.emptyTitle}>No questions available</Text>
-          <Text style={styles.emptyText}>
-            {mode === "unavailable"
-              ? "You're offline and this content hasn't downloaded yet. Connect to the internet once to download it."
-              : "There's nothing synced for this selection yet."}
-          </Text>
-          <Pressable style={styles.emptyButton} onPress={() => router.back()}>
-            <Text style={styles.emptyButtonText}>Go back</Text>
-          </Pressable>
+          <EmptyState
+            icon="alert-circle-outline"
+            title="No questions available"
+            body={
+              mode === "unavailable"
+                ? "You're offline and this content hasn't downloaded yet. Connect to the internet once to download it."
+                : "There's nothing synced for this selection yet."
+            }
+            action={{ label: "Go back", onPress: () => router.back() }}
+          />
         </View>
       </>
     );
@@ -156,20 +187,20 @@ export default function Quiz() {
 
         <View style={styles.toolbarRow}>
           <Pressable style={styles.languageButton} onPress={() => setLanguagePickerVisible(true)}>
-            <Ionicons name="language-outline" size={16} color="#1a2b4a" />
+            <Ionicons name="language-outline" size={16} color={colors.brand.primary} />
             <Text style={styles.languageButtonText}>{currentLanguageName}</Text>
-            <Ionicons name="chevron-down" size={14} color="#1a2b4a" />
+            <Ionicons name="chevron-down" size={14} color={colors.brand.primary} />
           </Pressable>
 
           <View style={styles.toolbarIcons}>
             <Pressable style={styles.iconButton} onPress={toggleReport}>
-              <Ionicons name={isReported ? "flag" : "flag-outline"} size={20} color={isReported ? "#c94f4f" : "#8a94a6"} />
+              <Ionicons name={isReported ? "flag" : "flag-outline"} size={20} color={isReported ? colors.semantic.error : colors.text.muted} />
             </Pressable>
             <Pressable style={styles.iconButton} onPress={handleToggleBookmark}>
               <Ionicons
                 name={isBookmarked(question.id) ? "star" : "star-outline"}
                 size={22}
-                color={isBookmarked(question.id) ? "#e8a63c" : "#8a94a6"}
+                color={isBookmarked(question.id) ? colors.semantic.warning : colors.text.muted}
               />
             </Pressable>
           </View>
@@ -218,8 +249,8 @@ export default function Quiz() {
                     </Text>
                   </View>
                   <Text style={styles.optionText}>{option}</Text>
-                  {showCorrectHighlight && <Ionicons name="checkmark-circle" size={20} color="#2f9e64" />}
-                  {isPickedWrong && <Ionicons name="close-circle" size={20} color="#c94f4f" />}
+                  {showCorrectHighlight && <Ionicons name="checkmark-circle" size={20} color={colors.semantic.success} />}
+                  {isPickedWrong && <Ionicons name="close-circle" size={20} color={colors.semantic.error} />}
                 </Pressable>
               );
             })}
@@ -235,9 +266,9 @@ export default function Quiz() {
 
         {selectedOption !== null && (
           <View style={styles.footer}>
-            <Pressable style={styles.nextButton} onPress={goNext}>
-              <Text style={styles.nextButtonText}>{currentIndex === total - 1 ? "Finish" : "Next Question"}</Text>
-            </Pressable>
+            <Button size="lg" onPress={goNext}>
+              {currentIndex === total - 1 ? "Finish" : "Next Question"}
+            </Button>
           </View>
         )}
       </View>
@@ -256,185 +287,151 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
   },
+  loadingScreen: {
+    flex: 1,
+    justifyContent: "center",
+    padding: spacing.xl,
+  },
   centeredScreen: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: 32,
-    gap: 10,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#1a2b4a",
-  },
-  emptyText: {
-    fontSize: 13,
-    color: "#8a94a6",
-    textAlign: "center",
-  },
-  emptyButton: {
-    marginTop: 14,
-    backgroundColor: "#1a2b4a",
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-  },
-  emptyButtonText: {
-    color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "600",
+    padding: spacing["2xl"],
   },
   progressRow: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.base,
   },
   progressTrack: {
     height: 6,
     borderRadius: 3,
-    backgroundColor: "#e2e6ee",
+    backgroundColor: colors.border,
     overflow: "hidden",
   },
-  progressFill: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#1a2b4a",
-  },
   progressText: {
-    marginTop: 6,
+    marginTop: spacing.sm - 2,
     fontSize: 12,
-    color: "#8a94a6",
+    color: colors.text.muted,
   },
   toolbarRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 4,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xs,
   },
   languageButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    backgroundColor: "#eef1f8",
-    borderRadius: 8,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
+    gap: spacing.sm - 2,
+    backgroundColor: colors.surfaceElevated2,
+    borderRadius: radius.sm,
+    paddingVertical: spacing.xs + 3,
+    paddingHorizontal: spacing.md,
   },
   languageButtonText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#1a2b4a",
+    color: colors.brand.primary,
   },
   toolbarIcons: {
     flexDirection: "row",
-    gap: 4,
+    gap: spacing.xs,
   },
   iconButton: {
-    padding: 8,
+    padding: spacing.sm,
   },
   container: {
-    padding: 20,
-    paddingTop: 8,
-    paddingBottom: 40,
+    padding: spacing.xl,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing["3xl"],
   },
   fallbackNote: {
     fontSize: 12,
-    color: "#8a94a6",
+    color: colors.text.muted,
     fontStyle: "italic",
-    marginBottom: 10,
+    marginBottom: spacing.sm + 2,
   },
   questionText: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#1a2b4a",
+    color: colors.text.primary,
     lineHeight: 26,
-    marginBottom: 20,
+    marginBottom: spacing.xl,
   },
   optionsList: {
-    gap: 12,
+    gap: spacing.md,
   },
   optionCard: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    backgroundColor: "#ffffff",
+    gap: spacing.md,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: "#e2e6ee",
-    borderRadius: 12,
-    padding: 14,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.md + 2,
   },
   optionCorrect: {
-    borderColor: "#2f9e64",
-    backgroundColor: "#e8f7f0",
+    borderColor: colors.semantic.success,
+    backgroundColor: colors.semantic.successBg,
   },
   optionWrong: {
-    borderColor: "#c94f4f",
-    backgroundColor: "#fdecec",
+    borderColor: colors.semantic.error,
+    backgroundColor: colors.semantic.errorBg,
   },
   optionBadge: {
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: "#eef1f8",
+    backgroundColor: colors.surfaceElevated2,
     alignItems: "center",
     justifyContent: "center",
   },
   optionBadgeCorrect: {
-    backgroundColor: "#2f9e64",
+    backgroundColor: colors.semantic.success,
   },
   optionBadgeWrong: {
-    backgroundColor: "#c94f4f",
+    backgroundColor: colors.semantic.error,
   },
   optionBadgeText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#1a2b4a",
+    color: colors.text.primary,
   },
   optionBadgeTextLight: {
-    color: "#ffffff",
+    color: colors.text.onAccent,
   },
   optionText: {
     flex: 1,
     fontSize: 15,
-    color: "#1a2b4a",
+    color: colors.text.primary,
   },
   explanationBox: {
-    marginTop: 20,
-    backgroundColor: "#eef1f8",
-    borderRadius: 12,
-    padding: 16,
+    marginTop: spacing.xl,
+    backgroundColor: colors.surfaceElevated2,
+    borderRadius: radius.md,
+    padding: spacing.base,
   },
   explanationLabel: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#5a6a85",
+    color: colors.text.secondary,
     textTransform: "uppercase",
     letterSpacing: 0.5,
-    marginBottom: 6,
+    marginBottom: spacing.xs + 2,
   },
   explanationText: {
     fontSize: 14,
-    color: "#1a2b4a",
+    color: colors.text.primary,
     lineHeight: 21,
   },
   footer: {
-    padding: 20,
-    paddingTop: 12,
+    padding: spacing.xl,
+    paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: "#e2e6ee",
-    backgroundColor: "#ffffff",
-  },
-  nextButton: {
-    backgroundColor: "#1a2b4a",
-    borderRadius: 12,
-    paddingVertical: 15,
-    alignItems: "center",
-  },
-  nextButtonText: {
-    color: "#ffffff",
-    fontSize: 15,
-    fontWeight: "600",
+    borderTopColor: colors.border,
+    backgroundColor: colors.surfaceElevated,
   },
 });

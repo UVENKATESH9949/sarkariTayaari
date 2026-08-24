@@ -1,12 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
+import { ScrollView, Text, View, StyleSheet } from "react-native";
 import { useSessionHistory } from "../../../practice/sessionHistory";
+import { Button } from "../../../ui/Button";
+import { Card } from "../../../ui/Card";
+import { colors, radius, spacing, typography } from "../../../ui/theme";
 
-function scoreColor(accuracyPercent: number): { text: string; bg: string } {
-  if (accuracyPercent >= 70) return { text: "#2f9e64", bg: "#e8f7f0" };
-  if (accuracyPercent >= 40) return { text: "#c9861f", bg: "#fdf3e2" };
-  return { text: "#c94f4f", bg: "#fdecec" };
+function scoreTone(accuracyPercent: number): { text: string; bg: string } {
+  if (accuracyPercent >= 70) return { text: colors.semantic.success, bg: colors.semantic.successBg };
+  if (accuracyPercent >= 40) return { text: colors.semantic.warning, bg: colors.semantic.warningBg };
+  return { text: colors.semantic.error, bg: colors.semantic.errorBg };
 }
 
 export default function Summary() {
@@ -24,51 +27,48 @@ export default function Summary() {
   }
 
   const accuracyPercent = Math.round((session.correctCount / session.totalCount) * 100);
-  const colors = scoreColor(accuracyPercent);
+  const tone = scoreTone(accuracyPercent);
 
   return (
     <>
       <Stack.Screen options={{ title: "Session Summary" }} />
       <ScrollView contentContainerStyle={styles.container}>
-        <View style={[styles.scoreCircle, { backgroundColor: colors.bg }]}>
-          <Text style={[styles.scoreText, { color: colors.text }]}>
+        <View style={[styles.scoreCircle, { backgroundColor: tone.bg }]}>
+          <Text style={[styles.scoreText, { color: tone.text }]}>
             {session.correctCount}/{session.totalCount}
           </Text>
         </View>
-        <Text style={[styles.accuracyText, { color: colors.text }]}>{accuracyPercent}% accuracy</Text>
+        <Text style={[styles.accuracyText, { color: tone.text }]}>{accuracyPercent}% accuracy</Text>
         <Text style={styles.contextText}>
           {session.subjectName} · {session.topicName} · {session.levelLabel}
         </Text>
 
-        <Text style={styles.sectionLabel}>Question by question</Text>
+        <Text style={[typography.label, styles.sectionLabel]}>Question by question</Text>
         <View style={styles.list}>
           {session.results.map((result, index) => (
-            <View key={result.questionId} style={styles.resultRow}>
+            <Card key={result.questionId} style={styles.resultRow}>
               <View
                 style={[
                   styles.resultIcon,
-                  result.isCorrect ? styles.resultIconCorrect : styles.resultIconWrong,
+                  { backgroundColor: result.isCorrect ? colors.semantic.success : colors.semantic.error },
                 ]}
               >
-                <Ionicons name={result.isCorrect ? "checkmark" : "close"} size={14} color="#ffffff" />
+                <Ionicons name={result.isCorrect ? "checkmark" : "close"} size={14} color={colors.text.onAccent} />
               </View>
               <Text style={styles.resultText} numberOfLines={2}>
                 {index + 1}. {result.questionText}
               </Text>
-            </View>
+            </Card>
           ))}
         </View>
 
-        <Pressable
-          style={styles.secondaryButton}
-          onPress={() => router.push("/practice/history")}
-        >
-          <Text style={styles.secondaryButtonText}>View Session History</Text>
-        </Pressable>
+        <Button variant="secondary" size="lg" onPress={() => router.push("/practice/history")} style={styles.secondaryButton}>
+          View Session History
+        </Button>
 
-        <Pressable style={styles.primaryButton} onPress={() => router.replace("/practice")}>
-          <Text style={styles.primaryButtonText}>Back to Practice</Text>
-        </Pressable>
+        <Button size="lg" onPress={() => router.replace("/practice")} style={styles.primaryButton}>
+          Back to Practice
+        </Button>
       </ScrollView>
     </>
   );
@@ -76,10 +76,10 @@ export default function Summary() {
 
 const styles = StyleSheet.create({
   container: {
-    padding: 24,
-    paddingTop: 32,
+    padding: spacing.xl,
+    paddingTop: spacing["2xl"],
     alignItems: "center",
-    paddingBottom: 48,
+    paddingBottom: spacing["4xl"],
   },
   emptyScreen: {
     flex: 1,
@@ -87,8 +87,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   emptyText: {
-    fontSize: 14,
-    color: "#8a94a6",
+    ...typography.secondary,
   },
   scoreCircle: {
     width: 120,
@@ -102,39 +101,31 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   accuracyText: {
-    marginTop: 14,
+    marginTop: spacing.md + 2,
     fontSize: 16,
     fontWeight: "700",
   },
   contextText: {
-    marginTop: 6,
+    marginTop: spacing.xs + 2,
     fontSize: 13,
-    color: "#8a94a6",
+    color: colors.text.muted,
     textAlign: "center",
   },
   sectionLabel: {
     alignSelf: "flex-start",
-    marginTop: 32,
-    marginBottom: 12,
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#8a94a6",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+    marginTop: spacing["2xl"],
+    marginBottom: spacing.md,
   },
   list: {
     width: "100%",
-    gap: 10,
+    gap: spacing.sm + 2,
   },
   resultRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 10,
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#e2e6ee",
-    borderRadius: 10,
-    padding: 12,
+    gap: spacing.sm + 2,
+    padding: spacing.md,
+    borderRadius: radius.sm + 2,
   },
   resultIcon: {
     width: 22,
@@ -144,43 +135,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginTop: 1,
   },
-  resultIconCorrect: {
-    backgroundColor: "#2f9e64",
-  },
-  resultIconWrong: {
-    backgroundColor: "#c94f4f",
-  },
   resultText: {
     flex: 1,
     fontSize: 13,
-    color: "#1a2b4a",
+    color: colors.text.primary,
     lineHeight: 19,
   },
   secondaryButton: {
     width: "100%",
-    marginTop: 32,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#1a2b4a",
-  },
-  secondaryButtonText: {
-    color: "#1a2b4a",
-    fontSize: 15,
-    fontWeight: "600",
+    marginTop: spacing["2xl"],
   },
   primaryButton: {
     width: "100%",
-    marginTop: 12,
-    backgroundColor: "#1a2b4a",
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  primaryButtonText: {
-    color: "#ffffff",
-    fontSize: 15,
-    fontWeight: "600",
+    marginTop: spacing.md,
   },
 });

@@ -2,9 +2,12 @@ import { db } from "../db/client";
 import { clearResumeState, getResumeState, setLastSyncedAt, setResumeState } from "../db/syncMeta";
 import { syncQuestions } from "../api/questions";
 import { writeLanguages, writeReferenceData, upsertQuestionsBatch } from "./writeQuestions";
+import { captureError } from "../telemetry/analytics";
 
 const PAGE_SIZE = 500;
 const SOFT_TIMEOUT_MS = 2 * 60 * 1000;
+const RETRY_BASE_MS = 2 * 1000;
+const RETRY_MAX_MS = 30 * 1000;
 
 export type SyncStatus = "syncing" | "partial" | "completed" | "error";
 
@@ -86,5 +89,43 @@ export async function runInitialSync(onProgress?: OnProgress): Promise<{ status:
     const message = (err as Error).message;
     onProgress?.({ status: "error", synced, total, error: message });
     throw err;
+  }
+}
+
+/**
+ * Wraps `runInitialSync` with indefinite retry, backing off exponentially (capped at
+ * 30s) between attempts. A page failing mid-download (e.g. a transient 500 from the
+ * backend) is expected to be recoverable, not fatal — the per-page checkpoint in
+ * `runInitialSync` means a retry resumes at the next page instead of restarting, so
+ * there's no cost to just trying again. The caller never sees a terminal "error": each
+ * failed attempt is swallowed and reported back as "syncing" with the last known
+ * progress, so the UI has nothing to show but a percentage climbing towards 100.
+ */
+export async function runInitialSyncUntilDone(onProgress?: OnProgress): Promise<void> {
+  let attempt = 0;
+  let lastSynced = 0;
+  let lastTotal = 0;
+
+  const wrappedProgress: OnProgress = (progress) => {
+    if (progress.status === "error") {
+      onProgress?.({ status: "syncing", synced: lastSynced, total: lastTotal });
+      return;
+    }
+    lastSynced = progress.synced;
+    lastTotal = progress.total;
+    onProgress?.(progress);
+  };
+
+  while (true) {
+    try {
+      await runInitialSync(wrappedProgress);
+      return;
+    } catch (err) {
+      attempt += 1;
+      const delay = Math.min(RETRY_BASE_MS * 2 ** (attempt - 1), RETRY_MAX_MS);
+      console.warn(`Initial sync attempt ${attempt} failed, retrying in ${delay}ms`, err);
+      captureError(err, { context: "initial sync retry", attempt });
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
   }
 }

@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ActivityIndicator, Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
+import { ScrollView, Text, View, StyleSheet } from "react-native";
 import { getSectionAvailability, type SectionAvailability } from "../../../db/mockTest";
 import { getPaperById, type SyncedPaper } from "../../../db/examStructure";
 import { getPaperByIdLive } from "../../../data/mockTestStructureData";
 import { getSectionAvailabilityLive } from "../../../data/mockTestData";
 import { useHybridMode } from "../../../data/hybridSource";
+import { Button } from "../../../ui/Button";
+import { Card } from "../../../ui/Card";
+import { CardSkeleton } from "../../../ui/Skeleton";
+import { colors, radius, spacing, typography } from "../../../ui/theme";
 
 export default function MockTestStart() {
   const router = useRouter();
@@ -45,8 +49,13 @@ export default function MockTestStart() {
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator />
+      <View style={styles.container}>
+        <CardSkeleton height={28} />
+        <View style={[styles.summaryRow, { marginTop: spacing.xl }]}>
+          <CardSkeleton height={78} />
+          <CardSkeleton height={78} />
+          <CardSkeleton height={78} />
+        </View>
       </View>
     );
   }
@@ -81,17 +90,17 @@ export default function MockTestStart() {
 
       <View style={styles.summaryRow}>
         <View style={styles.summaryCard}>
-          <Ionicons name="time-outline" size={20} color="#1a2b4a" />
+          <Ionicons name="time-outline" size={20} color={colors.brand.primary} />
           <Text style={styles.summaryValue}>{totalMinutes != null ? `${totalMinutes} min` : "—"}</Text>
           <Text style={styles.summaryLabel}>{sectionallyTimed ? "Total (sectional)" : "Duration"}</Text>
         </View>
         <View style={styles.summaryCard}>
-          <Ionicons name="help-circle-outline" size={20} color="#1a2b4a" />
+          <Ionicons name="help-circle-outline" size={20} color={colors.brand.primary} />
           <Text style={styles.summaryValue}>{totalAvailable ?? totalRequested}</Text>
           <Text style={styles.summaryLabel}>Questions</Text>
         </View>
         <View style={styles.summaryCard}>
-          <Ionicons name="ribbon-outline" size={20} color="#1a2b4a" />
+          <Ionicons name="ribbon-outline" size={20} color={colors.brand.primary} />
           <Text style={styles.summaryValue}>
             {paper.marksCorrect != null ? `+${paper.marksCorrect}/-${paper.marksWrong ?? 0}` : "—"}
           </Text>
@@ -101,7 +110,7 @@ export default function MockTestStart() {
 
       {isCapped && (
         <View style={styles.cappedNote}>
-          <Ionicons name="information-circle-outline" size={16} color="#c9861f" />
+          <Ionicons name="information-circle-outline" size={16} color={colors.semantic.warning} />
           <Text style={styles.cappedNoteText}>
             Only {totalAvailable} of the usual {totalRequested} questions are available today — more content is
             added over time.
@@ -109,14 +118,14 @@ export default function MockTestStart() {
         </View>
       )}
 
-      <Text style={styles.sectionsHeading}>Sections</Text>
+      <Text style={typography.label}>Sections</Text>
       <View style={styles.sectionsList}>
         {paper.sections.map((section) => {
           const availability = sections?.find((s) => s.sectionName === section.name);
           return (
-            <View key={section.id} style={styles.sectionRow}>
-              <View style={[styles.sectionIconCircle, { backgroundColor: "#eef1f8" }]}>
-                <Ionicons name="layers-outline" size={18} color="#5a6a85" />
+            <Card key={section.id} style={styles.sectionRow}>
+              <View style={styles.sectionIconCircle}>
+                <Ionicons name="layers-outline" size={18} color={colors.text.secondary} />
               </View>
               <Text style={styles.sectionName}>
                 {section.name}
@@ -125,7 +134,7 @@ export default function MockTestStart() {
               <Text style={styles.sectionCount}>
                 {availability ? `${availability.available} questions` : "…"}
               </Text>
-            </View>
+            </Card>
           );
         })}
       </View>
@@ -145,103 +154,87 @@ export default function MockTestStart() {
         <Text style={styles.instructionsItem}>• Use the question navigator to jump around and mark questions for review.</Text>
       </View>
 
-      <Pressable
-        disabled={!canStart}
-        onPress={startTest}
-        style={({ pressed }) => [styles.startButton, !canStart && styles.startButtonDisabled, pressed && canStart && styles.startButtonPressed]}
-      >
-        <Text style={styles.startButtonText}>{canStart ? "Start Test" : "Not enough questions yet"}</Text>
-      </Pressable>
+      <Button size="lg" disabled={!canStart} onPress={startTest}>
+        {canStart ? "Start Test" : "Not enough questions yet"}
+      </Button>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    padding: 20,
-    paddingTop: 24,
-    paddingBottom: 40,
+    padding: spacing.lg,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing["3xl"],
   },
   centered: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: 32,
+    padding: spacing["2xl"],
   },
   emptyText: {
-    fontSize: 13,
-    color: "#8a94a6",
+    ...typography.secondary,
     textAlign: "center",
   },
   examName: {
+    ...typography.pageTitle,
     fontSize: 20,
-    fontWeight: "700",
-    color: "#1a2b4a",
-    marginBottom: 20,
+    marginBottom: spacing.xl,
   },
   summaryRow: {
     flexDirection: "row",
-    gap: 10,
-    marginBottom: 16,
+    gap: spacing.sm + 2,
+    marginBottom: spacing.base,
   },
   summaryCard: {
     flex: 1,
-    backgroundColor: "#eef1f8",
-    borderRadius: 12,
-    padding: 12,
+    backgroundColor: colors.surfaceElevated2,
+    borderRadius: radius.md,
+    padding: spacing.md,
     alignItems: "center",
-    gap: 4,
+    gap: spacing.xs,
   },
   summaryValue: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#1a2b4a",
+    color: colors.text.primary,
   },
   summaryLabel: {
     fontSize: 11,
-    color: "#5a6a85",
+    color: colors.text.secondary,
   },
   cappedNote: {
     flexDirection: "row",
-    gap: 8,
-    backgroundColor: "#fdf3e2",
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 16,
+    gap: spacing.sm,
+    backgroundColor: colors.semantic.warningBg,
+    borderRadius: radius.sm,
+    padding: spacing.md,
+    marginBottom: spacing.base,
     alignItems: "flex-start",
   },
   cappedNoteText: {
     flex: 1,
     fontSize: 12,
-    color: "#8a6420",
+    color: colors.semantic.warning,
     lineHeight: 17,
   },
-  sectionsHeading: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#8a94a6",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 10,
-  },
   sectionsList: {
-    gap: 8,
-    marginBottom: 24,
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    marginBottom: spacing.xl,
   },
   sectionRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#e2e6ee",
-    borderRadius: 12,
-    padding: 12,
+    gap: spacing.md,
+    padding: spacing.md,
   },
   sectionIconCircle: {
     width: 32,
     height: 32,
     borderRadius: 16,
+    backgroundColor: colors.surfaceElevated2,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -249,45 +242,28 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: "600",
-    color: "#1a2b4a",
+    color: colors.text.primary,
   },
   sectionCount: {
     fontSize: 12,
-    color: "#8a94a6",
+    color: colors.text.muted,
   },
   instructionsBox: {
-    backgroundColor: "#f5f6f9",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
-    gap: 6,
+    backgroundColor: colors.surfaceElevated2,
+    borderRadius: radius.md,
+    padding: spacing.base,
+    marginBottom: spacing.xl,
+    gap: spacing.xs + 2,
   },
   instructionsTitle: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#1a2b4a",
-    marginBottom: 4,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
   },
   instructionsItem: {
     fontSize: 12,
-    color: "#5a6a85",
+    color: colors.text.secondary,
     lineHeight: 18,
-  },
-  startButton: {
-    backgroundColor: "#1a2b4a",
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: "center",
-  },
-  startButtonPressed: {
-    backgroundColor: "#142138",
-  },
-  startButtonDisabled: {
-    backgroundColor: "#c7cee0",
-  },
-  startButtonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "600",
   },
 });

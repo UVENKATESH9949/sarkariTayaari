@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { Modal, Pressable, ScrollView, Text, TextInput, View, StyleSheet } from "react-native";
 import { LANGUAGES } from "./appLanguage";
+import { colors, radius, spacing } from "../ui/theme";
 
 type Props = {
   visible: boolean;
@@ -32,11 +33,11 @@ export function LanguagePickerModal({ visible, selectedCode, onSelect, onClose, 
         <Pressable style={styles.card} onPress={(e) => e.stopPropagation()}>
           <Text style={styles.title}>{title}</Text>
           <View style={styles.searchBar}>
-            <Ionicons name="search" size={16} color="#8a94a6" />
+            <Ionicons name="search" size={16} color={colors.text.muted} />
             <TextInput
               style={styles.searchInput}
               placeholder="Search languages..."
-              placeholderTextColor="#8a94a6"
+              placeholderTextColor={colors.text.muted}
               value={search}
               onChangeText={setSearch}
             />
@@ -51,7 +52,7 @@ export function LanguagePickerModal({ visible, selectedCode, onSelect, onClose, 
                   style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
                 >
                   <Text style={styles.rowText}>{lang.name}</Text>
-                  {isSelected && <Ionicons name="checkmark" size={18} color="#1a2b4a" />}
+                  {isSelected && <Ionicons name="checkmark" size={18} color={colors.brand.light} />}
                 </Pressable>
               );
             })}
@@ -68,36 +69,38 @@ export function LanguagePickerModal({ visible, selectedCode, onSelect, onClose, 
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(20, 30, 50, 0.5)",
+    backgroundColor: "rgba(2, 3, 5, 0.7)",
     justifyContent: "center",
-    padding: 24,
+    padding: spacing.xl,
   },
   card: {
-    backgroundColor: "#ffffff",
-    borderRadius: 16,
-    padding: 20,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
     maxHeight: "70%",
   },
   title: {
     fontSize: 17,
     fontWeight: "700",
-    color: "#1a2b4a",
-    marginBottom: 14,
+    color: colors.text.primary,
+    marginBottom: spacing.md + 2,
   },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    backgroundColor: "#f5f6f9",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    marginBottom: 12,
+    gap: spacing.sm,
+    backgroundColor: colors.surfaceElevated2,
+    borderRadius: radius.sm + 2,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 1,
+    marginBottom: spacing.md,
   },
   searchInput: {
     flex: 1,
     fontSize: 14,
-    color: "#1a2b4a",
+    color: colors.text.primary,
     padding: 0,
   },
   list: {
@@ -107,21 +110,21 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 13,
+    paddingVertical: spacing.md + 1,
     borderBottomWidth: 1,
-    borderBottomColor: "#f0f1f4",
+    borderBottomColor: colors.border,
   },
   rowPressed: {
-    backgroundColor: "#f5f6f9",
+    backgroundColor: colors.surfaceElevated2,
   },
   rowText: {
     fontSize: 15,
-    color: "#1a2b4a",
+    color: colors.text.primary,
   },
   emptyText: {
-    paddingVertical: 20,
+    paddingVertical: spacing.xl,
     textAlign: "center",
     fontSize: 13,
-    color: "#8a94a6",
+    color: colors.text.muted,
   },
 });

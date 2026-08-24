@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { Pressable, ScrollView, Text, TextInput, View, StyleSheet } from "react-native";
+import { ScrollView, Text, TextInput, View, StyleSheet } from "react-native";
 import { toSubjectMeta } from "../../../constants/subjects";
 import { useSyncStatus } from "../../../sync/SyncContext";
-import { PressableScale } from "../../../ui/PressableScale";
 import { FadeInItem } from "../../../ui/FadeInList";
 import { OfflineNoDataNotice } from "../../../ui/OfflineNoDataNotice";
+import { Card } from "../../../ui/Card";
+import { EmptyState } from "../../../ui/EmptyState";
+import { colors, radius, spacing, typography } from "../../../ui/theme";
 import { getSubjectStats, type SubjectStat } from "../../../data/practiceData";
 import { useHybridMode } from "../../../data/hybridSource";
 
@@ -42,11 +44,11 @@ export default function Subjects() {
       <Stack.Screen options={{ title: examLabel ?? "Subjects" }} />
       <View style={styles.screen}>
         <View style={styles.searchBar}>
-          <Ionicons name="search" size={18} color="#8a94a6" />
+          <Ionicons name="search" size={18} color={colors.text.muted} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search subjects..."
-            placeholderTextColor="#8a94a6"
+            placeholderTextColor={colors.text.muted}
             value={search}
             onChangeText={setSearch}
           />
@@ -62,28 +64,28 @@ export default function Subjects() {
               const disabled = subject.questionCount === 0;
               return (
                 <FadeInItem key={subject.id} index={index}>
-                <PressableScale
-                  disabled={disabled}
-                  onPress={() => openTopics(subject.id, subject.name)}
-                  style={[styles.card, disabled && styles.cardDisabled]}
-                >
-                  <View style={[styles.iconCircle, { backgroundColor: meta.iconBg }]}>
-                    <Ionicons name={meta.icon} size={22} color={meta.iconColor} />
-                  </View>
-                  <View style={styles.textBlock}>
-                    <Text style={styles.subjectName}>{subject.name}</Text>
-                    <Text style={styles.subjectStats}>
-                      {disabled ? "No questions yet" : questionsLabel(subject.questionCount)}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color="#c3cadb" />
-                </PressableScale>
+                  <Card
+                    disabled={disabled}
+                    onPress={() => openTopics(subject.id, subject.name)}
+                    style={styles.card}
+                  >
+                    <View style={[styles.iconCircle, { backgroundColor: meta.iconBg }]}>
+                      <Ionicons name={meta.icon} size={22} color={meta.iconColor} />
+                    </View>
+                    <View style={styles.textBlock}>
+                      <Text style={styles.subjectName}>{subject.name}</Text>
+                      <Text style={styles.subjectStats}>
+                        {disabled ? "No questions yet" : questionsLabel(subject.questionCount)}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={colors.text.muted} />
+                  </Card>
                 </FadeInItem>
               );
             })}
 
             {filteredSubjects.length === 0 && subjects.length > 0 && (
-              <Text style={styles.emptyText}>No subjects match "{search}"</Text>
+              <EmptyState icon="search-outline" title={`No subjects match "${search}"`} />
             )}
             {subjects.length === 0 && mode === "unavailable" && <OfflineNoDataNotice />}
           </View>
@@ -100,58 +102,44 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    backgroundColor: "#ffffff",
+    gap: spacing.sm,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: "#e2e6ee",
-    borderRadius: 12,
-    marginHorizontal: 20,
-    marginTop: 16,
-    marginBottom: 4,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.base,
+    marginBottom: spacing.xs,
+    paddingHorizontal: spacing.md + 2,
+    paddingVertical: spacing.sm + 2,
   },
   searchInput: {
     flex: 1,
     fontSize: 14,
-    color: "#1a2b4a",
+    color: colors.text.primary,
     padding: 0,
   },
   container: {
-    padding: 20,
-    paddingTop: 12,
-    paddingBottom: 40,
+    padding: spacing.xl,
+    paddingTop: spacing.md,
+    paddingBottom: spacing["3xl"],
   },
   heading: {
+    ...typography.pageTitle,
     fontSize: 22,
-    fontWeight: "700",
-    color: "#1a2b4a",
   },
   subheading: {
-    marginTop: 4,
-    fontSize: 13,
-    color: "#8a94a6",
-    marginBottom: 20,
+    ...typography.secondary,
+    marginTop: spacing.xs,
+    marginBottom: spacing.xl,
   },
   list: {
-    gap: 12,
+    gap: spacing.md,
   },
   card: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 14,
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#e2e6ee",
-    borderRadius: 14,
-    padding: 14,
-  },
-  cardPressed: {
-    backgroundColor: "#f5f6f9",
-  },
-  cardDisabled: {
-    backgroundColor: "#f5f6f9",
-    opacity: 0.6,
+    gap: spacing.md + 2,
   },
   iconCircle: {
     width: 44,
@@ -166,17 +154,11 @@ const styles = StyleSheet.create({
   subjectName: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#1a2b4a",
+    color: colors.text.primary,
   },
   subjectStats: {
     fontSize: 12,
-    color: "#8a94a6",
+    color: colors.text.muted,
     marginTop: 2,
-  },
-  emptyText: {
-    marginTop: 12,
-    fontSize: 13,
-    color: "#8a94a6",
-    textAlign: "center",
   },
 });

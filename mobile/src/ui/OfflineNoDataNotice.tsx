@@ -1,5 +1,6 @@
 import { Text, View, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { colors } from "./theme";
 
 /**
  * Shown instead of a screen's normal "genuinely zero results" empty state when the
@@ -11,7 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 export function OfflineNoDataNotice() {
   return (
     <View style={styles.container}>
-      <Ionicons name="cloud-offline-outline" size={32} color="#c7cee0" />
+      <Ionicons name="cloud-offline-outline" size={32} color={colors.brand.light} />
       <Text style={styles.text}>
         You&apos;re offline and this content hasn&apos;t downloaded yet. Connect to the
         internet once to download it — after that, everything works offline.
@@ -29,7 +30,7 @@ const styles = StyleSheet.create({
   },
   text: {
     fontSize: 13,
-    color: "#8a94a6",
+    color: colors.text.muted,
     textAlign: "center",
     lineHeight: 19,
   },

@@ -2,21 +2,25 @@ import { useEffect, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { ScrollView, Text, View, StyleSheet } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSessionHistory } from "../../practice/sessionHistory";
 import { toSubjectMeta } from "../../constants/subjects";
 import { getAllSubjects, type SubjectMetaRow } from "../../db/subjectMeta";
 import { PressableScale } from "../../ui/PressableScale";
 import { AnimatedProgressBar } from "../../ui/AnimatedProgressBar";
 import { FadeInItem } from "../../ui/FadeInList";
+import { Card } from "../../ui/Card";
+import { colors, radius, spacing, typography } from "../../ui/theme";
 
 function scoreColor(percent: number) {
-  if (percent >= 70) return "#2f9e64";
-  if (percent >= 40) return "#c9861f";
-  return "#c94f4f";
+  if (percent >= 70) return colors.semantic.success;
+  if (percent >= 40) return colors.semantic.warning;
+  return colors.semantic.error;
 }
 
 export default function Progress() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { sessions } = useSessionHistory();
   // Breakdown covers whatever subjects are synced, not a fixed built-in list.
   const [syncedSubjects, setSyncedSubjects] = useState<SubjectMetaRow[]>([]);
@@ -59,10 +63,10 @@ export default function Progress() {
   const hasActivity = stats.totalQuestions > 0;
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + spacing.xl }]}>
       <Text style={styles.title}>Your Progress</Text>
 
-      <View style={styles.readinessCard}>
+      <Card variant="filled" style={styles.readinessCard}>
         <View style={styles.readinessCircle}>
           <Text style={styles.readinessPercent}>{stats.readinessPercent}%</Text>
         </View>
@@ -74,7 +78,7 @@ export default function Progress() {
               : "Complete a practice session to see your score."}
           </Text>
         </View>
-      </View>
+      </Card>
 
       <View style={styles.statRow}>
         <View style={styles.statCard}>
@@ -87,7 +91,7 @@ export default function Progress() {
         </View>
       </View>
 
-      <Text style={styles.sectionTitle}>Subject-wise accuracy</Text>
+      <Text style={typography.sectionTitle}>Subject-wise accuracy</Text>
       <View style={styles.subjectList}>
         {stats.subjectBreakdown.map((subject, index) => (
           <FadeInItem key={subject.name} index={index}>
@@ -121,7 +125,7 @@ export default function Progress() {
 
       <PressableScale style={styles.historyLink} onPress={() => router.push("/practice/history")}>
         <Text style={styles.historyLinkText}>View full session history</Text>
-        <Ionicons name="chevron-forward" size={16} color="#1a2b4a" />
+        <Ionicons name="chevron-forward" size={16} color={colors.brand.primary} />
       </PressableScale>
     </ScrollView>
   );
@@ -129,24 +133,19 @@ export default function Progress() {
 
 const styles = StyleSheet.create({
   container: {
-    padding: 24,
-    paddingTop: 32,
-    paddingBottom: 48,
+    padding: spacing.xl,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing["3xl"],
   },
   title: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#1a2b4a",
-    marginBottom: 20,
+    ...typography.pageTitle,
+    marginBottom: spacing.lg,
   },
   readinessCard: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 16,
-    backgroundColor: "#1a2b4a",
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 16,
+    gap: spacing.base,
+    marginBottom: spacing.base,
   },
   readinessCircle: {
     width: 66,
@@ -159,7 +158,7 @@ const styles = StyleSheet.create({
   readinessPercent: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#ffffff",
+    color: colors.text.onAccent,
   },
   readinessInfo: {
     flex: 1,
@@ -167,48 +166,43 @@ const styles = StyleSheet.create({
   readinessLabel: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#ffffff",
+    color: colors.text.onAccent,
   },
   readinessHint: {
     fontSize: 12,
-    color: "#c7cee0",
-    marginTop: 4,
+    color: colors.text.onAccentSecondary,
+    marginTop: spacing.xs,
     lineHeight: 17,
   },
   statRow: {
     flexDirection: "row",
-    gap: 12,
-    marginBottom: 24,
+    gap: spacing.md,
+    marginBottom: spacing.xl,
   },
   statCard: {
     flex: 1,
-    backgroundColor: "#f5f6f9",
-    borderRadius: 14,
-    padding: 16,
+    backgroundColor: colors.surfaceElevated2,
+    borderRadius: radius.lg,
+    padding: spacing.base,
   },
   statValue: {
     fontSize: 22,
     fontWeight: "700",
-    color: "#1a2b4a",
+    color: colors.text.primary,
   },
   statLabel: {
     fontSize: 12,
-    color: "#5a6a85",
-    marginTop: 4,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#1a2b4a",
-    marginBottom: 12,
+    color: colors.text.secondary,
+    marginTop: spacing.xs,
   },
   subjectList: {
-    gap: 14,
+    gap: spacing.md + 2,
+    marginTop: spacing.md,
   },
   subjectRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: spacing.md,
   },
   subjectIconCircle: {
     width: 36,
@@ -223,18 +217,18 @@ const styles = StyleSheet.create({
   subjectName: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#1a2b4a",
-    marginBottom: 6,
+    color: colors.text.primary,
+    marginBottom: spacing.xs + 2,
   },
   subjectEmpty: {
     fontSize: 12,
-    color: "#8a94a6",
+    color: colors.text.muted,
     fontStyle: "italic",
   },
   subjectPercent: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#8a94a6",
+    color: colors.text.muted,
     width: 40,
     textAlign: "right",
   },
@@ -242,13 +236,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    gap: 6,
-    marginTop: 28,
-    paddingVertical: 12,
+    gap: spacing.xs + 2,
+    marginTop: spacing["2xl"],
+    paddingVertical: spacing.md,
   },
   historyLinkText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#1a2b4a",
+    color: colors.brand.primary,
   },
 });

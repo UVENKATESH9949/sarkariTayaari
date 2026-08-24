@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { RefreshControl, ScrollView, Text, View, StyleSheet } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getFollowedExam } from "../../db/followedExams";
 import { useBookmarks } from "../../practice/bookmarks";
 import { useSessionHistory } from "../../practice/sessionHistory";
@@ -9,6 +10,9 @@ import { getWrongAnswers } from "../../practice/wrongAnswers";
 import { useSyncStatus } from "../../sync/SyncContext";
 import { PressableScale } from "../../ui/PressableScale";
 import { FadeInItem } from "../../ui/FadeInList";
+import { Button } from "../../ui/Button";
+import { Card } from "../../ui/Card";
+import { colors, radius, spacing, typography } from "../../ui/theme";
 
 // Streak/readiness are still mock — real streak computation and the final
 // readiness formula haven't been decided yet (see Progress for the real,
@@ -20,14 +24,17 @@ const MOCK = {
 
 export default function Home() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [followedExamName, setFollowedExamName] = useState<string | null>(null);
   const { bookmarks } = useBookmarks();
   const { sessions } = useSessionHistory();
-  const { isRefreshing, refresh } = useSyncStatus();
+  const { isRefreshing, refresh, syncVersion } = useSyncStatus();
 
   useEffect(() => {
     getFollowedExam().then((exam) => setFollowedExamName(exam?.name ?? null));
-  }, []);
+    // syncVersion in deps: previously missing, so this never picked up a followed-exam
+    // change from a background sync — only from manual pull-to-refresh below.
+  }, [syncVersion]);
 
   const wrongAnswerCount = useMemo(() => getWrongAnswers(sessions).length, [sessions]);
 
@@ -41,45 +48,45 @@ export default function Home() {
 
   return (
     <ScrollView
-      contentContainerStyle={styles.container}
+      contentContainerStyle={[styles.container, { paddingTop: insets.top + spacing.xl }]}
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
     >
       <Text style={styles.greeting}>Welcome back 👋</Text>
       <Text style={styles.title}>SarkariTaiyaari</Text>
 
       <View style={styles.streakCard}>
-        <Ionicons name="flame" size={22} color="#e8823c" />
+        <Ionicons name="flame" size={22} color={colors.semantic.warning} />
         <Text style={styles.streakText}>{MOCK.streakDays}-day streak</Text>
       </View>
 
-      <View style={styles.examCard}>
+      <Card style={styles.examCard}>
         <Text style={styles.examLabel}>Preparing for</Text>
-        <Text style={styles.examName}>{followedExamName ?? " "}</Text>
-      </View>
+        <Text style={styles.examName}>{followedExamName ?? " "}</Text>
+      </Card>
 
-      <PressableScale style={styles.continueButton} onPress={() => router.push("/practice")}>
-        <Text style={styles.continueButtonText}>Continue Practice</Text>
-      </PressableScale>
+      <Button size="lg" onPress={() => router.push("/practice")}>
+        Continue Practice
+      </Button>
 
-      <PressableScale style={styles.readinessCard} onPress={() => router.push("/progress")}>
+      <Card variant="filled" onPress={() => router.push("/progress")} style={styles.readinessCard}>
         <View>
           <Text style={styles.readinessLabel}>Your readiness</Text>
           <Text style={styles.readinessPercent}>{MOCK.readinessPercent}%</Text>
         </View>
         <View style={styles.readinessCta}>
           <Text style={styles.readinessCtaText}>View progress</Text>
-          <Ionicons name="chevron-forward" size={16} color="#1a2b4a" />
+          <Ionicons name="chevron-forward" size={16} color={colors.text.onAccent} />
         </View>
-      </PressableScale>
+      </Card>
 
-      <Text style={styles.sectionLabel}>Revise</Text>
+      <Text style={typography.label}>Revise</Text>
       <View style={styles.reviseRow}>
         <FadeInItem index={0} style={styles.reviseItem}>
           <PressableScale
             style={styles.reviseCard}
             onPress={() => router.push({ pathname: "/revise", params: { initialTab: "bookmarks" } })}
           >
-            <Ionicons name="star" size={20} color="#e8a63c" />
+            <Ionicons name="star" size={20} color={colors.semantic.warning} />
             <Text style={styles.reviseCount}>{bookmarks.length}</Text>
             <Text style={styles.reviseLabel}>Bookmarked</Text>
           </PressableScale>
@@ -89,7 +96,7 @@ export default function Home() {
             style={styles.reviseCard}
             onPress={() => router.push({ pathname: "/revise", params: { initialTab: "wrong" } })}
           >
-            <Ionicons name="close-circle" size={20} color="#c94f4f" />
+            <Ionicons name="close-circle" size={20} color={colors.semantic.error} />
             <Text style={styles.reviseCount}>{wrongAnswerCount}</Text>
             <Text style={styles.reviseLabel}>Wrong Answers</Text>
           </PressableScale>
@@ -101,103 +108,72 @@ export default function Home() {
 
 const styles = StyleSheet.create({
   container: {
-    padding: 24,
-    paddingTop: 32,
-    paddingBottom: 48,
-    gap: 16,
+    padding: spacing.xl,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing["3xl"],
+    gap: spacing.base,
   },
   greeting: {
-    fontSize: 15,
-    color: "#5a6a85",
+    ...typography.secondary,
   },
   title: {
-    fontSize: 26,
-    fontWeight: "700",
-    color: "#1a2b4a",
-    marginBottom: 8,
+    ...typography.pageTitle,
+    marginBottom: spacing.sm,
   },
   streakCard: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    backgroundColor: "#fff3e9",
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    gap: spacing.sm,
+    backgroundColor: colors.semantic.warningBg,
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.base,
     alignSelf: "flex-start",
   },
   streakText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#a85d20",
+    color: colors.semantic.warning,
   },
   examCard: {
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#e2e6ee",
-    borderRadius: 14,
-    padding: 18,
+    padding: spacing.lg,
   },
   examLabel: {
-    fontSize: 13,
-    color: "#8a94a6",
+    ...typography.secondary,
   },
   examName: {
+    ...typography.cardTitle,
     fontSize: 20,
-    fontWeight: "700",
-    color: "#1a2b4a",
-    marginTop: 4,
-  },
-  continueButton: {
-    backgroundColor: "#1a2b4a",
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: "center",
-  },
-  continueButtonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "600",
+    marginTop: spacing.xs,
   },
   readinessCard: {
-    backgroundColor: "#eef1f8",
-    borderRadius: 14,
-    padding: 18,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
   readinessLabel: {
     fontSize: 13,
-    color: "#5a6a85",
+    color: "rgba(255,255,255,0.75)",
   },
   readinessPercent: {
     fontSize: 24,
     fontWeight: "700",
-    color: "#1a2b4a",
+    color: colors.text.onAccent,
     marginTop: 2,
   },
   readinessCta: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: spacing.xs,
   },
   readinessCtaText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#1a2b4a",
-  },
-  sectionLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#8a94a6",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginTop: 4,
+    color: colors.text.onAccent,
   },
   reviseRow: {
     flexDirection: "row",
-    gap: 12,
+    gap: spacing.md,
   },
   // Carries the flex share; reviseCard fills whatever width that gives it. Same
   // wrapper-vs-child sizing trap as the Practice grid — see FadeInItem's own comment.
@@ -205,21 +181,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   reviseCard: {
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: "#e2e6ee",
-    borderRadius: 14,
-    padding: 16,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: spacing.base,
   },
   reviseCount: {
     fontSize: 20,
     fontWeight: "700",
-    color: "#1a2b4a",
-    marginTop: 8,
+    color: colors.text.primary,
+    marginTop: spacing.sm,
   },
   reviseLabel: {
     fontSize: 12,
-    color: "#8a94a6",
+    color: colors.text.muted,
     marginTop: 2,
   },
 });

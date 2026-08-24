@@ -1,5 +1,6 @@
 import type { ComponentProps } from "react";
 import type { Ionicons } from "@expo/vector-icons";
+import { colors } from "../ui/theme";
 
 export type IoniconName = ComponentProps<typeof Ionicons>["name"];
 
@@ -18,8 +19,8 @@ export type SubjectMeta = {
 const FALLBACK_SUBJECT_META: SubjectMeta = {
   name: "",
   icon: "book-outline",
-  iconColor: "#5a6a85",
-  iconBg: "#eef1f8",
+  iconColor: colors.text.secondary,
+  iconBg: colors.surfaceElevated2,
 };
 
 type SyncedSubjectStyle = {

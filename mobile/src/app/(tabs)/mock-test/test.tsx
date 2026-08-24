@@ -9,6 +9,9 @@ import { buildMockTestQuestionsLive } from "../../../data/mockTestData";
 import { useHybridMode } from "../../../data/hybridSource";
 import { LANGUAGES, useAppLanguage } from "../../../practice/appLanguage";
 import { LanguagePickerModal } from "../../../practice/LanguagePickerModal";
+import { useActiveSession } from "../../../practice/activeSessionContext";
+import { QuestionSkeleton } from "../../../ui/Skeleton";
+import { colors, spacing } from "../../../ui/theme";
 
 function formatTime(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60);
@@ -38,6 +41,7 @@ export default function MockTestTaking() {
     paperName: string;
   }>();
   const { defaultLanguageCode } = useAppLanguage();
+  const { beginSession, endSession, abandonSession, resetSignal, pendingDestinationRef } = useActiveSession();
   const [paper, setPaper] = useState<SyncedPaper | null>(null);
 
   const [questions, setQuestions] = useState<MockTestQuestion[] | null>(null);
@@ -58,6 +62,29 @@ export default function MockTestTaking() {
   // sync completing mid-test must not flip the data source and refetch a *different*
   // question set out from under the student — see the effect's own comment.
   const modeAtStartRef = useRef(mode);
+  // router.dismissAll()/dismissTo() resolve "closest stack" against whichever tab
+  // currently has focus, not against this screen's own position in the tree, so
+  // they only work reliably while this screen is still the focused one — a plain
+  // replace() to this module's own first screen (the same mechanism confirmExit
+  // below and submitTest already use) is what abandonment falls back to. The tab
+  // bar deliberately doesn't navigate to the destination tab itself: doing that
+  // before this fixup runs races this same replace() call on the same router,
+  // and whichever one lands second wins the tab focus — so it hands the intended
+  // destination off via pendingDestinationRef instead, completed here once this
+  // screen's own stack is back to a clean state.
+  const seenResetRef = useRef(resetSignal.mock);
+
+  useEffect(() => {
+    if (resetSignal.mock !== seenResetRef.current) {
+      seenResetRef.current = resetSignal.mock;
+      router.replace("/mock-test");
+      const destination = pendingDestinationRef.current;
+      if (destination) {
+        pendingDestinationRef.current = null;
+        router.replace(destination);
+      }
+    }
+  }, [resetSignal.mock, router, pendingDestinationRef]);
 
   useEffect(() => {
     if (!paperId) return;
@@ -70,6 +97,7 @@ export default function MockTestTaking() {
         const qs = startMode === "local" ? await buildMockTestQuestions(loaded) : await buildMockTestQuestionsLive(loaded);
         const minutes = totalDurationMinutes(loaded);
         setQuestions(qs);
+        if (qs.length > 0) beginSession("mock");
         startedAtRef.current = Date.now();
         endTimeRef.current = Date.now() + minutes * 60 * 1000;
         setRemainingSeconds(minutes * 60);
@@ -77,7 +105,7 @@ export default function MockTestTaking() {
         console.warn("Failed to load mock test questions", err);
       }
     })();
-  }, [paperId]);
+  }, [paperId, beginSession]);
 
   const submitTest = useMemo(
     () => async (auto: boolean) => {
@@ -138,9 +166,10 @@ export default function MockTestTaking() {
         return;
       }
 
+      endSession();
       router.replace({ pathname: "/mock-test/result", params: { attemptId } });
     },
-    [questions, paper, answers, markedForReview, remainingSeconds, examLabel, paperName, router],
+    [questions, paper, answers, markedForReview, remainingSeconds, examLabel, paperName, router, endSession],
   );
 
   useEffect(() => {
@@ -210,7 +239,14 @@ export default function MockTestTaking() {
   const confirmExit = () => {
     Alert.alert("Exit without submitting?", "Your progress on this attempt will be lost.", [
       { text: "Keep going", style: "cancel" },
-      { text: "Exit", style: "destructive", onPress: () => router.replace("/mock-test") },
+      {
+        text: "Exit",
+        style: "destructive",
+        onPress: () => {
+          abandonSession();
+          router.replace("/mock-test");
+        },
+      },
     ]);
   };
 
@@ -224,8 +260,8 @@ export default function MockTestTaking() {
 
   if (questions === null || !question || !translation) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.emptyText}>Preparing your test…</Text>
+      <View style={[styles.centered, { paddingTop: spacing["3xl"], alignItems: "stretch" }]}>
+        <QuestionSkeleton />
       </View>
     );
   }
@@ -237,7 +273,7 @@ export default function MockTestTaking() {
           <Text style={styles.exitText}>Exit</Text>
         </Pressable>
         <View style={styles.timerBlock}>
-          <Ionicons name="time-outline" size={16} color={remainingSeconds < 300 ? "#c94f4f" : "#1a2b4a"} />
+          <Ionicons name="time-outline" size={16} color={remainingSeconds < 300 ? colors.semantic.error : colors.text.primary} />
           <Text style={[styles.timerText, remainingSeconds < 300 && styles.timerTextLow]}>
             {formatTime(remainingSeconds)}
           </Text>
@@ -252,19 +288,19 @@ export default function MockTestTaking() {
           Question {currentIndex + 1} of {total} · {question.subjectName}
         </Text>
         <Pressable style={styles.navigatorButton} onPress={() => setNavigatorVisible(true)}>
-          <Ionicons name="grid-outline" size={16} color="#1a2b4a" />
+          <Ionicons name="grid-outline" size={16} color={colors.text.primary} />
           <Text style={styles.navigatorButtonText}>{answeredCount}/{total}</Text>
         </Pressable>
       </View>
 
       <View style={styles.toolbarRow}>
         <Pressable style={styles.languageButton} onPress={() => setLanguagePickerVisible(true)}>
-          <Ionicons name="language-outline" size={14} color="#1a2b4a" />
+          <Ionicons name="language-outline" size={14} color={colors.text.primary} />
           <Text style={styles.languageButtonText}>{currentLanguageName}</Text>
-          <Ionicons name="chevron-down" size={12} color="#1a2b4a" />
+          <Ionicons name="chevron-down" size={12} color={colors.text.primary} />
         </Pressable>
         <Pressable style={styles.markButton} onPress={toggleMarkForReview}>
-          <Ionicons name={isMarked ? "bookmark" : "bookmark-outline"} size={16} color={isMarked ? "#c9861f" : "#8a94a6"} />
+          <Ionicons name={isMarked ? "bookmark" : "bookmark-outline"} size={16} color={isMarked ? colors.semantic.warning : colors.text.muted} />
           <Text style={[styles.markButtonText, isMarked && styles.markButtonTextActive]}>
             {isMarked ? "Marked" : "Mark for review"}
           </Text>
@@ -293,7 +329,7 @@ export default function MockTestTaking() {
                   </Text>
                 </View>
                 <Text style={styles.optionText}>{option}</Text>
-                {isSelected && <Ionicons name="checkmark-circle" size={20} color="#1a2b4a" />}
+                {isSelected && <Ionicons name="checkmark-circle" size={20} color={colors.text.primary} />}
               </Pressable>
             );
           })}
@@ -384,7 +420,7 @@ export default function MockTestTaking() {
 
       {submitting && (
         <View style={styles.submittingOverlay}>
-          <ActivityIndicator size="large" color="#ffffff" />
+          <ActivityIndicator size="large" color={colors.text.onAccent} />
           <Text style={styles.submittingText}>Submitting your test…</Text>
         </View>
       )}
@@ -405,7 +441,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: "#8a94a6",
+    color: colors.text.muted,
     textAlign: "center",
   },
   topBar: {
@@ -418,18 +454,18 @@ const styles = StyleSheet.create({
   exitText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#8a94a6",
+    color: colors.text.muted,
   },
   submitText: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#1a2b4a",
+    color: colors.text.primary,
   },
   timerBlock: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#eef1f8",
+    backgroundColor: colors.surfaceElevated2,
     borderRadius: 8,
     paddingVertical: 6,
     paddingHorizontal: 12,
@@ -437,10 +473,10 @@ const styles = StyleSheet.create({
   timerText: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#1a2b4a",
+    color: colors.text.primary,
   },
   timerTextLow: {
-    color: "#c94f4f",
+    color: colors.semantic.error,
   },
   metaRow: {
     flexDirection: "row",
@@ -451,13 +487,13 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontSize: 12,
-    color: "#8a94a6",
+    color: colors.text.muted,
   },
   navigatorButton: {
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    backgroundColor: "#eef1f8",
+    backgroundColor: colors.surfaceElevated2,
     borderRadius: 8,
     paddingVertical: 5,
     paddingHorizontal: 10,
@@ -465,7 +501,7 @@ const styles = StyleSheet.create({
   navigatorButtonText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#1a2b4a",
+    color: colors.text.primary,
   },
   toolbarRow: {
     flexDirection: "row",
@@ -478,7 +514,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    backgroundColor: "#f5f6f9",
+    backgroundColor: colors.surfaceElevated2,
     borderRadius: 8,
     paddingVertical: 6,
     paddingHorizontal: 10,
@@ -486,7 +522,7 @@ const styles = StyleSheet.create({
   languageButtonText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#1a2b4a",
+    color: colors.text.primary,
   },
   markButton: {
     flexDirection: "row",
@@ -498,10 +534,10 @@ const styles = StyleSheet.create({
   markButtonText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#8a94a6",
+    color: colors.text.muted,
   },
   markButtonTextActive: {
-    color: "#c9861f",
+    color: colors.semantic.warning,
   },
   container: {
     padding: 20,
@@ -510,14 +546,14 @@ const styles = StyleSheet.create({
   },
   fallbackNote: {
     fontSize: 12,
-    color: "#8a94a6",
+    color: colors.text.muted,
     fontStyle: "italic",
     marginBottom: 10,
   },
   questionText: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#1a2b4a",
+    color: colors.text.primary,
     lineHeight: 26,
     marginBottom: 20,
   },
@@ -528,39 +564,39 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: "#e2e6ee",
+    borderColor: colors.border,
     borderRadius: 12,
     padding: 14,
   },
   optionSelected: {
-    borderColor: "#1a2b4a",
-    backgroundColor: "#eef1f8",
+    borderColor: colors.brand.primary,
+    backgroundColor: colors.surfaceElevated2,
   },
   optionBadge: {
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: "#eef1f8",
+    backgroundColor: colors.surfaceElevated2,
     alignItems: "center",
     justifyContent: "center",
   },
   optionBadgeSelected: {
-    backgroundColor: "#1a2b4a",
+    backgroundColor: colors.brand.primary,
   },
   optionBadgeText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#1a2b4a",
+    color: colors.text.primary,
   },
   optionBadgeTextSelected: {
-    color: "#ffffff",
+    color: colors.text.onAccent,
   },
   optionText: {
     flex: 1,
     fontSize: 15,
-    color: "#1a2b4a",
+    color: colors.text.primary,
   },
   clearButton: {
     marginTop: 16,
@@ -569,7 +605,7 @@ const styles = StyleSheet.create({
   clearButtonText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#c94f4f",
+    color: colors.semantic.error,
   },
   footer: {
     flexDirection: "row",
@@ -577,18 +613,18 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: "#e2e6ee",
-    backgroundColor: "#ffffff",
+    borderTopColor: colors.border,
+    backgroundColor: colors.surfaceElevated,
   },
   navButton: {
     flex: 1,
     borderRadius: 12,
     paddingVertical: 15,
     alignItems: "center",
-    backgroundColor: "#eef1f8",
+    backgroundColor: colors.surfaceElevated2,
   },
   navButtonPrimary: {
-    backgroundColor: "#1a2b4a",
+    backgroundColor: colors.brand.primary,
   },
   navButtonDisabled: {
     opacity: 0.4,
@@ -596,23 +632,23 @@ const styles = StyleSheet.create({
   navButtonText: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#1a2b4a",
+    color: colors.text.primary,
   },
   navButtonTextDisabled: {
-    color: "#8a94a6",
+    color: colors.text.muted,
   },
   navButtonPrimaryText: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#ffffff",
+    color: colors.text.onAccent,
   },
   navigatorBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(20, 30, 50, 0.5)",
+    backgroundColor: "rgba(2, 3, 5, 0.7)",
     justifyContent: "flex-end",
   },
   navigatorCard: {
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.surfaceElevated,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
@@ -621,7 +657,7 @@ const styles = StyleSheet.create({
   navigatorTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#1a2b4a",
+    color: colors.text.primary,
     marginBottom: 14,
   },
   navigatorLegend: {
@@ -640,17 +676,17 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   legendAnswered: {
-    backgroundColor: "#1a2b4a",
+    backgroundColor: colors.brand.primary,
   },
   legendMarked: {
-    backgroundColor: "#c9861f",
+    backgroundColor: colors.semantic.warning,
   },
   legendUnanswered: {
-    backgroundColor: "#e2e6ee",
+    backgroundColor: colors.border,
   },
   legendText: {
     fontSize: 11,
-    color: "#5a6a85",
+    color: colors.text.secondary,
   },
   navigatorGridScroll: {
     maxHeight: 320,
@@ -666,30 +702,30 @@ const styles = StyleSheet.create({
     height: 42,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#e2e6ee",
-    backgroundColor: "#ffffff",
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceElevated,
     alignItems: "center",
     justifyContent: "center",
   },
   navigatorCellAnswered: {
-    backgroundColor: "#1a2b4a",
-    borderColor: "#1a2b4a",
+    backgroundColor: colors.brand.primary,
+    borderColor: colors.brand.primary,
   },
   navigatorCellMarked: {
-    backgroundColor: "#c9861f",
-    borderColor: "#c9861f",
+    backgroundColor: colors.semantic.warning,
+    borderColor: colors.semantic.warning,
   },
   navigatorCellCurrent: {
     borderWidth: 2,
-    borderColor: "#2f7fd5",
+    borderColor: colors.brand.light,
   },
   navigatorCellText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#1a2b4a",
+    color: colors.text.primary,
   },
   navigatorCellTextLight: {
-    color: "#ffffff",
+    color: colors.text.onAccent,
   },
   submittingOverlay: {
     position: "absolute",
@@ -697,7 +733,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(20, 30, 50, 0.85)",
+    backgroundColor: "rgba(2, 3, 5, 0.88)",
     alignItems: "center",
     justifyContent: "center",
     gap: 14,
@@ -705,6 +741,6 @@ const styles = StyleSheet.create({
   submittingText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#ffffff",
+    color: colors.text.onAccent,
   },
 });

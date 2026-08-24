@@ -6,14 +6,15 @@ import { db } from "../db/client";
 import migrations from "../db/migrations/migrations";
 import { SyncProvider } from "../sync/SyncContext";
 import { NetworkStatusProvider } from "../sync/NetworkStatusContext";
-import { SyncBanner } from "../sync/SyncBanner";
 import { OfflineBanner } from "../sync/OfflineBanner";
 import { SessionHistoryProvider } from "../practice/sessionHistory";
 import { BookmarksProvider } from "../practice/bookmarks";
 import { AppLanguageProvider } from "../practice/appLanguage";
 import { AuthProvider } from "../practice/authContext";
+import { ActiveSessionProvider } from "../practice/activeSessionContext";
 import { STACK_SCREEN_OPTIONS } from "../ui/navigation";
 import { useScreenViewTracking } from "../telemetry/analytics";
+import { colors } from "../ui/theme";
 
 // Module scope, before anything renders — including the migration-loading/error
 // screens below, which happen before any provider mounts. If EXPO_PUBLIC_SENTRY_DSN
@@ -29,16 +30,16 @@ function RootLayout() {
 
   if (error) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 20 }}>
-        <Text>Database migration failed: {error.message}</Text>
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 20, backgroundColor: colors.bg }}>
+        <Text style={{ color: colors.text.primary }}>Database migration failed: {error.message}</Text>
       </View>
     );
   }
 
   if (!success) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <Text>Setting up local database...</Text>
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.bg }}>
+        <Text style={{ color: colors.text.secondary }}>Setting up local database...</Text>
       </View>
     );
   }
@@ -52,7 +53,11 @@ function RootLayout() {
           <SessionHistoryProvider>
             <BookmarksProvider>
               <AppLanguageProvider>
-                <RootNavigator />
+                {/* Innermost: only the tab bar and the quiz/test screens need this, and
+                    neither depends on sync/auth/session-history state. */}
+                <ActiveSessionProvider>
+                  <RootNavigator />
+                </ActiveSessionProvider>
               </AppLanguageProvider>
             </BookmarksProvider>
           </SessionHistoryProvider>
@@ -73,7 +78,6 @@ function RootNavigator() {
         <Stack.Screen name="account" options={{ title: "Your account" }} />
       </Stack>
       <OfflineBanner />
-      <SyncBanner />
     </>
   );
 }

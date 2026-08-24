@@ -1,4 +1,5 @@
 import { DURATION } from "./motion";
+import { colors } from "./theme";
 
 /**
  * Shared stack transition options.
@@ -16,4 +17,15 @@ export const STACK_SCREEN_OPTIONS = {
   // Faster than the platform default. These transitions are crossed dozens of times in a
   // study session, and anything leisurely becomes an irritation rather than a delight.
   animationDuration: DURATION.base,
+  // React Navigation's native header defaults to a light bar — without this every
+  // Stack header (Practice/Mock Test's own tab header, every drill-down screen,
+  // Revise/Account pushed from the root Stack) would stay light against a dark app.
+  headerStyle: { backgroundColor: colors.surface },
+  headerTitleStyle: { color: colors.text.primary },
+  headerTintColor: colors.brand.light,
+  headerShadowVisible: false,
+  // Every screen's actual background otherwise falls back to the OS default (light
+  // gray/white) — cards and text can be perfectly dark-themed and the page still reads
+  // as broken if this isn't set, since nothing else paints the space around them.
+  contentStyle: { backgroundColor: colors.bg },
 } as const;

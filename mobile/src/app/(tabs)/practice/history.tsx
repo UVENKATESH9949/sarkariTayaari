@@ -2,6 +2,9 @@ import { Stack } from "expo-router";
 import { ScrollView, Text, View, StyleSheet } from "react-native";
 import { useSessionHistory } from "../../../practice/sessionHistory";
 import type { SessionRecord } from "../../../practice/sessionHistory";
+import { Card } from "../../../ui/Card";
+import { EmptyState } from "../../../ui/EmptyState";
+import { colors, radius, spacing } from "../../../ui/theme";
 
 function formatRelativeTime(timestampMs: number, nowMs: number): string {
   const diffMinutes = Math.floor((nowMs - timestampMs) / (1000 * 60));
@@ -15,9 +18,9 @@ function formatRelativeTime(timestampMs: number, nowMs: number): string {
 }
 
 function scoreColor(accuracyPercent: number): string {
-  if (accuracyPercent >= 70) return "#2f9e64";
-  if (accuracyPercent >= 40) return "#c9861f";
-  return "#c94f4f";
+  if (accuracyPercent >= 70) return colors.semantic.success;
+  if (accuracyPercent >= 40) return colors.semantic.warning;
+  return colors.semantic.error;
 }
 
 function SessionRow({ session, nowMs }: { session: SessionRecord; nowMs: number }) {
@@ -25,7 +28,7 @@ function SessionRow({ session, nowMs }: { session: SessionRecord; nowMs: number 
   const color = scoreColor(accuracyPercent);
 
   return (
-    <View style={styles.row}>
+    <Card style={styles.row}>
       <View style={[styles.scoreBadge, { backgroundColor: color }]}>
         <Text style={styles.scoreBadgeText}>
           {session.correctCount}/{session.totalCount}
@@ -44,7 +47,7 @@ function SessionRow({ session, nowMs }: { session: SessionRecord; nowMs: number 
             {session.results.map((r) => (
               <View
                 key={r.questionId}
-                style={[styles.dot, { backgroundColor: r.isCorrect ? "#2f9e64" : "#c94f4f" }]}
+                style={[styles.dot, { backgroundColor: r.isCorrect ? colors.semantic.success : colors.semantic.error }]}
               />
             ))}
           </View>
@@ -52,7 +55,7 @@ function SessionRow({ session, nowMs }: { session: SessionRecord; nowMs: number 
       </View>
 
       <Text style={styles.rowTime}>{formatRelativeTime(session.completedAt, nowMs)}</Text>
-    </View>
+    </Card>
   );
 }
 
@@ -65,7 +68,11 @@ export default function History() {
       <Stack.Screen options={{ title: "Session History" }} />
       <ScrollView contentContainerStyle={styles.container}>
         {sessions.length === 0 ? (
-          <Text style={styles.emptyText}>No practice sessions yet — finish a quiz to see it here.</Text>
+          <EmptyState
+            icon="time-outline"
+            title="No practice sessions yet"
+            body="Finish a quiz to see it here."
+          />
         ) : (
           <View style={styles.list}>
             {sessions.map((session) => (
@@ -81,38 +88,27 @@ export default function History() {
 
 const styles = StyleSheet.create({
   container: {
-    padding: 20,
-    paddingTop: 20,
-    paddingBottom: 40,
-  },
-  emptyText: {
-    marginTop: 40,
-    textAlign: "center",
-    fontSize: 14,
-    color: "#8a94a6",
+    padding: spacing.xl,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing["3xl"],
   },
   list: {
-    gap: 12,
+    gap: spacing.md,
   },
   row: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#e2e6ee",
-    borderRadius: 12,
-    padding: 14,
+    gap: spacing.md,
   },
   scoreBadge: {
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    borderRadius: radius.sm + 2,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md - 2,
     minWidth: 50,
     alignItems: "center",
   },
   scoreBadgeText: {
-    color: "#ffffff",
+    color: colors.text.onAccent,
     fontSize: 13,
     fontWeight: "700",
   },
@@ -122,17 +118,17 @@ const styles = StyleSheet.create({
   rowTitle: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#1a2b4a",
+    color: colors.text.primary,
   },
   rowSubtitle: {
     marginTop: 2,
     fontSize: 12,
-    color: "#8a94a6",
+    color: colors.text.muted,
   },
   dotsRow: {
     flexDirection: "row",
     gap: 4,
-    marginTop: 6,
+    marginTop: spacing.xs + 2,
   },
   dot: {
     width: 7,
@@ -141,13 +137,13 @@ const styles = StyleSheet.create({
   },
   rowTime: {
     fontSize: 11,
-    color: "#a7afc0",
+    color: colors.text.muted,
     alignSelf: "flex-start",
   },
   footerNote: {
-    marginTop: 20,
+    marginTop: spacing.xl,
     textAlign: "center",
     fontSize: 12,
-    color: "#a7afc0",
+    color: colors.text.muted,
   },
 });

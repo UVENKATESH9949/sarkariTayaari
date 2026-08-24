@@ -5,11 +5,14 @@ import { Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
 import { getMockTestAttempt, type MockTestAttemptRecord } from "../../../db/mockTest";
 import { toSubjectMeta } from "../../../constants/subjects";
 import { getAllSubjects, type SubjectMetaRow } from "../../../db/subjectMeta";
+import { Button } from "../../../ui/Button";
+import { CardSkeleton } from "../../../ui/Skeleton";
+import { colors, spacing } from "../../../ui/theme";
 
-function scoreColor(percent: number): { text: string; bg: string } {
-  if (percent >= 70) return { text: "#2f9e64", bg: "#e8f7f0" };
-  if (percent >= 40) return { text: "#c9861f", bg: "#fdf3e2" };
-  return { text: "#c94f4f", bg: "#fdecec" };
+function scoreTone(percent: number): { text: string; bg: string } {
+  if (percent >= 70) return { text: colors.semantic.success, bg: colors.semantic.successBg };
+  if (percent >= 40) return { text: colors.semantic.warning, bg: colors.semantic.warningBg };
+  return { text: colors.semantic.error, bg: colors.semantic.errorBg };
 }
 
 function formatDuration(totalSeconds: number): string {
@@ -50,42 +53,47 @@ export default function MockTestResult() {
 
   if (!attempt) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.emptyText}>Loading result…</Text>
+      <View style={styles.container}>
+        <CardSkeleton height={110} />
+        <View style={[styles.statRow, { marginTop: spacing.base }]}>
+          <CardSkeleton height={72} />
+          <CardSkeleton height={72} />
+          <CardSkeleton height={72} />
+        </View>
       </View>
     );
   }
 
   const maxMarks = attempt.totalQuestions * attempt.marksCorrect;
   const scorePercent = maxMarks > 0 ? Math.round((attempt.totalMarksScored / maxMarks) * 100) : 0;
-  const colors = scoreColor(scorePercent);
+  const tone = scoreTone(scorePercent);
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <View style={[styles.scoreCard, { backgroundColor: colors.bg }]}>
-        <Text style={[styles.scoreValue, { color: colors.text }]}>
+      <View style={[styles.scoreCard, { backgroundColor: tone.bg }]}>
+        <Text style={[styles.scoreValue, { color: tone.text }]}>
           {attempt.totalMarksScored} / {maxMarks}
         </Text>
-        <Text style={[styles.scoreLabel, { color: colors.text }]}>marks scored</Text>
+        <Text style={[styles.scoreLabel, { color: tone.text }]}>marks scored</Text>
       </View>
 
       <View style={styles.statRow}>
         <View style={styles.statCard}>
-          <Text style={[styles.statValue, { color: "#2f9e64" }]}>{attempt.correctCount}</Text>
+          <Text style={[styles.statValue, { color: colors.semantic.success }]}>{attempt.correctCount}</Text>
           <Text style={styles.statLabel}>Correct</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={[styles.statValue, { color: "#c94f4f" }]}>{attempt.wrongCount}</Text>
+          <Text style={[styles.statValue, { color: colors.semantic.error }]}>{attempt.wrongCount}</Text>
           <Text style={styles.statLabel}>Wrong</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={[styles.statValue, { color: "#8a94a6" }]}>{attempt.unattemptedCount}</Text>
+          <Text style={[styles.statValue, { color: colors.text.muted }]}>{attempt.unattemptedCount}</Text>
           <Text style={styles.statLabel}>Unattempted</Text>
         </View>
       </View>
 
       <View style={styles.timeRow}>
-        <Ionicons name="time-outline" size={16} color="#8a94a6" />
+        <Ionicons name="time-outline" size={16} color={colors.text.muted} />
         <Text style={styles.timeText}>
           {formatDuration(attempt.timeTakenSeconds)} of {formatDuration(attempt.durationSeconds)} used
         </Text>
@@ -134,14 +142,14 @@ export default function MockTestResult() {
                           : "remove-circle-outline"
                     }
                     size={18}
-                    color={status === "correct" ? "#2f9e64" : status === "wrong" ? "#c94f4f" : "#8a94a6"}
+                    color={status === "correct" ? colors.semantic.success : status === "wrong" ? colors.semantic.error : colors.text.muted}
                   />
                   <Text style={styles.cardTag}>
                     {index + 1}. {r.subjectName}
                   </Text>
-                  {r.markedForReview && <Ionicons name="bookmark" size={14} color="#c9861f" />}
+                  {r.markedForReview && <Ionicons name="bookmark" size={14} color={colors.semantic.warning} />}
                 </View>
-                <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={18} color="#8a94a6" />
+                <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={18} color={colors.text.muted} />
               </View>
               <Text style={styles.cardQuestion} numberOfLines={isExpanded ? undefined : 2}>
                 {r.questionText}
@@ -163,8 +171,8 @@ export default function MockTestResult() {
                           ]}
                         >
                           <Text style={styles.optionText}>{option}</Text>
-                          {isCorrect && <Ionicons name="checkmark-circle" size={18} color="#2f9e64" />}
-                          {isPickedWrong && <Ionicons name="close-circle" size={18} color="#c94f4f" />}
+                          {isCorrect && <Ionicons name="checkmark-circle" size={18} color={colors.semantic.success} />}
+                          {isPickedWrong && <Ionicons name="close-circle" size={18} color={colors.semantic.error} />}
                         </View>
                       );
                     })}
@@ -180,9 +188,9 @@ export default function MockTestResult() {
         })}
       </View>
 
-      <Pressable style={styles.backButton} onPress={() => router.replace("/mock-test")}>
-        <Text style={styles.backButtonText}>Back to Mock Test</Text>
-      </Pressable>
+      <Button size="lg" onPress={() => router.replace("/mock-test")}>
+        Back to Mock Test
+      </Button>
     </ScrollView>
   );
 }
@@ -192,16 +200,6 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingTop: 24,
     paddingBottom: 40,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 32,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: "#8a94a6",
   },
   scoreCard: {
     borderRadius: 16,
@@ -224,7 +222,7 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: "#f5f6f9",
+    backgroundColor: colors.surfaceElevated2,
     borderRadius: 12,
     padding: 14,
     alignItems: "center",
@@ -235,7 +233,7 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: 11,
-    color: "#8a94a6",
+    color: colors.text.muted,
     marginTop: 2,
   },
   timeRow: {
@@ -247,12 +245,12 @@ const styles = StyleSheet.create({
   },
   timeText: {
     fontSize: 12,
-    color: "#8a94a6",
+    color: colors.text.muted,
   },
   sectionHeading: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#8a94a6",
+    color: colors.text.muted,
     textTransform: "uppercase",
     letterSpacing: 0.5,
     marginBottom: 10,
@@ -265,9 +263,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: "#e2e6ee",
+    borderColor: colors.border,
     borderRadius: 12,
     padding: 12,
   },
@@ -282,20 +280,20 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontWeight: "600",
-    color: "#1a2b4a",
+    color: colors.text.primary,
   },
   sectionStats: {
     fontSize: 12,
-    color: "#5a6a85",
+    color: colors.text.secondary,
   },
   list: {
     gap: 12,
     marginBottom: 24,
   },
   card: {
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: "#e2e6ee",
+    borderColor: colors.border,
     borderRadius: 14,
     padding: 16,
   },
@@ -314,11 +312,11 @@ const styles = StyleSheet.create({
   cardTag: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#5a6a85",
+    color: colors.text.secondary,
   },
   cardQuestion: {
     fontSize: 15,
-    color: "#1a2b4a",
+    color: colors.text.primary,
     lineHeight: 21,
   },
   expandedContent: {
@@ -332,51 +330,40 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#e2e6ee",
+    borderColor: colors.border,
     borderRadius: 10,
     padding: 11,
   },
   optionCorrect: {
-    borderColor: "#2f9e64",
-    backgroundColor: "#e8f7f0",
+    borderColor: colors.semantic.success,
+    backgroundColor: colors.semantic.successBg,
   },
   optionWrong: {
-    borderColor: "#c94f4f",
-    backgroundColor: "#fdecec",
+    borderColor: colors.semantic.error,
+    backgroundColor: colors.semantic.errorBg,
   },
   optionText: {
     fontSize: 13,
-    color: "#1a2b4a",
+    color: colors.text.primary,
     flex: 1,
   },
   explanationBox: {
     marginTop: 12,
-    backgroundColor: "#eef1f8",
+    backgroundColor: colors.surfaceElevated2,
     borderRadius: 10,
     padding: 12,
   },
   explanationLabel: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#5a6a85",
+    color: colors.text.secondary,
     textTransform: "uppercase",
     letterSpacing: 0.5,
     marginBottom: 4,
   },
   explanationText: {
     fontSize: 13,
-    color: "#1a2b4a",
+    color: colors.text.primary,
     lineHeight: 19,
-  },
-  backButton: {
-    backgroundColor: "#1a2b4a",
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: "center",
-  },
-  backButtonText: {
-    color: "#ffffff",
-    fontSize: 15,
-    fontWeight: "600",
   },
 });

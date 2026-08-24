@@ -5,6 +5,9 @@ import { Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
 import { useBookmarks } from "../practice/bookmarks";
 import { useSessionHistory } from "../practice/sessionHistory";
 import { getWrongAnswers, type WrongAnswerItem } from "../practice/wrongAnswers";
+import { Card } from "../ui/Card";
+import { EmptyState } from "../ui/EmptyState";
+import { colors, radius, spacing } from "../ui/theme";
 
 type ReviseTab = "bookmarks" | "wrong";
 type ReviseItem = WrongAnswerItem;
@@ -58,36 +61,26 @@ export default function Revise() {
 
         <ScrollView contentContainerStyle={styles.list}>
           {items.length === 0 && (
-            <View style={styles.emptyState}>
-              <Ionicons
-                name={activeTab === "bookmarks" ? "star-outline" : "checkmark-done-circle-outline"}
-                size={40}
-                color="#c7cee0"
-              />
-              <Text style={styles.emptyTitle}>
-                {activeTab === "bookmarks" ? "No bookmarks yet" : "No wrong answers yet"}
-              </Text>
-              <Text style={styles.emptyText}>
-                {activeTab === "bookmarks"
+            <EmptyState
+              icon={activeTab === "bookmarks" ? "star-outline" : "checkmark-done-circle-outline"}
+              title={activeTab === "bookmarks" ? "No bookmarks yet" : "No wrong answers yet"}
+              body={
+                activeTab === "bookmarks"
                   ? "Tap the star icon while practicing to save a question here for later revision."
-                  : "Great job so far — questions you get wrong during practice will show up here for revision."}
-              </Text>
-            </View>
+                  : "Great job so far — questions you get wrong during practice will show up here for revision."
+              }
+            />
           )}
 
           {items.map((item) => {
             const isExpanded = expandedId === item.id;
             return (
-              <Pressable
-                key={item.id}
-                style={styles.card}
-                onPress={() => setExpandedId(isExpanded ? null : item.id)}
-              >
+              <Card key={item.id} onPress={() => setExpandedId(isExpanded ? null : item.id)}>
                 <View style={styles.cardHeader}>
                   <Text style={styles.cardTag}>
                     {item.subjectName} · {item.topicName}
                   </Text>
-                  <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={18} color="#8a94a6" />
+                  <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={18} color={colors.text.muted} />
                 </View>
                 <Text style={styles.cardQuestion} numberOfLines={isExpanded ? undefined : 2}>
                   {item.questionText}
@@ -109,8 +102,8 @@ export default function Revise() {
                             ]}
                           >
                             <Text style={styles.optionText}>{option}</Text>
-                            {isCorrect && <Ionicons name="checkmark-circle" size={18} color="#2f9e64" />}
-                            {isPickedWrong && <Ionicons name="close-circle" size={18} color="#c94f4f" />}
+                            {isCorrect && <Ionicons name="checkmark-circle" size={18} color={colors.semantic.success} />}
+                            {isPickedWrong && <Ionicons name="close-circle" size={18} color={colors.semantic.error} />}
                           </View>
                         );
                       })}
@@ -128,13 +121,13 @@ export default function Revise() {
                           setExpandedId(null);
                         }}
                       >
-                        <Ionicons name="star" size={16} color="#e8a63c" />
+                        <Ionicons name="star" size={16} color={colors.semantic.warning} />
                         <Text style={styles.removeButtonText}>Remove bookmark</Text>
                       </Pressable>
                     )}
                   </View>
                 )}
-              </Pressable>
+              </Card>
             );
           })}
         </ScrollView>
@@ -148,24 +141,24 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 16,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.base,
+    paddingBottom: spacing.base,
   },
   segmentedControl: {
     flexDirection: "row",
-    backgroundColor: "#f5f6f9",
-    borderRadius: 10,
-    padding: 4,
+    backgroundColor: colors.surfaceElevated2,
+    borderRadius: radius.sm + 2,
+    padding: spacing.xs,
   },
   segment: {
     flex: 1,
-    paddingVertical: 9,
-    borderRadius: 8,
+    paddingVertical: spacing.sm + 1,
+    borderRadius: radius.sm,
     alignItems: "center",
   },
   segmentActive: {
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.surfaceElevated2,
     shadowColor: "#000",
     shadowOpacity: 0.06,
     shadowRadius: 4,
@@ -174,114 +167,90 @@ const styles = StyleSheet.create({
   segmentText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#8a94a6",
+    color: colors.text.muted,
   },
   segmentTextActive: {
-    color: "#1a2b4a",
+    color: colors.text.primary,
   },
   list: {
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-    gap: 12,
-  },
-  emptyState: {
-    alignItems: "center",
-    paddingTop: 60,
-    paddingHorizontal: 20,
-    gap: 10,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#1a2b4a",
-  },
-  emptyText: {
-    fontSize: 13,
-    color: "#8a94a6",
-    textAlign: "center",
-    lineHeight: 19,
-  },
-  card: {
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#e2e6ee",
-    borderRadius: 14,
-    padding: 16,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing["3xl"],
+    gap: spacing.md,
   },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   cardTag: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#5a6a85",
+    color: colors.text.secondary,
   },
   cardQuestion: {
     fontSize: 15,
-    color: "#1a2b4a",
+    color: colors.text.primary,
     lineHeight: 21,
   },
   expandedContent: {
-    marginTop: 14,
+    marginTop: spacing.md + 2,
   },
   optionsList: {
-    gap: 8,
+    gap: spacing.sm,
   },
   optionRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#e2e6ee",
-    borderRadius: 10,
-    padding: 11,
+    borderColor: colors.border,
+    borderRadius: radius.sm + 2,
+    padding: spacing.md - 1,
   },
   optionCorrect: {
-    borderColor: "#2f9e64",
-    backgroundColor: "#e8f7f0",
+    borderColor: colors.semantic.success,
+    backgroundColor: colors.semantic.successBg,
   },
   optionWrong: {
-    borderColor: "#c94f4f",
-    backgroundColor: "#fdecec",
+    borderColor: colors.semantic.error,
+    backgroundColor: colors.semantic.errorBg,
   },
   optionText: {
     fontSize: 13,
-    color: "#1a2b4a",
+    color: colors.text.primary,
     flex: 1,
   },
   explanationBox: {
-    marginTop: 12,
-    backgroundColor: "#eef1f8",
-    borderRadius: 10,
-    padding: 12,
+    marginTop: spacing.md,
+    backgroundColor: colors.surfaceElevated2,
+    borderRadius: radius.sm + 2,
+    padding: spacing.md,
   },
   explanationLabel: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#5a6a85",
+    color: colors.text.secondary,
     textTransform: "uppercase",
     letterSpacing: 0.5,
-    marginBottom: 4,
+    marginBottom: spacing.xs,
   },
   explanationText: {
     fontSize: 13,
-    color: "#1a2b4a",
+    color: colors.text.primary,
     lineHeight: 19,
   },
   removeButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    marginTop: 12,
-    paddingVertical: 10,
+    gap: spacing.sm - 2,
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm + 2,
   },
   removeButtonText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#c94f4f",
+    color: colors.semantic.error,
   },
 });

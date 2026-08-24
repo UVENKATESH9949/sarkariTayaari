@@ -15,6 +15,9 @@ import {
 } from "react-native";
 import { useAuth } from "../practice/authContext";
 import { useNetworkStatus } from "../sync/NetworkStatusContext";
+import { Button } from "../ui/Button";
+import { CardSkeleton } from "../ui/Skeleton";
+import { colors, radius, spacing } from "../ui/theme";
 
 /**
  * Sign in / sign up, and the signed-in account view.
@@ -36,8 +39,8 @@ export default function Account() {
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator />
+      <View style={styles.container}>
+        <CardSkeleton height={140} />
       </View>
     );
   }
@@ -71,7 +74,7 @@ export default function Account() {
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.card}>
           <View style={styles.avatar}>
-            <Ionicons name="person" size={26} color="#ffffff" />
+            <Ionicons name="person" size={26} color={colors.text.onAccent} />
           </View>
           <Text style={styles.name}>{user.displayName || "Signed in"}</Text>
           <Text style={styles.email}>{user.email}</Text>
@@ -80,12 +83,12 @@ export default function Account() {
         <View style={styles.statusRow}>
           {syncing ? (
             <>
-              <ActivityIndicator size="small" />
+              <ActivityIndicator size="small" color={colors.brand.primary} />
               <Text style={styles.statusText}>Saving your progress…</Text>
             </>
           ) : (
             <>
-              <Ionicons name="checkmark-circle" size={18} color="#2f9e64" />
+              <Ionicons name="checkmark-circle" size={18} color={colors.semantic.success} />
               <Text style={styles.statusText}>Progress is backed up to your account</Text>
             </>
           )}
@@ -96,13 +99,9 @@ export default function Account() {
           phone, sign in on a new one and your history comes back.
         </Text>
 
-        <Pressable
-          disabled={busy}
-          onPress={handleSignOut}
-          style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
-        >
-          <Text style={styles.secondaryButtonText}>{busy ? "Signing out…" : "Sign out"}</Text>
-        </Pressable>
+        <Button variant="danger" size="lg" disabled={busy} onPress={handleSignOut} style={styles.secondaryButton}>
+          {busy ? "Signing out…" : "Sign out"}
+        </Button>
       </ScrollView>
     );
   }
@@ -189,15 +188,9 @@ export default function Account() {
           />
         </View>
 
-        <Pressable
-          disabled={busy}
-          onPress={submit}
-          style={({ pressed }) => [styles.primaryButton, busy && styles.disabled, pressed && !busy && styles.pressed]}
-        >
-          <Text style={styles.primaryButtonText}>
-            {busy ? "Please wait…" : mode === "signup" ? "Create account" : "Sign in"}
-          </Text>
-        </Pressable>
+        <Button size="lg" disabled={busy} loading={busy} onPress={submit} style={styles.primaryButton}>
+          {mode === "signup" ? "Create account" : "Sign in"}
+        </Button>
 
         <Pressable onPress={() => { setMode(mode === "signup" ? "signin" : "signup"); setError(null); }}>
           <Text style={styles.switchText}>
@@ -214,43 +207,32 @@ export default function Account() {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 20, paddingTop: 24, paddingBottom: 40 },
-  centered: { flex: 1, alignItems: "center", justifyContent: "center" },
-  heading: { fontSize: 22, fontWeight: "700", color: "#1a2b4a" },
-  subheading: { marginTop: 6, marginBottom: 24, fontSize: 13.5, color: "#8a94a6", lineHeight: 19 },
-  field: { marginBottom: 16 },
-  label: { fontSize: 12.5, fontWeight: "600", color: "#5a6a85", marginBottom: 6 },
+  container: { padding: spacing.xl, paddingTop: spacing.xl, paddingBottom: spacing["3xl"] },
+  heading: { fontSize: 22, fontWeight: "700", color: colors.text.primary },
+  subheading: { marginTop: spacing.sm - 2, marginBottom: spacing.xl, fontSize: 13.5, color: colors.text.muted, lineHeight: 19 },
+  field: { marginBottom: spacing.base },
+  label: { fontSize: 12.5, fontWeight: "600", color: colors.text.secondary, marginBottom: spacing.sm - 2 },
   input: {
-    borderWidth: 1, borderColor: "#e3e8f0", borderRadius: 10, paddingHorizontal: 14,
-    paddingVertical: 12, fontSize: 15, backgroundColor: "#ffffff", color: "#1a2b4a",
+    borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.md + 2,
+    paddingVertical: spacing.md, fontSize: 15, backgroundColor: colors.surfaceElevated, color: colors.text.primary,
   },
-  primaryButton: {
-    backgroundColor: "#208AEF", borderRadius: 12, paddingVertical: 15,
-    alignItems: "center", marginTop: 8,
-  },
-  primaryButtonText: { color: "#ffffff", fontSize: 15, fontWeight: "700" },
-  secondaryButton: {
-    borderWidth: 1, borderColor: "#e3e8f0", borderRadius: 12, paddingVertical: 14,
-    alignItems: "center", marginTop: 24,
-  },
-  secondaryButtonText: { color: "#c94f4f", fontSize: 15, fontWeight: "600" },
-  disabled: { opacity: 0.6 },
-  pressed: { opacity: 0.85 },
-  switchText: { marginTop: 18, textAlign: "center", color: "#208AEF", fontSize: 14, fontWeight: "600" },
-  footnote: { marginTop: 22, textAlign: "center", color: "#8a94a6", fontSize: 12.5, lineHeight: 18 },
-  errorBox: { backgroundColor: "#fdecec", borderRadius: 10, padding: 12, marginBottom: 16 },
-  errorText: { color: "#c94f4f", fontSize: 13.5 },
-  card: { alignItems: "center", paddingVertical: 24 },
+  primaryButton: { marginTop: spacing.sm },
+  secondaryButton: { marginTop: spacing["2xl"] },
+  switchText: { marginTop: spacing.lg - 2, textAlign: "center", color: colors.brand.primary, fontSize: 14, fontWeight: "600" },
+  footnote: { marginTop: spacing.xl + 2, textAlign: "center", color: colors.text.muted, fontSize: 12.5, lineHeight: 18 },
+  errorBox: { backgroundColor: colors.semantic.errorBg, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.base },
+  errorText: { color: colors.semantic.error, fontSize: 13.5 },
+  card: { alignItems: "center", paddingVertical: spacing.xl },
   avatar: {
-    width: 64, height: 64, borderRadius: 32, backgroundColor: "#208AEF",
-    alignItems: "center", justifyContent: "center", marginBottom: 14,
+    width: 64, height: 64, borderRadius: 32, backgroundColor: colors.brand.primary,
+    alignItems: "center", justifyContent: "center", marginBottom: spacing.md + 2,
   },
-  name: { fontSize: 18, fontWeight: "700", color: "#1a2b4a" },
-  email: { fontSize: 13.5, color: "#8a94a6", marginTop: 4 },
+  name: { fontSize: 18, fontWeight: "700", color: colors.text.primary },
+  email: { fontSize: 13.5, color: colors.text.muted, marginTop: spacing.xs },
   statusRow: {
-    flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#f5f7fb",
-    borderRadius: 10, padding: 14,
+    flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.surfaceElevated2,
+    borderRadius: radius.md, padding: spacing.md + 2,
   },
-  statusText: { fontSize: 13.5, color: "#5a6a85", flex: 1 },
-  explainer: { marginTop: 16, fontSize: 13, color: "#8a94a6", lineHeight: 19 },
+  statusText: { fontSize: 13.5, color: colors.text.secondary, flex: 1 },
+  explainer: { marginTop: spacing.base, fontSize: 13, color: colors.text.muted, lineHeight: 19 },
 });

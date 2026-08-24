@@ -5,9 +5,11 @@ import { Pressable, ScrollView, Text, TextInput, View, StyleSheet } from "react-
 import { getSyncedExams, type ExamOption } from "../../../data/practiceData";
 import { useHybridMode } from "../../../data/hybridSource";
 import { useSyncStatus } from "../../../sync/SyncContext";
-import { PressableScale } from "../../../ui/PressableScale";
 import { FadeInItem } from "../../../ui/FadeInList";
 import { OfflineNoDataNotice } from "../../../ui/OfflineNoDataNotice";
+import { Card } from "../../../ui/Card";
+import { EmptyState } from "../../../ui/EmptyState";
+import { colors, radius, spacing, typography } from "../../../ui/theme";
 
 // Every exam here is real, locally-synced data — no hardcoded "coming soon" exams.
 // Adding a new exam on the backend makes it appear here automatically on next sync.
@@ -39,11 +41,11 @@ export default function Practice() {
   return (
     <View style={styles.screen}>
       <View style={styles.searchBar}>
-        <Ionicons name="search" size={18} color="#8a94a6" />
+        <Ionicons name="search" size={18} color={colors.text.muted} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search exams..."
-          placeholderTextColor="#8a94a6"
+          placeholderTextColor={colors.text.muted}
           value={search}
           onChangeText={setSearch}
           autoCapitalize="none"
@@ -52,7 +54,7 @@ export default function Practice() {
         />
         {searching && (
           <Pressable onPress={() => setSearch("")} hitSlop={10}>
-            <Ionicons name="close-circle" size={18} color="#c3cadb" />
+            <Ionicons name="close-circle" size={18} color={colors.text.muted} />
           </Pressable>
         )}
       </View>
@@ -62,24 +64,25 @@ export default function Practice() {
             told us what they are looking for. */}
         {!searching && (
           <>
-            <Text style={styles.sectionLabel}>Recommended</Text>
-            <PressableScale
-              style={styles.allExamsCard}
+            <Text style={typography.label}>Recommended</Text>
+            <Card
+              variant="filled"
               onPress={() => openSubjects("ALL", "All Government Exams")}
+              style={styles.allExamsCard}
             >
               <View style={[styles.iconCircle, styles.allExamsIconCircle]}>
-                <Ionicons name="earth" size={26} color="#ffffff" />
+                <Ionicons name="earth" size={26} color={colors.text.onAccent} />
               </View>
               <View style={styles.allExamsTextBlock}>
                 <Text style={styles.allExamsTitle}>All Government Exams</Text>
                 <Text style={styles.allExamsSubtitle}>Common Quant, Reasoning, English & GA content</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color="#c3cadb" />
-            </PressableScale>
+              <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.6)" />
+            </Card>
           </>
         )}
 
-        <Text style={styles.sectionLabel}>
+        <Text style={[typography.label, styles.sectionLabel]}>
           {searching ? `${filteredExams.length} result${filteredExams.length === 1 ? "" : "s"}` : "Browse by exam"}
         </Text>
         {/*
@@ -92,9 +95,9 @@ export default function Practice() {
         <View style={styles.list}>
           {filteredExams.map((exam, index) => (
             <FadeInItem key={exam.code} index={index}>
-              <PressableScale onPress={() => openSubjects(exam.code, exam.name)} style={styles.examCard}>
+              <Card onPress={() => openSubjects(exam.code, exam.name)} style={styles.examCard}>
                 <View style={styles.iconCircle}>
-                  <Ionicons name="document-text-outline" size={22} color="#1a2b4a" />
+                  <Ionicons name="document-text-outline" size={22} color={colors.brand.primary} />
                 </View>
                 <View style={styles.examTextBlock}>
                   <Text style={styles.examLabel} numberOfLines={2}>
@@ -106,19 +109,19 @@ export default function Practice() {
                       : `${exam.questionCount.toLocaleString()} question${exam.questionCount === 1 ? "" : "s"}`}
                   </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color="#c3cadb" />
-              </PressableScale>
+                <Ionicons name="chevron-forward" size={18} color={colors.text.muted} />
+              </Card>
             </FadeInItem>
           ))}
           {/* Two different empty states: nothing synced yet is a content gap, while a
               search that found nothing is a dead end the user can back out of. */}
           {filteredExams.length === 0 && mode === "unavailable" && <OfflineNoDataNotice />}
           {filteredExams.length === 0 && mode !== "unavailable" && (
-            <Text style={styles.emptyText}>
-              {searching
-                ? `No exams match "${search.trim()}"`
-                : "More exams are added as they're synced."}
-            </Text>
+            <EmptyState
+              icon={searching ? "search-outline" : "document-text-outline"}
+              title={searching ? `No exams match "${search.trim()}"` : "No exams synced yet"}
+              body={searching ? undefined : "More exams are added as they're synced."}
+            />
           )}
         </View>
       </ScrollView>
@@ -133,54 +136,43 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    backgroundColor: "#ffffff",
+    gap: spacing.sm,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: "#e2e6ee",
-    borderRadius: 12,
-    marginHorizontal: 20,
-    marginTop: 16,
-    marginBottom: 4,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.base,
+    marginBottom: spacing.xs,
+    paddingHorizontal: spacing.md + 2,
+    paddingVertical: spacing.sm + 2,
   },
   searchInput: {
     flex: 1,
     fontSize: 14,
-    color: "#1a2b4a",
+    color: colors.text.primary,
     padding: 0,
   },
   scrollContent: {
-    padding: 20,
-    paddingTop: 12,
-    paddingBottom: 40,
+    padding: spacing.xl,
+    paddingTop: spacing.md,
+    paddingBottom: spacing["3xl"],
   },
   sectionLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#8a94a6",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 10,
-    marginTop: 8,
+    marginTop: spacing.sm,
   },
   allExamsCard: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 14,
-    backgroundColor: "#1a2b4a",
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 20,
-  },
-  allExamsCardPressed: {
-    backgroundColor: "#142138",
+    gap: spacing.md + 2,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xl,
   },
   iconCircle: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: "#eef1f8",
+    backgroundColor: colors.surfaceElevated2,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -193,29 +185,20 @@ const styles = StyleSheet.create({
   allExamsTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#ffffff",
+    color: colors.text.onAccent,
   },
   allExamsSubtitle: {
     fontSize: 12,
-    color: "#c3cadb",
+    color: "rgba(255,255,255,0.75)",
     marginTop: 2,
   },
   list: {
-    gap: 12,
+    gap: spacing.md,
   },
   examCard: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 14,
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#e2e6ee",
-    borderRadius: 14,
-    padding: 14,
-  },
-  examCardPressed: {
-    backgroundColor: "#eef1f8",
-    borderColor: "#1a2b4a",
+    gap: spacing.md + 2,
   },
   examTextBlock: {
     flex: 1,
@@ -223,17 +206,11 @@ const styles = StyleSheet.create({
   examLabel: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#1a2b4a",
+    color: colors.text.primary,
   },
   examMeta: {
     fontSize: 12,
-    color: "#8a94a6",
+    color: colors.text.muted,
     marginTop: 2,
-  },
-  emptyText: {
-    fontSize: 13,
-    color: "#8a94a6",
-    textAlign: "center",
-    paddingVertical: 12,
   },
 });

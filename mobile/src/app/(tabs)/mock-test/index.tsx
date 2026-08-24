@@ -1,164 +1,159 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { ActivityIndicator, Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
-import { getSyncedExams } from "../../../data/practiceData";
-import { getMockablePapersLive } from "../../../data/mockTestStructureData";
+import { Pressable, ScrollView, Text, TextInput, View, StyleSheet } from "react-native";
+import { getSyncedExams, type ExamOption } from "../../../data/practiceData";
 import { useHybridMode } from "../../../data/hybridSource";
-import { getMockablePapers, type SyncedPaper } from "../../../db/examStructure";
 import { useSyncStatus } from "../../../sync/SyncContext";
-import { PressableScale } from "../../../ui/PressableScale";
 import { FadeInItem } from "../../../ui/FadeInList";
 import { OfflineNoDataNotice } from "../../../ui/OfflineNoDataNotice";
+import { Card } from "../../../ui/Card";
+import { EmptyState } from "../../../ui/EmptyState";
+import { colors, radius, spacing, typography } from "../../../ui/theme";
 
-type ListedPaper = SyncedPaper & { examName: string };
-
-export default function MockTestLanding() {
+// Every exam here is real, locally-synced data, same source Practice uses. A mock
+// paper always belongs to one exam's structure, so there's no cross-exam "All Exams"
+// shortcut here the way Practice has one.
+export default function MockTestExamSelection() {
   const router = useRouter();
-  const [papers, setPapers] = useState<ListedPaper[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [exams, setExams] = useState<ExamOption[]>([]);
+
   const { syncVersion } = useSyncStatus();
   const mode = useHybridMode();
 
-  // One entry per mock-testable paper, not per exam: an exam can have several
-  // (Prelims and Mains), and descriptive or interview papers are excluded entirely.
   useEffect(() => {
-    (async () => {
-      try {
-        const exams = await getSyncedExams(mode);
-        const collected: ListedPaper[] = [];
-        for (const exam of exams) {
-          const mockable = mode === "local" ? await getMockablePapers(exam.code) : await getMockablePapersLive(exam.code);
-          mockable.forEach((paper) => collected.push({ ...paper, examName: exam.name }));
-        }
-        setPapers(collected);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    getSyncedExams(mode).then(setExams);
   }, [syncVersion, mode]);
 
-  const openStart = (paper: ListedPaper) => {
-    router.push({
-      pathname: "/mock-test/start",
-      params: {
-        paperId: paper.id,
-        examCode: paper.examCode,
-        examLabel: paper.examName,
-        paperName: paper.name,
-      },
-    });
+  const openPapers = (examCode: string, examLabel: string) => {
+    router.push({ pathname: "/mock-test/papers", params: { examCode, examLabel } });
   };
 
+  const query = search.trim().toLowerCase();
+  const filteredExams = useMemo(
+    () => (query ? exams.filter((exam) => exam.name.toLowerCase().includes(query)) : exams),
+    [exams, query],
+  );
+  const searching = query.length > 0;
+
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.heading}>Full-length Mock Tests</Text>
-      <Text style={styles.subheading}>
-        Timed, exam-pattern tests with real negative marking — just like the real thing.
-      </Text>
+    <View style={styles.screen}>
+      <View style={styles.searchBar}>
+        <Ionicons name="search" size={18} color={colors.text.muted} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search exams..."
+          placeholderTextColor={colors.text.muted}
+          value={search}
+          onChangeText={setSearch}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
+        />
+        {searching && (
+          <Pressable onPress={() => setSearch("")} hitSlop={10}>
+            <Ionicons name="close-circle" size={18} color={colors.text.muted} />
+          </Pressable>
+        )}
+      </View>
 
-      {loading && <ActivityIndicator />}
-
-      {!loading && (
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <Text style={typography.label}>
+          {searching ? `${filteredExams.length} result${filteredExams.length === 1 ? "" : "s"}` : "Choose an exam"}
+        </Text>
         <View style={styles.list}>
-          {papers.map((paper, index) => {
-            const totalQuestions = paper.sections.reduce((sum, s) => sum + s.questionCount, 0);
-            const marking =
-              paper.marksCorrect != null ? ` · +${paper.marksCorrect}/-${paper.marksWrong ?? 0} marking` : "";
-            return (
-              <FadeInItem key={paper.id} index={index}>
-              <PressableScale
-                onPress={() => openStart(paper)}
-                style={styles.card}
-              >
-                <View style={styles.cardIconCircle}>
-                  <Ionicons name="timer-outline" size={24} color="#ffffff" />
+          {filteredExams.map((exam, index) => (
+            <FadeInItem key={exam.code} index={index}>
+              <Card onPress={() => openPapers(exam.code, exam.name)} style={styles.examCard}>
+                <View style={styles.iconCircle}>
+                  <Ionicons name="timer-outline" size={22} color={colors.brand.primary} />
                 </View>
-                <View style={styles.cardTextBlock}>
-                  <Text style={styles.cardTitle}>
-                    {paper.examName} — {paper.name}
+                <View style={styles.examTextBlock}>
+                  <Text style={styles.examLabel} numberOfLines={2}>
+                    {exam.name}
                   </Text>
-                  <Text style={styles.cardSubtitle}>
-                    {paper.stageName} · {totalQuestions} questions
-                    {paper.durationMinutes != null ? ` · ${paper.durationMinutes} min` : ""}
-                    {marking}
+                  <Text style={styles.examMeta}>
+                    {exam.questionCount === 0
+                      ? "Not synced yet"
+                      : `${exam.questionCount.toLocaleString()} question${exam.questionCount === 1 ? "" : "s"}`}
                   </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color="#c3cadb" />
-              </PressableScale>
-              </FadeInItem>
-            );
-          })}
-
-          {papers.length === 0 && mode === "unavailable" && <OfflineNoDataNotice />}
-          {papers.length === 0 && mode !== "unavailable" && (
-            <Text style={styles.emptyText}>
-              No mock tests yet. An exam needs a paper defined in its structure before a test can be built from it.
-            </Text>
+                <Ionicons name="chevron-forward" size={18} color={colors.text.muted} />
+              </Card>
+            </FadeInItem>
+          ))}
+          {filteredExams.length === 0 && mode === "unavailable" && <OfflineNoDataNotice />}
+          {filteredExams.length === 0 && mode !== "unavailable" && (
+            <EmptyState
+              icon={searching ? "search-outline" : "timer-outline"}
+              title={searching ? `No exams match "${search.trim()}"` : "No exams synced yet"}
+              body={searching ? undefined : "More exams are added as they're synced."}
+            />
           )}
         </View>
-      )}
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    padding: 20,
-    paddingTop: 24,
-    paddingBottom: 40,
+  screen: {
+    flex: 1,
   },
-  heading: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#1a2b4a",
-  },
-  subheading: {
-    marginTop: 6,
-    fontSize: 13,
-    color: "#8a94a6",
-    marginBottom: 24,
-    lineHeight: 19,
-  },
-  list: {
-    gap: 12,
-  },
-  card: {
+  searchBar: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 14,
-    backgroundColor: "#1a2b4a",
-    borderRadius: 14,
-    padding: 16,
+    gap: spacing.sm,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.base,
+    marginBottom: spacing.xs,
+    paddingHorizontal: spacing.md + 2,
+    paddingVertical: spacing.sm + 2,
   },
-  cardPressed: {
-    backgroundColor: "#142138",
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.text.primary,
+    padding: 0,
   },
-  cardIconCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: "rgba(255,255,255,0.15)",
+  scrollContent: {
+    padding: spacing.xl,
+    paddingTop: spacing.md,
+    paddingBottom: spacing["3xl"],
+  },
+  list: {
+    gap: spacing.md,
+    marginTop: spacing.sm,
+  },
+  examCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md + 2,
+  },
+  iconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.surfaceElevated2,
     alignItems: "center",
     justifyContent: "center",
   },
-  cardTextBlock: {
+  examTextBlock: {
     flex: 1,
   },
-  cardTitle: {
+  examLabel: {
     fontSize: 15,
-    fontWeight: "700",
-    color: "#ffffff",
+    fontWeight: "600",
+    color: colors.text.primary,
   },
-  cardSubtitle: {
+  examMeta: {
     fontSize: 12,
-    color: "#c3cadb",
-    marginTop: 3,
-  },
-  emptyText: {
-    fontSize: 13,
-    color: "#8a94a6",
-    textAlign: "center",
-    paddingVertical: 20,
+    color: colors.text.muted,
+    marginTop: 2,
   },
 });

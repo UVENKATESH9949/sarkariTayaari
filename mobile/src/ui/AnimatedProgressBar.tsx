@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { View, type StyleProp, type ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { DURATION, EASE_IN_OUT } from "./motion";
+import { colors } from "./theme";
 
 type Props = {
   /** 0 to 1. */
@@ -22,8 +23,8 @@ type Props = {
 export function AnimatedProgressBar({
   progress,
   height = 6,
-  trackColor = "#eef1f8",
-  fillColor = "#208AEF",
+  trackColor = colors.surfaceElevated2,
+  fillColor = colors.brand.bright,
   style,
 }: Props) {
   const width = useSharedValue(0);

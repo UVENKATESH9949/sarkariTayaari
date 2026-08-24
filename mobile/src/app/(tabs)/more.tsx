@@ -2,11 +2,14 @@ import { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { Alert, Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../practice/authContext";
 import { useSessionHistory } from "../../practice/sessionHistory";
 import { LANGUAGES, useAppLanguage } from "../../practice/appLanguage";
 import { LanguagePickerModal } from "../../practice/LanguagePickerModal";
 import { useSyncStatus } from "../../sync/SyncContext";
+import { Card, CardDivider, CardRow } from "../../ui/Card";
+import { colors, spacing, typography } from "../../ui/theme";
 
 function formatLastSynced(date: Date): string {
   const now = new Date();
@@ -21,6 +24,7 @@ function formatLastSynced(date: Date): string {
 
 export default function More() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { clearSessions } = useSessionHistory();
   const { defaultLanguageCode, setDefaultLanguageCode } = useAppLanguage();
@@ -28,7 +32,11 @@ export default function More() {
   const { status, synced, total, lastSyncedAt, isRefreshing, refreshError, syncNow } = useSyncStatus();
 
   const isSyncing = status === "checking" || status === "syncing" || status === "partial" || isRefreshing;
-  const hasFailed = !isSyncing && (status === "error" || refreshError !== null);
+  // Initial sync retries indefinitely on its own (see runInitialSyncUntilDone), so
+  // status never settles on "error" for it — only a delta-sync check-for-updates
+  // failure can still land here, and existing offline content is unaffected by it.
+  const hasFailed = !isSyncing && refreshError !== null;
+  const percent = total > 0 ? Math.min(100, Math.round((synced / total) * 100)) : 0;
   const [manualSyncing, setManualSyncing] = useState(false);
 
   const handleSyncNow = () => {
@@ -50,63 +58,60 @@ export default function More() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + spacing.xl }]}>
       <Text style={styles.title}>More</Text>
 
-      <Text style={styles.sectionTitle}>Account</Text>
-      <View style={styles.card}>
-        <Pressable style={styles.row} onPress={() => router.push("/account")}>
-          <View style={styles.rowIconCircle}>
-            <Ionicons name={user ? "person-circle-outline" : "cloud-upload-outline"} size={18} color="#1a2b4a" />
-          </View>
-          <View style={styles.rowInfo}>
-            <Text style={styles.rowLabel}>{user ? "Your account" : "Save your progress"}</Text>
-            <Text style={styles.rowValue}>
-              {user
-                ? user.email
-                : "Not signed in — progress is only on this phone"}
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color="#c7cee0" />
-        </Pressable>
-      </View>
+      <Text style={typography.label}>Account</Text>
+      <Card variant="container" style={styles.card}>
+        <CardRow
+          icon={user ? "person-circle-outline" : "cloud-upload-outline"}
+          label={user ? "Your account" : "Save your progress"}
+          value={user ? user.email : "Not signed in — progress is only on this phone"}
+          onPress={() => router.push("/account")}
+        />
+      </Card>
 
-      <Text style={styles.sectionTitle}>Preferences</Text>
-      <View style={styles.card}>
-        <Pressable style={styles.row} onPress={() => setLanguagePickerVisible(true)}>
-          <View style={styles.rowIconCircle}>
-            <Ionicons name="language-outline" size={18} color="#1a2b4a" />
-          </View>
-          <View style={styles.rowInfo}>
-            <Text style={styles.rowLabel}>Default quiz language</Text>
-            <Text style={styles.rowValue}>{defaultLanguageName}</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color="#c7cee0" />
-        </Pressable>
-      </View>
+      <Text style={[typography.label, styles.sectionSpacing]}>Preferences</Text>
+      <Card variant="container" style={styles.card}>
+        <CardRow
+          icon="language-outline"
+          label="Default quiz language"
+          value={defaultLanguageName}
+          onPress={() => setLanguagePickerVisible(true)}
+        />
+      </Card>
 
-      <Text style={styles.sectionTitle}>Data</Text>
-      <View style={styles.card}>
+      <Text style={[typography.label, styles.sectionSpacing]}>Data</Text>
+      <Card variant="container" style={styles.card}>
         {isSyncing ? (
           <View style={styles.row}>
             <View style={styles.rowIconCircle}>
-              <Ionicons name="sync-outline" size={18} color="#1a2b4a" />
+              <Ionicons name="sync-outline" size={18} color={colors.brand.primary} />
             </View>
             <View style={styles.rowInfo}>
               <Text style={styles.rowLabel}>
-                {status === "checking" ? "Preparing content sync..." : isRefreshing ? "Checking for updates..." : "Syncing content..."}
+                {status === "checking" ? "Preparing content sync..." : isRefreshing ? "Checking for updates..." : "Downloading your content..."}
               </Text>
-              <Text style={styles.rowValue}>
-                {total > 0
-                  ? `${synced} / ${total} questions — you can keep using the app`
-                  : "You can keep using the app while this finishes"}
-              </Text>
+              {status === "syncing" || status === "partial" ? (
+                <>
+                  <View style={styles.progressTrack}>
+                    <View style={[styles.progressFill, { width: `${percent}%` }]} />
+                  </View>
+                  <Text style={styles.rowValue}>
+                    {total > 0
+                      ? `${percent}% · ${synced.toLocaleString()} / ${total.toLocaleString()} questions`
+                      : "Starting..."}
+                  </Text>
+                </>
+              ) : (
+                <Text style={styles.rowValue}>You can keep using the app while this finishes</Text>
+              )}
             </View>
           </View>
         ) : hasFailed ? (
           <Pressable style={styles.row} onPress={handleSyncNow} disabled={manualSyncing}>
             <View style={[styles.rowIconCircle, styles.rowIconCircleDanger]}>
-              <Ionicons name="warning-outline" size={18} color="#c94f4f" />
+              <Ionicons name="warning-outline" size={18} color={colors.semantic.error} />
             </View>
             <View style={styles.rowInfo}>
               <Text style={[styles.rowLabel, styles.rowLabelDanger]}>Sync couldn&apos;t be completed</Text>
@@ -119,7 +124,7 @@ export default function More() {
         ) : lastSyncedAt !== null ? (
           <Pressable style={styles.row} onPress={handleSyncNow} disabled={manualSyncing}>
             <View style={styles.rowIconCircle}>
-              <Ionicons name="checkmark-circle-outline" size={18} color="#1a2b4a" />
+              <Ionicons name="checkmark-circle-outline" size={18} color={colors.brand.primary} />
             </View>
             <View style={styles.rowInfo}>
               <Text style={styles.rowLabel}>Content is up to date</Text>
@@ -130,7 +135,7 @@ export default function More() {
         ) : (
           <Pressable style={styles.row} onPress={handleSyncNow} disabled={manualSyncing}>
             <View style={styles.rowIconCircle}>
-              <Ionicons name="cloud-download-outline" size={18} color="#1a2b4a" />
+              <Ionicons name="cloud-download-outline" size={18} color={colors.brand.primary} />
             </View>
             <View style={styles.rowInfo}>
               <Text style={styles.rowLabel}>Not downloaded yet</Text>
@@ -139,30 +144,23 @@ export default function More() {
             <Text style={styles.actionText}>{manualSyncing ? "Starting…" : "Sync Now"}</Text>
           </Pressable>
         )}
-        <View style={styles.divider} />
-        <Pressable style={styles.row} onPress={handleClearHistory}>
-          <View style={[styles.rowIconCircle, styles.rowIconCircleDanger]}>
-            <Ionicons name="trash-outline" size={18} color="#c94f4f" />
-          </View>
-          <View style={styles.rowInfo}>
-            <Text style={[styles.rowLabel, styles.rowLabelDanger]}>Clear practice history</Text>
-            <Text style={styles.rowValue}>Removes all recorded sessions</Text>
-          </View>
-        </Pressable>
-      </View>
+        <CardDivider />
+        <CardRow
+          icon="trash-outline"
+          iconColor={colors.semantic.error}
+          iconBg={colors.semantic.errorBg}
+          label="Clear practice history"
+          labelColor={colors.semantic.error}
+          value="Removes all recorded sessions"
+          onPress={handleClearHistory}
+          trailing={false}
+        />
+      </Card>
 
-      <Text style={styles.sectionTitle}>About</Text>
-      <View style={styles.card}>
-        <View style={styles.row}>
-          <View style={styles.rowIconCircle}>
-            <Ionicons name="information-circle-outline" size={18} color="#1a2b4a" />
-          </View>
-          <View style={styles.rowInfo}>
-            <Text style={styles.rowLabel}>SarkariTaiyaari</Text>
-            <Text style={styles.rowValue}>Version 0.1.0</Text>
-          </View>
-        </View>
-      </View>
+      <Text style={[typography.label, styles.sectionSpacing]}>About</Text>
+      <Card variant="container" style={styles.card}>
+        <CardRow icon="information-circle-outline" label="SarkariTaiyaari" value="Version 0.1.0" />
+      </Card>
 
       <LanguagePickerModal
         visible={languagePickerVisible}
@@ -177,48 +175,37 @@ export default function More() {
 
 const styles = StyleSheet.create({
   container: {
-    padding: 24,
-    paddingTop: 32,
-    paddingBottom: 48,
+    padding: spacing.xl,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing["3xl"],
   },
   title: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#1a2b4a",
-    marginBottom: 20,
+    ...typography.pageTitle,
+    marginBottom: spacing.lg,
   },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#8a94a6",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 8,
-    marginTop: 20,
+  sectionSpacing: {
+    marginTop: spacing.xl,
+    marginBottom: spacing.sm,
   },
   card: {
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#e2e6ee",
-    borderRadius: 14,
-    overflow: "hidden",
+    marginTop: spacing.sm,
   },
   row: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    padding: 14,
+    gap: spacing.md,
+    padding: spacing.md + 2,
   },
   rowIconCircle: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: "#eef1f8",
+    backgroundColor: colors.surfaceElevated2,
     alignItems: "center",
     justifyContent: "center",
   },
   rowIconCircleDanger: {
-    backgroundColor: "#fdecec",
+    backgroundColor: colors.semantic.errorBg,
   },
   rowInfo: {
     flex: 1,
@@ -226,24 +213,31 @@ const styles = StyleSheet.create({
   rowLabel: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#1a2b4a",
+    color: colors.text.primary,
   },
   rowLabelDanger: {
-    color: "#c94f4f",
+    color: colors.semantic.error,
   },
   rowValue: {
     fontSize: 12,
-    color: "#8a94a6",
+    color: colors.text.muted,
     marginTop: 2,
+  },
+  progressTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.surfaceElevated2,
+    marginTop: spacing.sm,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 3,
+    backgroundColor: colors.brand.primary,
   },
   actionText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#1a2b4a",
-  },
-  divider: {
-    height: 1,
-    backgroundColor: "#eef1f8",
-    marginLeft: 60,
+    color: colors.brand.primary,
   },
 });
