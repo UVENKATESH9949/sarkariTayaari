@@ -255,7 +255,11 @@ export default function MockTestTaking() {
   if (questions && !paper) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.emptyText}>This paper is no longer part of the exam's structure.</Text>
+        <EmptyState
+          icon="alert-circle-outline"
+          title="Test not available"
+          body="This paper is no longer part of the exam's structure."
+        />
       </View>
     );
   }

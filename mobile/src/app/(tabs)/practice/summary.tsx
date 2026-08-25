@@ -5,6 +5,7 @@ import { useSessionHistory } from "../../../practice/sessionHistory";
 import type { QuestionResult } from "../../../practice/sessionHistory";
 import { Button } from "../../../ui/Button";
 import { Card } from "../../../ui/Card";
+import { EmptyState } from "../../../ui/EmptyState";
 import { colors, radius, spacing, typography } from "../../../ui/theme";
 
 function scoreTone(accuracyPercent: number): { text: string; bg: string } {
@@ -128,7 +129,7 @@ export default function Summary() {
   if (!session) {
     return (
       <View style={styles.emptyScreen}>
-        <Text style={styles.emptyText}>Session not found.</Text>
+        <EmptyState icon="alert-circle-outline" title="Session not found" body="This session may have been cleared from your history." />
       </View>
     );
   }

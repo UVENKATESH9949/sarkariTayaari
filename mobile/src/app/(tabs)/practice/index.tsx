@@ -5,12 +5,19 @@ import { Pressable, ScrollView, Text, TextInput, View, StyleSheet } from "react-
 import { getSyncedExams, type ExamOption } from "../../../data/practiceData";
 import { useHybridMode } from "../../../data/hybridSource";
 import { useSyncStatus } from "../../../sync/SyncContext";
+import { useSessionHistory } from "../../../practice/sessionHistory";
+import { getExamPracticeProgress } from "../../../practice/examProgress";
+import { getExamGradient } from "../../../constants/examTheme";
 import { FadeInItem } from "../../../ui/FadeInList";
 import { OfflineNoDataNotice } from "../../../ui/OfflineNoDataNotice";
 import { Card } from "../../../ui/Card";
 import { EmptyState } from "../../../ui/EmptyState";
+import { IconBox } from "../../../ui/IconBox";
+import { StatPill } from "../../../ui/StatPill";
+import { SectionLabel } from "../../../ui/SectionLabel";
+import { AnimatedProgressBar } from "../../../ui/AnimatedProgressBar";
 import { ListSkeleton } from "../../../ui/Skeleton";
-import { colors, radius, spacing, typography } from "../../../ui/theme";
+import { colors, radius, spacing } from "../../../ui/theme";
 
 // Every exam here is real, locally-synced data — no hardcoded "coming soon" exams.
 // Adding a new exam on the backend makes it appear here automatically on next sync.
@@ -22,6 +29,7 @@ export default function Practice() {
 
   const { syncVersion } = useSyncStatus();
   const mode = useHybridMode();
+  const { sessions } = useSessionHistory();
 
   useEffect(() => {
     getSyncedExams(mode).then((result) => {
@@ -69,27 +77,31 @@ export default function Practice() {
             told us what they are looking for. */}
         {!searching && (
           <>
-            <Text style={typography.label}>Recommended</Text>
-            <Card
-              variant="filled"
-              onPress={() => openSubjects("ALL", "All Government Exams")}
-              style={styles.allExamsCard}
-            >
-              <View style={[styles.iconCircle, styles.allExamsIconCircle]}>
-                <Ionicons name="earth" size={26} color={colors.text.onAccent} />
+            <SectionLabel label="Recommended" style={styles.sectionLabelSpacing} />
+            <Card variant="gradient" onPress={() => openSubjects("ALL", "All Government Exams")} style={styles.allExamsCard}>
+              <View style={styles.allExamsGlow} />
+              <View style={styles.allExamsTop}>
+                <View style={styles.allExamsIconCircle}>
+                  <Ionicons name="earth" size={26} color={colors.text.onAccent} />
+                </View>
+                <View style={styles.allExamsTextBlock}>
+                  <Text style={styles.allExamsTitle}>All Government Exams</Text>
+                  <Text style={styles.allExamsSubtitle}>Common Quant, Reasoning, English & GA content</Text>
+                </View>
               </View>
-              <View style={styles.allExamsTextBlock}>
-                <Text style={styles.allExamsTitle}>All Government Exams</Text>
-                <Text style={styles.allExamsSubtitle}>Common Quant, Reasoning, English & GA content</Text>
+              <View style={styles.allExamsCta}>
+                <Text style={styles.allExamsCtaText}>Start practicing</Text>
+                <Ionicons name="arrow-forward" size={14} color={colors.text.onAccent} />
               </View>
-              <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.6)" />
             </Card>
           </>
         )}
 
-        <Text style={[typography.label, styles.sectionLabel]}>
-          {searching ? `${filteredExams.length} result${filteredExams.length === 1 ? "" : "s"}` : "Browse by exam"}
-        </Text>
+        <SectionLabel
+          label={searching ? `${filteredExams.length} result${filteredExams.length === 1 ? "" : "s"}` : "Browse by exam"}
+          count={searching ? undefined : `${filteredExams.length} board${filteredExams.length === 1 ? "" : "s"}`}
+          style={styles.sectionLabel}
+        />
         {loading ? (
           <ListSkeleton count={5} />
         ) : (
@@ -102,26 +114,36 @@ export default function Practice() {
           without a tap — the thing an aspirant most wants to know before diving in.
         */}
         <View style={styles.list}>
-          {filteredExams.map((exam, index) => (
-            <FadeInItem key={exam.code} index={index}>
-              <Card onPress={() => openSubjects(exam.code, exam.name)} style={styles.examCard}>
-                <View style={styles.iconCircle}>
-                  <Ionicons name="document-text-outline" size={22} color={colors.brand.primary} />
-                </View>
-                <View style={styles.examTextBlock}>
-                  <Text style={styles.examLabel} numberOfLines={2}>
-                    {exam.name}
-                  </Text>
-                  <Text style={styles.examMeta}>
-                    {exam.questionCount === 0
-                      ? "Not synced yet"
-                      : `${exam.questionCount.toLocaleString()} question${exam.questionCount === 1 ? "" : "s"}`}
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.text.muted} />
-              </Card>
-            </FadeInItem>
-          ))}
+          {filteredExams.map((exam, index) => {
+            const gradient = getExamGradient(exam.code);
+            const progress = getExamPracticeProgress(sessions, exam.code);
+            return (
+              <FadeInItem key={exam.code} index={index}>
+                <Card onPress={() => openSubjects(exam.code, exam.name)} style={styles.examCard}>
+                  <View style={styles.examTopRow}>
+                    <IconBox icon={gradient.icon} gradientColors={gradient.colors} />
+                    <View style={styles.examTextBlock}>
+                      <Text style={styles.examLabel} numberOfLines={2}>
+                        {exam.name}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={colors.text.muted} />
+                  </View>
+                  <StatPill
+                    icon="document-text-outline"
+                    value={exam.questionCount.toLocaleString()}
+                    label={exam.questionCount === 1 ? "question" : "questions"}
+                  />
+                  {progress !== null && (
+                    <View style={styles.progressWrap}>
+                      <AnimatedProgressBar progress={progress / 100} style={styles.progressTrack} />
+                      <Text style={styles.progressText}>{progress}%</Text>
+                    </View>
+                  )}
+                </Card>
+              </FadeInItem>
+            );
+          })}
           {/* Two different empty states: nothing synced yet is a content gap, while a
               search that found nothing is a dead end the user can back out of. */}
           {filteredExams.length === 0 && mode === "unavailable" && <OfflineNoDataNotice />}
@@ -169,44 +191,77 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: spacing["3xl"],
   },
+  sectionLabelSpacing: {
+    marginBottom: spacing.sm,
+  },
   sectionLabel: {
     marginTop: spacing.sm,
+    marginBottom: spacing.md,
   },
   allExamsCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md + 2,
     marginTop: spacing.sm,
     marginBottom: spacing.xl,
   },
-  iconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.surfaceElevated2,
-    alignItems: "center",
-    justifyContent: "center",
+  allExamsGlow: {
+    position: "absolute",
+    top: -40,
+    right: -40,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: colors.brand.bright,
+    opacity: 0.25,
+  },
+  allExamsTop: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.md + 2,
   },
   allExamsIconCircle: {
-    backgroundColor: "rgba(255,255,255,0.15)",
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   allExamsTextBlock: {
     flex: 1,
   },
   allExamsTitle: {
-    fontSize: 15,
+    fontSize: 18,
     fontWeight: "700",
     color: colors.text.onAccent,
+    marginBottom: spacing.xs,
   },
   allExamsSubtitle: {
-    fontSize: 12,
-    color: "rgba(255,255,255,0.75)",
-    marginTop: 2,
+    fontSize: 13.5,
+    color: colors.text.onAccentSecondary,
+    lineHeight: 19,
+  },
+  allExamsCta: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: spacing.xs + 2,
+    backgroundColor: colors.brand.primary,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm + 1,
+    paddingHorizontal: spacing.base,
+    marginTop: spacing.base,
+  },
+  allExamsCtaText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.text.onAccent,
   },
   list: {
-    gap: spacing.md,
+    gap: spacing.base,
   },
   examCard: {
+    gap: spacing.md,
+  },
+  examTopRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md + 2,
@@ -215,13 +270,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   examLabel: {
-    fontSize: 15,
-    fontWeight: "600",
+    fontSize: 17,
+    fontWeight: "700",
     color: colors.text.primary,
   },
-  examMeta: {
-    fontSize: 12,
-    color: colors.text.muted,
-    marginTop: 2,
+  progressWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  progressTrack: {
+    flex: 1,
+    height: 5,
+    borderRadius: 3,
+  },
+  progressText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: colors.brand.light,
   },
 });

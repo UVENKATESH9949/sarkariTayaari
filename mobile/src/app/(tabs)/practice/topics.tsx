@@ -118,6 +118,9 @@ export default function Topics() {
               <EmptyState icon="search-outline" title={`No topics match "${search}"`} />
             )}
             {topics.length === 0 && mode === "unavailable" && <OfflineNoDataNotice />}
+            {topics.length === 0 && mode !== "unavailable" && (
+              <EmptyState icon="document-text-outline" title="No topics synced yet" body="Topics appear here once they're synced." />
+            )}
           </View>
           )}
         </ScrollView>

@@ -17,6 +17,9 @@ export type SessionRecord = {
   id: string;
   completedAt: number;
   examLabel: string;
+  /** Null for sessions recorded before this field existed, and for the "All Government
+   * Exams" shortcut, which spans every exam at once. */
+  examCode: string | null;
   subjectName: string;
   topicName: string;
   levelLabel: string;
@@ -45,6 +48,7 @@ export async function loadSessions(): Promise<SessionRecord[]> {
       id: row.id,
       completedAt: row.completedAt.getTime(),
       examLabel: row.examLabel,
+      examCode: row.examCode,
       subjectName: row.subjectName,
       topicName: row.topicName,
       levelLabel: row.levelLabel,
@@ -72,6 +76,7 @@ export async function insertSession(session: SessionRecord): Promise<void> {
       id: session.id,
       completedAt: new Date(session.completedAt),
       examLabel: session.examLabel,
+      examCode: session.examCode,
       subjectName: session.subjectName,
       topicName: session.topicName,
       levelLabel: session.levelLabel,

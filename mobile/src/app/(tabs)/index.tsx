@@ -12,6 +12,7 @@ import { PressableScale } from "../../ui/PressableScale";
 import { FadeInItem } from "../../ui/FadeInList";
 import { Button } from "../../ui/Button";
 import { Card } from "../../ui/Card";
+import { SectionLabel } from "../../ui/SectionLabel";
 import { CardSkeleton } from "../../ui/Skeleton";
 import { colors, radius, spacing, typography } from "../../ui/theme";
 
@@ -76,7 +77,7 @@ export default function Home() {
         Continue Practice
       </Button>
 
-      <Card variant="filled" onPress={() => router.push("/progress")} style={styles.readinessCard}>
+      <Card variant="gradient" onPress={() => router.push("/progress")} style={styles.readinessCard}>
         <View>
           <Text style={styles.readinessLabel}>Your readiness</Text>
           <Text style={styles.readinessPercent}>{MOCK.readinessPercent}%</Text>
@@ -87,7 +88,7 @@ export default function Home() {
         </View>
       </Card>
 
-      <Text style={typography.label}>Revise</Text>
+      <SectionLabel label="Revise" />
       <View style={styles.reviseRow}>
         <FadeInItem index={0} style={styles.reviseItem}>
           <PressableScale

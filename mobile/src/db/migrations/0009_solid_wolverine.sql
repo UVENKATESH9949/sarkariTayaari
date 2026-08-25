@@ -1,0 +1,1 @@
+ALTER TABLE `practice_sessions` ADD `exam_code` text;

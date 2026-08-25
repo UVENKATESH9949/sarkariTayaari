@@ -6,6 +6,7 @@ import { getMockTestAttempt, type MockTestAttemptRecord } from "../../../db/mock
 import { toSubjectMeta } from "../../../constants/subjects";
 import { getAllSubjects, type SubjectMetaRow } from "../../../db/subjectMeta";
 import { Button } from "../../../ui/Button";
+import { ContextualLoading } from "../../../ui/ContextualLoading";
 import { CardSkeleton } from "../../../ui/Skeleton";
 import { colors, spacing, typography } from "../../../ui/theme";
 
@@ -54,13 +55,19 @@ export default function MockTestResult() {
   if (!attempt) {
     return (
       <View style={styles.container}>
-        <Text style={styles.loadingMessage}>Preparing your performance report...</Text>
-        <CardSkeleton height={110} />
-        <View style={[styles.statRow, { marginTop: spacing.base }]}>
-          <CardSkeleton height={72} />
-          <CardSkeleton height={72} />
-          <CardSkeleton height={72} />
-        </View>
+        <ContextualLoading
+          message="Preparing your performance report..."
+          skeleton={
+            <>
+              <CardSkeleton height={110} />
+              <View style={[styles.statRow, { marginTop: spacing.base }]}>
+                <CardSkeleton height={72} />
+                <CardSkeleton height={72} />
+                <CardSkeleton height={72} />
+              </View>
+            </>
+          }
+        />
       </View>
     );
   }

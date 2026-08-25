@@ -9,6 +9,8 @@ import { getSectionAvailabilityLive } from "../../../data/mockTestData";
 import { useHybridMode } from "../../../data/hybridSource";
 import { Button } from "../../../ui/Button";
 import { Card } from "../../../ui/Card";
+import { ContextualLoading } from "../../../ui/ContextualLoading";
+import { EmptyState } from "../../../ui/EmptyState";
 import { CardSkeleton } from "../../../ui/Skeleton";
 import { colors, radius, spacing, typography } from "../../../ui/theme";
 
@@ -50,13 +52,19 @@ export default function MockTestStart() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <Text style={styles.loadingMessage}>Preparing your test details...</Text>
-        <CardSkeleton height={28} />
-        <View style={[styles.summaryRow, { marginTop: spacing.xl }]}>
-          <CardSkeleton height={78} />
-          <CardSkeleton height={78} />
-          <CardSkeleton height={78} />
-        </View>
+        <ContextualLoading
+          message="Preparing your test details..."
+          skeleton={
+            <>
+              <CardSkeleton height={28} />
+              <View style={[styles.summaryRow, { marginTop: spacing.xl }]}>
+                <CardSkeleton height={78} />
+                <CardSkeleton height={78} />
+                <CardSkeleton height={78} />
+              </View>
+            </>
+          }
+        />
       </View>
     );
   }
@@ -64,7 +72,11 @@ export default function MockTestStart() {
   if (!paper) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.emptyText}>This paper is no longer part of the exam's structure.</Text>
+        <EmptyState
+          icon="alert-circle-outline"
+          title="Test not available"
+          body="This paper is no longer part of the exam's structure."
+        />
       </View>
     );
   }

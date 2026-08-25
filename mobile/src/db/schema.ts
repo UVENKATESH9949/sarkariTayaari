@@ -251,6 +251,11 @@ export const practiceSessions = sqliteTable(
     id: text("id").primaryKey(),
     completedAt: integer("completed_at", { mode: "timestamp_ms" }).notNull(),
     examLabel: text("exam_label").notNull(),
+    // Nullable, same reasoning as durationMs below: sessions recorded before this column
+    // existed (and the "All Government Exams" shortcut, which spans every exam at once)
+    // have no single exam to attribute to — the per-exam progress card on the exam list
+    // simply doesn't count them, rather than guessing from the examLabel text.
+    examCode: text("exam_code"),
     subjectName: text("subject_name").notNull(),
     topicName: text("topic_name").notNull(),
     levelLabel: text("level_label").notNull(),

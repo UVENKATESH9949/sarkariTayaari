@@ -9,6 +9,7 @@ import { getAllSubjects, type SubjectMetaRow } from "../../db/subjectMeta";
 import { PressableScale } from "../../ui/PressableScale";
 import { AnimatedProgressBar } from "../../ui/AnimatedProgressBar";
 import { ContextualLoading } from "../../ui/ContextualLoading";
+import { DonutRing } from "../../ui/DonutRing";
 import { FadeInItem } from "../../ui/FadeInList";
 import { Card } from "../../ui/Card";
 import { ListSkeleton } from "../../ui/Skeleton";
@@ -18,6 +19,13 @@ function scoreColor(percent: number) {
   if (percent >= 70) return colors.semantic.success;
   if (percent >= 40) return colors.semantic.warning;
   return colors.semantic.error;
+}
+
+function formatLastActive(completedAt: number): string {
+  const diffDays = Math.floor((Date.now() - completedAt) / (1000 * 60 * 60 * 24));
+  if (diffDays <= 0) return "today";
+  if (diffDays === 1) return "yesterday";
+  return `${diffDays} days ago`;
 }
 
 export default function Progress() {
@@ -68,14 +76,30 @@ export default function Progress() {
 
   const hasActivity = stats.totalQuestions > 0;
 
+  const mostRecentSession = sessions[0];
+
   return (
     <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + spacing.xl }]}>
       <Text style={styles.title}>Your Progress</Text>
 
-      <Card variant="filled" style={styles.readinessCard}>
-        <View style={styles.readinessCircle}>
-          <Text style={styles.readinessPercent}>{stats.readinessPercent}%</Text>
-        </View>
+      {mostRecentSession && (
+        <PressableScale style={styles.historyCard} onPress={() => router.push("/practice/history")}>
+          <View style={styles.historyIconBox}>
+            <Ionicons name="time-outline" size={21} color={colors.brand.light} />
+          </View>
+          <View style={styles.historyInfo}>
+            <Text style={styles.historyTitle}>View full session history</Text>
+            <Text style={styles.historySub}>
+              {stats.sessionsCompleted} session{stats.sessionsCompleted === 1 ? "" : "s"} logged · last active{" "}
+              {formatLastActive(mostRecentSession.completedAt)}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.brand.light} />
+        </PressableScale>
+      )}
+
+      <Card variant="gradient" style={styles.readinessCard}>
+        <DonutRing percent={stats.readinessPercent} fillColor={colors.brand.light} />
         <View style={styles.readinessInfo}>
           <Text style={styles.readinessLabel}>Exam Readiness Score</Text>
           <Text style={styles.readinessHint}>
@@ -151,24 +175,43 @@ const styles = StyleSheet.create({
     ...typography.pageTitle,
     marginBottom: spacing.lg,
   },
+  historyCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: spacing.base,
+    marginBottom: spacing.base,
+  },
+  historyIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    backgroundColor: colors.surfaceElevated2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  historyInfo: {
+    flex: 1,
+  },
+  historyTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.text.primary,
+    marginBottom: 2,
+  },
+  historySub: {
+    fontSize: 12,
+    color: colors.text.muted,
+  },
   readinessCard: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.base,
     marginBottom: spacing.base,
-  },
-  readinessCircle: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  readinessPercent: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: colors.text.onAccent,
   },
   readinessInfo: {
     flex: 1,

@@ -132,6 +132,9 @@ export default function Quiz() {
         id: sessionId,
         completedAt: Date.now(),
         examLabel: examLabel ?? "",
+        // "ALL" is the sentinel for the "All Government Exams" shortcut — that session
+        // isn't attributable to one exam, so it's excluded from per-exam progress.
+        examCode: examCode && examCode !== "ALL" ? examCode : null,
         subjectName: subjectName ?? "",
         topicName: topicName ?? "",
         levelLabel: levelLabel ?? "",

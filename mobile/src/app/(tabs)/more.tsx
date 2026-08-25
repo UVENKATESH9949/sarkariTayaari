@@ -10,6 +10,7 @@ import { LanguagePickerModal } from "../../practice/LanguagePickerModal";
 import { useSyncStatus } from "../../sync/SyncContext";
 import { AppAlert } from "../../ui/AppDialog";
 import { Card, CardDivider, CardRow } from "../../ui/Card";
+import { SectionLabel } from "../../ui/SectionLabel";
 import { colors, spacing, typography } from "../../ui/theme";
 
 function formatLastSynced(date: Date): string {
@@ -62,7 +63,7 @@ export default function More() {
     <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + spacing.xl }]}>
       <Text style={styles.title}>More</Text>
 
-      <Text style={typography.label}>Account</Text>
+      <SectionLabel label="Account" />
       <Card variant="container" style={styles.card}>
         <CardRow
           icon={user ? "person-circle-outline" : "cloud-upload-outline"}
@@ -72,7 +73,7 @@ export default function More() {
         />
       </Card>
 
-      <Text style={[typography.label, styles.sectionSpacing]}>Preferences</Text>
+      <SectionLabel label="Preferences" style={styles.sectionSpacing} />
       <Card variant="container" style={styles.card}>
         <CardRow
           icon="language-outline"
@@ -82,7 +83,7 @@ export default function More() {
         />
       </Card>
 
-      <Text style={[typography.label, styles.sectionSpacing]}>Data</Text>
+      <SectionLabel label="Data" style={styles.sectionSpacing} />
       <Card variant="container" style={styles.card}>
         {isSyncing ? (
           <View style={styles.row}>
@@ -158,7 +159,7 @@ export default function More() {
         />
       </Card>
 
-      <Text style={[typography.label, styles.sectionSpacing]}>About</Text>
+      <SectionLabel label="About" style={styles.sectionSpacing} />
       <Card variant="container" style={styles.card}>
         <CardRow icon="information-circle-outline" label="SarkariTaiyaari" value="Version 0.1.0" />
       </Card>

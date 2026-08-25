@@ -49,6 +49,9 @@ export const colors = {
     warningBg: "rgba(232, 166, 60, 0.12)",
     error: "#F87171",
     errorBg: "rgba(248, 113, 113, 0.12)",
+    /** "Trending"-style badges only — everything else (new/popular/best) reuses success. */
+    hot: "#FF8A65",
+    hotBg: "rgba(255, 138, 101, 0.14)",
   },
 } as const;
 
@@ -70,6 +73,8 @@ export const radius = {
   md: 12,
   lg: 14,
   xl: 16,
+  /** The redesigned exam/hero cards' corner radius — bigger and softer than xl. */
+  "2xl": 20,
   pill: 999,
 } as const;
 

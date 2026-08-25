@@ -1,26 +1,51 @@
 import type { ReactNode } from "react";
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import type { IoniconName } from "../constants/subjects";
 import { PressableScale } from "./PressableScale";
 import { colors, radius, shadow, spacing } from "./theme";
 
-type CardVariant = "elevated" | "filled" | "container";
+type CardVariant = "elevated" | "filled" | "container" | "gradient";
+
+/** The redesign's default hero-card gradient (navy, matching the "recommended" cards). */
+const DEFAULT_GRADIENT: readonly [string, string] = ["#1A2B57", "#0F1A38"];
 
 type CardProps = {
-  /** elevated = dark surface+border (default), filled = dark surface + blue glow accent (hero cards), container = bordered wrapper for CardRow children. */
+  /** elevated = dark surface+border (default), filled = dark surface + blue glow accent (hero cards), container = bordered wrapper for CardRow children, gradient = redesigned hero/recommended cards. */
   variant?: CardVariant;
   onPress?: () => void;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
   children: ReactNode;
+  /** Only used when variant === "gradient" — defaults to the navy hero gradient. */
+  gradientColors?: readonly [string, string];
 };
 
 /**
- * The one card primitive, covering the three ad hoc card idioms that had
- * accumulated across screens (white-bordered, dark-filled, bordered-row-container).
+ * The one card primitive, covering the ad hoc card idioms that had
+ * accumulated across screens (white-bordered, dark-filled, bordered-row-container,
+ * and now the redesigned gradient hero card).
  */
-export function Card({ variant = "elevated", onPress, disabled, style, children }: CardProps) {
+export function Card({ variant = "elevated", onPress, disabled, style, children, gradientColors }: CardProps) {
+  if (variant === "gradient") {
+    const content = (
+      <View style={[variantStyles.gradient, disabled && styles.disabled, style]}>
+        <LinearGradient
+          colors={gradientColors ?? DEFAULT_GRADIENT}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        {children}
+      </View>
+    );
+    if (onPress) {
+      return <PressableScale onPress={onPress} disabled={disabled}>{content}</PressableScale>;
+    }
+    return content;
+  }
+
   const body = [variantStyles[variant], disabled && styles.disabled, style];
 
   if (onPress) {
@@ -111,6 +136,13 @@ const variantStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.lg,
+    overflow: "hidden",
+  },
+  gradient: {
+    borderWidth: 1,
+    borderColor: colors.borderAccent,
+    borderRadius: radius["2xl"],
+    padding: spacing.lg,
     overflow: "hidden",
   },
 });

@@ -241,3 +241,33 @@ export async function loadMockTestAttempts(): Promise<MockTestAttemptRecord[]> {
   const full = await Promise.all(rows.map((r) => getMockTestAttempt(r.id)));
   return full.filter((r): r is MockTestAttemptRecord => r !== null);
 }
+
+export type MockAttemptSummary = {
+  attempted: number;
+  bestScore: number;
+  avgTimeSeconds: number;
+};
+
+/**
+ * Backs the exam-list "N/M taken" progress row and the per-exam tier screen's
+ * Attempted/Best Score/Avg Time stat row. Deliberately reads only the two columns it
+ * needs from mockTestAttempts rather than loadMockTestAttempts()'s full per-question
+ * results join — this is a lightweight summary, not a detail view. Returns null (not a
+ * zeroed object) when the exam has never been attempted, so the caller can omit the row
+ * instead of showing a fabricated 0.
+ */
+export async function getMockAttemptSummary(examCode: string): Promise<MockAttemptSummary | null> {
+  const rows = await db
+    .select({ totalMarksScored: mockTestAttempts.totalMarksScored, timeTakenSeconds: mockTestAttempts.timeTakenSeconds })
+    .from(mockTestAttempts)
+    .where(eq(mockTestAttempts.examCode, examCode))
+    .all();
+
+  if (rows.length === 0) return null;
+
+  return {
+    attempted: rows.length,
+    bestScore: Math.max(...rows.map((r) => r.totalMarksScored)),
+    avgTimeSeconds: Math.round(rows.reduce((sum, r) => sum + r.timeTakenSeconds, 0) / rows.length),
+  };
+}

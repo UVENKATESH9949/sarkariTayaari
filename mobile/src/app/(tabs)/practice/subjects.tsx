@@ -100,6 +100,9 @@ export default function Subjects() {
               <EmptyState icon="search-outline" title={`No subjects match "${search}"`} />
             )}
             {subjects.length === 0 && mode === "unavailable" && <OfflineNoDataNotice />}
+            {subjects.length === 0 && mode !== "unavailable" && (
+              <EmptyState icon="book-outline" title="No subjects synced yet" body="Subjects appear here once they're synced." />
+            )}
           </View>
           )}
         </ScrollView>
