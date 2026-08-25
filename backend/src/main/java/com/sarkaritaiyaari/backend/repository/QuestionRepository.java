@@ -19,8 +19,12 @@ public interface QuestionRepository extends JpaRepository<Question, UUID>, JpaSp
     // by hibernate.default_batch_fetch_size instead — a JOIN FETCH on those would
     // multiply rows per page and break LIMIT/OFFSET-based pagination.
     @Query(
-            value = "SELECT q FROM Question q JOIN FETCH q.topic t JOIN FETCH t.subject WHERE q.updatedAt > :since",
-            countQuery = "SELECT count(q) FROM Question q WHERE q.updatedAt > :since"
+            value = "SELECT q FROM Question q JOIN FETCH q.topic t JOIN FETCH t.subject WHERE q.updatedAt > :since "
+                    + "AND (:poolEnabled = false OR q.id IN (SELECT p.questionId FROM TemporaryQuestionPool p))",
+            countQuery = "SELECT count(q) FROM Question q WHERE q.updatedAt > :since "
+                    + "AND (:poolEnabled = false OR q.id IN (SELECT p.questionId FROM TemporaryQuestionPool p))"
     )
-    Page<Question> findByUpdatedAtAfter(@Param("since") OffsetDateTime since, Pageable pageable);
+    Page<Question> findByUpdatedAtAfter(@Param("since") OffsetDateTime since,
+                                         @Param("poolEnabled") boolean poolEnabled,
+                                         Pageable pageable);
 }

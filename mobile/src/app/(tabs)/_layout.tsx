@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
-import { Alert } from "react-native";
 import { useActiveSession, type TabHref } from "../../practice/activeSessionContext";
+import { AppAlert } from "../../ui/AppDialog";
 import { colors } from "../../ui/theme";
 
 const ACTIVE_COLOR = colors.brand.light;
@@ -38,7 +38,7 @@ export default function TabsLayout() {
         tabPress: (e) => {
           if (!activeSessionRef.current) return;
           e.preventDefault();
-          Alert.alert(
+          AppAlert.alert(
             "Leave this test?",
             "You are moving to another module. Your current test state may be lost if you leave now.",
             [

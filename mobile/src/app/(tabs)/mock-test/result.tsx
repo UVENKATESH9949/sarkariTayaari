@@ -7,7 +7,7 @@ import { toSubjectMeta } from "../../../constants/subjects";
 import { getAllSubjects, type SubjectMetaRow } from "../../../db/subjectMeta";
 import { Button } from "../../../ui/Button";
 import { CardSkeleton } from "../../../ui/Skeleton";
-import { colors, spacing } from "../../../ui/theme";
+import { colors, spacing, typography } from "../../../ui/theme";
 
 function scoreTone(percent: number): { text: string; bg: string } {
   if (percent >= 70) return { text: colors.semantic.success, bg: colors.semantic.successBg };
@@ -54,6 +54,7 @@ export default function MockTestResult() {
   if (!attempt) {
     return (
       <View style={styles.container}>
+        <Text style={styles.loadingMessage}>Preparing your performance report...</Text>
         <CardSkeleton height={110} />
         <View style={[styles.statRow, { marginTop: spacing.base }]}>
           <CardSkeleton height={72} />
@@ -200,6 +201,10 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingTop: 24,
     paddingBottom: 40,
+  },
+  loadingMessage: {
+    ...typography.secondary,
+    marginBottom: spacing.md,
   },
   scoreCard: {
     borderRadius: 16,

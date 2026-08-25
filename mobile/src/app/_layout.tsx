@@ -1,10 +1,11 @@
+import type { ReactNode } from "react";
 import { Stack } from "expo-router";
 import { Text, View } from "react-native";
 import { useMigrations } from "drizzle-orm/expo-sqlite/migrator";
 import * as Sentry from "@sentry/react-native";
 import { db } from "../db/client";
 import migrations from "../db/migrations/migrations";
-import { SyncProvider } from "../sync/SyncContext";
+import { SyncProvider, useSyncStatus } from "../sync/SyncContext";
 import { NetworkStatusProvider } from "../sync/NetworkStatusContext";
 import { OfflineBanner } from "../sync/OfflineBanner";
 import { SessionHistoryProvider } from "../practice/sessionHistory";
@@ -12,6 +13,8 @@ import { BookmarksProvider } from "../practice/bookmarks";
 import { AppLanguageProvider } from "../practice/appLanguage";
 import { AuthProvider } from "../practice/authContext";
 import { ActiveSessionProvider } from "../practice/activeSessionContext";
+import { PreparingApp } from "../ui/PreparingApp";
+import { AppDialogHost } from "../ui/AppDialog";
 import { STACK_SCREEN_OPTIONS } from "../ui/navigation";
 import { useScreenViewTracking } from "../telemetry/analytics";
 import { colors } from "../ui/theme";
@@ -56,7 +59,9 @@ function RootLayout() {
                 {/* Innermost: only the tab bar and the quiz/test screens need this, and
                     neither depends on sync/auth/session-history state. */}
                 <ActiveSessionProvider>
-                  <RootNavigator />
+                  <FirstLaunchGate>
+                    <RootNavigator />
+                  </FirstLaunchGate>
                 </ActiveSessionProvider>
               </AppLanguageProvider>
             </BookmarksProvider>
@@ -65,6 +70,15 @@ function RootLayout() {
       </SyncProvider>
     </NetworkStatusProvider>
   );
+}
+
+/** Shows the first-launch preparation screen instead of the app until a genuinely first-ever sync reaches a usable state — see SyncContext's firstLaunchSyncActive. */
+function FirstLaunchGate({ children }: { children: ReactNode }) {
+  const { firstLaunchSyncActive } = useSyncStatus();
+  if (firstLaunchSyncActive) {
+    return <PreparingApp />;
+  }
+  return <>{children}</>;
 }
 
 function RootNavigator() {
@@ -78,6 +92,7 @@ function RootNavigator() {
         <Stack.Screen name="account" options={{ title: "Your account" }} />
       </Stack>
       <OfflineBanner />
+      <AppDialogHost />
     </>
   );
 }

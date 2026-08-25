@@ -26,6 +26,7 @@ export async function runDeltaSync(): Promise<DeltaSyncResult> {
   try {
     const lastSyncedAt = await getLastSyncedAt();
     const since = lastSyncedAt ? lastSyncedAt.toISOString() : "0";
+    if (__DEV__) console.log(`[sync] delta sync started (since ${since})`);
     // Captured before any fetching, and stored as the new watermark on success — a
     // question edited mid-sync would otherwise fall between the old and new marks and
     // never be picked up.
@@ -57,8 +58,10 @@ export async function runDeltaSync(): Promise<DeltaSyncResult> {
     }
 
     await setLastSyncedAt(startedAt);
+    if (__DEV__) console.log(`[sync] delta sync completed (${upserted} upserted, ${deleted} deleted)`);
     return { status: "completed", upserted, deleted };
   } catch (err) {
+    if (__DEV__) console.log("[sync] delta sync failed", (err as Error).message);
     return { status: "error", upserted, deleted, error: (err as Error).message };
   }
 }

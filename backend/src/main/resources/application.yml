@@ -84,3 +84,10 @@ app:
   # Relative to the backend module's directory. Deliberately outside src/ so builds are
   # never packaged into the jar.
   downloads-dir: ./downloads
+
+  question-pool:
+    # Temporary measure: restricts every public question read (sync, live, counts, mock
+    # sampling) to the ~500-question pool seeded by V9__temporary_question_pool.sql,
+    # instead of the full ~37,900-question bank. Flip to false to serve everything again —
+    # no other code change needed. See QuestionService.temporaryPoolEnabled.
+    temporary-enabled: true

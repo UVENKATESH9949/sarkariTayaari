@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useSyncStatus } from "../sync/SyncContext";
 import { useNetworkStatus } from "../sync/NetworkStatusContext";
 
@@ -16,7 +17,13 @@ export type HybridMode = "local" | "live" | "unavailable";
 export function useHybridMode(): HybridMode {
   const { lastSyncedAt } = useSyncStatus();
   const { isOnline } = useNetworkStatus();
-  if (lastSyncedAt !== null) return "local";
-  if (isOnline !== false) return "live";
-  return "unavailable";
+  const mode: HybridMode = lastSyncedAt !== null ? "local" : isOnline !== false ? "live" : "unavailable";
+
+  // Dev-only visibility into which source a screen is actually reading from — logs only
+  // on a real transition (mount counts as one), never in a production build.
+  useEffect(() => {
+    if (__DEV__) console.log(`[cache] hybrid mode -> ${mode}`);
+  }, [mode]);
+
+  return mode;
 }

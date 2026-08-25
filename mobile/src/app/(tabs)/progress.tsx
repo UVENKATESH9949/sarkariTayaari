@@ -8,8 +8,10 @@ import { toSubjectMeta } from "../../constants/subjects";
 import { getAllSubjects, type SubjectMetaRow } from "../../db/subjectMeta";
 import { PressableScale } from "../../ui/PressableScale";
 import { AnimatedProgressBar } from "../../ui/AnimatedProgressBar";
+import { ContextualLoading } from "../../ui/ContextualLoading";
 import { FadeInItem } from "../../ui/FadeInList";
 import { Card } from "../../ui/Card";
+import { ListSkeleton } from "../../ui/Skeleton";
 import { colors, radius, spacing, typography } from "../../ui/theme";
 
 function scoreColor(percent: number) {
@@ -24,9 +26,13 @@ export default function Progress() {
   const { sessions } = useSessionHistory();
   // Breakdown covers whatever subjects are synced, not a fixed built-in list.
   const [syncedSubjects, setSyncedSubjects] = useState<SubjectMetaRow[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getAllSubjects().then(setSyncedSubjects).catch(() => setSyncedSubjects([]));
+    getAllSubjects()
+      .then(setSyncedSubjects)
+      .catch(() => setSyncedSubjects([]))
+      .finally(() => setLoading(false));
   }, []);
 
   const stats = useMemo(() => {
@@ -92,6 +98,9 @@ export default function Progress() {
       </View>
 
       <Text style={typography.sectionTitle}>Subject-wise accuracy</Text>
+      {loading ? (
+        <ContextualLoading message="Preparing your performance report..." skeleton={<ListSkeleton count={4} />} />
+      ) : (
       <View style={styles.subjectList}>
         {stats.subjectBreakdown.map((subject, index) => (
           <FadeInItem key={subject.name} index={index}>
@@ -122,6 +131,7 @@ export default function Progress() {
           </FadeInItem>
         ))}
       </View>
+      )}
 
       <PressableScale style={styles.historyLink} onPress={() => router.push("/practice/history")}>
         <Text style={styles.historyLinkText}>View full session history</Text>

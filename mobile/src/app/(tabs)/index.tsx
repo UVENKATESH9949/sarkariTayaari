@@ -12,6 +12,7 @@ import { PressableScale } from "../../ui/PressableScale";
 import { FadeInItem } from "../../ui/FadeInList";
 import { Button } from "../../ui/Button";
 import { Card } from "../../ui/Card";
+import { CardSkeleton } from "../../ui/Skeleton";
 import { colors, radius, spacing, typography } from "../../ui/theme";
 
 // Streak/readiness are still mock — real streak computation and the final
@@ -26,12 +27,15 @@ export default function Home() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [followedExamName, setFollowedExamName] = useState<string | null>(null);
+  const [loadingExam, setLoadingExam] = useState(true);
   const { bookmarks } = useBookmarks();
   const { sessions } = useSessionHistory();
   const { isRefreshing, refresh, syncVersion } = useSyncStatus();
 
   useEffect(() => {
-    getFollowedExam().then((exam) => setFollowedExamName(exam?.name ?? null));
+    getFollowedExam()
+      .then((exam) => setFollowedExamName(exam?.name ?? null))
+      .finally(() => setLoadingExam(false));
     // syncVersion in deps: previously missing, so this never picked up a followed-exam
     // change from a background sync — only from manual pull-to-refresh below.
   }, [syncVersion]);
@@ -59,10 +63,14 @@ export default function Home() {
         <Text style={styles.streakText}>{MOCK.streakDays}-day streak</Text>
       </View>
 
-      <Card style={styles.examCard}>
-        <Text style={styles.examLabel}>Preparing for</Text>
-        <Text style={styles.examName}>{followedExamName ?? " "}</Text>
-      </Card>
+      {loadingExam ? (
+        <CardSkeleton height={70} />
+      ) : (
+        <Card style={styles.examCard}>
+          <Text style={styles.examLabel}>Preparing for</Text>
+          <Text style={styles.examName}>{followedExamName ?? " "}</Text>
+        </Card>
+      )}
 
       <Button size="lg" onPress={() => router.push("/practice")}>
         Continue Practice

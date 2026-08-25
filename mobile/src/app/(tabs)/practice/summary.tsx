@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { ScrollView, Text, View, StyleSheet } from "react-native";
 import { useSessionHistory } from "../../../practice/sessionHistory";
+import type { QuestionResult } from "../../../practice/sessionHistory";
 import { Button } from "../../../ui/Button";
 import { Card } from "../../../ui/Card";
 import { colors, radius, spacing, typography } from "../../../ui/theme";
@@ -10,6 +11,112 @@ function scoreTone(accuracyPercent: number): { text: string; bg: string } {
   if (accuracyPercent >= 70) return { text: colors.semantic.success, bg: colors.semantic.successBg };
   if (accuracyPercent >= 40) return { text: colors.semantic.warning, bg: colors.semantic.warningBg };
   return { text: colors.semantic.error, bg: colors.semantic.errorBg };
+}
+
+function formatDateTime(timestampMs: number): string {
+  const date = new Date(timestampMs);
+  return `${date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })} · ${date.toLocaleTimeString(
+    undefined,
+    { hour: "numeric", minute: "2-digit" },
+  )}`;
+}
+
+function formatDuration(durationMs: number): string {
+  const totalSeconds = Math.round(durationMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes === 0) return `${seconds}s`;
+  return `${minutes}m ${seconds}s`;
+}
+
+function StatCell({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <View style={styles.statCell}>
+      <Text style={[styles.statValue, color ? { color } : null]}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function ResultCard({ result, index }: { result: QuestionResult; index: number }) {
+  return (
+    <Card style={styles.resultCard}>
+      <View style={styles.resultHeader}>
+        <Text style={styles.resultQuestionNumber}>Question {index + 1}</Text>
+        <View
+          style={[
+            styles.statusPill,
+            { backgroundColor: result.isCorrect ? colors.semantic.successBg : colors.semantic.errorBg },
+          ]}
+        >
+          <Ionicons
+            name={result.isCorrect ? "checkmark" : "close"}
+            size={12}
+            color={result.isCorrect ? colors.semantic.success : colors.semantic.error}
+          />
+          <Text style={[styles.statusPillText, { color: result.isCorrect ? colors.semantic.success : colors.semantic.error }]}>
+            {result.isCorrect ? "Correct" : "Incorrect"}
+          </Text>
+        </View>
+      </View>
+
+      <Text style={styles.resultQuestionText}>{result.questionText}</Text>
+
+      <View style={styles.optionsList}>
+        {result.options.map((option, optionIndex) => {
+          const isCorrectOption = optionIndex === result.correctIndex;
+          const isUserWrongPick = optionIndex === result.selectedIndex && !result.isCorrect;
+          return (
+            <View
+              key={optionIndex}
+              style={[
+                styles.optionRow,
+                isCorrectOption && styles.optionRowCorrect,
+                isUserWrongPick && styles.optionRowWrong,
+              ]}
+            >
+              <View
+                style={[
+                  styles.optionBadge,
+                  isCorrectOption && styles.optionBadgeCorrect,
+                  isUserWrongPick && styles.optionBadgeWrong,
+                ]}
+              >
+                <Text style={[styles.optionBadgeText, (isCorrectOption || isUserWrongPick) && styles.optionBadgeTextLight]}>
+                  {String.fromCharCode(65 + optionIndex)}
+                </Text>
+              </View>
+              <Text style={styles.optionText}>{option}</Text>
+              {isCorrectOption && <Ionicons name="checkmark-circle" size={16} color={colors.semantic.success} />}
+              {isUserWrongPick && <Ionicons name="close-circle" size={16} color={colors.semantic.error} />}
+            </View>
+          );
+        })}
+      </View>
+
+      <View style={styles.answerLines}>
+        <Text style={styles.answerLine}>
+          Your Answer:{" "}
+          <Text style={[styles.answerLineValue, { color: result.isCorrect ? colors.semantic.success : colors.semantic.error }]}>
+            {String.fromCharCode(65 + result.selectedIndex)}. {result.options[result.selectedIndex]}
+          </Text>
+        </Text>
+        {!result.isCorrect && (
+          <Text style={styles.answerLine}>
+            Correct Answer:{" "}
+            <Text style={[styles.answerLineValue, { color: colors.semantic.success }]}>
+              {String.fromCharCode(65 + result.correctIndex)}. {result.options[result.correctIndex]}
+            </Text>
+          </Text>
+        )}
+      </View>
+
+      <View style={styles.explanationBox}>
+        <Text style={styles.explanationLabel}>Explanation</Text>
+        <Text style={styles.explanationText}>{result.explanation}</Text>
+      </View>
+    </Card>
+  );
 }
 
 export default function Summary() {
@@ -27,6 +134,7 @@ export default function Summary() {
   }
 
   const accuracyPercent = Math.round((session.correctCount / session.totalCount) * 100);
+  const incorrectCount = session.totalCount - session.correctCount;
   const tone = scoreTone(accuracyPercent);
 
   return (
@@ -40,25 +148,29 @@ export default function Summary() {
         </View>
         <Text style={[styles.accuracyText, { color: tone.text }]}>{accuracyPercent}% accuracy</Text>
         <Text style={styles.contextText}>
+          {session.examLabel ? `${session.examLabel} · ` : ""}
           {session.subjectName} · {session.topicName} · {session.levelLabel}
         </Text>
+        <Text style={styles.dateText}>{formatDateTime(session.completedAt)}</Text>
+
+        <View style={styles.statsRow}>
+          <StatCell label="Total" value={String(session.totalCount)} />
+          <StatCell label="Correct" value={String(session.correctCount)} color={colors.semantic.success} />
+          <StatCell label="Incorrect" value={String(incorrectCount)} color={colors.semantic.error} />
+          <StatCell label="Accuracy" value={`${accuracyPercent}%`} />
+        </View>
+
+        {session.durationMs !== null && (
+          <View style={styles.durationRow}>
+            <Ionicons name="time-outline" size={14} color={colors.text.muted} />
+            <Text style={styles.durationText}>Time taken: {formatDuration(session.durationMs)}</Text>
+          </View>
+        )}
 
         <Text style={[typography.label, styles.sectionLabel]}>Question by question</Text>
         <View style={styles.list}>
           {session.results.map((result, index) => (
-            <Card key={result.questionId} style={styles.resultRow}>
-              <View
-                style={[
-                  styles.resultIcon,
-                  { backgroundColor: result.isCorrect ? colors.semantic.success : colors.semantic.error },
-                ]}
-              >
-                <Ionicons name={result.isCorrect ? "checkmark" : "close"} size={14} color={colors.text.onAccent} />
-              </View>
-              <Text style={styles.resultText} numberOfLines={2}>
-                {index + 1}. {result.questionText}
-              </Text>
-            </Card>
+            <ResultCard key={result.questionId} result={result} index={index} />
           ))}
         </View>
 
@@ -111,6 +223,47 @@ const styles = StyleSheet.create({
     color: colors.text.muted,
     textAlign: "center",
   },
+  dateText: {
+    marginTop: spacing.xs,
+    fontSize: 12,
+    color: colors.text.muted,
+  },
+  statsRow: {
+    flexDirection: "row",
+    width: "100%",
+    marginTop: spacing.xl,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+  },
+  statCell: {
+    flex: 1,
+    alignItems: "center",
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: colors.text.primary,
+  },
+  statLabel: {
+    marginTop: 2,
+    fontSize: 11,
+    color: colors.text.muted,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  durationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginTop: spacing.md,
+  },
+  durationText: {
+    fontSize: 12,
+    color: colors.text.muted,
+  },
   sectionLabel: {
     alignSelf: "flex-start",
     marginTop: spacing["2xl"],
@@ -118,28 +271,117 @@ const styles = StyleSheet.create({
   },
   list: {
     width: "100%",
-    gap: spacing.sm + 2,
+    gap: spacing.md,
   },
-  resultRow: {
+  resultCard: {
+    width: "100%",
+    gap: spacing.md,
+  },
+  resultHeader: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    gap: spacing.sm + 2,
-    padding: spacing.md,
-    borderRadius: radius.sm + 2,
+    alignItems: "center",
+    justifyContent: "space-between",
   },
-  resultIcon: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+  resultQuestionNumber: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.text.muted,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 3,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.pill,
+  },
+  statusPillText: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  resultQuestionText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: colors.text.primary,
+    lineHeight: 22,
+  },
+  optionsList: {
+    gap: spacing.sm,
+  },
+  optionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm + 2,
+    backgroundColor: colors.surfaceElevated2,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm + 2,
+    padding: spacing.sm + 2,
+  },
+  optionRowCorrect: {
+    borderColor: colors.semantic.success,
+    backgroundColor: colors.semantic.successBg,
+  },
+  optionRowWrong: {
+    borderColor: colors.semantic.error,
+    backgroundColor: colors.semantic.errorBg,
+  },
+  optionBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceElevated,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 1,
   },
-  resultText: {
+  optionBadgeCorrect: {
+    backgroundColor: colors.semantic.success,
+  },
+  optionBadgeWrong: {
+    backgroundColor: colors.semantic.error,
+  },
+  optionBadgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.text.primary,
+  },
+  optionBadgeTextLight: {
+    color: colors.text.onAccent,
+  },
+  optionText: {
     flex: 1,
     fontSize: 13,
     color: colors.text.primary,
-    lineHeight: 19,
+  },
+  answerLines: {
+    gap: 4,
+  },
+  answerLine: {
+    fontSize: 13,
+    color: colors.text.secondary,
+  },
+  answerLineValue: {
+    fontWeight: "700",
+  },
+  explanationBox: {
+    backgroundColor: colors.surfaceElevated2,
+    borderRadius: radius.md,
+    padding: spacing.md,
+  },
+  explanationLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.text.secondary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: spacing.xs,
+  },
+  explanationText: {
+    fontSize: 13,
+    color: colors.text.primary,
+    lineHeight: 20,
   },
   secondaryButton: {
     width: "100%",

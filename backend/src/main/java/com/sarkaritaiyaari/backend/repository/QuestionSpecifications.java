@@ -1,6 +1,8 @@
 package com.sarkaritaiyaari.backend.repository;
 
 import com.sarkaritaiyaari.backend.entity.Question;
+import com.sarkaritaiyaari.backend.entity.TemporaryQuestionPool;
+import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.util.List;
@@ -33,6 +35,20 @@ public final class QuestionSpecifications {
     /** Student-facing reads must never surface a soft-deleted question — unlike the admin CRUD list, which deliberately shows them for restore purposes. */
     public static Specification<Question> notDeleted() {
         return (root, query, cb) -> cb.isFalse(root.get("deleted"));
+    }
+
+    /**
+     * Restricts to the temporary ~500-question pool (see V9__temporary_question_pool.sql
+     * and app.question-pool.temporary-enabled) — applied only where the caller has
+     * confirmed the flag is on, so this predicate itself doesn't need to know about config.
+     */
+    public static Specification<Question> inTemporaryPool() {
+        return (root, query, cb) -> {
+            Subquery<UUID> sub = query.subquery(UUID.class);
+            var poolRoot = sub.from(TemporaryQuestionPool.class);
+            sub.select(poolRoot.get("questionId"));
+            return root.get("id").in(sub);
+        };
     }
 
     /**

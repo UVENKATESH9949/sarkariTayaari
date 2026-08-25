@@ -7,10 +7,12 @@ import { getTopicStats, type TopicStat } from "../../../data/practiceData";
 import { useHybridMode } from "../../../data/hybridSource";
 import { getSubjectMetaByName, type SubjectMetaRow } from "../../../db/subjectMeta";
 import { useSyncStatus } from "../../../sync/SyncContext";
+import { ContextualLoading } from "../../../ui/ContextualLoading";
 import { FadeInItem } from "../../../ui/FadeInList";
 import { OfflineNoDataNotice } from "../../../ui/OfflineNoDataNotice";
 import { Card } from "../../../ui/Card";
 import { EmptyState } from "../../../ui/EmptyState";
+import { ListSkeleton } from "../../../ui/Skeleton";
 import { colors, radius, spacing, typography } from "../../../ui/theme";
 
 function questionsLabel(count: number): string {
@@ -28,13 +30,17 @@ export default function Topics() {
   const [search, setSearch] = useState("");
   const [topics, setTopics] = useState<TopicStat[]>([]);
   const [subjectStyle, setSubjectStyle] = useState<SubjectMetaRow | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const { syncVersion } = useSyncStatus();
   const mode = useHybridMode();
 
   useEffect(() => {
     if (!subjectId) return;
-    getTopicStats(subjectId, examCode ?? null, mode).then(setTopics);
+    getTopicStats(subjectId, examCode ?? null, mode).then((result) => {
+      setTopics(result);
+      setLoading(false);
+    });
   }, [subjectId, examCode, syncVersion, mode]);
 
   // Styling is synced per subject rather than looked up from a hardcoded table.
@@ -77,6 +83,12 @@ export default function Topics() {
           <Text style={styles.heading}>Choose a topic</Text>
           <Text style={styles.subheading}>{topics.length} topics under {subjectName}</Text>
 
+          {loading ? (
+            <ContextualLoading
+              message={`Preparing topics for ${subjectName ?? "this subject"}...`}
+              skeleton={<ListSkeleton count={6} />}
+            />
+          ) : (
           <View style={styles.list}>
             {filteredTopics.map((topic, index) => {
               const disabled = topic.questionCount === 0;
@@ -107,6 +119,7 @@ export default function Topics() {
             )}
             {topics.length === 0 && mode === "unavailable" && <OfflineNoDataNotice />}
           </View>
+          )}
         </ScrollView>
       </View>
     </>

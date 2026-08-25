@@ -40,8 +40,11 @@ export async function runInitialSync(onProgress?: OnProgress): Promise<{ status:
   let synced = 0;
   let total = 0;
 
+  if (__DEV__) console.log("[sync] initial sync started");
+
   try {
     await Promise.all([writeLanguages(), writeReferenceData()]);
+    if (__DEV__) console.log("[sync] reference data ready (languages, exams, subjects, topics, structures)");
 
     // Resume an interrupted run rather than re-downloading everything. Pages already
     // written stay written — the upserts make a partial run safe to build on.
@@ -58,6 +61,7 @@ export async function runInitialSync(onProgress?: OnProgress): Promise<{ status:
         await upsertQuestionsBatch(tx, result.content);
       });
       synced += result.content.length;
+      if (__DEV__) console.log(`[sync] page ${page} written (${synced}/${total} questions)`);
       // Checkpoint after the page is committed, so a crash here resumes at the next one.
       await setResumeState({ page: page + 1, startedAt });
 
@@ -83,10 +87,12 @@ export async function runInitialSync(onProgress?: OnProgress): Promise<{ status:
     // running is then re-fetched by the next delta sync instead of being missed.
     await setLastSyncedAt(startedAt);
     await clearResumeState();
+    if (__DEV__) console.log(`[sync] initial sync completed (${synced}/${total} questions)`);
     onProgress?.({ status: "completed", synced, total });
     return { status: "completed" };
   } catch (err) {
     const message = (err as Error).message;
+    if (__DEV__) console.log("[sync] initial sync failed, will retry", message);
     onProgress?.({ status: "error", synced, total, error: message });
     throw err;
   }

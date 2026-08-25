@@ -22,6 +22,8 @@ export type SessionRecord = {
   levelLabel: string;
   correctCount: number;
   totalCount: number;
+  /** Null for sessions recorded before this field existed. */
+  durationMs: number | null;
   results: QuestionResult[];
 };
 
@@ -48,6 +50,7 @@ export async function loadSessions(): Promise<SessionRecord[]> {
       levelLabel: row.levelLabel,
       correctCount: row.correctCount,
       totalCount: row.totalCount,
+      durationMs: row.durationMs,
       results: resultRows.map((r) => ({
         questionId: r.questionId,
         questionText: r.questionText,
@@ -74,6 +77,7 @@ export async function insertSession(session: SessionRecord): Promise<void> {
       levelLabel: session.levelLabel,
       correctCount: session.correctCount,
       totalCount: session.totalCount,
+      durationMs: session.durationMs,
     });
 
     for (const [index, result] of session.results.entries()) {

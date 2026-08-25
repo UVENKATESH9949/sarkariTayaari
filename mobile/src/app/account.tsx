@@ -3,7 +3,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -15,6 +14,7 @@ import {
 } from "react-native";
 import { useAuth } from "../practice/authContext";
 import { useNetworkStatus } from "../sync/NetworkStatusContext";
+import { AppAlert } from "../ui/AppDialog";
 import { Button } from "../ui/Button";
 import { CardSkeleton } from "../ui/Skeleton";
 import { colors, radius, spacing } from "../ui/theme";
@@ -49,7 +49,7 @@ export default function Account() {
 
   if (user) {
     const handleSignOut = () => {
-      Alert.alert(
+      AppAlert.alert(
         "Sign out?",
         "Your progress is saved to your account first. It stays on this phone too.",
         [

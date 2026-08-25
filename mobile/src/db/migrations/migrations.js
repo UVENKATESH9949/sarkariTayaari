@@ -9,6 +9,7 @@ import m0004 from './0004_perfect_micromacro.sql';
 import m0005 from './0005_aromatic_supernaut.sql';
 import m0006 from './0006_good_christian_walker.sql';
 import m0007 from './0007_first_loa.sql';
+import m0008 from './0008_flawless_mockingbird.sql';
 
   export default {
     journal,
@@ -20,7 +21,8 @@ m0003,
 m0004,
 m0005,
 m0006,
-m0007
+m0007,
+m0008
     }
   }
   

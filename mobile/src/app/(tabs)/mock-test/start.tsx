@@ -50,6 +50,7 @@ export default function MockTestStart() {
   if (loading) {
     return (
       <View style={styles.container}>
+        <Text style={styles.loadingMessage}>Preparing your test details...</Text>
         <CardSkeleton height={28} />
         <View style={[styles.summaryRow, { marginTop: spacing.xl }]}>
           <CardSkeleton height={78} />
@@ -176,6 +177,10 @@ const styles = StyleSheet.create({
   emptyText: {
     ...typography.secondary,
     textAlign: "center",
+  },
+  loadingMessage: {
+    ...typography.secondary,
+    marginBottom: spacing.md,
   },
   examName: {
     ...typography.pageTitle,

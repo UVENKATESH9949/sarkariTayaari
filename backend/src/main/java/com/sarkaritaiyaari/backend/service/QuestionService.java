@@ -22,6 +22,7 @@ import com.sarkaritaiyaari.backend.repository.QuestionSpecifications;
 import com.sarkaritaiyaari.backend.repository.QuestionTranslationRepository;
 import com.sarkaritaiyaari.backend.repository.SubjectRepository;
 import com.sarkaritaiyaari.backend.repository.TopicRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -56,6 +57,15 @@ public class QuestionService {
     private static final String ROOT_LANGUAGE = "en";
     private static final OffsetDateTime EPOCH = Instant.EPOCH.atOffset(ZoneOffset.UTC);
     private static final int MAX_SYNC_PAGE_SIZE = 1000;
+
+    /**
+     * Temporary measure: while true, every public read (sync, live, counts, mock sampling)
+     * is restricted to the ~500-question pool seeded by V9__temporary_question_pool.sql,
+     * instead of the full ~37,900-question bank. Flip to false (or reseed the pool table
+     * with more ids) to grow the pool later — no other code change needed.
+     */
+    @Value("${app.question-pool.temporary-enabled:true}")
+    private boolean temporaryPoolEnabled;
 
     private final QuestionRepository questionRepository;
     private final QuestionTranslationRepository translationRepository;
@@ -138,7 +148,7 @@ public class QuestionService {
         Pageable pageable = PageRequest.of(page, clampedSize, Sort.by("updatedAt").ascending());
 
         return questionRepository
-                .findByUpdatedAtAfter(sinceTimestamp, pageable)
+                .findByUpdatedAtAfter(sinceTimestamp, temporaryPoolEnabled, pageable)
                 .map(QuestionMapper::toResponse);
     }
 
@@ -157,6 +167,9 @@ public class QuestionService {
         int clampedSize = Math.min(Math.max(size, 1), MAX_LIVE_PAGE_SIZE);
         var spec = QuestionSpecifications.filter(examCode, subjectId, topicId, difficulty)
                 .and(QuestionSpecifications.notDeleted());
+        if (temporaryPoolEnabled) {
+            spec = spec.and(QuestionSpecifications.inTemporaryPool());
+        }
         return questionRepository.findAll(spec, PageRequest.of(page, clampedSize)).map(QuestionMapper::toResponse);
     }
 
@@ -167,20 +180,20 @@ public class QuestionService {
      */
     @Transactional(readOnly = true)
     public Map<String, Long> countsGroupedBy(String groupBy, String examCode, UUID subjectId, UUID topicId, String difficulty) {
-        return questionRepository.countGroupedBy(groupBy, examCode, subjectId, topicId, difficulty);
+        return questionRepository.countGroupedBy(groupBy, examCode, subjectId, topicId, difficulty, temporaryPoolEnabled);
     }
 
     /** Live equivalent of mobile/src/db/mockTest.ts's countAvailable() — per-section question availability before local sync completes. */
     @Transactional(readOnly = true)
     public long countForMock(String examCode, List<UUID> subjectIds) {
-        return questionRepository.countForMock(examCode, subjectIds);
+        return questionRepository.countForMock(examCode, subjectIds, temporaryPoolEnabled);
     }
 
     /** Live equivalent of mobile/src/db/mockTest.ts's buildMockTestQuestions() per-section query — a genuinely random sample, not just the first N matches. */
     @Transactional(readOnly = true)
     public List<QuestionResponse> sampleForMock(String examCode, List<UUID> subjectIds, int limit) {
         int clampedLimit = Math.min(Math.max(limit, 1), MAX_MOCK_SAMPLE_SIZE);
-        return questionRepository.sampleForMock(examCode, subjectIds, clampedLimit).stream()
+        return questionRepository.sampleForMock(examCode, subjectIds, clampedLimit, temporaryPoolEnabled).stream()
                 .map(QuestionMapper::toResponse)
                 .toList();
     }

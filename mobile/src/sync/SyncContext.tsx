@@ -20,6 +20,15 @@ type SyncContextValue = (SyncProgress | { status: "checking"; synced: 0; total: 
   isRefreshing: boolean;
   lastSyncedAt: Date | null;
   refreshError: string | null;
+  /**
+   * True only for a device's genuinely first-ever sync, from the moment it starts until
+   * `status` reaches "completed" or "partial" (the same soft-timeout-reached, already-
+   * navigable state `runInitialSync` already treats as usable elsewhere). Stays false the
+   * entire session for a returning device — the initial-sync branch below is the only
+   * place that ever sets it true. Drives the first-launch preparation gate
+   * (`mobile/src/app/PreparingApp.tsx`) without needing a separate persisted flag.
+   */
+  firstLaunchSyncActive: boolean;
   refresh: (options?: { force?: boolean }) => Promise<void>;
   /**
    * The More screen's single "Sync Now"/"Retry" action — picks initial vs. delta sync
@@ -43,6 +52,7 @@ const SyncContext = createContext<SyncContextValue>({
   isRefreshing: false,
   lastSyncedAt: null,
   refreshError: null,
+  firstLaunchSyncActive: false,
   refresh: async () => {},
   syncNow: async () => {},
   syncVersion: 0,
@@ -76,6 +86,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [syncVersion, setSyncVersion] = useState(0);
+  const [firstLaunchSyncActive, setFirstLaunchSyncActive] = useState(false);
 
   const { isOnline } = useNetworkStatus();
   const started = useRef(false);
@@ -124,6 +135,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     (async () => {
       const last = await getLastSyncedAt();
       if (last) {
+        if (__DEV__) console.log("[cache] warm — already synced, checking for updates in background");
         setProgress({ status: "completed", synced: 0, total: 0 });
         setLastSyncedAt(last);
         ensureExamFollowed().catch((err) => {
@@ -143,7 +155,19 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       // read live from the backend (via useHybridMode()) until this resolves.
       // Retries indefinitely on failure (e.g. a transient backend error mid-download) —
       // see runInitialSyncUntilDone's own comment for why that's safe to do.
-      runInitialSyncUntilDone(setProgress).then(async () => {
+      // This is a genuinely first-ever launch — the preparation gate stays up until
+      // progress reaches a usable state, released from inside the progress callback
+      // itself (not a separate effect reacting to state, same shape as the setState
+      // calls already made from the `.then()` below).
+      if (__DEV__) console.log("[cache] cold — first-ever launch, preparation gate active");
+      setFirstLaunchSyncActive(true);
+      runInitialSyncUntilDone((p) => {
+        setProgress(p);
+        if (p.status === "completed" || p.status === "partial") {
+          if (__DEV__) console.log(`[cache] preparation gate released (status: ${p.status})`);
+          setFirstLaunchSyncActive(false);
+        }
+      }).then(async () => {
         await ensureExamFollowed();
         setLastSyncedAt(await getLastSyncedAt());
         setSyncVersion((v) => v + 1);
@@ -190,7 +214,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
   return (
     <SyncContext.Provider
-      value={{ ...progress, isRefreshing, lastSyncedAt, refreshError, refresh, syncNow, syncVersion }}
+      value={{ ...progress, isRefreshing, lastSyncedAt, refreshError, firstLaunchSyncActive, refresh, syncNow, syncVersion }}
     >
       {children}
     </SyncContext.Provider>

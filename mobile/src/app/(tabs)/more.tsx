@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Alert, Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
+import { Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../practice/authContext";
 import { useSessionHistory } from "../../practice/sessionHistory";
 import { LANGUAGES, useAppLanguage } from "../../practice/appLanguage";
 import { LanguagePickerModal } from "../../practice/LanguagePickerModal";
 import { useSyncStatus } from "../../sync/SyncContext";
+import { AppAlert } from "../../ui/AppDialog";
 import { Card, CardDivider, CardRow } from "../../ui/Card";
 import { colors, spacing, typography } from "../../ui/theme";
 
@@ -47,7 +48,7 @@ export default function More() {
   const defaultLanguageName = LANGUAGES.find((l) => l.code === defaultLanguageCode)?.name ?? "English";
 
   const handleClearHistory = () => {
-    Alert.alert(
+    AppAlert.alert(
       "Clear practice history?",
       "This will remove all your recorded practice sessions. Bookmarked questions won't be affected. This can't be undone.",
       [

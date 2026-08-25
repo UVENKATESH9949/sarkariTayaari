@@ -54,7 +54,12 @@ export default function MockTestPapers() {
           Timed, exam-pattern tests with real negative marking — just like the real thing.
         </Text>
 
-        {loading && <ListSkeleton count={4} />}
+        {loading && (
+          <>
+            <Text style={styles.loadingMessage}>Finding the right mock tests for you...</Text>
+            <ListSkeleton count={4} />
+          </>
+        )}
 
         {!loading && (
           <View style={styles.list}>
@@ -127,6 +132,10 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     marginBottom: spacing.xl,
     lineHeight: 19,
+  },
+  loadingMessage: {
+    ...typography.secondary,
+    marginBottom: spacing.md,
   },
   list: {
     gap: spacing.md,

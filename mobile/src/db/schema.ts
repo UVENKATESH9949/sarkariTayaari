@@ -256,6 +256,9 @@ export const practiceSessions = sqliteTable(
     levelLabel: text("level_label").notNull(),
     correctCount: integer("correct_count").notNull(),
     totalCount: integer("total_count").notNull(),
+    // Nullable: sessions recorded before this column existed have no duration on record —
+    // the review screen hides the "time taken" row rather than showing a fake 0.
+    durationMs: integer("duration_ms"),
     // false until this session has been accepted by the server. Written locally first
     // and uploaded afterwards, so finishing a session never waits on the network.
     isSynced: integer("is_synced", { mode: "boolean" }).notNull().default(false),

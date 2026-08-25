@@ -4,10 +4,12 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { ScrollView, Text, TextInput, View, StyleSheet } from "react-native";
 import { toSubjectMeta } from "../../../constants/subjects";
 import { useSyncStatus } from "../../../sync/SyncContext";
+import { ContextualLoading } from "../../../ui/ContextualLoading";
 import { FadeInItem } from "../../../ui/FadeInList";
 import { OfflineNoDataNotice } from "../../../ui/OfflineNoDataNotice";
 import { Card } from "../../../ui/Card";
 import { EmptyState } from "../../../ui/EmptyState";
+import { ListSkeleton } from "../../../ui/Skeleton";
 import { colors, radius, spacing, typography } from "../../../ui/theme";
 import { getSubjectStats, type SubjectStat } from "../../../data/practiceData";
 import { useHybridMode } from "../../../data/hybridSource";
@@ -21,12 +23,16 @@ export default function Subjects() {
   const { examCode, examLabel } = useLocalSearchParams<{ examCode: string; examLabel: string }>();
   const [search, setSearch] = useState("");
   const [subjects, setSubjects] = useState<SubjectStat[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const { syncVersion } = useSyncStatus();
   const mode = useHybridMode();
 
   useEffect(() => {
-    getSubjectStats(examCode ?? null, mode).then(setSubjects);
+    getSubjectStats(examCode ?? null, mode).then((result) => {
+      setSubjects(result);
+      setLoading(false);
+    });
   }, [examCode, syncVersion, mode]);
 
   const filteredSubjects = useMemo(() => {
@@ -58,6 +64,12 @@ export default function Subjects() {
           <Text style={styles.heading}>Choose a subject</Text>
           <Text style={styles.subheading}>Shared across every exam you're preparing for</Text>
 
+          {loading ? (
+            <ContextualLoading
+              message={`Preparing subjects for ${examLabel ?? "this exam"}...`}
+              skeleton={<ListSkeleton count={5} />}
+            />
+          ) : (
           <View style={styles.list}>
             {filteredSubjects.map((subject, index) => {
               const meta = toSubjectMeta(subject);
@@ -89,6 +101,7 @@ export default function Subjects() {
             )}
             {subjects.length === 0 && mode === "unavailable" && <OfflineNoDataNotice />}
           </View>
+          )}
         </ScrollView>
       </View>
     </>

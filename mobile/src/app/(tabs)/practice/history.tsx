@@ -1,4 +1,4 @@
-import { Stack } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { ScrollView, Text, View, StyleSheet } from "react-native";
 import { useSessionHistory } from "../../../practice/sessionHistory";
 import type { SessionRecord } from "../../../practice/sessionHistory";
@@ -23,12 +23,12 @@ function scoreColor(accuracyPercent: number): string {
   return colors.semantic.error;
 }
 
-function SessionRow({ session, nowMs }: { session: SessionRecord; nowMs: number }) {
+function SessionRow({ session, nowMs, onPress }: { session: SessionRecord; nowMs: number; onPress: () => void }) {
   const accuracyPercent = Math.round((session.correctCount / session.totalCount) * 100);
   const color = scoreColor(accuracyPercent);
 
   return (
-    <Card style={styles.row}>
+    <Card style={styles.row} onPress={onPress}>
       <View style={[styles.scoreBadge, { backgroundColor: color }]}>
         <Text style={styles.scoreBadgeText}>
           {session.correctCount}/{session.totalCount}
@@ -60,6 +60,7 @@ function SessionRow({ session, nowMs }: { session: SessionRecord; nowMs: number 
 }
 
 export default function History() {
+  const router = useRouter();
   const { sessions } = useSessionHistory();
   const nowMs = Date.now();
 
@@ -76,7 +77,12 @@ export default function History() {
         ) : (
           <View style={styles.list}>
             {sessions.map((session) => (
-              <SessionRow key={session.id} session={session} nowMs={nowMs} />
+              <SessionRow
+                key={session.id}
+                session={session}
+                nowMs={nowMs}
+                onPress={() => router.push({ pathname: "/practice/summary", params: { sessionId: session.id } })}
+              />
             ))}
           </View>
         )}

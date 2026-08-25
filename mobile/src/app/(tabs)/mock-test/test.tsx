@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
+import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
 import { buildMockTestQuestions, insertMockTestAttempt, type MockTestQuestion } from "../../../db/mockTest";
 import { getPaperById, type SyncedPaper } from "../../../db/examStructure";
 import { getPaperByIdLive } from "../../../data/mockTestStructureData";
@@ -10,8 +10,10 @@ import { useHybridMode } from "../../../data/hybridSource";
 import { LANGUAGES, useAppLanguage } from "../../../practice/appLanguage";
 import { LanguagePickerModal } from "../../../practice/LanguagePickerModal";
 import { useActiveSession } from "../../../practice/activeSessionContext";
+import { AppAlert } from "../../../ui/AppDialog";
+import { EmptyState } from "../../../ui/EmptyState";
 import { QuestionSkeleton } from "../../../ui/Skeleton";
-import { colors, spacing } from "../../../ui/theme";
+import { colors, spacing, typography } from "../../../ui/theme";
 
 function formatTime(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60);
@@ -162,7 +164,7 @@ export default function MockTestTaking() {
         console.warn("Failed to save mock test attempt", err);
         submittedRef.current = false;
         setSubmitting(false);
-        Alert.alert("Couldn't save your result", "Please try submitting again.");
+        AppAlert.alert("Couldn't save your result", "Please try submitting again.", undefined, "error");
         return;
       }
 
@@ -226,7 +228,7 @@ export default function MockTestTaking() {
 
   const confirmSubmit = () => {
     const unanswered = total - answeredCount;
-    Alert.alert(
+    AppAlert.alert(
       "Submit test?",
       `${unanswered} question${unanswered === 1 ? "" : "s"} unanswered${markedCount > 0 ? `, ${markedCount} marked for review` : ""}. You can't change answers after submitting.`,
       [
@@ -237,7 +239,7 @@ export default function MockTestTaking() {
   };
 
   const confirmExit = () => {
-    Alert.alert("Exit without submitting?", "Your progress on this attempt will be lost.", [
+    AppAlert.alert("Exit without submitting?", "Your progress on this attempt will be lost.", [
       { text: "Keep going", style: "cancel" },
       {
         text: "Exit",
@@ -258,9 +260,32 @@ export default function MockTestTaking() {
     );
   }
 
+  // Distinct from questions === null (still loading): the fetch completed but genuinely
+  // found nothing — e.g. offline with this paper never synced, or too few questions
+  // exist yet for the required sections. Without this check, an empty array fell through
+  // to the loading branch below and got stuck showing "Preparing your questions..."
+  // forever, which is worse than a blank screen: it looks alive but never resolves.
+  if (questions !== null && questions.length === 0) {
+    return (
+      <View style={styles.centered}>
+        <EmptyState
+          icon="alert-circle-outline"
+          title="No questions available"
+          body={
+            mode === "unavailable"
+              ? "You're offline and this content hasn't downloaded yet. Connect to the internet once to download it."
+              : "There aren't enough questions synced for this paper yet."
+          }
+          action={{ label: "Go back", onPress: () => router.replace("/mock-test") }}
+        />
+      </View>
+    );
+  }
+
   if (questions === null || !question || !translation) {
     return (
       <View style={[styles.centered, { paddingTop: spacing["3xl"], alignItems: "stretch" }]}>
+        <Text style={styles.loadingMessage}>Preparing your questions...</Text>
         <QuestionSkeleton />
       </View>
     );
@@ -443,6 +468,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.text.muted,
     textAlign: "center",
+  },
+  loadingMessage: {
+    ...typography.secondary,
+    textAlign: "center",
+    marginBottom: spacing.lg,
   },
   topBar: {
     flexDirection: "row",

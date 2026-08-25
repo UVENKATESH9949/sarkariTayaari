@@ -9,6 +9,7 @@ import { FadeInItem } from "../../../ui/FadeInList";
 import { OfflineNoDataNotice } from "../../../ui/OfflineNoDataNotice";
 import { Card } from "../../../ui/Card";
 import { EmptyState } from "../../../ui/EmptyState";
+import { ListSkeleton } from "../../../ui/Skeleton";
 import { colors, radius, spacing, typography } from "../../../ui/theme";
 
 // Every exam here is real, locally-synced data — no hardcoded "coming soon" exams.
@@ -17,12 +18,16 @@ export default function Practice() {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [exams, setExams] = useState<ExamOption[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const { syncVersion } = useSyncStatus();
   const mode = useHybridMode();
 
   useEffect(() => {
-    getSyncedExams(mode).then(setExams);
+    getSyncedExams(mode).then((result) => {
+      setExams(result);
+      setLoading(false);
+    });
   }, [syncVersion, mode]);
 
   const openSubjects = (examCode: string, examLabel: string) => {
@@ -85,6 +90,10 @@ export default function Practice() {
         <Text style={[typography.label, styles.sectionLabel]}>
           {searching ? `${filteredExams.length} result${filteredExams.length === 1 ? "" : "s"}` : "Browse by exam"}
         </Text>
+        {loading ? (
+          <ListSkeleton count={5} />
+        ) : (
+        <>
         {/*
           A single-column list rather than a two-up grid: exam names range from "GK"
           to "RRB NTPC (Graduate Level)", and a fixed-width tile either wastes space on
@@ -124,6 +133,8 @@ export default function Practice() {
             />
           )}
         </View>
+        </>
+        )}
       </ScrollView>
     </View>
   );

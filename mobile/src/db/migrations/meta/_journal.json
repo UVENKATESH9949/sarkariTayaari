@@ -57,6 +57,13 @@
       "when": 1786965460556,
       "tag": "0007_first_loa",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1787571782705,
+      "tag": "0008_flawless_mockingbird",
+      "breakpoints": true
     }
   ]
 }

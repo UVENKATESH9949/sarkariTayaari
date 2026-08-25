@@ -11,7 +11,7 @@ import { AnimatedProgressBar } from "../../../ui/AnimatedProgressBar";
 import { Button } from "../../../ui/Button";
 import { EmptyState } from "../../../ui/EmptyState";
 import { QuestionSkeleton } from "../../../ui/Skeleton";
-import { colors, radius, spacing } from "../../../ui/theme";
+import { colors, radius, spacing, typography } from "../../../ui/theme";
 import { getPracticeQuestions, type PracticeQuestion } from "../../../data/practiceData";
 import { useHybridMode } from "../../../data/hybridSource";
 
@@ -38,6 +38,7 @@ export default function Quiz() {
   const [reported, setReported] = useState<Set<string>>(new Set());
   const [languageCode, setLanguageCode] = useState(defaultLanguageCode);
   const [languagePickerVisible, setLanguagePickerVisible] = useState(false);
+  const sessionStartRef = useRef<number | null>(null);
 
   const mode = useHybridMode();
   // router.dismissAll() resolves "closest stack" against whichever tab currently
@@ -67,7 +68,10 @@ export default function Quiz() {
     const difficulty = levelKey as "all" | "easy" | "medium" | "hard";
     getPracticeQuestions(topicId, difficulty, examCode ?? null, mode).then((qs) => {
       setQuestions(qs);
-      if (qs.length > 0) beginSession("practice");
+      if (qs.length > 0) {
+        sessionStartRef.current = Date.now();
+        beginSession("practice");
+      }
     });
   }, [topicId, levelKey, examCode, mode, beginSession]);
 
@@ -123,6 +127,7 @@ export default function Quiz() {
       });
       const correctCount = results.filter((r) => r.isCorrect).length;
       const sessionId = `session-${Date.now()}`;
+      const durationMs = sessionStartRef.current !== null ? Date.now() - sessionStartRef.current : null;
       addSession({
         id: sessionId,
         completedAt: Date.now(),
@@ -132,6 +137,7 @@ export default function Quiz() {
         levelLabel: levelLabel ?? "",
         correctCount,
         totalCount: total,
+        durationMs,
         results,
       });
       endSession();
@@ -148,6 +154,7 @@ export default function Quiz() {
       <>
         <Stack.Screen options={{ title: `${topicName ?? ""} · ${levelLabel ?? ""}` }} />
         <View style={styles.loadingScreen}>
+          <Text style={styles.loadingMessage}>Preparing your questions...</Text>
           <QuestionSkeleton />
         </View>
       </>
@@ -291,6 +298,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     padding: spacing.xl,
+  },
+  loadingMessage: {
+    ...typography.secondary,
+    textAlign: "center",
+    marginBottom: spacing.lg,
   },
   centeredScreen: {
     flex: 1,

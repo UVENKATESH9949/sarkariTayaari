@@ -5,8 +5,11 @@ import { ScrollView, Text, View, StyleSheet } from "react-native";
 import { getDifficultyCounts, getDifficultyLevels, type DifficultyCounts, type DifficultyLevel } from "../../../data/practiceData";
 import { useHybridMode } from "../../../data/hybridSource";
 import { useSyncStatus } from "../../../sync/SyncContext";
+import { ContextualLoading } from "../../../ui/ContextualLoading";
 import { FadeInItem } from "../../../ui/FadeInList";
+import { OfflineNoDataNotice } from "../../../ui/OfflineNoDataNotice";
 import { Card } from "../../../ui/Card";
+import { ListSkeleton } from "../../../ui/Skeleton";
 import { colors, spacing, typography } from "../../../ui/theme";
 import type { IoniconName } from "../../../constants/subjects";
 
@@ -38,18 +41,28 @@ export default function Levels() {
   const [counts, setCounts] = useState<DifficultyCounts>({});
   // Whatever levels were synced, in the admin's order — not a fixed three.
   const [syncedLevels, setSyncedLevels] = useState<DifficultyLevel[]>([]);
+  const [countsLoading, setCountsLoading] = useState(true);
+  const [levelsLoading, setLevelsLoading] = useState(true);
 
   const { syncVersion } = useSyncStatus();
   const mode = useHybridMode();
 
   useEffect(() => {
     if (!topicId) return;
-    getDifficultyCounts(topicId, examCode ?? null, mode).then(setCounts);
+    getDifficultyCounts(topicId, examCode ?? null, mode).then((result) => {
+      setCounts(result);
+      setCountsLoading(false);
+    });
   }, [topicId, examCode, syncVersion, mode]);
 
   useEffect(() => {
-    getDifficultyLevels(mode).then(setSyncedLevels).catch(() => setSyncedLevels([]));
+    getDifficultyLevels(mode)
+      .then(setSyncedLevels)
+      .catch(() => setSyncedLevels([]))
+      .finally(() => setLevelsLoading(false));
   }, [syncVersion, mode]);
+
+  const loading = countsLoading || levelsLoading;
 
   const levels = useMemo<Level[]>(
     () =>
@@ -82,6 +95,10 @@ export default function Levels() {
         <Text style={styles.heading}>Choose a level</Text>
         <Text style={styles.subheading}>{topicName}</Text>
 
+        {loading ? (
+          <ContextualLoading message="Getting your practice levels ready..." skeleton={<ListSkeleton count={4} />} />
+        ) : (
+        <>
         <Card
           variant="filled"
           disabled={allLevelsTotal === 0}
@@ -120,6 +137,9 @@ export default function Levels() {
             );
           })}
         </View>
+        {allLevelsTotal === 0 && mode === "unavailable" && <OfflineNoDataNotice />}
+        </>
+        )}
       </ScrollView>
     </>
   );
