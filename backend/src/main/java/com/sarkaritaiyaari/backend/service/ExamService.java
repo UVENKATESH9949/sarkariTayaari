@@ -2,16 +2,23 @@ package com.sarkaritaiyaari.backend.service;
 
 import com.sarkaritaiyaari.backend.dto.ExamRequest;
 import com.sarkaritaiyaari.backend.dto.ExamResponse;
+import com.sarkaritaiyaari.backend.dto.ExamTopicResponse;
+import com.sarkaritaiyaari.backend.dto.ExamTopicsRequest;
 import com.sarkaritaiyaari.backend.dto.SubjectResponse;
 import com.sarkaritaiyaari.backend.entity.Exam;
+import com.sarkaritaiyaari.backend.entity.ExamTopic;
 import com.sarkaritaiyaari.backend.entity.Subject;
+import com.sarkaritaiyaari.backend.entity.Topic;
 import com.sarkaritaiyaari.backend.repository.DifficultyLevelRepository;
 import com.sarkaritaiyaari.backend.repository.ExamBadgeRepository;
 import com.sarkaritaiyaari.backend.repository.ExamRepository;
+import com.sarkaritaiyaari.backend.repository.ExamTopicRepository;
 import com.sarkaritaiyaari.backend.repository.SubjectRepository;
+import com.sarkaritaiyaari.backend.repository.TopicRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -27,13 +34,18 @@ public class ExamService {
     private final SubjectRepository subjectRepository;
     private final DifficultyLevelRepository difficultyLevelRepository;
     private final ExamBadgeRepository examBadgeRepository;
+    private final ExamTopicRepository examTopicRepository;
+    private final TopicRepository topicRepository;
 
     public ExamService(ExamRepository examRepository, SubjectRepository subjectRepository,
-                       DifficultyLevelRepository difficultyLevelRepository, ExamBadgeRepository examBadgeRepository) {
+                       DifficultyLevelRepository difficultyLevelRepository, ExamBadgeRepository examBadgeRepository,
+                       ExamTopicRepository examTopicRepository, TopicRepository topicRepository) {
         this.examRepository = examRepository;
         this.subjectRepository = subjectRepository;
         this.difficultyLevelRepository = difficultyLevelRepository;
         this.examBadgeRepository = examBadgeRepository;
+        this.examTopicRepository = examTopicRepository;
+        this.topicRepository = topicRepository;
     }
 
     /* -------------------------------------------------------------------- Syllabus */
@@ -58,6 +70,68 @@ public class ExamService {
         exam.setSubjects(subjects);
         examRepository.save(exam);
         return getSyllabus(examCode);
+    }
+
+    /* ------------------------------------------------------------- Topic map (Epic L) */
+
+    /**
+     * The topics this exam covers, with the admin's curated weightage. Distinct from
+     * {@link #getSyllabus} — that answers "which subjects", this answers "which topics",
+     * which was previously unanswerable at all (see preparation-os-requirements.md §18.2).
+     */
+    @Transactional(readOnly = true)
+    public List<ExamTopicResponse> getTopics(String examCode) {
+        getEntity(examCode); // 404 for an unknown exam rather than a misleading empty list
+        return examTopicRepository.findByExamCodeOrderByTopicName(examCode).stream()
+                .map(ExamService::toExamTopicResponse)
+                .toList();
+    }
+
+    /** Replaces the topic map wholesale — the admin sends the complete list it wants. */
+    public List<ExamTopicResponse> setTopics(String examCode, ExamTopicsRequest request) {
+        Exam exam = getEntity(examCode);
+
+        // Reject duplicates explicitly: the synthetic id would silently collapse them into
+        // one row, so the admin would see fewer topics saved than it sent with no error.
+        Set<UUID> seen = new LinkedHashSet<>();
+        for (ExamTopicsRequest.Entry entry : request.getTopics()) {
+            if (!seen.add(entry.getTopicId())) {
+                throw new IllegalArgumentException("Duplicate topicId in request: " + entry.getTopicId());
+            }
+        }
+
+        examTopicRepository.deleteByExamCode(examCode);
+        // Flush the delete before inserting: the natural-key UNIQUE would otherwise be
+        // violated by a re-sent topic, since Hibernate is free to order the insert first.
+        examTopicRepository.flush();
+
+        List<ExamTopic> rows = new ArrayList<>();
+        for (ExamTopicsRequest.Entry entry : request.getTopics()) {
+            Topic topic = topicRepository.findById(entry.getTopicId())
+                    .orElseThrow(() -> new IllegalArgumentException("Unknown topicId: " + entry.getTopicId()));
+            ExamTopic row = new ExamTopic();
+            row.setId(ExamTopic.idFor(examCode, topic.getId()));
+            row.setExam(exam);
+            row.setTopic(topic);
+            row.setWeightagePercent(entry.getWeightagePercent());
+            rows.add(row);
+        }
+        examTopicRepository.saveAll(rows);
+        return getTopics(examCode);
+    }
+
+    private static ExamTopicResponse toExamTopicResponse(ExamTopic row) {
+        Topic topic = row.getTopic();
+        Topic parent = topic.getParent();
+        return new ExamTopicResponse(
+                topic.getId(),
+                topic.getName(),
+                topic.getSubject().getId(),
+                topic.getSubject().getName(),
+                parent != null ? parent.getId() : null,
+                parent != null ? parent.getName() : null,
+                row.getWeightagePercent()
+        );
     }
 
     /**

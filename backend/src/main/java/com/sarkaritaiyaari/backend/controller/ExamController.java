@@ -2,6 +2,8 @@ package com.sarkaritaiyaari.backend.controller;
 
 import com.sarkaritaiyaari.backend.dto.ExamRequest;
 import com.sarkaritaiyaari.backend.dto.ExamResponse;
+import com.sarkaritaiyaari.backend.dto.ExamTopicResponse;
+import com.sarkaritaiyaari.backend.dto.ExamTopicsRequest;
 import com.sarkaritaiyaari.backend.dto.SubjectResponse;
 import com.sarkaritaiyaari.backend.dto.SyllabusRequest;
 import com.sarkaritaiyaari.backend.service.AuthService;
@@ -74,6 +76,27 @@ public class ExamController {
                                               @PathVariable String code, @Valid @RequestBody SyllabusRequest request) {
         authService.requireAdmin(authorization);
         return examService.setSyllabus(code, request.getSubjectIds());
+    }
+
+    /**
+     * The topics this exam covers, with the admin's curated weightage. Finer-grained than
+     * {@code /subjects} — see preparation-os-requirements.md §18.2 for why subject
+     * granularity wasn't enough. Admin-only for now: no mobile screen consumes it yet, and
+     * exposing an unfinished curation surface publicly would be premature.
+     */
+    @GetMapping("/{code}/topics")
+    public List<ExamTopicResponse> getTopics(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
+                                             @PathVariable String code) {
+        authService.requireAdmin(authorization);
+        return examService.getTopics(code);
+    }
+
+    /** Replaces the topic map with exactly the topics supplied. */
+    @PutMapping("/{code}/topics")
+    public List<ExamTopicResponse> setTopics(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
+                                             @PathVariable String code, @Valid @RequestBody ExamTopicsRequest request) {
+        authService.requireAdmin(authorization);
+        return examService.setTopics(code, request);
     }
 
     @PutMapping("/{code}")
