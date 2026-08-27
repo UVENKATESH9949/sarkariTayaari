@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { ScrollView, Text, View, StyleSheet } from "react-native";
+import { FlatList, Text, View, StyleSheet } from "react-native";
 import { useSessionHistory } from "../../../practice/sessionHistory";
 import type { QuestionResult } from "../../../practice/sessionHistory";
 import { Button } from "../../../ui/Button";
@@ -141,48 +141,65 @@ export default function Summary() {
   return (
     <>
       <Stack.Screen options={{ title: "Session Summary" }} />
-      <ScrollView contentContainerStyle={styles.container}>
-        <View style={[styles.scoreCircle, { backgroundColor: tone.bg }]}>
-          <Text style={[styles.scoreText, { color: tone.text }]}>
-            {session.correctCount}/{session.totalCount}
-          </Text>
-        </View>
-        <Text style={[styles.accuracyText, { color: tone.text }]}>{accuracyPercent}% accuracy</Text>
-        <Text style={styles.contextText}>
-          {session.examLabel ? `${session.examLabel} · ` : ""}
-          {session.subjectName} · {session.topicName} · {session.levelLabel}
-        </Text>
-        <Text style={styles.dateText}>{formatDateTime(session.completedAt)}</Text>
+      {/*
+        Virtualized: this renders one expandable card per question of the session, and a
+        session is as long as the quiz was (capped at PRACTICE_QUESTION_LIMIT, 200). All
+        of the surrounding chrome moves into the header/footer slots so it still scrolls
+        as one surface.
+      */}
+      <FlatList
+        data={session.results}
+        keyExtractor={(result) => result.questionId}
+        contentContainerStyle={styles.container}
+        renderItem={({ item, index }) => <ResultCard result={item} index={index} />}
+        ListHeaderComponent={
+          <View style={styles.headerBlock}>
+            <View style={[styles.scoreCircle, { backgroundColor: tone.bg }]}>
+              <Text style={[styles.scoreText, { color: tone.text }]}>
+                {session.correctCount}/{session.totalCount}
+              </Text>
+            </View>
+            <Text style={[styles.accuracyText, { color: tone.text }]}>{accuracyPercent}% accuracy</Text>
+            <Text style={styles.contextText}>
+              {session.examLabel ? `${session.examLabel} · ` : ""}
+              {session.subjectName} · {session.topicName} · {session.levelLabel}
+            </Text>
+            <Text style={styles.dateText}>{formatDateTime(session.completedAt)}</Text>
 
-        <View style={styles.statsRow}>
-          <StatCell label="Total" value={String(session.totalCount)} />
-          <StatCell label="Correct" value={String(session.correctCount)} color={colors.semantic.success} />
-          <StatCell label="Incorrect" value={String(incorrectCount)} color={colors.semantic.error} />
-          <StatCell label="Accuracy" value={`${accuracyPercent}%`} />
-        </View>
+            <View style={styles.statsRow}>
+              <StatCell label="Total" value={String(session.totalCount)} />
+              <StatCell label="Correct" value={String(session.correctCount)} color={colors.semantic.success} />
+              <StatCell label="Incorrect" value={String(incorrectCount)} color={colors.semantic.error} />
+              <StatCell label="Accuracy" value={`${accuracyPercent}%`} />
+            </View>
 
-        {session.durationMs !== null && (
-          <View style={styles.durationRow}>
-            <Ionicons name="time-outline" size={14} color={colors.text.muted} />
-            <Text style={styles.durationText}>Time taken: {formatDuration(session.durationMs)}</Text>
+            {session.durationMs !== null && (
+              <View style={styles.durationRow}>
+                <Ionicons name="time-outline" size={14} color={colors.text.muted} />
+                <Text style={styles.durationText}>Time taken: {formatDuration(session.durationMs)}</Text>
+              </View>
+            )}
+
+            <Text style={[typography.label, styles.sectionLabel]}>Question by question</Text>
           </View>
-        )}
+        }
+        ListFooterComponent={
+          <View style={styles.footerBlock}>
+            <Button
+              variant="secondary"
+              size="lg"
+              onPress={() => router.push("/practice/history")}
+              style={styles.secondaryButton}
+            >
+              View Session History
+            </Button>
 
-        <Text style={[typography.label, styles.sectionLabel]}>Question by question</Text>
-        <View style={styles.list}>
-          {session.results.map((result, index) => (
-            <ResultCard key={result.questionId} result={result} index={index} />
-          ))}
-        </View>
-
-        <Button variant="secondary" size="lg" onPress={() => router.push("/practice/history")} style={styles.secondaryButton}>
-          View Session History
-        </Button>
-
-        <Button size="lg" onPress={() => router.replace("/practice")} style={styles.primaryButton}>
-          Back to Practice
-        </Button>
-      </ScrollView>
+            <Button size="lg" onPress={() => router.replace("/practice")} style={styles.primaryButton}>
+              Back to Practice
+            </Button>
+          </View>
+        }
+      />
     </>
   );
 }
@@ -270,13 +287,19 @@ const styles = StyleSheet.create({
     marginTop: spacing["2xl"],
     marginBottom: spacing.md,
   },
-  list: {
+  // The header/footer slots carry the centring that the old single ScrollView container
+  // applied to everything at once.
+  headerBlock: {
     width: "100%",
-    gap: spacing.md,
+    alignItems: "center",
+  },
+  footerBlock: {
+    width: "100%",
   },
   resultCard: {
     width: "100%",
     gap: spacing.md,
+    marginBottom: spacing.md,
   },
   resultHeader: {
     flexDirection: "row",

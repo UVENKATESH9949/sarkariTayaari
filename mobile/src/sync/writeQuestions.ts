@@ -1,4 +1,4 @@
-import { eq, inArray, sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import { db } from "../db/client";
 import {
   difficultyLevels,
@@ -32,15 +32,11 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export async function writeLanguages() {
   const langs = await getLanguages();
-  for (const lang of langs) {
-    await db
-      .insert(languages)
-      .values({ code: lang.code, name: lang.name, isActive: true })
-      .onConflictDoUpdate({
-        target: languages.code,
-        set: { name: lang.name },
-      });
-  }
+  if (langs.length === 0) return;
+  await db
+    .insert(languages)
+    .values(langs.map((lang) => ({ code: lang.code, name: lang.name, isActive: true })))
+    .onConflictDoUpdate({ target: languages.code, set: { name: sql`excluded.name` } });
 }
 
 /**
@@ -61,50 +57,85 @@ export async function writeReferenceData() {
       getExamStructures(),
     ]);
 
-  for (const exam of examList) {
-    // Listed once and reused for both halves of the upsert: a field present in `values`
-    // but missing from `set` silently never updates on an existing row, which is the
-    // failure mode this shape exists to prevent.
-    const fields = {
-      name: exam.name,
-      imageUrl: exam.imageUrl,
-      displayOrder: exam.displayOrder,
-      difficulty: exam.difficulty,
-      badge: exam.badge,
-    };
+  // One bulk upsert per table rather than one awaited statement per row. These run on
+  // *every* sync, initial and delta, outside any transaction, and topics are
+  // admin-authored so that list grows without bound — the same per-row-await cost that
+  // made question writes stall sync for minutes at load-test scale. `excluded.*` is
+  // required here (not a closed-over value) because one `set` clause is applied to every
+  // conflicting row; see upsertQuestionsBatch below for the same reasoning.
+  if (examList.length > 0) {
     await db
       .insert(exams)
-      .values({ code: exam.code, ...fields })
-      .onConflictDoUpdate({ target: exams.code, set: fields });
+      .values(
+        examList.map((exam) => ({
+          code: exam.code,
+          name: exam.name,
+          imageUrl: exam.imageUrl,
+          displayOrder: exam.displayOrder,
+          difficulty: exam.difficulty,
+          badge: exam.badge,
+        })),
+      )
+      .onConflictDoUpdate({
+        target: exams.code,
+        set: {
+          name: sql`excluded.name`,
+          imageUrl: sql`excluded.image_url`,
+          displayOrder: sql`excluded.display_order`,
+          difficulty: sql`excluded.difficulty`,
+          badge: sql`excluded.badge`,
+        },
+      });
   }
 
   // Subjects and topics are upserted rather than replaced: questions reference them,
   // so wiping the table would break those rows mid-sync.
-  for (const subject of subjectList) {
-    const fields = {
-      name: subject.name,
-      displayOrder: subject.displayOrder,
-      icon: subject.icon,
-      color: subject.color,
-      colorBg: subject.colorBg,
-    };
+  if (subjectList.length > 0) {
     await db
       .insert(subjects)
-      .values({ id: subject.id, ...fields })
-      .onConflictDoUpdate({ target: subjects.id, set: fields });
+      .values(
+        subjectList.map((subject) => ({
+          id: subject.id,
+          name: subject.name,
+          displayOrder: subject.displayOrder,
+          icon: subject.icon,
+          color: subject.color,
+          colorBg: subject.colorBg,
+        })),
+      )
+      .onConflictDoUpdate({
+        target: subjects.id,
+        set: {
+          name: sql`excluded.name`,
+          displayOrder: sql`excluded.display_order`,
+          icon: sql`excluded.icon`,
+          color: sql`excluded.color`,
+          colorBg: sql`excluded.color_bg`,
+        },
+      });
   }
 
-  for (const topic of topicList) {
-    const fields = {
-      subjectId: topic.subjectId,
-      subjectName: topic.subjectName,
-      name: topic.name,
-      displayOrder: topic.displayOrder,
-    };
+  if (topicList.length > 0) {
     await db
       .insert(topics)
-      .values({ id: topic.id, ...fields })
-      .onConflictDoUpdate({ target: topics.id, set: fields });
+      .values(
+        topicList.map((topic) => ({
+          id: topic.id,
+          subjectId: topic.subjectId,
+          subjectName: topic.subjectName,
+          name: topic.name,
+          displayOrder: topic.displayOrder,
+        })),
+      )
+      .onConflictDoUpdate({
+        target: topics.id,
+        set: {
+          subjectId: sql`excluded.subject_id`,
+          subjectName: sql`excluded.subject_name`,
+          name: sql`excluded.name`,
+          displayOrder: sql`excluded.display_order`,
+        },
+      });
   }
 
   // Difficulty levels, paper types and exam badges are small, self-contained lookups
@@ -317,8 +348,19 @@ export async function upsertQuestionsBatch(tx: Tx, qs: QuestionResponse[]) {
   }
 }
 
-export async function deleteQuestionLocally(tx: Tx, questionId: string) {
-  await tx.delete(questionTranslations).where(eq(questionTranslations.questionId, questionId));
-  await tx.delete(questionExams).where(eq(questionExams.questionId, questionId));
-  await tx.delete(questions).where(eq(questions.id, questionId));
+/**
+ * Hard-deletes a batch of questions and their children — three statements total,
+ * regardless of batch size. Previously one call per question (three awaited statements
+ * each), which at a full 500-row page of tombstones was 1,500 sequential round trips
+ * through the SQLite bridge inside a single transaction.
+ *
+ * Children first: nothing enforces these FKs at the SQLite level, but deleting parents
+ * first would leave orphaned translation/tag rows if the transaction failed between
+ * statements.
+ */
+export async function deleteQuestionsLocally(tx: Tx, questionIds: string[]) {
+  if (questionIds.length === 0) return;
+  await tx.delete(questionTranslations).where(inArray(questionTranslations.questionId, questionIds));
+  await tx.delete(questionExams).where(inArray(questionExams.questionId, questionIds));
+  await tx.delete(questions).where(inArray(questions.id, questionIds));
 }

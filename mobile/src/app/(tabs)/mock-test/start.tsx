@@ -2,10 +2,12 @@ import { useEffect, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ScrollView, Text, View, StyleSheet } from "react-native";
-import { getSectionAvailability, type SectionAvailability } from "../../../db/mockTest";
-import { getPaperById, type SyncedPaper } from "../../../db/examStructure";
-import { getPaperByIdLive } from "../../../data/mockTestStructureData";
-import { getSectionAvailabilityLive } from "../../../data/mockTestData";
+import {
+  getPaperById,
+  getSectionAvailability,
+  type SectionAvailability,
+  type SyncedPaper,
+} from "../../../data/mockTestAccess";
 import { useHybridMode } from "../../../data/hybridSource";
 import { Button } from "../../../ui/Button";
 import { Card } from "../../../ui/Card";
@@ -32,10 +34,10 @@ export default function MockTestStart() {
     (async () => {
       setLoading(true);
       try {
-        const loaded = mode === "local" ? await getPaperById(paperId) : await getPaperByIdLive(paperId);
+        const loaded = await getPaperById(paperId, mode);
         setPaper(loaded);
         if (loaded) {
-          setSections(mode === "local" ? await getSectionAvailability(loaded) : await getSectionAvailabilityLive(loaded));
+          setSections(await getSectionAvailability(loaded, mode));
         }
       } catch (err) {
         // A live fetch can fail (connectivity dropped between screens) where the local

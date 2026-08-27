@@ -40,6 +40,13 @@ export default function Quiz() {
   const [languageCode, setLanguageCode] = useState(defaultLanguageCode);
   const [languagePickerVisible, setLanguagePickerVisible] = useState(false);
   const sessionStartRef = useRef<number | null>(null);
+  // A ref as well as state: `addSession` is fire-and-forget and the session id is
+  // `session-${Date.now()}`, so two taps a millisecond apart used to write two real
+  // sessions (and two taps inside the same millisecond collided on the primary key and
+  // lost one silently). State alone can't stop that — it hasn't re-rendered yet when the
+  // second tap lands. Same shape as mock-test/test.tsx's submittedRef.
+  const finishedRef = useRef(false);
+  const [finishing, setFinishing] = useState(false);
 
   const mode = useHybridMode();
   // router.dismissAll() resolves "closest stack" against whichever tab currently
@@ -112,6 +119,9 @@ export default function Quiz() {
   const goNext = () => {
     if (!question || !questions) return;
     if (currentIndex === total - 1) {
+      if (finishedRef.current) return;
+      finishedRef.current = true;
+      setFinishing(true);
       const finalAnswers = { ...answers, [question.id]: selectedOption! };
       const results = questions.map((q) => {
         const chosen = finalAnswers[q.id];
@@ -276,7 +286,7 @@ export default function Quiz() {
 
         {selectedOption !== null && (
           <View style={styles.footer}>
-            <Button size="lg" onPress={goNext}>
+            <Button size="lg" onPress={goNext} disabled={finishing} loading={finishing}>
               {currentIndex === total - 1 ? "Finish" : "Next Question"}
             </Button>
           </View>

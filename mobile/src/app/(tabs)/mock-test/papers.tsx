@@ -2,9 +2,8 @@ import { useEffect, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { ScrollView, Text, View, StyleSheet } from "react-native";
-import { getMockablePapersLive } from "../../../data/mockTestStructureData";
 import { useHybridMode } from "../../../data/hybridSource";
-import { getMockablePapers, type SyncedPaper } from "../../../db/examStructure";
+import { getMockablePapers, type SyncedPaper } from "../../../data/mockTestAccess";
 import { getMockAttemptSummary, type MockAttemptSummary } from "../../../db/mockTest";
 import { getExamOrgName } from "../../../constants/examOrgs";
 import { useSyncStatus } from "../../../sync/SyncContext";
@@ -36,7 +35,7 @@ export default function MockTestPapers() {
     (async () => {
       try {
         const [mockable, attemptSummary] = await Promise.all([
-          mode === "local" ? getMockablePapers(examCode) : getMockablePapersLive(examCode),
+          getMockablePapers(examCode, mode),
           getMockAttemptSummary(examCode),
         ]);
         setPapers(mockable);

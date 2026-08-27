@@ -27,9 +27,32 @@ function fetchStructures(): Promise<ExamStructureResponse[]> {
   return cachedStructures;
 }
 
-/** Call when sync completes or connectivity changes, so a stale live snapshot isn't reused after switching to local mode. */
+/** Drops the shared snapshot so the next read refetches. */
 export function resetStructureCache(): void {
   cachedStructures = null;
+}
+
+let lastSeenMode: string | null = null;
+
+/**
+ * Invalidates the snapshot when the hybrid mode changes.
+ *
+ * `resetStructureCache` existed with a doc comment saying to call it "when sync completes
+ * or connectivity changes" and **nothing ever called it** — so the module-level cache was
+ * never invalidated for the whole process lifetime. Rather than leave the dead function
+ * (or delete it and keep the latent staleness), the mock-test facade now routes every
+ * structure read through here, which is the one chokepoint all of them share.
+ *
+ * Partial by design, and worth knowing: `practiceData.ts`'s `getSyllabusSubjectIdsLive`
+ * reads the same cache without going through the facade, so a mode flip triggered only by
+ * a Practice-screen read still won't invalidate it. Covering that too means giving
+ * Practice the same chokepoint; not done here to keep this change scoped to Mock Test.
+ */
+export function noteHybridMode(mode: string): void {
+  if (lastSeenMode !== null && lastSeenMode !== mode) {
+    resetStructureCache();
+  }
+  lastSeenMode = mode;
 }
 
 function toSyncedPaper(structure: ExamStructureResponse): SyncedPaper[] {

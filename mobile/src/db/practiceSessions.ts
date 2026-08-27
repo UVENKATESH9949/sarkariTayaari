@@ -1,4 +1,4 @@
-import { asc, desc, eq, lt } from "drizzle-orm";
+import { asc, desc, inArray, lt } from "drizzle-orm";
 import { db } from "./client";
 import { practiceSessionResults, practiceSessions } from "./schema";
 import { trackEvent } from "../telemetry/analytics";
@@ -32,41 +32,68 @@ export type SessionRecord = {
 
 const MAX_SESSIONS = 50;
 
+/**
+ * Two queries total, not 1 + N.
+ *
+ * This runs at app startup for every user, unconditionally — `SessionHistoryProvider`
+ * mounts above the whole tab tree — so its cost is paid on the critical path before
+ * anything renders. It previously issued one sequentially-awaited query per session
+ * (51 round trips through the SQLite JS bridge at a full history) and had no `LIMIT`
+ * despite `MAX_SESSIONS` being declared right above it. `db/mockTest.ts` already used
+ * the `inArray` shape this now follows.
+ */
 export async function loadSessions(): Promise<SessionRecord[]> {
-  const sessionRows = await db.select().from(practiceSessions).orderBy(desc(practiceSessions.completedAt)).all();
+  const sessionRows = await db
+    .select()
+    .from(practiceSessions)
+    .orderBy(desc(practiceSessions.completedAt))
+    .limit(MAX_SESSIONS)
+    .all();
 
-  const sessions: SessionRecord[] = [];
-  for (const row of sessionRows) {
-    const resultRows = await db
-      .select()
-      .from(practiceSessionResults)
-      .where(eq(practiceSessionResults.sessionId, row.id))
-      .orderBy(asc(practiceSessionResults.orderIndex))
-      .all();
+  if (sessionRows.length === 0) return [];
 
-    sessions.push({
-      id: row.id,
-      completedAt: row.completedAt.getTime(),
-      examLabel: row.examLabel,
-      examCode: row.examCode,
-      subjectName: row.subjectName,
-      topicName: row.topicName,
-      levelLabel: row.levelLabel,
-      correctCount: row.correctCount,
-      totalCount: row.totalCount,
-      durationMs: row.durationMs,
-      results: resultRows.map((r) => ({
-        questionId: r.questionId,
-        questionText: r.questionText,
-        options: r.options,
-        selectedIndex: r.selectedIndex,
-        correctIndex: r.correctIndex,
-        explanation: r.explanation,
-        isCorrect: r.isCorrect,
-      })),
+  const resultRows = await db
+    .select()
+    .from(practiceSessionResults)
+    .where(
+      inArray(
+        practiceSessionResults.sessionId,
+        sessionRows.map((r) => r.id),
+      ),
+    )
+    .orderBy(asc(practiceSessionResults.orderIndex))
+    .all();
+
+  // Grouped in one pass rather than a .filter() per session, which would reintroduce the
+  // same quadratic scan the N+1 was costing.
+  const resultsBySession = new Map<string, QuestionResult[]>();
+  for (const r of resultRows) {
+    const bucket = resultsBySession.get(r.sessionId) ?? [];
+    bucket.push({
+      questionId: r.questionId,
+      questionText: r.questionText,
+      options: r.options,
+      selectedIndex: r.selectedIndex,
+      correctIndex: r.correctIndex,
+      explanation: r.explanation,
+      isCorrect: r.isCorrect,
     });
+    resultsBySession.set(r.sessionId, bucket);
   }
-  return sessions;
+
+  return sessionRows.map((row) => ({
+    id: row.id,
+    completedAt: row.completedAt.getTime(),
+    examLabel: row.examLabel,
+    examCode: row.examCode,
+    subjectName: row.subjectName,
+    topicName: row.topicName,
+    levelLabel: row.levelLabel,
+    correctCount: row.correctCount,
+    totalCount: row.totalCount,
+    durationMs: row.durationMs,
+    results: resultsBySession.get(row.id) ?? [],
+  }));
 }
 
 /** Persists a session and trims history back down to the most recent MAX_SESSIONS. */
@@ -85,19 +112,24 @@ export async function insertSession(session: SessionRecord): Promise<void> {
       durationMs: session.durationMs,
     });
 
-    for (const [index, result] of session.results.entries()) {
-      await tx.insert(practiceSessionResults).values({
-        id: `${session.id}:${result.questionId}`,
-        sessionId: session.id,
-        orderIndex: index,
-        questionId: result.questionId,
-        questionText: result.questionText,
-        options: result.options,
-        selectedIndex: result.selectedIndex,
-        correctIndex: result.correctIndex,
-        explanation: result.explanation,
-        isCorrect: result.isCorrect,
-      });
+    // One statement with N value tuples, not N awaited inserts — the same fix already
+    // applied in db/mockTest.ts, where per-row awaits made submitting a ~100-question
+    // attempt take ~7s purely in bridge overhead.
+    if (session.results.length > 0) {
+      await tx.insert(practiceSessionResults).values(
+        session.results.map((result, index) => ({
+          id: `${session.id}:${result.questionId}`,
+          sessionId: session.id,
+          orderIndex: index,
+          questionId: result.questionId,
+          questionText: result.questionText,
+          options: result.options,
+          selectedIndex: result.selectedIndex,
+          correctIndex: result.correctIndex,
+          explanation: result.explanation,
+          isCorrect: result.isCorrect,
+        })),
+      );
     }
 
     const overflow = await tx
@@ -115,9 +147,13 @@ export async function insertSession(session: SessionRecord): Promise<void> {
         .where(lt(practiceSessions.completedAt, overflow.completedAt))
         .all();
 
-      for (const s of stale) {
-        await tx.delete(practiceSessionResults).where(eq(practiceSessionResults.sessionId, s.id));
-        await tx.delete(practiceSessions).where(eq(practiceSessions.id, s.id));
+      if (stale.length > 0) {
+        // Two statements rather than two per stale session. Children first: nothing
+        // enforces the FK here, but deleting parents first would briefly leave orphaned
+        // result rows if the transaction failed between the two.
+        const staleIds = stale.map((s) => s.id);
+        await tx.delete(practiceSessionResults).where(inArray(practiceSessionResults.sessionId, staleIds));
+        await tx.delete(practiceSessions).where(inArray(practiceSessions.id, staleIds));
       }
     }
   });

@@ -4,6 +4,7 @@ import {
   getTopicStats as getTopicStatsLocal,
   getDifficultyCounts as getDifficultyCountsLocal,
   getPracticeQuestions as getPracticeQuestionsLocal,
+  PRACTICE_QUESTION_LIMIT,
   type ExamOption,
   type SubjectStat,
   type TopicStat,
@@ -142,7 +143,7 @@ export async function getPracticeQuestions(
     topicId,
     difficulty: difficulty === "all" ? undefined : difficulty,
     examCode: exam,
-    size: 200,
+    size: PRACTICE_QUESTION_LIMIT,
   });
 
   const result = page.content.map((q) => {

@@ -5,8 +5,7 @@ import { Pressable, ScrollView, Text, TextInput, View, StyleSheet } from "react-
 import { getSyncedExams, getExamBadges, type ExamOption, type ExamBadge } from "../../../data/practiceData";
 import { useHybridMode } from "../../../data/hybridSource";
 import { useSyncStatus } from "../../../sync/SyncContext";
-import { getMockablePapers } from "../../../db/examStructure";
-import { getMockablePapersLive } from "../../../data/mockTestStructureData";
+import { getMockablePapers } from "../../../data/mockTestAccess";
 import { getMockAttemptSummary, type MockAttemptSummary } from "../../../db/mockTest";
 import { getExamGradient } from "../../../constants/examTheme";
 import { getExamOrgName } from "../../../constants/examOrgs";
@@ -54,7 +53,7 @@ export default function MockTestExamSelection() {
       const summaries: Record<string, MockAttemptSummary | null> = {};
       await Promise.all(
         exams.map(async (exam) => {
-          const papers = mode === "local" ? await getMockablePapers(exam.code) : await getMockablePapersLive(exam.code);
+          const papers = await getMockablePapers(exam.code, mode);
           counts[exam.code] = papers.length;
           summaries[exam.code] = await getMockAttemptSummary(exam.code);
         }),

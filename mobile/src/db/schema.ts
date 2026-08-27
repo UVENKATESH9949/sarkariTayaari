@@ -34,14 +34,26 @@ export const examBadges = sqliteTable("exam_badges", {
 // Mirrors Subject — synced from GET /api/subjects. Global, not per-exam.
 // icon/color/colorBg come from the server so a subject added by an admin renders
 // correctly without an app release — there is no client-side lookup by name.
-export const subjects = sqliteTable("subjects", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  displayOrder: integer("display_order").notNull().default(0),
-  icon: text("icon"),
-  color: text("color"),
-  colorBg: text("color_bg"),
-});
+export const subjects = sqliteTable(
+  "subjects",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    displayOrder: integer("display_order").notNull().default(0),
+    icon: text("icon"),
+    color: text("color"),
+    colorBg: text("color_bg"),
+  },
+  // Serves getSubjectMetaByName(), which looks subjects up by name from three screens and
+  // previously had no index at all.
+  //
+  // Deliberately NOT unique, even though Postgres declares `subjects.name UNIQUE`.
+  // Mirroring that here would add nothing to query performance and would make this
+  // migration capable of failing on a device that already holds a duplicate — and a
+  // failed migration is a hard gate in app/_layout.tsx, i.e. an app that cannot start.
+  // A local read cache is the wrong place to re-litigate a server-side invariant.
+  (table) => [index("idx_subjects_name").on(table.name)],
+);
 
 // Synced from GET /api/difficulty-levels (active-only). Replaces the hardcoded
 // "easy" | "medium" | "hard" union — the app renders whatever it receives.
@@ -186,6 +198,12 @@ export const questions = sqliteTable(
     index("idx_questions_topic_id").on(table.topicId),
     index("idx_questions_difficulty").on(table.difficulty),
     index("idx_questions_updated_at").on(table.updatedAt),
+    // Composites matching what the practice queries actually filter on. Every questions
+    // query in the app also filters `is_deleted = false`, which the single-column indexes
+    // above leave to a scan: SQLite picks one of them and then walks the rest. Trailing
+    // `is_deleted` is deliberate — it's the lowest-cardinality column, so it belongs last.
+    index("idx_questions_topic_difficulty_deleted").on(table.topicId, table.difficulty, table.isDeleted),
+    index("idx_questions_subject_deleted").on(table.subjectId, table.isDeleted),
   ],
 );
 
@@ -215,8 +233,11 @@ export const questionTranslations = sqliteTable(
     explanation: text("explanation"),
   },
   (table) => [
+    // A separate index on `question_id` alone used to sit here too. It was a strict
+    // prefix of this composite, so SQLite could never need it, and it cost write
+    // amplification on the hottest write path in the app — the per-page bulk translation
+    // insert during sync.
     uniqueIndex("idx_question_translations_question_language").on(table.questionId, table.languageCode),
-    index("idx_question_translations_question_id").on(table.questionId),
   ],
 );
 
@@ -335,6 +356,9 @@ export const mockTestAttempts = sqliteTable(
     isSynced: integer("is_synced", { mode: "boolean" }).notNull().default(false),
   },
   (table) => [
+    // getMockAttemptSummary() filters on exam_code and is called once per exam on the
+    // Mock Test tab mount — without this that's a full table scan per card.
+    index("idx_mock_test_attempts_exam_code").on(table.examCode),
     index("idx_mock_test_attempts_completed_at").on(table.completedAt),
     index("idx_mock_test_attempts_is_synced").on(table.isSynced),
   ],
@@ -370,17 +394,28 @@ export const mockTestAttemptResults = sqliteTable(
 // isSynced/updatedAt mirror the practice/mock sync columns — same pending-queue and
 // last-write-wins pattern, because unlike those append-only tables a bookmark is mutable
 // state that can be toggled from more than one device.
-export const bookmarks = sqliteTable("bookmarks", {
-  questionId: text("question_id").primaryKey(),
-  questionText: text("question_text").notNull(),
-  options: text("options", { mode: "json" }).notNull().$type<string[]>(),
-  correctIndex: integer("correct_index").notNull(),
-  explanation: text("explanation").notNull(),
-  subjectName: text("subject_name").notNull(),
-  topicName: text("topic_name").notNull(),
-  examLabel: text("exam_label").notNull(),
-  bookmarkedAt: integer("bookmarked_at", { mode: "timestamp_ms" }).notNull(),
-  isDeleted: integer("is_deleted", { mode: "boolean" }).notNull().default(false),
-  isSynced: integer("is_synced", { mode: "boolean" }).notNull().default(false),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
-});
+export const bookmarks = sqliteTable(
+  "bookmarks",
+  {
+    questionId: text("question_id").primaryKey(),
+    questionText: text("question_text").notNull(),
+    options: text("options", { mode: "json" }).notNull().$type<string[]>(),
+    correctIndex: integer("correct_index").notNull(),
+    explanation: text("explanation").notNull(),
+    subjectName: text("subject_name").notNull(),
+    topicName: text("topic_name").notNull(),
+    examLabel: text("exam_label").notNull(),
+    bookmarkedAt: integer("bookmarked_at", { mode: "timestamp_ms" }).notNull(),
+    isDeleted: integer("is_deleted", { mode: "boolean" }).notNull().default(false),
+    isSynced: integer("is_synced", { mode: "boolean" }).notNull().default(false),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  // Covers all three predicates this table is queried by: `is_deleted` alone
+  // (loadBookmarks, which runs at app startup), `is_synced` alone (loadPendingBookmarks —
+  // served by this index's leading column via a skip-scan only if is_deleted is also
+  // constrained, so it keeps its own), and both together (pruneSyncedTombstones).
+  (table) => [
+    index("idx_bookmarks_is_deleted_is_synced").on(table.isDeleted, table.isSynced),
+    index("idx_bookmarks_is_synced").on(table.isSynced),
+  ],
+);

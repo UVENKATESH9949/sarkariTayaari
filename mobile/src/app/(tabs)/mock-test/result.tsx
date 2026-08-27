@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
+import { FlatList, Pressable, Text, View, StyleSheet } from "react-native";
 import { getMockTestAttempt, type MockTestAttemptRecord } from "../../../db/mockTest";
 import { toSubjectMeta } from "../../../constants/subjects";
 import { getAllSubjects, type SubjectMetaRow } from "../../../db/subjectMeta";
@@ -20,6 +20,71 @@ function formatDuration(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60);
   const s = totalSeconds % 60;
   return `${m}m ${s.toString().padStart(2, "0")}s`;
+}
+
+type QuestionResult = MockTestAttemptRecord["results"][number];
+
+/** Extracted so the FlatList's renderItem stays small — the body is unchanged. */
+function QuestionResultCard({
+  result: r,
+  index,
+  isExpanded,
+  onToggle,
+}: {
+  result: QuestionResult;
+  index: number;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  const status = r.selectedIndex === null ? "unattempted" : r.selectedIndex === r.correctIndex ? "correct" : "wrong";
+  return (
+    <Pressable style={styles.card} onPress={onToggle}>
+      <View style={styles.cardHeader}>
+        <View style={styles.cardHeaderLeft}>
+          <Ionicons
+            name={
+              status === "correct" ? "checkmark-circle" : status === "wrong" ? "close-circle" : "remove-circle-outline"
+            }
+            size={18}
+            color={status === "correct" ? colors.semantic.success : status === "wrong" ? colors.semantic.error : colors.text.muted}
+          />
+          <Text style={styles.cardTag}>
+            {index + 1}. {r.subjectName}
+          </Text>
+          {r.markedForReview && <Ionicons name="bookmark" size={14} color={colors.semantic.warning} />}
+        </View>
+        <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={18} color={colors.text.muted} />
+      </View>
+      <Text style={styles.cardQuestion} numberOfLines={isExpanded ? undefined : 2}>
+        {r.questionText}
+      </Text>
+
+      {isExpanded && (
+        <View style={styles.expandedContent}>
+          <View style={styles.optionsList}>
+            {r.options.map((option, optIndex) => {
+              const isCorrect = optIndex === r.correctIndex;
+              const isPickedWrong = r.selectedIndex === optIndex && optIndex !== r.correctIndex;
+              return (
+                <View
+                  key={optIndex}
+                  style={[styles.optionRow, isCorrect && styles.optionCorrect, isPickedWrong && styles.optionWrong]}
+                >
+                  <Text style={styles.optionText}>{option}</Text>
+                  {isCorrect && <Ionicons name="checkmark-circle" size={18} color={colors.semantic.success} />}
+                  {isPickedWrong && <Ionicons name="close-circle" size={18} color={colors.semantic.error} />}
+                </View>
+              );
+            })}
+          </View>
+          <View style={styles.explanationBox}>
+            <Text style={styles.explanationLabel}>Explanation</Text>
+            <Text style={styles.explanationText}>{r.explanation}</Text>
+          </View>
+        </View>
+      )}
+    </Pressable>
+  );
 }
 
 export default function MockTestResult() {
@@ -76,8 +141,8 @@ export default function MockTestResult() {
   const scorePercent = maxMarks > 0 ? Math.round((attempt.totalMarksScored / maxMarks) * 100) : 0;
   const tone = scoreTone(scorePercent);
 
-  return (
-    <ScrollView contentContainerStyle={styles.container}>
+  const header = (
+    <>
       <View style={[styles.scoreCard, { backgroundColor: tone.bg }]}>
         <Text style={[styles.scoreValue, { color: tone.text }]}>
           {attempt.totalMarksScored} / {maxMarks}
@@ -129,77 +194,33 @@ export default function MockTestResult() {
       </View>
 
       <Text style={styles.sectionHeading}>Question by question</Text>
-      <View style={styles.list}>
-        {attempt.results.map((r, index) => {
-          const isExpanded = expandedId === r.questionId;
-          const status = r.selectedIndex === null ? "unattempted" : r.selectedIndex === r.correctIndex ? "correct" : "wrong";
-          return (
-            <Pressable
-              key={r.questionId}
-              style={styles.card}
-              onPress={() => setExpandedId(isExpanded ? null : r.questionId)}
-            >
-              <View style={styles.cardHeader}>
-                <View style={styles.cardHeaderLeft}>
-                  <Ionicons
-                    name={
-                      status === "correct"
-                        ? "checkmark-circle"
-                        : status === "wrong"
-                          ? "close-circle"
-                          : "remove-circle-outline"
-                    }
-                    size={18}
-                    color={status === "correct" ? colors.semantic.success : status === "wrong" ? colors.semantic.error : colors.text.muted}
-                  />
-                  <Text style={styles.cardTag}>
-                    {index + 1}. {r.subjectName}
-                  </Text>
-                  {r.markedForReview && <Ionicons name="bookmark" size={14} color={colors.semantic.warning} />}
-                </View>
-                <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={18} color={colors.text.muted} />
-              </View>
-              <Text style={styles.cardQuestion} numberOfLines={isExpanded ? undefined : 2}>
-                {r.questionText}
-              </Text>
+    </>
+  );
 
-              {isExpanded && (
-                <View style={styles.expandedContent}>
-                  <View style={styles.optionsList}>
-                    {r.options.map((option, optIndex) => {
-                      const isCorrect = optIndex === r.correctIndex;
-                      const isPickedWrong = r.selectedIndex === optIndex && optIndex !== r.correctIndex;
-                      return (
-                        <View
-                          key={optIndex}
-                          style={[
-                            styles.optionRow,
-                            isCorrect && styles.optionCorrect,
-                            isPickedWrong && styles.optionWrong,
-                          ]}
-                        >
-                          <Text style={styles.optionText}>{option}</Text>
-                          {isCorrect && <Ionicons name="checkmark-circle" size={18} color={colors.semantic.success} />}
-                          {isPickedWrong && <Ionicons name="close-circle" size={18} color={colors.semantic.error} />}
-                        </View>
-                      );
-                    })}
-                  </View>
-                  <View style={styles.explanationBox}>
-                    <Text style={styles.explanationLabel}>Explanation</Text>
-                    <Text style={styles.explanationText}>{r.explanation}</Text>
-                  </View>
-                </View>
-              )}
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <Button size="lg" onPress={() => router.replace("/mock-test")}>
-        Back to Mock Test
-      </Button>
-    </ScrollView>
+  // Virtualized: an attempt carries ~80-100 of these, each expandable with a full option
+  // list inside, and they were all mounted up front — real cost on the budget hardware
+  // this app targets. All the chrome above moves into the header slot so it still scrolls
+  // as one surface.
+  return (
+    <FlatList
+      data={attempt.results}
+      keyExtractor={(r) => r.questionId}
+      contentContainerStyle={styles.container}
+      ListHeaderComponent={header}
+      renderItem={({ item, index }) => (
+        <QuestionResultCard
+          result={item}
+          index={index}
+          isExpanded={expandedId === item.questionId}
+          onToggle={() => setExpandedId(expandedId === item.questionId ? null : item.questionId)}
+        />
+      )}
+      ListFooterComponent={
+        <Button size="lg" onPress={() => router.replace("/mock-test")}>
+          Back to Mock Test
+        </Button>
+      }
+    />
   );
 }
 
@@ -298,16 +319,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.text.secondary,
   },
-  list: {
-    gap: 12,
-    marginBottom: 24,
-  },
   card: {
     backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 14,
     padding: 16,
+    // Was the wrapping `list` style's `gap` before this became a FlatList; per-cell
+    // spacing is the equivalent once the cells are separate children.
+    marginBottom: 12,
   },
   cardHeader: {
     flexDirection: "row",

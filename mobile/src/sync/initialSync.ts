@@ -11,10 +11,20 @@ const RETRY_MAX_MS = 30 * 1000;
 
 export type SyncStatus = "syncing" | "partial" | "completed" | "error";
 
+/**
+ * Which half of the initial sync is in flight. This exists so the first-launch gate can
+ * release on `"questions"` — i.e. the moment reference data is written — instead of
+ * waiting for the entire question bank. The app shell only needs exams/subjects/topics/
+ * levels to render; questions are needed when a quiz opens, and `useHybridMode()`
+ * already serves those live until the local copy lands.
+ */
+export type SyncPhase = "reference" | "questions";
+
 export type SyncProgress = {
   status: SyncStatus;
   synced: number;
   total: number;
+  phase?: SyncPhase;
   error?: string;
 };
 
@@ -43,8 +53,12 @@ export async function runInitialSync(onProgress?: OnProgress): Promise<{ status:
   if (__DEV__) console.log("[sync] initial sync started");
 
   try {
+    onProgress?.({ status: "syncing", synced: 0, total: 0, phase: "reference" });
     await Promise.all([writeLanguages(), writeReferenceData()]);
     if (__DEV__) console.log("[sync] reference data ready (languages, exams, subjects, topics, structures)");
+    // The gate's release signal. Everything past this point is background work as far
+    // as the app shell is concerned.
+    onProgress?.({ status: "syncing", synced: 0, total: 0, phase: "questions" });
 
     // Resume an interrupted run rather than re-downloading everything. Pages already
     // written stay written — the upserts make a partial run safe to build on.
@@ -67,13 +81,13 @@ export async function runInitialSync(onProgress?: OnProgress): Promise<{ status:
 
       if (!result.last && !timedOutNotified && Date.now() > deadline) {
         timedOutNotified = true;
-        onProgress?.({ status: "partial", synced, total });
+        onProgress?.({ status: "partial", synced, total, phase: "questions" });
       } else {
         // Always report a "syncing" tick with the real counts for this page,
         // even on the last page — otherwise a dataset that fits in one page
         // (true today, at ~108 rows) never shows real progress before the
         // final "completed" tick.
-        onProgress?.({ status: "syncing", synced, total });
+        onProgress?.({ status: "syncing", synced, total, phase: "questions" });
       }
 
       if (result.last) {
@@ -88,7 +102,7 @@ export async function runInitialSync(onProgress?: OnProgress): Promise<{ status:
     await setLastSyncedAt(startedAt);
     await clearResumeState();
     if (__DEV__) console.log(`[sync] initial sync completed (${synced}/${total} questions)`);
-    onProgress?.({ status: "completed", synced, total });
+    onProgress?.({ status: "completed", synced, total, phase: "questions" });
     return { status: "completed" };
   } catch (err) {
     const message = (err as Error).message;
@@ -111,14 +125,19 @@ export async function runInitialSyncUntilDone(onProgress?: OnProgress): Promise<
   let attempt = 0;
   let lastSynced = 0;
   let lastTotal = 0;
+  // Carried across the error rewrite below so a failure during the question phase
+  // doesn't look like a regression back to the reference phase — the gate keys off
+  // `phase`, and reference data that already landed stays landed.
+  let lastPhase: SyncPhase | undefined;
 
   const wrappedProgress: OnProgress = (progress) => {
     if (progress.status === "error") {
-      onProgress?.({ status: "syncing", synced: lastSynced, total: lastTotal });
+      onProgress?.({ status: "syncing", synced: lastSynced, total: lastTotal, phase: lastPhase });
       return;
     }
     lastSynced = progress.synced;
     lastTotal = progress.total;
+    lastPhase = progress.phase ?? lastPhase;
     onProgress?.(progress);
   };
 

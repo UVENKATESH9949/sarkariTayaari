@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams } from "expo-router";
-import { Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
+import { FlatList, Pressable, Text, View, StyleSheet } from "react-native";
 import { useBookmarks } from "../practice/bookmarks";
 import { useSessionHistory } from "../practice/sessionHistory";
 import { getWrongAnswers, type WrongAnswerItem } from "../practice/wrongAnswers";
@@ -59,8 +59,19 @@ export default function Revise() {
           </View>
         </View>
 
-        <ScrollView contentContainerStyle={styles.list}>
-          {items.length === 0 && (
+        {/*
+          Virtualized, unlike every other list in this app, because this one genuinely
+          grows without bound: a user can bookmark every question they ever see, and the
+          Wrong Answers tab flattens all 50 retained sessions' results. A plain ScrollView
+          mounted all of them at once. `key` is tied to the tab so switching tabs resets
+          scroll position instead of stranding the user mid-way down the other list.
+        */}
+        <FlatList
+          key={activeTab}
+          data={items}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.list}
+          ListEmptyComponent={
             <EmptyState
               icon={activeTab === "bookmarks" ? "star-outline" : "checkmark-done-circle-outline"}
               title={activeTab === "bookmarks" ? "No bookmarks yet" : "No wrong answers yet"}
@@ -70,12 +81,11 @@ export default function Revise() {
                   : "Great job so far — questions you get wrong during practice will show up here for revision."
               }
             />
-          )}
-
-          {items.map((item) => {
+          }
+          renderItem={({ item }) => {
             const isExpanded = expandedId === item.id;
             return (
-              <Card key={item.id} onPress={() => setExpandedId(isExpanded ? null : item.id)}>
+              <Card onPress={() => setExpandedId(isExpanded ? null : item.id)}>
                 <View style={styles.cardHeader}>
                   <Text style={styles.cardTag}>
                     {item.subjectName} · {item.topicName}
@@ -129,8 +139,8 @@ export default function Revise() {
                 )}
               </Card>
             );
-          })}
-        </ScrollView>
+          }}
+        />
       </View>
     </>
   );

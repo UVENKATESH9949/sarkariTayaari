@@ -23,6 +23,9 @@ const TRACK_WIDTH: Record<"hero" | "compact", number> = { hero: 260, compact: 16
 const BAR_HEIGHT: Record<"hero" | "compact", number> = { hero: 10, compact: 6 };
 const LABEL_SIZE: Record<"hero" | "compact", number> = { hero: 24, compact: 14 };
 const SWEEP_WIDTH_FRACTION = 0.4;
+/** Slightly longer than the caller's tick interval, and linear, so consecutive updates
+ * blend into one continuous slide instead of a visible step every tick. */
+const FILL_EASE_MS = 240;
 
 /**
  * The "preparing your content" mark used on the first-launch screen (hero, with a real
@@ -34,6 +37,7 @@ export function LoadingMark({ label = "PREPARING", percent, size = "hero" }: Loa
   const trackWidth = TRACK_WIDTH[size];
   const cursorOpacity = useSharedValue(1);
   const sweepProgress = useSharedValue(0);
+  const fillPercent = useSharedValue(0);
 
   useEffect(() => {
     cursorOpacity.value = withRepeat(
@@ -48,11 +52,22 @@ export function LoadingMark({ label = "PREPARING", percent, size = "hero" }: Loa
     }
   }, [percent, sweepProgress]);
 
+  // Ease toward each new value rather than snapping to it: callers update this on a
+  // fixed tick, and jumping per tick reads as a stuttering bar. Runs on the UI thread,
+  // so it stays smooth even while JS is busy writing the sync's first page to SQLite.
+  useEffect(() => {
+    if (percent === undefined) return;
+    fillPercent.value = withTiming(Math.max(0, Math.min(100, percent)), {
+      duration: FILL_EASE_MS,
+      easing: Easing.linear,
+    });
+  }, [percent, fillPercent]);
+
   const cursorStyle = useAnimatedStyle(() => ({ opacity: cursorOpacity.value }));
 
   const fillStyle = useAnimatedStyle(() => {
     if (percent !== undefined) {
-      return { width: `${Math.max(0, Math.min(100, percent))}%`, left: 0 };
+      return { width: `${fillPercent.value}%`, left: 0 };
     }
     const sweepWidth = trackWidth * SWEEP_WIDTH_FRACTION;
     const travel = trackWidth - sweepWidth;

@@ -6,6 +6,21 @@ import { resolveCorrectIndex } from "./answerResolution";
 
 const ALL_EXAMS = "ALL";
 
+/**
+ * Hard cap on one practice session's question set.
+ *
+ * This was previously unbounded, which was a latent crash rather than a slow query: the
+ * `inArray` translation lookup below binds one parameter per matched question, so a topic
+ * with more questions than SQLite's `SQLITE_MAX_VARIABLE_NUMBER` (999 on older builds)
+ * would fail outright. It never surfaced only because the backend serves a temporary
+ * ~500-question pool; lifting that pool would have exposed it immediately.
+ *
+ * Shared with the live path (`data/practiceData.ts`) so local and live can't drift into
+ * returning materially different amounts for the same call — they already had, at
+ * unbounded vs. 200.
+ */
+export const PRACTICE_QUESTION_LIMIT = 200;
+
 function examFilter(examCode: string | null) {
   return examCode && examCode !== ALL_EXAMS ? examCode : null;
 }
@@ -197,12 +212,14 @@ export async function getPracticeQuestions(
         .innerJoin(questionExams, eq(questionExams.questionId, questions.id))
         .where(and(...baseConditions, eq(questionExams.examCode, exam)))
         .orderBy(sql`RANDOM()`)
+        .limit(PRACTICE_QUESTION_LIMIT)
         .all()
     : await db
         .select({ id: questions.id, correctAnswer: questions.correctAnswer })
         .from(questions)
         .where(and(...baseConditions))
         .orderBy(sql`RANDOM()`)
+        .limit(PRACTICE_QUESTION_LIMIT)
         .all();
 
   if (matched.length === 0) return [];

@@ -2,10 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
-import { buildMockTestQuestions, insertMockTestAttempt, type MockTestQuestion } from "../../../db/mockTest";
-import { getPaperById, type SyncedPaper } from "../../../db/examStructure";
-import { getPaperByIdLive } from "../../../data/mockTestStructureData";
-import { buildMockTestQuestionsLive } from "../../../data/mockTestData";
+import { insertMockTestAttempt } from "../../../db/mockTest";
+import {
+  buildMockTestQuestions,
+  getPaperById,
+  type MockTestQuestion,
+  type SyncedPaper,
+} from "../../../data/mockTestAccess";
 import { useHybridMode } from "../../../data/hybridSource";
 import { LANGUAGES, useAppLanguage } from "../../../practice/appLanguage";
 import { LanguagePickerModal } from "../../../practice/LanguagePickerModal";
@@ -93,10 +96,10 @@ export default function MockTestTaking() {
     const startMode = modeAtStartRef.current;
     (async () => {
       try {
-        const loaded = startMode === "local" ? await getPaperById(paperId) : await getPaperByIdLive(paperId);
+        const loaded = await getPaperById(paperId, startMode);
         if (!loaded) return;
         setPaper(loaded);
-        const qs = startMode === "local" ? await buildMockTestQuestions(loaded) : await buildMockTestQuestionsLive(loaded);
+        const qs = await buildMockTestQuestions(loaded, startMode);
         const minutes = totalDurationMinutes(loaded);
         setQuestions(qs);
         if (qs.length > 0) beginSession("mock");
