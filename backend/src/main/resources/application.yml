@@ -90,4 +90,4 @@ app:
     # sampling) to the ~500-question pool seeded by V9__temporary_question_pool.sql,
     # instead of the full ~37,900-question bank. Flip to false to serve everything again —
     # no other code change needed. See QuestionService.temporaryPoolEnabled.
-    temporary-enabled: true
+    temporary-enabled: false
