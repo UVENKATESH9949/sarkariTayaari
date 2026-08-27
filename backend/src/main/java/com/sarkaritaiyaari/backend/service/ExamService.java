@@ -5,6 +5,8 @@ import com.sarkaritaiyaari.backend.dto.ExamResponse;
 import com.sarkaritaiyaari.backend.dto.SubjectResponse;
 import com.sarkaritaiyaari.backend.entity.Exam;
 import com.sarkaritaiyaari.backend.entity.Subject;
+import com.sarkaritaiyaari.backend.repository.DifficultyLevelRepository;
+import com.sarkaritaiyaari.backend.repository.ExamBadgeRepository;
 import com.sarkaritaiyaari.backend.repository.ExamRepository;
 import com.sarkaritaiyaari.backend.repository.SubjectRepository;
 import org.springframework.stereotype.Service;
@@ -23,10 +25,15 @@ public class ExamService {
 
     private final ExamRepository examRepository;
     private final SubjectRepository subjectRepository;
+    private final DifficultyLevelRepository difficultyLevelRepository;
+    private final ExamBadgeRepository examBadgeRepository;
 
-    public ExamService(ExamRepository examRepository, SubjectRepository subjectRepository) {
+    public ExamService(ExamRepository examRepository, SubjectRepository subjectRepository,
+                       DifficultyLevelRepository difficultyLevelRepository, ExamBadgeRepository examBadgeRepository) {
         this.examRepository = examRepository;
         this.subjectRepository = subjectRepository;
+        this.difficultyLevelRepository = difficultyLevelRepository;
+        this.examBadgeRepository = examBadgeRepository;
     }
 
     /* -------------------------------------------------------------------- Syllabus */
@@ -114,6 +121,35 @@ public class ExamService {
         exam.setImageUrl(request.getImageUrl());
         exam.setActive(request.isActive());
         exam.setDisplayOrder(request.getDisplayOrder());
+        exam.setDifficulty(normalizeDifficulty(request.getDifficulty()));
+        exam.setBadge(normalizeBadge(request.getBadge()));
+    }
+
+    /*
+     * Both fields are optional FKs. Blank is normalised to null so an admin form that
+     * submits "" for "not set" clears the column instead of tripping the constraint, and
+     * an unknown code fails here with a 400 rather than as a raw constraint violation —
+     * same reasoning as QuestionService.requireDifficultyExists.
+     */
+
+    private String normalizeDifficulty(String difficulty) {
+        String value = blankToNull(difficulty);
+        if (value != null && !difficultyLevelRepository.existsById(value)) {
+            throw new IllegalArgumentException("Unknown difficulty: " + value);
+        }
+        return value;
+    }
+
+    private String normalizeBadge(String badge) {
+        String value = blankToNull(badge);
+        if (value != null && !examBadgeRepository.existsById(value)) {
+            throw new IllegalArgumentException("Unknown badge: " + value);
+        }
+        return value;
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private Exam getEntity(String code) {
@@ -122,6 +158,7 @@ public class ExamService {
     }
 
     private static ExamResponse toResponse(Exam exam) {
-        return new ExamResponse(exam.getCode(), exam.getName(), exam.getImageUrl(), exam.isActive(), exam.getDisplayOrder());
+        return new ExamResponse(exam.getCode(), exam.getName(), exam.getImageUrl(), exam.isActive(),
+                exam.getDisplayOrder(), exam.getDifficulty(), exam.getBadge());
     }
 }

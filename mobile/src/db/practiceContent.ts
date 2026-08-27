@@ -10,11 +10,27 @@ function examFilter(examCode: string | null) {
   return examCode && examCode !== ALL_EXAMS ? examCode : null;
 }
 
-export type ExamOption = { code: string; name: string; questionCount: number };
+export type ExamOption = {
+  code: string;
+  name: string;
+  questionCount: number;
+  /** difficulty_levels code, or null. Resolved to a label/colour/icon at render time. */
+  difficulty: string | null;
+  /** exam_badges code, or null. */
+  badge: string | null;
+  /** Admin-uploaded logo, or null to fall back to the exam-family icon. */
+  imageUrl: string | null;
+};
 
 export async function getSyncedExams(): Promise<ExamOption[]> {
   const list = await db
-    .select({ code: exams.code, name: exams.name })
+    .select({
+      code: exams.code,
+      name: exams.name,
+      difficulty: exams.difficulty,
+      badge: exams.badge,
+      imageUrl: exams.imageUrl,
+    })
     .from(exams)
     .orderBy(asc(exams.displayOrder))
     .all();

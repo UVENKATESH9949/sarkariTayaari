@@ -29,6 +29,10 @@ type CardProps = {
  */
 export function Card({ variant = "elevated", onPress, disabled, style, children, gradientColors }: CardProps) {
   if (variant === "gradient") {
+    // Deliberately no drop shadow: depth here comes from the gradient, the accent border
+    // and the surface-shade step above the page background. An outer shadow wrapper was
+    // tried and reverted — Android renders `elevation` as an opaque banded rectangle
+    // behind the rounded card, which reads as a rendering bug, not as depth.
     const content = (
       <View style={[variantStyles.gradient, disabled && styles.disabled, style]}>
         <LinearGradient

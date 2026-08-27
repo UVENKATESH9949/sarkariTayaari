@@ -6,6 +6,19 @@ export type ExamResponse = {
   imageUrl: string | null;
   active: boolean;
   displayOrder: number;
+  /** difficulty_levels code, or null when the exam hasn't been assessed. */
+  difficulty: string | null;
+  /** exam_badges code, or null when the exam carries no editorial tag. */
+  badge: string | null;
+};
+
+export type ExamBadgeResponse = {
+  code: string;
+  label: string;
+  displayOrder: number;
+  color: string | null;
+  colorBg: string | null;
+  active: boolean;
 };
 
 export type SubjectResponse = {
@@ -114,6 +127,11 @@ export function getDifficultyLevels() {
 
 export function getPaperTypes() {
   return apiFetch<PaperTypeResponse[]>("/paper-types");
+}
+
+/** Active-only. The badge vocabulary exam cards resolve their tag against. */
+export function getExamBadges() {
+  return apiFetch<ExamBadgeResponse[]>("/exam-badges");
 }
 
 /**

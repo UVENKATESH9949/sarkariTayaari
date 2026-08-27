@@ -9,9 +9,10 @@ import { LANGUAGES, useAppLanguage } from "../../../practice/appLanguage";
 import { LanguagePickerModal } from "../../../practice/LanguagePickerModal";
 import { AnimatedProgressBar } from "../../../ui/AnimatedProgressBar";
 import { Button } from "../../../ui/Button";
+import { ContextualLoading } from "../../../ui/ContextualLoading";
 import { EmptyState } from "../../../ui/EmptyState";
 import { QuestionSkeleton } from "../../../ui/Skeleton";
-import { colors, radius, spacing, typography } from "../../../ui/theme";
+import { colors, radius, spacing } from "../../../ui/theme";
 import { getPracticeQuestions, type PracticeQuestion } from "../../../data/practiceData";
 import { useHybridMode } from "../../../data/hybridSource";
 
@@ -157,8 +158,7 @@ export default function Quiz() {
       <>
         <Stack.Screen options={{ title: `${topicName ?? ""} · ${levelLabel ?? ""}` }} />
         <View style={styles.loadingScreen}>
-          <Text style={styles.loadingMessage}>Preparing your questions...</Text>
-          <QuestionSkeleton />
+          <ContextualLoading message="Preparing your questions..." skeleton={<QuestionSkeleton />} />
         </View>
       </>
     );
@@ -301,11 +301,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     padding: spacing.xl,
-  },
-  loadingMessage: {
-    ...typography.secondary,
-    textAlign: "center",
-    marginBottom: spacing.lg,
   },
   centeredScreen: {
     flex: 1,

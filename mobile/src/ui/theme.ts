@@ -15,12 +15,21 @@ import type { TextStyle } from "react-native";
  * see the dark-theme migration plan for the full incident this token
  * structure was designed to prevent.
  */
+/**
+ * The surface ladder is the primary depth mechanism (see `shadow` below for why it isn't
+ * shadows): each step up is a visibly lighter, slightly blue-shifted neutral, so a card
+ * reads as lifted off the page purely from its own fill. Values match the redesign
+ * reference's dark layered system — cards were previously near-black (#0D1117 on
+ * #05070A), which is what made every screen read as flat and "dull".
+ */
 export const colors = {
-  bg: "#05070A",
-  surface: "#0A0E14",
-  surfaceElevated: "#0D1117",
-  surfaceElevated2: "#131A26",
-  border: "#1C2534",
+  bg: "#0A0D14",
+  surface: "#0F131C",
+  surfaceElevated: "#12161F",
+  surfaceElevated2: "#181D28",
+  border: "#1F2530",
+  /** Inner borders on nested surfaces (stat pills, chips) — one step lighter than `border`. */
+  borderSubtle: "#232938",
   borderAccent: "rgba(59, 130, 246, 0.22)",
 
   text: {
@@ -78,6 +87,12 @@ export const radius = {
   pill: 999,
 } as const;
 
+/**
+ * Kept deliberately restrained. Depth in this design comes from the surface-shade
+ * ladder (bg -> surfaceElevated -> surfaceElevated2), borders and gradients — not from
+ * shadows. Android renders only `elevation`, and a large elevation under a rounded card
+ * paints an opaque banded rectangle that reads as a rendering bug rather than depth.
+ */
 export const shadow = {
   card: {
     shadowColor: "#000000",

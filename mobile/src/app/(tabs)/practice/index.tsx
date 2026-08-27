@@ -2,14 +2,24 @@ import { useEffect, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { Pressable, ScrollView, Text, TextInput, View, StyleSheet } from "react-native";
-import { getSyncedExams, type ExamOption } from "../../../data/practiceData";
+import {
+  getSyncedExams,
+  getDifficultyLevels,
+  getExamBadges,
+  type ExamOption,
+  type DifficultyLevel,
+  type ExamBadge,
+} from "../../../data/practiceData";
 import { useHybridMode } from "../../../data/hybridSource";
 import { useSyncStatus } from "../../../sync/SyncContext";
 import { useSessionHistory } from "../../../practice/sessionHistory";
 import { getExamPracticeProgress } from "../../../practice/examProgress";
 import { getExamGradient } from "../../../constants/examTheme";
+import { getExamOrgName } from "../../../constants/examOrgs";
+import type { IoniconName } from "../../../constants/subjects";
 import { FadeInItem } from "../../../ui/FadeInList";
 import { OfflineNoDataNotice } from "../../../ui/OfflineNoDataNotice";
+import { Badge } from "../../../ui/Badge";
 import { Card } from "../../../ui/Card";
 import { EmptyState } from "../../../ui/EmptyState";
 import { IconBox } from "../../../ui/IconBox";
@@ -25,6 +35,8 @@ export default function Practice() {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [exams, setExams] = useState<ExamOption[]>([]);
+  const [levels, setLevels] = useState<DifficultyLevel[]>([]);
+  const [badges, setBadges] = useState<ExamBadge[]>([]);
   const [loading, setLoading] = useState(true);
 
   const { syncVersion } = useSyncStatus();
@@ -37,6 +49,21 @@ export default function Practice() {
       setLoading(false);
     });
   }, [syncVersion, mode]);
+
+  // The two lookup vocabularies an exam's `difficulty`/`badge` codes resolve against.
+  // Kept as maps so a code with no matching row simply renders nothing rather than
+  // showing the raw code.
+  useEffect(() => {
+    getDifficultyLevels(mode)
+      .then(setLevels)
+      .catch(() => setLevels([]));
+    getExamBadges(mode)
+      .then(setBadges)
+      .catch(() => setBadges([]));
+  }, [syncVersion, mode]);
+
+  const levelByCode = useMemo(() => new Map(levels.map((l) => [l.code, l])), [levels]);
+  const badgeByCode = useMemo(() => new Map(badges.map((b) => [b.code, b])), [badges]);
 
   const openSubjects = (examCode: string, examLabel: string) => {
     router.push({ pathname: "/practice/subjects", params: { examCode, examLabel } });
@@ -116,24 +143,58 @@ export default function Practice() {
         <View style={styles.list}>
           {filteredExams.map((exam, index) => {
             const gradient = getExamGradient(exam.code);
+            const orgName = getExamOrgName(exam.code);
             const progress = getExamPracticeProgress(sessions, exam.code);
+            const level = exam.difficulty ? levelByCode.get(exam.difficulty) : undefined;
+            const badge = exam.badge ? badgeByCode.get(exam.badge) : undefined;
             return (
               <FadeInItem key={exam.code} index={index}>
                 <Card onPress={() => openSubjects(exam.code, exam.name)} style={styles.examCard}>
                   <View style={styles.examTopRow}>
-                    <IconBox icon={gradient.icon} gradientColors={gradient.colors} />
+                    <IconBox
+                      icon={gradient.icon}
+                      gradientColors={gradient.colors}
+                      iconColor={gradient.iconTint}
+                      imageUrl={exam.imageUrl}
+                    />
                     <View style={styles.examTextBlock}>
-                      <Text style={styles.examLabel} numberOfLines={2}>
-                        {exam.name}
-                      </Text>
+                      <View style={styles.examTitleRow}>
+                        <Text style={styles.examLabel} numberOfLines={2}>
+                          {exam.name}
+                        </Text>
+                        {badge && (
+                          <Badge
+                            label={badge.label}
+                            variant={badge.code === "trending" ? "hot" : "success"}
+                            color={badge.color}
+                            backgroundColor={badge.colorBg}
+                          />
+                        )}
+                      </View>
+                      {orgName && (
+                        <Text style={styles.examOrg} numberOfLines={1}>
+                          {orgName}
+                        </Text>
+                      )}
                     </View>
                     <Ionicons name="chevron-forward" size={18} color={colors.text.muted} />
                   </View>
-                  <StatPill
-                    icon="document-text-outline"
-                    value={exam.questionCount.toLocaleString()}
-                    label={exam.questionCount === 1 ? "question" : "questions"}
-                  />
+                  <View style={styles.statRow}>
+                    <StatPill
+                      icon="document-text-outline"
+                      value={exam.questionCount.toLocaleString()}
+                      label={exam.questionCount === 1 ? "question" : "questions"}
+                    />
+                    {/* Only when the admin has actually set a difficulty — an unassessed
+                        exam shows one pill rather than a guessed level. */}
+                    {level && (
+                      <StatPill
+                        icon={(level.icon as IoniconName | null) ?? "speedometer-outline"}
+                        value={level.label}
+                        label="level"
+                      />
+                    )}
+                  </View>
                   {progress !== null && (
                     <View style={styles.progressWrap}>
                       <AnimatedProgressBar progress={progress / 100} style={styles.progressTrack} />
@@ -172,8 +233,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
+    borderColor: colors.borderSubtle,
+    borderRadius: radius.lg,
     marginHorizontal: spacing.xl,
     marginTop: spacing.base,
     marginBottom: spacing.xs,
@@ -259,7 +320,9 @@ const styles = StyleSheet.create({
     gap: spacing.base,
   },
   examCard: {
-    gap: spacing.md,
+    gap: spacing.md + 2,
+    borderRadius: radius.xl + 2,
+    padding: spacing.base + 2,
   },
   examTopRow: {
     flexDirection: "row",
@@ -269,10 +332,25 @@ const styles = StyleSheet.create({
   examTextBlock: {
     flex: 1,
   },
+  examTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
   examLabel: {
     fontSize: 17,
     fontWeight: "700",
     color: colors.text.primary,
+    flexShrink: 1,
+  },
+  statRow: {
+    flexDirection: "row",
+    gap: spacing.sm + 2,
+  },
+  examOrg: {
+    fontSize: 12.5,
+    color: colors.text.muted,
+    marginTop: 2,
   },
   progressWrap: {
     flexDirection: "row",

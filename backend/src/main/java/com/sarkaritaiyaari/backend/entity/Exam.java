@@ -32,6 +32,16 @@ public class Exam {
     private int displayOrder;
 
     /**
+     * FK to difficulty_levels.code — the same vocabulary questions use, so an exam's
+     * overall difficulty can't disagree with its questions'. Null means "not assessed",
+     * which the clients render as absent rather than guessing a level.
+     */
+    private String difficulty;
+
+    /** FK to exam_badges.code. Null means no editorial tag on this exam's card. */
+    private String badge;
+
+    /**
      * The exam's syllabus — which subjects it covers. Independent of its paper
      * structure, so an exam can have a syllabus before (or without) a defined pattern.
      */
@@ -89,5 +99,21 @@ public class Exam {
 
     public void setDisplayOrder(int displayOrder) {
         this.displayOrder = displayOrder;
+    }
+
+    public String getDifficulty() {
+        return difficulty;
+    }
+
+    public void setDifficulty(String difficulty) {
+        this.difficulty = difficulty;
+    }
+
+    public String getBadge() {
+        return badge;
+    }
+
+    public void setBadge(String badge) {
+        this.badge = badge;
     }
 }

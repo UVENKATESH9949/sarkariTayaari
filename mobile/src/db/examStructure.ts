@@ -1,6 +1,14 @@
 import { asc, eq, inArray } from "drizzle-orm";
 import { db } from "./client";
-import { difficultyLevels, examPapers, examStages, examSubjects, paperSections, sectionSubjects } from "./schema";
+import {
+  difficultyLevels,
+  examBadges,
+  examPapers,
+  examStages,
+  examSubjects,
+  paperSections,
+  sectionSubjects,
+} from "./schema";
 
 export type SyncedSection = {
   id: string;
@@ -38,6 +46,13 @@ export type DifficultyLevel = {
   color: string | null;
   colorBg: string | null;
   icon: string | null;
+};
+
+export type ExamBadge = {
+  code: string;
+  label: string;
+  color: string | null;
+  colorBg: string | null;
 };
 
 /** Every paper in an exam's structure, ordered by stage then paper. */
@@ -177,5 +192,19 @@ export async function getDifficultyLevels(): Promise<DifficultyLevel[]> {
     })
     .from(difficultyLevels)
     .orderBy(asc(difficultyLevels.displayOrder))
+    .all();
+}
+
+/** Whatever badges were synced, in display order — same no-hardcoded-set reasoning. */
+export async function getExamBadges(): Promise<ExamBadge[]> {
+  return db
+    .select({
+      code: examBadges.code,
+      label: examBadges.label,
+      color: examBadges.color,
+      colorBg: examBadges.colorBg,
+    })
+    .from(examBadges)
+    .orderBy(asc(examBadges.displayOrder))
     .all();
 }

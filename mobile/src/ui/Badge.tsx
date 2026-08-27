@@ -7,6 +7,10 @@ type BadgeProps = {
   label: string;
   /** "hot" = trending/urgent (orange). "success" = popular/new/best (green) — default. */
   variant?: BadgeVariant;
+  /** Admin-set colours from the synced exam_badges row. Each falls back to the variant's
+   * tone when the admin left it blank, so a badge is always readable. */
+  color?: string | null;
+  backgroundColor?: string | null;
 };
 
 const VARIANT_STYLE: Record<BadgeVariant, { color: string; bg: string }> = {
@@ -15,11 +19,11 @@ const VARIANT_STYLE: Record<BadgeVariant, { color: string; bg: string }> = {
 };
 
 /** Small pill-shaped label — "TRENDING" / "POPULAR" / "BEST 142/200" style tags on exam cards. */
-export function Badge({ label, variant = "success" }: BadgeProps) {
+export function Badge({ label, variant = "success", color, backgroundColor }: BadgeProps) {
   const tone = VARIANT_STYLE[variant];
   return (
-    <View style={[styles.badge, { backgroundColor: tone.bg }]}>
-      <Text style={[styles.text, { color: tone.color }]}>{label}</Text>
+    <View style={[styles.badge, { backgroundColor: backgroundColor || tone.bg }]}>
+      <Text style={[styles.text, { color: color || tone.color }]}>{label.toUpperCase()}</Text>
     </View>
   );
 }

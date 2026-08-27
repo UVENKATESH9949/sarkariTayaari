@@ -7,16 +7,24 @@ public class ExamResponse {
     private String imageUrl;
     private boolean active;
     private int displayOrder;
+    /** difficulty_levels code, or null. Clients join it against their own synced copy of
+     * that table for the label/colour/icon rather than having them duplicated here. */
+    private String difficulty;
+    /** exam_badges code, or null. Same join-rather-than-denormalise reasoning. */
+    private String badge;
 
     public ExamResponse() {
     }
 
-    public ExamResponse(String code, String name, String imageUrl, boolean active, int displayOrder) {
+    public ExamResponse(String code, String name, String imageUrl, boolean active, int displayOrder,
+                        String difficulty, String badge) {
         this.code = code;
         this.name = name;
         this.imageUrl = imageUrl;
         this.active = active;
         this.displayOrder = displayOrder;
+        this.difficulty = difficulty;
+        this.badge = badge;
     }
 
     public String getCode() {
@@ -57,5 +65,21 @@ public class ExamResponse {
 
     public void setDisplayOrder(int displayOrder) {
         this.displayOrder = displayOrder;
+    }
+
+    public String getDifficulty() {
+        return difficulty;
+    }
+
+    public void setDifficulty(String difficulty) {
+        this.difficulty = difficulty;
+    }
+
+    public String getBadge() {
+        return badge;
+    }
+
+    public void setBadge(String badge) {
+        this.badge = badge;
     }
 }

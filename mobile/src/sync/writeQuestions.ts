@@ -2,6 +2,7 @@ import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db/client";
 import {
   difficultyLevels,
+  examBadges,
   examPapers,
   examStages,
   examSubjects,
@@ -19,6 +20,7 @@ import {
 import { getLanguages, type QuestionResponse } from "../api/questions";
 import {
   getDifficultyLevels,
+  getExamBadges,
   getExamStructures,
   getExams,
   getPaperTypes,
@@ -48,23 +50,32 @@ export async function writeLanguages() {
  * every sync (initial or delta) rather than tracking its own sync_meta.
  */
 export async function writeReferenceData() {
-  const [examList, subjectList, topicList, difficultyList, paperTypeList, structures] = await Promise.all([
-    getExams(),
-    getSubjects(),
-    getTopics(),
-    getDifficultyLevels(),
-    getPaperTypes(),
-    getExamStructures(),
-  ]);
+  const [examList, subjectList, topicList, difficultyList, paperTypeList, badgeList, structures] =
+    await Promise.all([
+      getExams(),
+      getSubjects(),
+      getTopics(),
+      getDifficultyLevels(),
+      getPaperTypes(),
+      getExamBadges(),
+      getExamStructures(),
+    ]);
 
   for (const exam of examList) {
+    // Listed once and reused for both halves of the upsert: a field present in `values`
+    // but missing from `set` silently never updates on an existing row, which is the
+    // failure mode this shape exists to prevent.
+    const fields = {
+      name: exam.name,
+      imageUrl: exam.imageUrl,
+      displayOrder: exam.displayOrder,
+      difficulty: exam.difficulty,
+      badge: exam.badge,
+    };
     await db
       .insert(exams)
-      .values({ code: exam.code, name: exam.name, imageUrl: exam.imageUrl, displayOrder: exam.displayOrder })
-      .onConflictDoUpdate({
-        target: exams.code,
-        set: { name: exam.name, imageUrl: exam.imageUrl, displayOrder: exam.displayOrder },
-      });
+      .values({ code: exam.code, ...fields })
+      .onConflictDoUpdate({ target: exams.code, set: fields });
   }
 
   // Subjects and topics are upserted rather than replaced: questions reference them,
@@ -96,9 +107,10 @@ export async function writeReferenceData() {
       .onConflictDoUpdate({ target: topics.id, set: fields });
   }
 
-  // Difficulty levels and paper types are small, self-contained lookups with nothing
-  // referencing them locally (questions.difficulty is a plain text column), so a full
-  // replace is the simplest way to pick up removals and deactivations.
+  // Difficulty levels, paper types and exam badges are small, self-contained lookups
+  // with nothing referencing them locally (exams.difficulty/badge are plain text
+  // columns), so a full replace is the simplest way to pick up removals and
+  // deactivations.
   await db.transaction(async (tx) => {
     await tx.delete(difficultyLevels);
     if (difficultyList.length > 0) {
@@ -122,6 +134,19 @@ export async function writeReferenceData() {
           label: type.label,
           mockable: type.mockable,
           displayOrder: type.displayOrder,
+        })),
+      );
+    }
+
+    await tx.delete(examBadges);
+    if (badgeList.length > 0) {
+      await tx.insert(examBadges).values(
+        badgeList.map((badge) => ({
+          code: badge.code,
+          label: badge.label,
+          displayOrder: badge.displayOrder,
+          color: badge.color,
+          colorBg: badge.colorBg,
         })),
       );
     }

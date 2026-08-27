@@ -265,6 +265,18 @@ export function deleteDifficultyLevel(code) {
   return request(`/api/difficulty-levels/${code}`, { method: "DELETE" });
 }
 
+/* ------------------------------------------------------------- Exam badges */
+
+// Read-only: the badge vocabulary is seeded content, so there's no CRUD screen for it —
+// these just populate the exam form's dropdown.
+export function listExamBadges() {
+  return request(`/api/exam-badges`);
+}
+
+export function listAllExamBadges() {
+  return request(`/api/exam-badges/all`);
+}
+
 /* --------------------------------------------------------------- Paper types */
 
 export function listPaperTypes() {

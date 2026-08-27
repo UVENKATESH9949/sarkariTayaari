@@ -7,11 +7,28 @@ export const languages = sqliteTable("languages", {
 });
 
 // Mirrors the backend's Exam entity — synced from GET /api/exams (active-only).
+// difficulty/badge are codes into difficulty_levels and exam_badges below, not display
+// strings — the label and colours are looked up from those tables at render time, so an
+// admin recolouring a badge needs no app release. Both are nullable: most exams have
+// neither, and absent must render as absent rather than defaulting to a wrong value.
 export const exams = sqliteTable("exams", {
   code: text("code").primaryKey(),
   name: text("name").notNull(),
   imageUrl: text("image_url"),
   displayOrder: integer("display_order").notNull().default(0),
+  difficulty: text("difficulty"),
+  badge: text("badge"),
+});
+
+// Synced from GET /api/exam-badges (active-only). The editorial tag vocabulary
+// ("Trending"/"Popular") — a table rather than a union for the same reason
+// difficulty_levels is one.
+export const examBadges = sqliteTable("exam_badges", {
+  code: text("code").primaryKey(),
+  label: text("label").notNull(),
+  displayOrder: integer("display_order").notNull().default(0),
+  color: text("color"),
+  colorBg: text("color_bg"),
 });
 
 // Mirrors Subject — synced from GET /api/subjects. Global, not per-exam.

@@ -10,14 +10,25 @@ import {
   type DifficultyCounts,
   type PracticeQuestion,
 } from "../db/practiceContent";
-import { getDifficultyLevels as getDifficultyLevelsLocal, type DifficultyLevel } from "../db/examStructure";
-import { getExams, getSubjects, getTopics, getDifficultyLevels as getDifficultyLevelsApi } from "../api/reference";
+import {
+  getDifficultyLevels as getDifficultyLevelsLocal,
+  getExamBadges as getExamBadgesLocal,
+  type DifficultyLevel,
+  type ExamBadge,
+} from "../db/examStructure";
+import {
+  getExams,
+  getSubjects,
+  getTopics,
+  getDifficultyLevels as getDifficultyLevelsApi,
+  getExamBadges as getExamBadgesApi,
+} from "../api/reference";
 import { getLiveQuestions, getQuestionCounts } from "./liveQuestions";
 import { getSyllabusSubjectIdsLive } from "./mockTestStructureData";
 import { resolveCorrectIndex } from "../db/answerResolution";
 import type { HybridMode } from "./hybridSource";
 
-export type { ExamOption, SubjectStat, TopicStat, DifficultyCounts, PracticeQuestion, DifficultyLevel };
+export type { ExamOption, SubjectStat, TopicStat, DifficultyCounts, PracticeQuestion, DifficultyLevel, ExamBadge };
 
 const ALL_EXAMS = "ALL";
 function examFilter(examCode: string | null): string | undefined {
@@ -47,7 +58,14 @@ export async function getSyncedExams(mode: HybridMode): Promise<ExamOption[]> {
   if (mode === "unavailable") return [];
 
   const [list, counts] = await Promise.all([getExams(), getQuestionCounts({ groupBy: "exam" })]);
-  return list.map((e) => ({ code: e.code, name: e.name, questionCount: counts[e.code] ?? 0 }));
+  return list.map((e) => ({
+    code: e.code,
+    name: e.name,
+    questionCount: counts[e.code] ?? 0,
+    difficulty: e.difficulty,
+    badge: e.badge,
+    imageUrl: e.imageUrl,
+  }));
 }
 
 export async function getSubjectStats(examCode: string | null, mode: HybridMode): Promise<SubjectStat[]> {
@@ -99,6 +117,15 @@ export async function getDifficultyLevels(mode: HybridMode): Promise<DifficultyL
 
   const levels = await getDifficultyLevelsApi();
   return levels.map((l) => ({ code: l.code, label: l.label, color: l.color, colorBg: l.colorBg, icon: l.icon }));
+}
+
+/** Metadata for whatever exam badges exist — exam cards resolve their `badge` code against this. */
+export async function getExamBadges(mode: HybridMode): Promise<ExamBadge[]> {
+  if (mode === "local") return getExamBadgesLocal();
+  if (mode === "unavailable") return [];
+
+  const badges = await getExamBadgesApi();
+  return badges.map((b) => ({ code: b.code, label: b.label, color: b.color, colorBg: b.colorBg }));
 }
 
 export async function getPracticeQuestions(

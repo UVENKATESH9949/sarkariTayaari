@@ -1,15 +1,23 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { listAllExams, createExam, updateExam, deleteExam, uploadImage } from "../api.js";
+import {
+  listAllExams,
+  createExam,
+  updateExam,
+  deleteExam,
+  uploadImage,
+  listAllDifficultyLevels,
+  listAllExamBadges,
+} from "../api.js";
 import { MAX_LENGTHS, IMAGE_MAX_BYTES } from "../constants.js";
 import { deleteFailureMessage } from "../errors.js";
 import Modal from "../components/Modal.jsx";
 import { EditIcon, TrashIcon } from "../components/icons.jsx";
 import { useConfirm } from "../hooks/useConfirm.jsx";
 
-const BLANK_EXAM = { code: "", name: "", imageUrl: "", active: true, displayOrder: 0 };
+const BLANK_EXAM = { code: "", name: "", imageUrl: "", active: true, displayOrder: 0, difficulty: "", badge: "" };
 
-function ExamFormModal({ mode, initial, onCancel, onSaved }) {
+function ExamFormModal({ mode, initial, difficulties, badges, onCancel, onSaved }) {
   const [form, setForm] = useState(initial);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -51,6 +59,8 @@ function ExamFormModal({ mode, initial, onCancel, onSaved }) {
       imageUrl: form.imageUrl ? form.imageUrl.trim() : null,
       active: form.active,
       displayOrder: Number(form.displayOrder) || 0,
+      difficulty: form.difficulty || null,
+      badge: form.badge || null,
     };
     try {
       if (mode === "create") await createExam(payload);
@@ -129,6 +139,34 @@ function ExamFormModal({ mode, initial, onCancel, onSaved }) {
           </div>
         </div>
 
+        <div className="form-row">
+          <div className="form-field">
+            <label>Difficulty</label>
+            <select value={form.difficulty} onChange={(e) => set("difficulty", e.target.value)}>
+              <option value="">Not set</option>
+              {difficulties.map((d) => (
+                <option key={d.code} value={d.code}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+            <span className="field-note">Shown as a stat on the exam card. Leave unset to show nothing.</span>
+          </div>
+
+          <div className="form-field">
+            <label>Badge</label>
+            <select value={form.badge} onChange={(e) => set("badge", e.target.value)}>
+              <option value="">None</option>
+              {badges.map((b) => (
+                <option key={b.code} value={b.code}>
+                  {b.label}
+                </option>
+              ))}
+            </select>
+            <span className="field-note">An editorial tag pinned beside the exam name.</span>
+          </div>
+        </div>
+
         <div className="form-field" style={{ maxWidth: "none", marginBottom: 0 }}>
           <label>Image</label>
           <div className="image-picker">
@@ -158,6 +196,8 @@ export default function Exams() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [editorState, setEditorState] = useState(null);
+  const [difficulties, setDifficulties] = useState([]);
+  const [badges, setBadges] = useState([]);
   const [confirm, confirmDialog] = useConfirm();
 
   const load = useCallback(() => {
@@ -173,6 +213,17 @@ export default function Exams() {
   }, []);
 
   useEffect(load, [load]);
+
+  // Dropdown vocabularies for the edit form. Failing to load them leaves the selects
+  // empty rather than blocking the page — every other exam field still works.
+  useEffect(() => {
+    listAllDifficultyLevels()
+      .then(setDifficulties)
+      .catch(() => setDifficulties([]));
+    listAllExamBadges()
+      .then(setBadges)
+      .catch(() => setBadges([]));
+  }, []);
 
   async function handleDelete(exam) {
     const ok = await confirm(
@@ -250,7 +301,13 @@ export default function Exams() {
                         onClick={() =>
                           setEditorState({
                             mode: "edit",
-                            initial: { ...exam, imageUrl: exam.imageUrl || "" },
+                            // Nullable columns become "" so the inputs/selects stay controlled.
+                            initial: {
+                              ...exam,
+                              imageUrl: exam.imageUrl || "",
+                              difficulty: exam.difficulty || "",
+                              badge: exam.badge || "",
+                            },
                           })
                         }
                       >
@@ -279,6 +336,8 @@ export default function Exams() {
         <ExamFormModal
           mode={editorState.mode}
           initial={editorState.initial}
+          difficulties={difficulties}
+          badges={badges}
           onCancel={() => setEditorState(null)}
           onSaved={() => {
             setEditorState(null);

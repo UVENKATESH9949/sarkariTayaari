@@ -98,6 +98,77 @@ class ExamCrudTest extends AbstractIntegrationTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
+    @Test
+    void difficultyAndBadge_defaultToNullAndRoundTrip() {
+        ExamResponse created = createExam("CRUD_TAGGED_EXAM", "Untagged", false, 59);
+        // Absent rather than defaulted: the clients render "no difficulty" as no stat pill,
+        // so a default here would silently claim an exam had been assessed.
+        assertThat(created.getDifficulty()).isNull();
+        assertThat(created.getBadge()).isNull();
+
+        ExamRequest update = new ExamRequest();
+        update.setCode(created.getCode());
+        update.setName("Tagged");
+        update.setActive(true);
+        update.setDisplayOrder(59);
+        update.setDifficulty("medium");
+        update.setBadge("trending");
+
+        ResponseEntity<ExamResponse> response = restTemplate.exchange(
+                "/api/exams/" + created.getCode(), HttpMethod.PUT, adminAuth(update), ExamResponse.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().getDifficulty()).isEqualTo("medium");
+        assertThat(response.getBody().getBadge()).isEqualTo("trending");
+    }
+
+    @Test
+    void blankDifficultyOrBadge_clearsRatherThanFailing() {
+        ExamResponse created = createExam("CRUD_CLEARED_EXAM", "Cleared", false, 60);
+
+        ExamRequest update = new ExamRequest();
+        update.setCode(created.getCode());
+        update.setName("Cleared");
+        update.setActive(false);
+        update.setDisplayOrder(60);
+        // The admin form submits "" for "not set" — that has to clear the FK, not trip it.
+        update.setDifficulty("");
+        update.setBadge("");
+
+        ResponseEntity<ExamResponse> response = restTemplate.exchange(
+                "/api/exams/" + created.getCode(), HttpMethod.PUT, adminAuth(update), ExamResponse.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().getDifficulty()).isNull();
+        assertThat(response.getBody().getBadge()).isNull();
+    }
+
+    @Test
+    void unknownDifficulty_returns400() {
+        ExamRequest request = new ExamRequest();
+        request.setCode("CRUD_BAD_DIFFICULTY_EXAM");
+        request.setName("Bad Difficulty");
+        request.setActive(false);
+        request.setDisplayOrder(61);
+        request.setDifficulty("impossible");
+
+        ResponseEntity<Map> response = restTemplate.exchange("/api/exams", HttpMethod.POST, adminAuth(request), Map.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void unknownBadge_returns400() {
+        ExamRequest request = new ExamRequest();
+        request.setCode("CRUD_BAD_BADGE_EXAM");
+        request.setName("Bad Badge");
+        request.setActive(false);
+        request.setDisplayOrder(62);
+        request.setBadge("nonexistent");
+
+        ResponseEntity<Map> response = restTemplate.exchange("/api/exams", HttpMethod.POST, adminAuth(request), Map.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
     private ExamResponse createExam(String code, String name, boolean active, int displayOrder) {
         ExamRequest request = new ExamRequest();
         request.setCode(code);

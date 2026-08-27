@@ -2,8 +2,14 @@ import type { IoniconName } from "./subjects";
 
 export type ExamGradient = {
   icon: IoniconName;
-  /** Two-stop gradient for `expo-linear-gradient`, dark corner to darker corner (135deg). */
+  /** Two-stop gradient for `expo-linear-gradient` (145deg), deliberately dark and
+   * desaturated — the reference design keeps these boxes "dark and sophisticated" and
+   * carries colour on the symbol inside, not on the box itself. */
   colors: readonly [string, string];
+  /** The symbol's own colour. This is where per-family colour variety lives: the
+   * reference uses coloured emoji here, and a monochrome icon set needs an explicit
+   * tint to read the same way against a dark box. */
+  iconTint: string;
 };
 
 /**
@@ -16,12 +22,12 @@ export type ExamGradient = {
  * code change here.
  */
 const FAMILY_GRADIENTS: Record<string, ExamGradient> = {
-  SSC: { icon: "document-text-outline", colors: ["#22345E", "#16223F"] },
-  IBPS: { icon: "briefcase-outline", colors: ["#3A2258", "#241539"] },
-  RRB: { icon: "train-outline", colors: ["#0F3B37", "#0A2724"] },
-  UPSC: { icon: "shield-outline", colors: ["#4A2130", "#2E1420"] },
-  RBI: { icon: "business-outline", colors: ["#4A3B1A", "#2E2410"] },
-  LIC: { icon: "wallet-outline", colors: ["#1B3A4A", "#122530"] },
+  SSC: { icon: "document-text", colors: ["#22345E", "#16223F"], iconTint: "#7FB0FF" },
+  IBPS: { icon: "briefcase", colors: ["#3A2258", "#241539"], iconTint: "#C4A2FF" },
+  RRB: { icon: "train", colors: ["#0F3B37", "#0A2724"], iconTint: "#5EE0BC" },
+  UPSC: { icon: "shield", colors: ["#4A2130", "#2E1420"], iconTint: "#FF9BAE" },
+  RBI: { icon: "business", colors: ["#4A3B1A", "#2E2410"], iconTint: "#FFCE73" },
+  LIC: { icon: "wallet", colors: ["#1B3A4A", "#122530"], iconTint: "#7FD8F0" },
 };
 
 const FALLBACK_ORDER = Object.values(FAMILY_GRADIENTS);

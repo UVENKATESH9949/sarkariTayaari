@@ -2,15 +2,17 @@ import { useEffect, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { Pressable, ScrollView, Text, TextInput, View, StyleSheet } from "react-native";
-import { getSyncedExams, type ExamOption } from "../../../data/practiceData";
+import { getSyncedExams, getExamBadges, type ExamOption, type ExamBadge } from "../../../data/practiceData";
 import { useHybridMode } from "../../../data/hybridSource";
 import { useSyncStatus } from "../../../sync/SyncContext";
 import { getMockablePapers } from "../../../db/examStructure";
 import { getMockablePapersLive } from "../../../data/mockTestStructureData";
 import { getMockAttemptSummary, type MockAttemptSummary } from "../../../db/mockTest";
 import { getExamGradient } from "../../../constants/examTheme";
+import { getExamOrgName } from "../../../constants/examOrgs";
 import { FadeInItem } from "../../../ui/FadeInList";
 import { OfflineNoDataNotice } from "../../../ui/OfflineNoDataNotice";
+import { Badge } from "../../../ui/Badge";
 import { Card } from "../../../ui/Card";
 import { EmptyState } from "../../../ui/EmptyState";
 import { IconBox } from "../../../ui/IconBox";
@@ -33,6 +35,7 @@ export default function MockTestExamSelection() {
   // never server-driven, regardless of hybrid mode.
   const [paperCounts, setPaperCounts] = useState<Record<string, number>>({});
   const [attemptSummaries, setAttemptSummaries] = useState<Record<string, MockAttemptSummary | null>>({});
+  const [badges, setBadges] = useState<ExamBadge[]>([]);
 
   const { syncVersion } = useSyncStatus();
   const mode = useHybridMode();
@@ -60,6 +63,14 @@ export default function MockTestExamSelection() {
       setAttemptSummaries(summaries);
     })();
   }, [exams, mode]);
+
+  useEffect(() => {
+    getExamBadges(mode)
+      .then(setBadges)
+      .catch(() => setBadges([]));
+  }, [syncVersion, mode]);
+
+  const badgeByCode = useMemo(() => new Map(badges.map((b) => [b.code, b])), [badges]);
 
   const openPapers = (examCode: string, examLabel: string) => {
     router.push({ pathname: "/mock-test/papers", params: { examCode, examLabel } });
@@ -105,17 +116,39 @@ export default function MockTestExamSelection() {
         <View style={styles.list}>
           {filteredExams.map((exam, index) => {
             const gradient = getExamGradient(exam.code);
+            const orgName = getExamOrgName(exam.code);
             const totalPapers = paperCounts[exam.code];
             const summary = attemptSummaries[exam.code];
+            const badge = exam.badge ? badgeByCode.get(exam.badge) : undefined;
             return (
               <FadeInItem key={exam.code} index={index}>
                 <Card onPress={() => openPapers(exam.code, exam.name)} style={styles.examCard}>
                   <View style={styles.examTopRow}>
-                    <IconBox icon={gradient.icon} gradientColors={gradient.colors} />
+                    <IconBox
+                      icon={gradient.icon}
+                      gradientColors={gradient.colors}
+                      iconColor={gradient.iconTint}
+                      imageUrl={exam.imageUrl}
+                    />
                     <View style={styles.examTextBlock}>
-                      <Text style={styles.examLabel} numberOfLines={2}>
-                        {exam.name}
-                      </Text>
+                      <View style={styles.examTitleRow}>
+                        <Text style={styles.examLabel} numberOfLines={2}>
+                          {exam.name}
+                        </Text>
+                        {badge && (
+                          <Badge
+                            label={badge.label}
+                            variant={badge.code === "trending" ? "hot" : "success"}
+                            color={badge.color}
+                            backgroundColor={badge.colorBg}
+                          />
+                        )}
+                      </View>
+                      {orgName && (
+                        <Text style={styles.examOrg} numberOfLines={1}>
+                          {orgName}
+                        </Text>
+                      )}
                     </View>
                     <Ionicons name="chevron-forward" size={18} color={colors.text.muted} />
                   </View>
@@ -171,8 +204,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
+    borderColor: colors.borderSubtle,
+    borderRadius: radius.lg,
     marginHorizontal: spacing.xl,
     marginTop: spacing.base,
     marginBottom: spacing.xs,
@@ -198,7 +231,9 @@ const styles = StyleSheet.create({
     gap: spacing.base,
   },
   examCard: {
-    gap: spacing.md,
+    gap: spacing.md + 2,
+    borderRadius: radius.xl + 2,
+    padding: spacing.base + 2,
   },
   examTopRow: {
     flexDirection: "row",
@@ -208,10 +243,21 @@ const styles = StyleSheet.create({
   examTextBlock: {
     flex: 1,
   },
+  examTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
   examLabel: {
     fontSize: 17,
     fontWeight: "700",
     color: colors.text.primary,
+    flexShrink: 1,
+  },
+  examOrg: {
+    fontSize: 12.5,
+    color: colors.text.muted,
+    marginTop: 2,
   },
   statRow: {
     flexDirection: "row",

@@ -1,4 +1,5 @@
-import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import { useState } from "react";
+import { Image, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import type { IoniconName } from "../constants/subjects";
@@ -12,6 +13,12 @@ type IconBoxProps = {
   /** Flat background color. Ignored if `gradientColors` is set. */
   backgroundColor?: string;
   gradientColors?: readonly [string, string];
+  /**
+   * An admin-uploaded logo for this exam. When set it replaces the icon entirely — a real
+   * board logo always beats a generic symbol. The gradient stays as the backdrop so a
+   * transparent PNG still reads, and a null/failed image falls back to the icon.
+   */
+  imageUrl?: string | null;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -30,8 +37,13 @@ export function IconBox({
   iconColor = colors.text.onAccent,
   backgroundColor,
   gradientColors,
+  imageUrl,
   style,
 }: IconBoxProps) {
+  // Remembers *which* url failed rather than a bare boolean, so a changed url un-suppresses
+  // itself by comparison — no reset effect, and nothing to get stale.
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+
   const boxStyle: StyleProp<ViewStyle> = [
     styles.box,
     { width: size, height: size, borderRadius: Math.round(size * 0.27) },
@@ -39,20 +51,28 @@ export function IconBox({
     style,
   ];
   const resolvedIconSize = iconSize ?? Math.round(size * 0.43);
+  const showImage = Boolean(imageUrl) && failedUrl !== imageUrl;
+
+  const content = showImage ? (
+    <Image
+      source={{ uri: imageUrl as string }}
+      style={{ width: size * 0.62, height: size * 0.62 }}
+      resizeMode="contain"
+      onError={() => setFailedUrl(imageUrl ?? null)}
+    />
+  ) : (
+    <Ionicons name={icon} size={resolvedIconSize} color={iconColor} />
+  );
 
   if (gradientColors) {
     return (
       <LinearGradient colors={gradientColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={boxStyle}>
-        <Ionicons name={icon} size={resolvedIconSize} color={iconColor} />
+        {content}
       </LinearGradient>
     );
   }
 
-  return (
-    <View style={boxStyle}>
-      <Ionicons name={icon} size={resolvedIconSize} color={iconColor} />
-    </View>
-  );
+  return <View style={boxStyle}>{content}</View>;
 }
 
 const styles = StyleSheet.create({

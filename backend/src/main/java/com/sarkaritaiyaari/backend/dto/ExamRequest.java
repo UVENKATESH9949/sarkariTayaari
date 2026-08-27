@@ -16,6 +16,12 @@ public class ExamRequest {
 
     private int displayOrder;
 
+    /** Optional. Must be a difficulty_levels code when present — validated in the service. */
+    private String difficulty;
+
+    /** Optional. Must be an exam_badges code when present — validated in the service. */
+    private String badge;
+
     public String getCode() {
         return code;
     }
@@ -54,5 +60,21 @@ public class ExamRequest {
 
     public void setDisplayOrder(int displayOrder) {
         this.displayOrder = displayOrder;
+    }
+
+    public String getDifficulty() {
+        return difficulty;
+    }
+
+    public void setDifficulty(String difficulty) {
+        this.difficulty = difficulty;
+    }
+
+    public String getBadge() {
+        return badge;
+    }
+
+    public void setBadge(String badge) {
+        this.badge = badge;
     }
 }

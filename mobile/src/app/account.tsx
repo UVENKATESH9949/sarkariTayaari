@@ -16,6 +16,7 @@ import { useAuth } from "../practice/authContext";
 import { useNetworkStatus } from "../sync/NetworkStatusContext";
 import { AppAlert } from "../ui/AppDialog";
 import { Button } from "../ui/Button";
+import { ContextualLoading } from "../ui/ContextualLoading";
 import { CardSkeleton } from "../ui/Skeleton";
 import { colors, radius, spacing } from "../ui/theme";
 
@@ -40,7 +41,7 @@ export default function Account() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <CardSkeleton height={140} />
+        <ContextualLoading message="Loading your account..." skeleton={<CardSkeleton height={140} />} />
       </View>
     );
   }

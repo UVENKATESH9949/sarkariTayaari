@@ -6,6 +6,7 @@ import { getMockablePapersLive } from "../../../data/mockTestStructureData";
 import { useHybridMode } from "../../../data/hybridSource";
 import { getMockablePapers, type SyncedPaper } from "../../../db/examStructure";
 import { getMockAttemptSummary, type MockAttemptSummary } from "../../../db/mockTest";
+import { getExamOrgName } from "../../../constants/examOrgs";
 import { useSyncStatus } from "../../../sync/SyncContext";
 import { ContextualLoading } from "../../../ui/ContextualLoading";
 import { FadeInItem } from "../../../ui/FadeInList";
@@ -46,6 +47,8 @@ export default function MockTestPapers() {
     })();
   }, [examCode, syncVersion, mode]);
 
+  const orgName = examCode ? getExamOrgName(examCode) : null;
+
   const openStart = (paper: SyncedPaper) => {
     router.push({
       pathname: "/mock-test/start",
@@ -63,6 +66,7 @@ export default function MockTestPapers() {
       <Stack.Screen options={{ title: examLabel ?? "Mock Tests" }} />
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.heading}>Full-length Mock Tests</Text>
+        {orgName && <Text style={styles.orgName}>{orgName}</Text>}
         <Text style={styles.subheading}>
           Timed, exam-pattern tests with real negative marking — just like the real thing.
         </Text>
@@ -156,6 +160,12 @@ const styles = StyleSheet.create({
   heading: {
     ...typography.pageTitle,
     fontSize: 22,
+  },
+  orgName: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.brand.light,
+    marginTop: spacing.xs,
   },
   subheading: {
     ...typography.secondary,
