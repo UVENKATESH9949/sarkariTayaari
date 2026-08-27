@@ -14,9 +14,32 @@ function sortTopics(rows) {
   );
 }
 
+/**
+ * Whether `candidate` sits somewhere below `ancestorId` in the topic tree. Used to keep a
+ * topic's own descendants out of its parent picker.
+ *
+ * The `seen` guard is not theoretical: the API only started rejecting cycles in V12, so a
+ * tree that already contains one would otherwise loop here forever and hang the page.
+ */
+function isDescendantOf(candidate, ancestorId, allTopics) {
+  const byId = new Map(allTopics.map((t) => [t.id, t]));
+  const seen = new Set();
+  let current = candidate;
+  while (current && current.parentId) {
+    if (seen.has(current.id)) return false;
+    seen.add(current.id);
+    if (current.parentId === ancestorId) return true;
+    current = byId.get(current.parentId);
+  }
+  return false;
+}
+
 export default function Topics() {
   const [subjects, setSubjects] = useState([]);
   const [topics, setTopics] = useState([]);
+  // Unfiltered, for the editor's parent/prerequisite pickers. The table's `topics` list is
+  // subject-filtered, and walking a parent chain against a partial list could miss a link.
+  const [allTopics, setAllTopics] = useState([]);
   const [filterSubjectId, setFilterSubjectId] = useState("");
   const [newTopic, setNewTopic] = useState({ subjectId: "", name: "" });
   const [editing, setEditing] = useState(null);
@@ -34,8 +57,11 @@ export default function Topics() {
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    listTopics(filterSubjectId || undefined)
-      .then((rows) => setTopics(sortTopics(rows)))
+    Promise.all([listTopics(filterSubjectId || undefined), listTopics()])
+      .then(([filtered, everything]) => {
+        setTopics(sortTopics(filtered));
+        setAllTopics(everything);
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [filterSubjectId]);
@@ -71,6 +97,11 @@ export default function Topics() {
         subjectId: editing.subjectId,
         name,
         displayOrder: Number(editing.displayOrder) || 0,
+        parentId: editing.parentId || null,
+        // Always sent, so clearing every checkbox actually clears them. The API treats a
+        // missing field as "leave unchanged" and an empty array as "clear" — those are
+        // different, and this screen always means the latter.
+        prerequisiteTopicIds: editing.prerequisiteTopicIds,
       });
       setEditing(null);
       load();
@@ -80,6 +111,24 @@ export default function Topics() {
       setSaving(false);
     }
   }
+
+  // Every other topic in the same subject. Both the parent picker and the prerequisite
+  // list are scoped this way because the API enforces the same-subject rule for parents,
+  // and a cross-subject prerequisite would be meaningless on a subject-scoped screen.
+  const siblingsInSubject = editing
+    ? allTopics.filter((t) => t.subjectId === editing.subjectId && t.id !== editing.id)
+    : [];
+
+  /**
+   * The parent list additionally excludes this topic's own descendants. The server rejects
+   * such an edge anyway, but offering it and then failing teaches the admin nothing —
+   * a descendant simply cannot be a valid parent, so it shouldn't be selectable.
+   */
+  const parentOptions = editing
+    ? siblingsInSubject.filter((t) => !isDescendantOf(t, editing.id, allTopics))
+    : [];
+
+  const prerequisiteOptions = siblingsInSubject;
 
   async function handleDelete(topic) {
     const ok = await confirm(
@@ -179,6 +228,8 @@ export default function Topics() {
                 <th style={{ width: 80 }}>Order</th>
                 <th>Topic</th>
                 <th>Subject</th>
+                <th style={{ width: 160 }}>Parent</th>
+                <th style={{ width: 110 }}>Prerequisites</th>
                 <th style={{ width: 100 }}></th>
               </tr>
             </thead>
@@ -189,6 +240,14 @@ export default function Topics() {
                   <td>{t.name}</td>
                   <td>
                     <span className="badge">{t.subjectName}</span>
+                  </td>
+                  <td>{t.parentName || <span className="muted-note">—</span>}</td>
+                  <td>
+                    {t.prerequisiteTopicIds && t.prerequisiteTopicIds.length > 0 ? (
+                      <span className="badge">{t.prerequisiteTopicIds.length}</span>
+                    ) : (
+                      <span className="muted-note">—</span>
+                    )}
                   </td>
                   <td>
                     <div className="row-actions">
@@ -201,6 +260,9 @@ export default function Topics() {
                             name: t.name,
                             subjectId: t.subjectId,
                             displayOrder: t.displayOrder,
+                            // Nullable columns become "" / [] so the controls stay controlled.
+                            parentId: t.parentId || "",
+                            prerequisiteTopicIds: t.prerequisiteTopicIds || [],
                           })
                         }
                       >
@@ -215,7 +277,7 @@ export default function Topics() {
               ))}
               {topics.length === 0 && (
                 <tr>
-                  <td colSpan={4}>
+                  <td colSpan={6}>
                     <div className="empty-state">No topics here yet.</div>
                   </td>
                 </tr>
@@ -266,13 +328,65 @@ export default function Topics() {
                 required
               />
             </div>
-            <div className="form-field" style={{ maxWidth: "none", marginBottom: 0 }}>
+            <div className="form-field" style={{ maxWidth: "none" }}>
               <label>Display order</label>
               <input
                 type="number"
                 value={editing.displayOrder}
                 onChange={(e) => setEditing((prev) => ({ ...prev, displayOrder: e.target.value }))}
               />
+            </div>
+
+            <div className="form-field" style={{ maxWidth: "none" }}>
+              <label>Parent topic</label>
+              <select
+                value={editing.parentId}
+                onChange={(e) => setEditing((prev) => ({ ...prev, parentId: e.target.value }))}
+              >
+                <option value="">None — top level</option>
+                {parentOptions.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+              <span className="field-note">
+                Lets a subject nest as deeply as it needs (Arithmetic &rarr; Percentage &rarr; Successive
+                Percentage). Only topics in the same subject can be a parent.
+              </span>
+            </div>
+
+            <div className="form-field" style={{ maxWidth: "none", marginBottom: 0 }}>
+              <label>Prerequisites</label>
+              {prerequisiteOptions.length === 0 ? (
+                <span className="field-note">
+                  No other topics in this subject yet — add more before setting prerequisites.
+                </span>
+              ) : (
+                <div className="checkbox-grid">
+                  {prerequisiteOptions.map((t) => (
+                    <label key={t.id} className="checkbox-field">
+                      <input
+                        type="checkbox"
+                        checked={editing.prerequisiteTopicIds.includes(t.id)}
+                        onChange={(e) =>
+                          setEditing((prev) => ({
+                            ...prev,
+                            prerequisiteTopicIds: e.target.checked
+                              ? [...prev.prerequisiteTopicIds, t.id]
+                              : prev.prerequisiteTopicIds.filter((id) => id !== t.id),
+                          }))
+                        }
+                      />
+                      {t.name}
+                    </label>
+                  ))}
+                </div>
+              )}
+              <span className="field-note">
+                Topics a student should finish first. The server rejects anything that would create a
+                loop, however long the chain.
+              </span>
             </div>
           </form>
         </Modal>

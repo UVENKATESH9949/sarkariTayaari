@@ -192,6 +192,16 @@ export function setExamSyllabus(examCode, subjectIds) {
   return request(`/api/exams/${examCode}/subjects`, jsonBody("PUT", { subjectIds }));
 }
 
+// Finer-grained than the syllabus above: which *topics* matter for this exam, and the
+// admin's curated weightage for each. Full replace, same as the syllabus.
+export function getExamTopics(examCode) {
+  return request(`/api/exams/${examCode}/topics`);
+}
+
+export function setExamTopics(examCode, topics) {
+  return request(`/api/exams/${examCode}/topics`, jsonBody("PUT", { topics }));
+}
+
 /* -------------------------------------------------------- Exam structure tree */
 
 // Whole Stage → Paper → Section → Subjects tree for one exam, in display order.

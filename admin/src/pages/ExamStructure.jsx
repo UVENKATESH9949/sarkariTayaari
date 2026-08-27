@@ -4,8 +4,14 @@ import {
   getExamStructure,
   getExamSyllabus,
   setExamSyllabus,
+  getExamTopics,
+  // Aliased: the local useState setter is also called setExamTopics, and the unaliased
+  // import was silently shadowed by it — saveTopicMap was calling the state setter instead
+  // of the API and would never have persisted anything.
+  setExamTopics as saveExamTopicsApi,
   listPaperTypes,
   listSubjects,
+  listTopics,
   createStage,
   updateStage,
   deleteStage,
@@ -42,6 +48,19 @@ const BLANK_SECTION = {
   displayOrder: 1,
   subjectIds: [],
 };
+
+/** Groups topics under their subject heading, subjects and topics each alphabetical. */
+function groupTopicsBySubject(topics) {
+  const bySubject = new Map();
+  for (const t of topics) {
+    const bucket = bySubject.get(t.subjectName) ?? [];
+    bucket.push(t);
+    bySubject.set(t.subjectName, bucket);
+  }
+  return [...bySubject.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([subjectName, rows]) => [subjectName, [...rows].sort((a, b) => a.name.localeCompare(b.name))]);
+}
 
 /** Empty numeric inputs mean "not set" / "inherit", which the API expects as null. */
 function numOrNull(value) {
@@ -271,6 +290,12 @@ export default function ExamStructure() {
   const [structure, setStructure] = useState(null);
   const [syllabus, setSyllabus] = useState([]);
   const [syllabusDraft, setSyllabusDraft] = useState(null);
+  const [examTopics, setExamTopics] = useState([]);
+  // Topics of every syllabus subject, loaded only when the editor opens — there can be
+  // hundreds, and the card itself only needs the already-mapped rows.
+  const [topicChoices, setTopicChoices] = useState([]);
+  /** null = closed. Otherwise a map of topicId -> weightage string ("" for unset). */
+  const [topicMapDraft, setTopicMapDraft] = useState(null);
   const [paperTypes, setPaperTypes] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -283,10 +308,11 @@ export default function ExamStructure() {
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    Promise.all([getExamStructure(examCode), getExamSyllabus(examCode)])
-      .then(([structureData, syllabusData]) => {
+    Promise.all([getExamStructure(examCode), getExamSyllabus(examCode), getExamTopics(examCode)])
+      .then(([structureData, syllabusData, topicData]) => {
         setStructure(structureData);
         setSyllabus(syllabusData);
+        setExamTopics(topicData);
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
@@ -338,6 +364,65 @@ export default function ExamStructure() {
 
   function toggleSyllabusSubject(id) {
     setSyllabusDraft((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
+  }
+
+  /* ------------------------------------------------------------------ Topic map */
+
+  async function openTopicMapEditor() {
+    setFormError(null);
+    try {
+      // Only the syllabus subjects' topics are offerable: mapping a topic from a subject
+      // this exam doesn't even cover would contradict the syllabus.
+      const perSubject = await Promise.all(syllabus.map((s) => listTopics(s.id)));
+      setTopicChoices(perSubject.flat());
+      // Weightage is held as a string while editing so a half-typed "1." doesn't get
+      // coerced to a number mid-keystroke.
+      const draft = {};
+      for (const t of examTopics) {
+        draft[t.topicId] = t.weightagePercent != null ? String(t.weightagePercent) : "";
+      }
+      setTopicMapDraft(draft);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  function toggleTopicInMap(topicId) {
+    setTopicMapDraft((prev) => {
+      const next = { ...prev };
+      if (topicId in next) delete next[topicId];
+      else next[topicId] = "";
+      return next;
+    });
+  }
+
+  async function saveTopicMap() {
+    setFormError(null);
+    // Validated here rather than only server-side: the API stores whatever it's given, and
+    // a typo'd weightage is much cheaper to catch before it's persisted.
+    for (const [topicId, raw] of Object.entries(topicMapDraft)) {
+      if (raw === "") continue;
+      const value = Number(raw);
+      if (Number.isNaN(value) || value < 0 || value > 100) {
+        const name = topicChoices.find((t) => t.id === topicId)?.name ?? topicId;
+        setFormError(`Weightage for "${name}" must be a number between 0 and 100.`);
+        return;
+      }
+    }
+    setSaving(true);
+    try {
+      const topics = Object.entries(topicMapDraft).map(([topicId, raw]) => ({
+        topicId,
+        weightagePercent: raw === "" ? null : Number(raw),
+      }));
+      await saveExamTopicsApi(examCode, topics);
+      setTopicMapDraft(null);
+      load();
+    } catch (err) {
+      setFormError(err.message);
+    } finally {
+      setSaving(false);
+    }
   }
 
   function saveStage(form) {
@@ -472,6 +557,39 @@ export default function ExamStructure() {
           <div className="cell-tags">
             {syllabus.map((s) => (
               <span className="badge" key={s.id}>{s.name}</span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div className="stage-head">
+          <div>
+            <h2 style={{ marginBottom: 2 }}>Topic map</h2>
+            <div className="cell-secondary">
+              Finer-grained than the syllabus above: which individual topics matter for this exam, and roughly
+              how much of the paper each is worth. Nothing in the app reads this yet — it is the input the
+              Preparation Plan will be built from.
+            </div>
+          </div>
+          <button className="btn btn-sm" onClick={openTopicMapEditor} disabled={syllabus.length === 0}>
+            Edit topic map
+          </button>
+        </div>
+
+        {syllabus.length === 0 ? (
+          <div className="empty-state">
+            Set the syllabus first — topics are offered per subject, so there is nothing to choose from yet.
+          </div>
+        ) : examTopics.length === 0 ? (
+          <div className="empty-state">No topics mapped yet.</div>
+        ) : (
+          <div className="cell-tags">
+            {examTopics.map((t) => (
+              <span className="badge" key={t.topicId}>
+                {t.topicName}
+                {t.weightagePercent != null ? ` · ${t.weightagePercent}%` : ""}
+              </span>
             ))}
           </div>
         )}
@@ -704,6 +822,64 @@ export default function ExamStructure() {
               </label>
             ))}
           </div>
+        </Modal>
+      )}
+
+      {topicMapDraft && (
+        <Modal
+          title="Edit topic map"
+          onClose={() => setTopicMapDraft(null)}
+          footer={
+            <>
+              <button className="btn" onClick={() => setTopicMapDraft(null)}>Cancel</button>
+              <button className="btn btn-primary" onClick={saveTopicMap} disabled={saving}>
+                {saving ? "Saving..." : "Save"}
+              </button>
+            </>
+          }
+        >
+          {formError && <div className="banner banner-error">{formError}</div>}
+          <p className="field-note" style={{ marginTop: 0 }}>
+            Tick the topics this exam actually tests, and optionally give each one a weightage. Weightage is
+            your own judgement — leave it blank for &quot;relevant, not assessed&quot;, which is different from 0%.
+            Only topics from this exam&apos;s syllabus subjects are listed.
+          </p>
+
+          {topicChoices.length === 0 ? (
+            <div className="empty-state">
+              The syllabus subjects have no topics yet. <Link to="/topics">Add topics first.</Link>
+            </div>
+          ) : (
+            groupTopicsBySubject(topicChoices).map(([subjectName, rows]) => (
+              <div className="form-field" style={{ maxWidth: "none" }} key={subjectName}>
+                <label>{subjectName}</label>
+                {rows.map((t) => {
+                  const selected = t.id in topicMapDraft;
+                  return (
+                    <div className="topic-map-row" key={t.id}>
+                      <label className="checkbox-field">
+                        <input type="checkbox" checked={selected} onChange={() => toggleTopicInMap(t.id)} />
+                        {t.parentName ? `${t.parentName} → ${t.name}` : t.name}
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        placeholder="%"
+                        style={{ width: 90 }}
+                        value={selected ? topicMapDraft[t.id] : ""}
+                        disabled={!selected}
+                        onChange={(e) =>
+                          setTopicMapDraft((prev) => ({ ...prev, [t.id]: e.target.value }))
+                        }
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            ))
+          )}
         </Modal>
       )}
 

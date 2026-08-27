@@ -686,6 +686,20 @@ tbody tr.deleted-row {
   gap: 10px;
 }
 
+/* One topic in the exam topic map: a checkbox that takes the free space, and a fixed-width
+   weightage input pinned to the right so the numbers line up down the column. */
+.topic-map-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.topic-map-row .checkbox-field {
+  flex: 1;
+  min-width: 0;
+}
+
 .option-row .option-index.correct {
   background: var(--color-success-bg);
   color: var(--color-success-text);
