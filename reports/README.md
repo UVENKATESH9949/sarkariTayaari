@@ -30,6 +30,8 @@
 | `16-black-blue-dark-theme/` | Full black+blue dark theme — new semantic token structure (`surface*` vs. `text.onAccent*` kept deliberately separate), re-skinned `Card`/`Button`/`Skeleton`/`EmptyState`/`ErrorState` and every screen, approved via a demo Artifact before any code changed | Un-ticketed |
 | `17-resilient-initial-sync/` | Initial sync retries indefinitely with backoff instead of stranding the user on a transient backend failure; the floating sync banner is removed in favor of a real percentage bar on More | Un-ticketed |
 | `18-practice-mock-test-exit-guard/` | Mock Test restructured into Exam Selection → Mock List (matching Practice's flow); a "Leave this test?" confirmation guards a tab switch mid-quiz/mid-test and resets the abandoned module back to its home screen | Un-ticketed |
+| `19-startup-gate-and-query-limits/` | All six phases of `offline-exam-app-requirements.md` §9: first-launch gate rework (waits on reference data with a hard 5s ceiling, fixing an offline lockout by construction), `loadSessions` N+1, six new indexes, list virtualization, Mock Test data-layer facade, bulk writes, and the question pool lifted to the full 37,884-question bank. Verified on-device | Un-ticketed |
+| `20-epic-l-topic-model/` | Epic L first slice (TICKET-2101/2102/2103) — `exam_topics` map with curated weightage, `topics.parent_id` for variable-depth hierarchy, `topic_prerequisites` DAG, plus cycle/cross-subject validation a constraint can't express. Backend only, no admin UI or mobile yet | TICKET-2101–2103 |
 
 ## Two source-of-truth documents live at the project root, not here
 

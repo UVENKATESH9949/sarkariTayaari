@@ -1,8 +1,8 @@
 # SarkariTaiyaari — "Personal Preparation OS" — Advanced Features Requirements
 
 **Project:** SarkariTaiyaari Mobile (Offline-Sync Edition)
-**Doc version:** 1.0 (draft — feasibility/priority not yet decided, see Section 4)
-**Companion to:** `offline-exam-app-requirements.md` (the base product — offline sync, content model, Practice, Mock Test, Progress, accounts). This document does not repeat that content; every epic below states what it reuses from it.
+**Doc version:** 1.1 (2026-08-27 — adds Section 18, reconciling a supplied "Exam Intelligence & Preparation Plan Engine" spec into the epics below rather than running a second competing plan. Feasibility/priority for Epics A–K still undecided, see Section 4.)
+**Companion to:** `offline-exam-app-requirements.md` (the base product — offline sync, content model, Practice, Mock Test, Progress, accounts). This document does not repeat that content; every epic below states what it reuses from it. Performance/startup work lives in that document's Section 9, not here.
 
 ---
 
@@ -36,8 +36,10 @@ Confirmed from the current codebase, not assumed:
 - **Write-back sync pattern**, twice-proven: `UserPracticeSession(Result)` / `UserMockAttempt(Result)` (append-only, push-only) and `UserBookmark` (mutable, tombstoned, last-write-wins on `updated_at`) — every new per-user table below reuses one of these two shapes, not a third.
 - **`questions.is_premium`** — reserved, unused column already in the schema. Directly usable as the monetization gate for costlier features (AI Tutor, Question Scanner) without a schema change.
 - **Multi-language content model** (`languages`, `question_translations`) — English mandatory, others incremental, already handles per-question bilingual text. Epic K extends this pattern to non-question copy; it does not need to invent multi-language storage from scratch.
-- **The exam structure tree** (`exams → exam_stages → exam_papers → paper_sections → subjects/topics`) and `exam_subjects` syllabus mapping — anything that needs "which topics matter for this exam" already has a real answer, no new modeling needed.
-- **`practice_sessions`/`practice_session_results` and `mock_test_attempts`/`mock_test_attempt_results`** — the raw signal for weakness detection, mistake books, and the readiness score already exists on-device. Epics A/B/C are primarily *new queries and screens over data already being collected*, not new capture.
+- **The exam structure tree** (`exams → exam_stages → exam_papers → paper_sections → subjects/topics`) and `exam_subjects` syllabus mapping — the exam pattern and its subject-level syllabus are real, admin-managed data.
+  - **Correction (2026-08-27, doc v1.1):** this bullet previously claimed "which topics matter for this exam already has a real answer, no new modeling needed." That is **wrong** and was never verified. `exam_subjects` maps exam↔**subject**; there is no `exam_topics` table, so topic relevance is only transitive through the subject and no per-exam topic attribute can be stored. Epics A/C/D/F all depend on this. See Section 18.2 and TICKET-2101.
+- **`practice_sessions`/`practice_session_results` and `mock_test_attempts`/`mock_test_attempt_results`** — question-level correctness is already captured on-device and syncs up.
+  - **Correction (2026-08-27, doc v1.1):** this bullet previously claimed Epics A/B/C are "primarily new queries and screens over data already being collected, not new capture." Only partly true. Practice sessions store `topic_name` as a *denormalized string* that no code aggregates, and **mock attempt results carry `subject_name` but no topic at all** — so per-topic weakness cannot be computed from mock data as it stands. Epics A and C need real per-topic capture (TICKET-2105), not just new queries. Epic C's `time_taken_ms` prerequisite (Section 8) was already correctly identified.
 - **Admin app CRUD conventions** (list/create/edit/bulk-import, active-only vs. `/all`, image upload via Cloudinary) — every new content type below (current affairs items, exam calendar dates, eligibility criteria) gets the same pattern, not a bespoke one.
 
 ---
@@ -70,8 +72,11 @@ Used per-epic below so we can triage later without re-deriving this from scratch
 | 7 | I — Motivation & Social | 🟡–🟠 | Accounts (have); Epic D for group "today's mission %" |
 | 8 | J — Exam Logistics (Calendar / Eligibility / Application) | 🟡 | Independent; content-ops heavy, not engineering-heavy |
 | — | K — Regional-Language Depth | 🟢–🟡 | Ongoing tail work inside every epic above, not a standalone phase |
+| 0 | **L — Exam Intelligence Foundations** | 🟡 | **Nothing. This is the new prerequisite layer — see Section 18.** |
 
 Phases 1–4 form one coherent line (the "coach" — this is the centerpiece, build it in order). Phases 5–8 are independent tracks that can run in parallel to each other and to 1–4, in whatever order the business prioritizes.
+
+**Epic L is phase 0** because Epics A/C/D/F all silently assume a per-topic, per-exam data model that does not exist yet (Section 18.2). It is not a new product feature — it is the schema those epics need in order to be buildable at all.
 
 ---
 
@@ -372,3 +377,80 @@ These aren't blocked on more analysis — they're genuine choices to make before
 4. **Content-ops staffing** for Epic G (current affairs, effectively daily) and Epic J (exam notifications, per real-world announcement) — these are recurring people-cost commitments, not one-time builds, and should be sized before the corresponding epic is greenlit.
 5. **Privacy review** for Epic H3 (photo capture) and H2 (voice capture) before either collects real user data, even in beta.
 6. **Sequencing call**: Phases 1–4 (the coach line: A→B→C→D) are recommended to build in order since each depends on the last producing real signal. Phases 5–8 have no such dependency on each other and can be reordered freely based on which differentiator matters most commercially.
+
+---
+
+## 18. Exam Intelligence & Preparation Plan Engine — reconciliation
+
+**Added 2026-08-27.** A separate, AI-authored spec ("Exam Intelligence & Preparation Plan Engine") was supplied describing a 7-layer system built on exam structure, syllabus, topic hierarchy, previous-year-question trends, weightage, priority scoring and a phased preparation plan. Roughly 70% of it re-specifies Epics A/B/C/D/F above. Rather than maintain two competing plans for the same feature, that spec is folded in here: this section maps its layers onto the existing epics, records what it adds that is genuinely new (Epic L), and records the product decisions taken.
+
+### 18.1 Layer-to-epic mapping
+
+| Supplied layer | Already specified as |
+|---|---|
+| Layer 1 — Exam Intelligence | **Base product, Section 7** (`exams → exam_stages → exam_papers → paper_sections`, fully admin-managed). Built and shipped. |
+| Layer 2 — Subject Intelligence | **Base product** (`exam_subjects` syllabus mapping, global shared subjects). Built. |
+| Layer 3 — Topic Hierarchy | **Epic L** — only 2 of the 5 proposed levels exist. See 18.2. |
+| Layer 4 — PYQ Question Intelligence | **Epic F** (`questions.pyq_exam_code`, `pyq_year`, `question_concepts`, TICKET-1501…1506) |
+| Layer 5 — Weightage & Trend Engine | **Epic F / TICKET-1502** (`GET /api/questions/pyq-trend`), extended by Epic L for priority scoring |
+| Layer 6 — Preparation Plan Engine | **Epic D** (deterministic mission allocator, TICKET-1301…1306) |
+| Layer 7 — Personalized Adaptive Plan | **Epics A + B + C** (Weakness Radar, Revision Engine, Preparation Twin) |
+| §61 Exam Readiness Score | **Epic C** (Readiness v2 — five dimensions replacing today's single accuracy number) |
+| §31 Topic status state machine | **Epic L** (new — no per-topic user state exists) |
+| §66 Admin priority override, §67 auditability | **Epic L** (new) |
+
+**Terminology decision:** the supplied spec's user-facing name — **Preparation Plan** — is adopted, on its stated reasoning that many aspirants will not recognise "Roadmap". Internally the engine may be called the Preparation Plan Engine. Epic D's screens should use the user-facing term.
+
+### 18.2 Verified gap analysis (audited 2026-08-27, not assumed)
+
+The supplied spec's §55 lists ~30 tables to create, including `Exam`, `ExamStage`, `ExamPaper`, `ExamSection`, `Subject` and `Topic` — **all of which already exist**. Building that list literally would duplicate the schema. What the audit actually found:
+
+| Capability | Status | Detail |
+|---|---|---|
+| Exam → Stage → Paper → Section | **EXISTS** | V3 migration, admin editor at `/exams/:code/structure`, synced to device |
+| Syllabus | **PARTIAL** | `exam_subjects` is exam↔**subject** only. No exam↔topic link, no official syllabus text or document storage. |
+| Pattern versioning | **PARTIAL** | `exam_stages.effective_from` + `version_label` exist and are admin-editable — but they are **inert labels**. Nothing filters by them, and `UNIQUE(exam_code, name)` actively *prevents* two versions of the same stage name coexisting. Papers and sections have no version columns at all. |
+| Chapter / Sub-topic / Concept levels | **MISSING** | `topics` is `id, subject_id, name, display_order` — nothing else. No `parent_id`, no self-reference. Hierarchy is exactly Subject → Topic. |
+| Topic → exam mapping | **MISSING** | There is no `exam_topics` table. A topic is only reachable transitively via its subject, so **per-exam topic attributes cannot be expressed at all**. This is the single biggest structural blocker for per-exam intelligence. |
+| Topic dependencies / prerequisites | **MISSING** | No DAG, no ordering beyond `display_order` |
+| PYQ year / shift / source paper | **MISSING** | `questions` has 7 columns; none temporal beyond `updated_at`. `question_exam_types` is `(question_id, exam_code)` only — no "appeared in year N" semantics. |
+| Source traceability | **MISSING** | No source paper FK, question number, `is_pyq` flag, author, or `created_at` |
+| AI classification + confidence | **MISSING** | Zero AI/ML dependencies in `backend/pom.xml`, `admin/package.json` or `mobile/package.json` |
+| Review / approve workflow | **MISSING** | No status column on any entity. Roles are only `STUDENT` / `ADMIN`. An admin types content and it is live. |
+| Duplicate detection | **PARTIAL** | `admin/src/validateQuestions.js` — exact-lowercased-text, **within the pasted batch only**, warning-only, never checked against the existing bank |
+| Trend / weightage / priority | **MISSING** | No table, view, job or aggregation service. The only "trending" in the codebase is the cosmetic `exam_badges` tag. |
+| Preparation phases / tasks | **MISSING** | No plan/phase/task table |
+| Per-topic user mastery | **MISSING** | `user_practice_sessions.topic_name` is a denormalized string that **no code aggregates**; mock attempt results carry `subject_name` but no topic at all |
+| Weak-area detection | **PARTIAL** | `practice/wrongAnswers.ts` is a flat de-duped wrong-question list with no grouping or ranking |
+| Readiness score | **PARTIAL** | One client-side `correct/total` accuracy `useMemo` in `progress.tsx`, never persisted or synced, ignoring mocks, coverage and recency. Home's readiness is **hardcoded to 62**. |
+
+### 18.3 Epic L — Exam Intelligence Foundations 🟡
+
+The prerequisite schema Epics A/C/D/F assume. No user-facing feature of its own.
+
+- **TICKET-2101**: `exam_topics` mapping table (`exam_code`, `topic_id`, plus per-exam attributes). Without this, "which topics matter for *this* exam" has no answer beyond subject granularity, and no per-exam weightage can be stored.
+- **TICKET-2102**: Topic hierarchy depth. Add `topics.parent_id` (self-FK, nullable) rather than three new tables — one recursive relation covers Chapter / Topic / Sub-topic / Concept and lets depth vary per subject, which a fixed 5-table ladder cannot. Admin topic editor gains a parent picker.
+- **TICKET-2103**: `topic_prerequisites` (`topic_id`, `prerequisite_topic_id`) — the DAG Epic D's sequencing needs so an advanced topic is never recommended before its fundamentals.
+- **TICKET-2104**: PYQ provenance on questions — `pyq_year`, `pyq_shift`, `source_paper_id` (nullable FK to `exam_papers`), `question_number`, `source_url`. Supersedes Epic F/TICKET-1501's narrower `pyq_exam_code`+`pyq_year`, which should be folded into this ticket rather than built twice.
+- **TICKET-2105**: `user_topic_progress` — the per-topic state machine from the supplied §31 (`NOT_STARTED → LEARNING → PRACTICING → MASTERED`, with `MASTERED → NEEDS_REVISION` on regression), plus per-topic accuracy. Mutable/last-write-wins synced shape, same as bookmarks. **Prerequisite for Epics A, C and D** — all three currently assume per-topic signal that is not stored anywhere.
+- **TICKET-2106**: `topic_trend` / `topic_priority` derived tables plus the recalculation job. Every stored score records its **algorithm version** and its **inputs**, per the supplied §65/§67, so a recommendation stays explainable after the formula changes.
+- **TICKET-2107**: Admin priority override — store `system_priority`, `admin_override`, `final_priority` and `override_reason` as separate columns. Never overwrite the computed value in place (supplied §66).
+- **TICKET-2108**: Fix pattern versioning so it is real rather than decorative — relax `UNIQUE(exam_code, name)` to include the version, and add "which pattern is active" resolution keyed on `effective_from`. Until this lands, versioning is a label that cannot be used.
+- **TICKET-2109**: Server-side duplicate detection on question create/bulk-import, checked against the **existing bank** rather than only within the pasted batch, storing near-duplicate relationships instead of deleting (supplied §14).
+
+**Sprint DoD:** a topic can be mapped to a specific exam with a per-exam weight; a topic can have a parent and a prerequisite; a question can be tagged with the real year/shift/paper it came from; per-topic mastery is stored and syncs; a priority score can be recomputed, overridden by an admin with a recorded reason, and traced back to the questions that produced it.
+
+### 18.4 Decisions taken
+
+1. **PYQ ingestion scope — admin-tagged first.** The supplied §10–14 pipeline (PDF/OCR extraction, AI classification with confidence thresholds, dedup, review queue) is **specified but deferred**. V1 is manual admin tagging of year/shift/paper (TICKET-2104), with trends computed from that. There is currently no AI/ML or OCR infrastructure anywhere in the project, and the pipeline carries real per-use third-party cost; it is not worth building before trend analysis has proven valuable on real tagged data. This matches Epic F's original v1/v2 split.
+2. **Navigation — the Progress tab is replaced by Preparation Plan.** The tab bar stays at five items: Home, Practice, Mock Test, **Preparation Plan**, More. Progress's content moves to an entry point on Home. Preparation Plan gets **two entry points** — the tab itself, and a button on Home — since it is the product's new front door. This supersedes Epic D/TICKET-1303's "replace Home" proposal: Home is kept as a dashboard and the plan gets its own tab.
+3. **Explainability is a requirement, not a nice-to-have.** Per the supplied §18/§20/§63, every priority or recommendation surfaces *why* (frequency, appearance count, weightage, the user's own accuracy) and never states a prediction as a certainty. Language stays historical — "has averaged 2–3 questions in the analyzed papers", never "will have 3 questions".
+4. **No exam-specific branching.** Per the supplied §68, adding an exam must remain a data operation. Nothing in Epic L may introduce `if (examCode === "SSC_CGL")` logic.
+
+### 18.5 Not adopted from the supplied spec
+
+- **The §55 table list as written** — it recreates six tables that already exist. Only the genuinely missing entities are in Epic L.
+- **A fixed 5-table Chapter/Topic/SubTopic/Concept ladder** — replaced by one self-referencing `parent_id` (TICKET-2102), which supports variable depth per subject and avoids four near-identical tables.
+- **A separate `PYQPaper` entity** — a PYQ is still an ordinary question in every other respect (subject, topic, translations, difficulty), exactly as Epic F already argued; provenance goes on `questions`, not into a parallel content system.
+- **Draft/Review/Approved/Published workflow on every entity (§40)** — no such workflow exists anywhere in the project today and adding one across the whole admin is a much larger change than this feature needs. Revisit if and when the AI pipeline lands, where a review queue is genuinely load-bearing.
+- **Daily plans (§53)** — already correctly deferred by the supplied spec itself, and already Epic D's v2.

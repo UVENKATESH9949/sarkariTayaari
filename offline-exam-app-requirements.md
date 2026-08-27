@@ -395,3 +395,98 @@ App structure stays in code — the tab layout, the drill-down flow, the quiz me
 ## 8. "Personal Preparation OS" — Advanced Features (proposed, not yet greenlit)
 
 **Status: draft, feasibility/priority not yet decided.** A much larger product reframe — from test-prep app to a daily personal coach for government-job preparation (AI-generated daily missions, spaced-repetition revision, a multi-dimensional "Preparation Twin" readiness profile, PYQ trend intelligence, current affairs, audio/voice study modes, a question scanner, accountability partners/study groups, and exam eligibility/application logistics) — is specified separately in `preparation-os-requirements.md`, phased into 11 epics across 8 phases with per-epic feasibility ratings. Kept out of this document since none of it is scheduled yet; see that doc before picking up any of it.
+
+---
+
+## 9. Local-First Performance & Startup Hardening
+
+**Status: specified, not started (2026-08-27).** Requested as "improvement of the current build," from a supplied requirements prompt aimed at making the app feel fast. That prompt was AI-authored and several of its premises describe a codebase we do not have; this section records what a full audit actually found, so the work targets real defects instead of imagined ones.
+
+### 9.1 What the audit refuted
+
+Each of these was claimed by the source prompt and is **false** for this codebase. Written down so no future session re-plans against them:
+
+| Claim | Reality |
+|---|---|
+| "Users wait 2–3 minutes while 30,000+ questions download before the app opens" | The first sync is bounded to **~500 questions** by `temporary_question_pool` (V9/V10) plus `app.question-pool.temporary-enabled: true`. That is **~9 HTTP requests total** (1 question page at `PAGE_SIZE = 500` + 8 reference calls). Seconds, not minutes. |
+| "Every launch is blocked" | Only the **first ever** launch. Once `sync_meta.last_synced_at` exists the gate never activates; delta sync is fire-and-forget with a 15-minute staleness skip. |
+| "Home shows a sync progress bar" | It does not. Home renders no sync UI at all. Progress lives only on More, which is already where the prompt asks for it. |
+| "Sync is one giant non-resumable operation" | Already paginated, batched per page in one transaction, and **resumable** — `sync_meta.resume_page`/`resume_started_at` are checkpointed after every committed page. |
+| "Incremental sync needs backend work" | Already fully supported: `GET /api/questions/sync?since=&page=&size=`, ordered `updatedAt ASC` for safe resumption, tombstones included so deletes propagate. |
+| "`writeQuestions.ts` awaits one insert per row" | Already fixed for questions (`upsertQuestionsBatch`, bulk upsert via `excluded.*`). Per-row `await` survives only for languages/exams/subjects/topics — real, but a much smaller problem than described. |
+| "`MAX_SYNC_PAGE_SIZE` is 500" | It is **1000**. 500 is the controller default and the client's page size. The comment in `application.yml` citing 500 is stale. |
+
+### 9.2 What the audit confirmed, and one thing worse
+
+**Confirmed:** there *is* a hard blocking gate on first launch. `FirstLaunchGate` in `mobile/src/app/_layout.tsx` renders `PreparingApp` instead of the navigator, and its release condition genuinely waits for the **entire** question sync — `"syncing"` ticks do not release it. So the prompt's core complaint is legitimate even though its numbers are not.
+
+Note also that `SyncContext.tsx`'s own header comment is now factually wrong — it claims neither sync blocks navigation, which was true after `c1ca170` and stopped being true when `FirstLaunchGate` was reintroduced in `4f51124`. Fix the comment alongside the code.
+
+**Worse than claimed — a real shipped defect the prompt does not mention.** On a **first launch with no network the user is locked out permanently:**
+
+1. The initial-sync branch never checks connectivity (unlike `refresh()`, which returns early when offline).
+2. `runInitialSyncUntilDone` retries forever, and its wrapper rewrites every `"error"` into a `"syncing"` tick.
+3. `"syncing"` never satisfies `status === "completed" || status === "partial"`, so `firstLaunchSyncActive` stays `true` indefinitely.
+
+The user sees `PreparingApp` at 0% forever, cannot reach the app, and cannot reach More's Retry. This contradicts the project's own stated principle (`NetworkStatusContext`: "nothing here should ever block on connectivity") and makes `OfflineNoDataNotice` unreachable on a cold first launch. The 2-minute soft timeout cannot rescue it — `deadline` is recomputed on every attempt, and its `!result.last` guard is dead code while the bank fits in one page.
+
+**This is the highest-priority item in this section.** It is a correctness bug, not a performance nicety.
+
+### 9.3 The real bottlenecks
+
+Ordered by severity, with file references.
+
+1. **`getPracticeQuestions` has no `LIMIT`** — `mobile/src/db/practiceContent.ts`. It runs `ORDER BY RANDOM()` across every matching row, then builds an `inArray` with **one bind parameter per matched question**. Past SQLite's `SQLITE_MAX_VARIABLE_NUMBER` that is a **crash**, not a slowdown. The live path caps at `size: 200`; the local path does not, so the same function returns materially different amounts depending on source. `db/mockTest.ts` already shows the fix (`.limit(section.questionCount)`).
+2. **No virtualized lists anywhere.** There is not a single `FlatList`/`FlashList`/`SectionList` in `mobile/src`. Short browse lists are fine, but three lists genuinely grow unbounded: `revise.tsx` (bookmarks and wrong answers, both uncapped), `practice/summary.tsx` (one card per question of the session), and `mock-test/result.tsx` (~80–100 eagerly-mounted expandable cards). Note `FadeInItem`'s per-item entering animation is incompatible with recycling and needs rework if these are virtualized.
+3. **`loadSessions()` N+1 at every app start.** `mobile/src/db/practiceSessions.ts` issues one query per session, sequentially — 51 round trips — and `SessionHistoryProvider` mounts above the entire tab tree, so this runs unconditionally for every user on every launch, loading all 50 sessions' full question text, options JSON and explanations into a React context. One `inArray(sessionIds)` query fixes it; `db/mockTest.ts` already uses that shape. `MAX_SESSIONS = 50` is declared but never applied as a `LIMIT`.
+4. **Missing indexes.** Add `questions(topic_id, difficulty, is_deleted)`, `questions(subject_id, is_deleted)`, `mock_test_attempts(exam_code)` (currently a full scan **per exam** on the Mock Test tab), and `bookmarks(is_deleted, is_synced)`. Drop `idx_question_translations_question_id` — it is a strict prefix of the composite unique index and only costs write amplification on the hottest sync path. Also: `subjects.name` is `UNIQUE` in Postgres but a plain column in the local mirror, so that guarantee silently does not cross the sync boundary.
+5. **Practice quiz "Finish" is unguarded.** `practice/quiz.tsx`'s Button has neither `loading` nor `disabled`, and `addSession` is fire-and-forget with a `session-${Date.now()}` id — two taps a millisecond apart create **two duplicate sessions**. `Button` already has a correct `loading`-implies-`disabled` convention, used at exactly one call site in the whole app (`account.tsx`). Mock-test submit is guarded, but hand-rolls its own ref on a raw `Pressable`.
+6. **Mock Test has no data-layer facade.** All four mock-test screens contain the literal `mode === "local" ? fromSqlite() : fromApi()` ternary in the component body and import both the SQLite and HTTP modules directly. Practice keeps this to dependency injection (screens pass `mode` but never branch on it for source selection); Mock Test does not. `resetStructureCache()` is also dead code — its module-level cache is never invalidated for the process lifetime.
+7. **Per-row `await` in `writeReferenceData`** for languages, exams, subjects and topics — outside any transaction, on **every** sync. Topics are admin-authored and unbounded. The same file's `writeExamStructures` and its own `difficultyLevels`/`paperTypes`/`examBadges` blocks already use the correct gather-then-bulk-insert shape.
+
+### 9.4 Sequencing constraint — read before lifting the question pool
+
+The decision has been taken to **lift the temporary ~500-question pool** and, as an interim testing measure, make every practice/mock query resolve against the same broad question set so no screen is disabled for lack of content.
+
+**That lift must not land first.** Lifting the pool while items 1–3 above are unfixed would:
+
+- turn item 1 from a latent crash into an immediate one (a topic with thousands of questions builds a bind-parameter list past SQLite's limit),
+- make the first-launch gate hold the user for 76 pages instead of 1 — manufacturing the exact 2–3 minute wait the source prompt complains about,
+- and put thousands of non-virtualized cards on screen in Revise and Summary.
+
+Required order: **§9.2 offline lockout → item 1 (`LIMIT`) → item 3 (N+1) → item 4 (indexes) → item 2 (virtualization) → then lift the pool.** Every performance number recorded before the lift is measured against ~500 rows and must be re-measured after it.
+
+### 9.5 The startup gate — decided design (2026-08-27)
+
+The conflict between the source prompt (remove the blocking screen) and the shipped `PreparingApp` screen (deliberately built and art-directed at the user's request) is **resolved as follows, per an explicit user decision**:
+
+**Keep the screen and its animation. Cap it at 5 seconds. Gate on the wrong thing today, so change what it waits for.**
+
+1. **Gate on reference data, not questions.** This is the substantive fix. Home needs exams/subjects/topics/difficulty-levels/paper-types/badges/structures — 8 small requests. It does **not** need the question bank, which is only required once a quiz opens, and for which `useHybridMode()` already provides a live fallback. Today's gate waits for `"completed"`, which means every question page. Moving questions to background work is what makes a sub-2-second startup real rather than cosmetic. This is the source prompt's own P0/P1/P2 split (§30) applied correctly: P0 = migrations + reference data, P2 = questions.
+2. **Hard ceiling of 5 seconds, enforced independently of sync state.** Whatever is or isn't finished, the navigator renders by 5s. With the change above this ceiling should almost never be reached — it is a safety net, not the expected path. The user's stated tolerance is "5 seconds, less is fine."
+3. **Release earlier whenever the gated work finishes earlier.** No artificial minimum hold. If reference data lands in 900ms, Home appears at 900ms.
+4. **The progress bar advances smoothly and monotonically** toward the release point, so the user sees continuous motion rather than a 0 → 100 jump. Real milestones (migrations done, reference data done) drive it; time-based easing smooths between them. It must **never** reach 100% before the gate actually releases, and must never move backwards.
+5. **No fabricated counts.** A time-smoothed bar may show a percentage, but it must not be labelled with a synthetic "N / M questions" figure — that would be inventing data, which §38 of the source prompt and this project's own verification culture both forbid. Measured `synced / total` numbers stay on the More screen, where they are real.
+6. **This fixes the offline lockout in §9.2 by construction.** A 5-second ceiling that ignores sync state cannot lock anyone out. The explicit offline check is still worth adding for clarity, but the ceiling is the guarantee.
+7. **Background sync must genuinely continue after release** — `runInitialSyncUntilDone`'s promise already survives the gate closing, so the required change is that the gate stops *waiting* on it, not that new background machinery is built.
+
+### 9.6 Phased plan
+
+- **Phase 1 — Correctness and the startup gate.** Implement §9.5: split the gate's condition onto reference data, add the 5-second ceiling, make the bar monotonic and smoothed, keep questions in the background. Fix the stale `SyncContext` header comment. Add the `LIMIT` to `getPracticeQuestions`. Guard the quiz Finish button.
+- **Phase 2 — Query & startup cost: ✅ done (2026-08-27).** `loadSessions` N+1 collapsed to two queries with `Map` grouping; `MAX_SESSIONS` applied as a real `LIMIT`; migration `0011` adds `questions(topic_id, difficulty, is_deleted)`, `questions(subject_id, is_deleted)`, `mock_test_attempts(exam_code)`, `bookmarks(is_deleted, is_synced)`, `bookmarks(is_synced)`, `subjects(name)` and drops the redundant `idx_question_translations_question_id`. **Still open:** the materialized per-exam question-count table — `getSyncedExams` continues to full-scan `question_exams ⋈ questions` on both the Practice and Mock Test tab mounts.
+- **Phase 3 — Rendering: ✅ done (2026-08-27).** `revise.tsx`, `practice/summary.tsx` and `mock-test/result.tsx` converted to `FlatList` with chrome in the header/footer slots. `FadeInItem` needed **no** rework — it appears only in the short, deliberately non-virtualized lists, never inside a virtualized one.
+- **Phase 4 — Data layer: ✅ done (2026-08-27).** New `data/mockTestAccess.ts` mirrors `practiceData.ts`; all four Mock Test screens now call mode-taking facade functions instead of carrying `mode === "local" ? fromSqlite() : fromApi()` inline, and none imports both a SQLite and an HTTP module any more. The `db/` imports that remain there are local-only user data (attempt history/summary, subject styling) with no live counterpart. Also fixed `resetStructureCache`, which was **dead code** despite a comment saying to call it — the live structure snapshot was never invalidated for the process lifetime; the facade now drops it on a mode change via `noteHybridMode()`. **Partial:** `practiceData.ts`'s `getSyllabusSubjectIdsLive` shares that cache without going through the facade, so a Practice-only mode flip still won't invalidate it. **Still open:** making mode resolution a non-hook so the data layer owns it rather than every screen threading `mode` through `useEffect` deps.
+- **Phase 5 — Bulk writes: ✅ done (2026-08-27).** `writeLanguages` and `writeReferenceData`'s exams/subjects/topics loops are single bulk upserts using `excluded.*`; `deleteQuestionLocally` became `deleteQuestionsLocally(tx, ids[])` (three statements regardless of batch size, vs. 1,500 for a 500-row tombstone page); `insertSession`'s per-result inserts and prune loop are one statement each.
+- **Phase 6 — Lift the pool: ✅ done (2026-08-27).** `app.question-pool.temporary-enabled` flipped to `false`; the full **37,884-question** bank is now served and syncs to the device.
+
+  **The interim "assign the same questions to every query" measure turned out to be unnecessary and was deliberately not built.** It was requested to stop screens appearing disabled for lack of content, but measurement showed the pool restriction was the *entire* cause: with the pool lifted, **107 of 108 topics have questions** (151–458 each), all 11 exams have 3,392–12,203, and the three difficulty levels hold ~12k each. The single topic with none is `Automated Test Subject / Automated Test Topic`, a leftover test fixture already recorded in `memory/STATUS.md` as harmless. So nothing had to be faked, no query had to stop honouring its scoping, and the syllabus scoping shipped in Section 7 Phase C stays intact.
+
+  **Re-measured after the lift, as this section requires.** A full sync is 76 pages at `PAGE_SIZE = 500`; one page costs ~2.7s server-side, so ≈203s of server time alone (consistent with the ~236s recorded in `reports/12-load-test-data-seeding/`). That cost is now **entirely invisible to the user**, which is the point of Phase 1: on a fresh install the gate released on `reference data ready` **before a single question page was written**, and Practice → subjects → topics was navigated normally while pages 5 through 76 downloaded behind the open app. The sync completed `37884/37884`. A 136-question quiz then loaded without error — the previously-unbounded query running at real volume with the `LIMIT` in place.
+
+**Migration lesson worth carrying forward:** drizzle-kit generates index DDL with no existence guards, and a single failing statement renders the app unstartable (`app/_layout.tsx` gates on migration success). Migration `0011` genuinely bricked the test emulator with a bare `DROP INDEX` before being hand-edited to use `IF EXISTS` / `IF NOT EXISTS` throughout. Treat generated index migrations as needing that hand-edit by default. See `reports/19-startup-gate-and-query-limits/`.
+
+### 9.7 What this section deliberately does not adopt
+
+- **A repository/data-source abstraction layer for its own sake.** The source prompt asks for one generically; Practice's facade is already close enough, and the concrete defect is Mock Test's four bypasses. Fix those rather than introduce a new architecture.
+- **Prefetching and cache-eviction machinery.** No measured bottleneck justifies either yet, and the prompt's own §34 warns against over-engineering.
+- **A performance-instrumentation event taxonomy.** Sentry plus targeted timing around the specific paths above answers the actual questions; a full `APP_START`/`FIRST_FRAME` event scheme is more ceremony than signal at this size.
