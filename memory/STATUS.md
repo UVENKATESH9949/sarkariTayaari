@@ -99,7 +99,39 @@ console errors**.
 ~35,700 templated load-test questions — but nothing in the project could detect it before
 TICKET-2109. 1,000 edges are recorded so far (the scan caps per run); the rest need further runs.
 
-### The real deployment consequence (this is what actually blocks device testing)
+### Backend deploys are now automated (and why they weren't)
+
+`.github/workflows/backend-deploy.yml` deploys the backend on every push to `main` that
+touches `backend/**`. **This closes a structural gap that had been silently hiding shipped
+features from real devices.**
+
+The APK has been built automatically since 2026-08-21. The backend never was — deployed
+once by hand, from the owner's *personal* laptop (this work laptop has restrictions and has
+no `gcloud` or `docker` installed, verified 2026-08-31). So every backend change since
+2026-08-27 was live in the repo and absent from production, and nobody could see it because
+all testing ran on the emulator, which points at a *local* backend.
+
+Measured on 2026-08-31, against the live service, before the workflow existed:
+
+```
+GET /api/exam-badges   ->  404          (V11, shipped 2026-08-27)
+GET /api/exams         ->  no "difficulty" / "badge" fields
+```
+
+So the exam difficulty/badge feature had been invisible on real devices for four days, and
+the emulator could never have revealed it. **When a feature "works on the emulator but not
+on a device", check whether the backend was ever deployed before looking anywhere else.**
+
+**One-time setup is still required** and has to be done from a machine with `gcloud`
+(personal laptop, or Cloud Shell in a browser — needs nothing installed). Two repository
+*Variables*: `GCP_WORKLOAD_IDENTITY_PROVIDER` and `GCP_DEPLOY_SERVICE_ACCOUNT`. Full
+walkthrough in `DEPLOYMENT.md` → "Automated deploys". Until then the workflow fails fast
+and prints exactly what is missing — that first failure is by design, not a broken build.
+
+Keyless (Workload Identity Federation) is the documented path rather than a
+service-account key, specifically because this repo is public.
+
+### The deployment consequence that blocked device testing (fixed by the above, once set up)
 
 The deployed Cloud Run backend still runs pre-V13 code. It starts fine (see the correction at the
 top of this file), but **it does not have the new endpoints** — `GET /api/exams/{code}/topic-intelligence`
