@@ -232,10 +232,27 @@ jobs:
           # configure-docker` — same reason DEPLOYMENT.md gives for the manual flow.
           # Tests are skipped inside the Dockerfile on purpose: several of them hit the real
           # Neon database, whose credentials do not exist in a build context.
-          gcloud builds submit \
-            --tag "${SHA_TAG}" \
-            --project "${GCP_PROJECT}" \
-            .
+          # --suppress-logs is required, not cosmetic. By default `builds submit` tails the
+          # build log, and streaming the *default* logs bucket needs project Viewer/Owner -
+          # which this deploy account deliberately does not have (see the role list in
+          # DEPLOYMENT.md: it can build, push and deploy, and nothing else). Without the flag
+          # gcloud exits 1 with "This tool can only stream logs if you are Viewer/Owner"
+          # *while the build is running perfectly well*, failing the workflow over a log tail.
+          #
+          # The alternative would be granting roles/viewer to a deploy identity attached to a
+          # public repository, to gain console output that is one click away anyway.
+          #
+          # It still WAITS for the build and still exits non-zero if the build itself fails.
+          # Only --async would change that, and that could deploy a stale image.
+          if ! gcloud builds submit \
+                --suppress-logs \
+                --tag "${SHA_TAG}" \
+                --project "${GCP_PROJECT}" \
+                . ; then
+            echo "::error::Cloud Build failed. Logs are not streamed here by design - open them in the console:"
+            echo "  https://console.cloud.google.com/cloud-build/builds?project=${GCP_PROJECT}"
+            exit 1
+          fi
 
           # Move :latest to the image just built, so the manual `gcloud run deploy` in
           # DEPLOYMENT.md keeps working and keeps meaning "the newest build".
