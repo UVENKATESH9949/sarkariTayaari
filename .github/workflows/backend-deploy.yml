@@ -232,25 +232,52 @@ jobs:
           # configure-docker` — same reason DEPLOYMENT.md gives for the manual flow.
           # Tests are skipped inside the Dockerfile on purpose: several of them hit the real
           # Neon database, whose credentials do not exist in a build context.
-          # --suppress-logs is required, not cosmetic. By default `builds submit` tails the
-          # build log, and streaming the *default* logs bucket needs project Viewer/Owner -
-          # which this deploy account deliberately does not have (see the role list in
-          # DEPLOYMENT.md: it can build, push and deploy, and nothing else). Without the flag
-          # gcloud exits 1 with "This tool can only stream logs if you are Viewer/Owner"
-          # *while the build is running perfectly well*, failing the workflow over a log tail.
+          # Submitted --async and polled, rather than letting gcloud tail the build.
           #
-          # The alternative would be granting roles/viewer to a deploy identity attached to a
-          # public repository, to gain console output that is one click away anyway.
+          # Streaming the default logs bucket needs project Viewer/Owner, which this deploy
+          # account deliberately does not have - so a plain `builds submit` exits 1 with
+          # "This tool can only stream logs if you are Viewer/Owner" while the build itself is
+          # succeeding. --suppress-logs fixed that but threw away the diagnostic, which then
+          # cost a debugging round the moment a build genuinely failed.
           #
-          # It still WAITS for the build and still exits non-zero if the build itself fails.
-          # Only --async would change that, and that could deploy a stale image.
-          if ! gcloud builds submit \
-                --suppress-logs \
-                --tag "${SHA_TAG}" \
-                --project "${GCP_PROJECT}" \
-                . ; then
-            echo "::error::Cloud Build failed. Logs are not streamed here by design - open them in the console:"
-            echo "  https://console.cloud.google.com/cloud-build/builds?project=${GCP_PROJECT}"
+          # Reading the *finished* log object is a different permission from streaming it, and
+          # one this account does have (roles/storage.admin). So the log is fetched on failure
+          # and printed here. No extra IAM, and the failure is visible without console access.
+          BUILD_ID=$(gcloud builds submit \
+                       --async \
+                       --tag "${SHA_TAG}" \
+                       --project "${GCP_PROJECT}" \
+                       --format='value(id)' \
+                       .)
+
+          if [ -z "${BUILD_ID}" ]; then
+            echo "::error::Cloud Build did not return a build id - the submit itself failed."
+            exit 1
+          fi
+
+          CONSOLE="https://console.cloud.google.com/cloud-build/builds/${BUILD_ID}?project=${GCP_PROJECT}"
+          echo "build id: ${BUILD_ID}"
+          echo "console:  ${CONSOLE}"
+
+          # Cloud Build's own default timeout is 10 minutes, so it reaches a terminal status
+          # well inside this window; the cap only stops the job hanging if polling breaks.
+          STATUS="UNKNOWN"
+          for _ in $(seq 1 100); do
+            STATUS=$(gcloud builds describe "${BUILD_ID}" --project "${GCP_PROJECT}" --format="value(status)" 2>/dev/null || echo UNKNOWN)
+            case "${STATUS}" in
+              SUCCESS) break ;;
+              FAILURE|TIMEOUT|CANCELLED|EXPIRED|INTERNAL_ERROR) break ;;
+            esac
+            sleep 10
+          done
+
+          echo "build status: ${STATUS}"
+
+          if [ "${STATUS}" != "SUCCESS" ]; then
+            echo "::error::Cloud Build finished with status ${STATUS}. Log follows."
+            echo "----------------------------- build log -----------------------------"
+            gcloud builds log "${BUILD_ID}" --project "${GCP_PROJECT}" 2>&1 | tail -120 || echo "(could not read the log - open ${CONSOLE})"
+            echo "---------------------------------------------------------------------"
             exit 1
           fi
 
