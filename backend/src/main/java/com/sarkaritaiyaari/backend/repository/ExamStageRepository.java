@@ -16,6 +16,27 @@ public interface ExamStageRepository extends JpaRepository<ExamStage, UUID> {
     Optional<ExamStage> findByExamCodeAndNameIgnoreCase(String examCode, String name);
 
     /**
+     * Version-aware duplicate check (TICKET-2108).
+     *
+     * <p>Replaces {@link #findByExamCodeAndNameIgnoreCase} as the create/update guard. That
+     * method rejected any second stage sharing a name, which is the code-level twin of the
+     * {@code UNIQUE (exam_code, name)} constraint V16 relaxes - leaving it in place would have
+     * made the migration pointless, since the service would still refuse the write.
+     *
+     * <p>{@code coalesce} mirrors the unique index exactly: two null version labels are the
+     * same version ("un-versioned"), not two distinct ones.
+     */
+    @Query("""
+            select s from ExamStage s
+            where s.exam.code = :examCode
+              and lower(s.name) = lower(:name)
+              and coalesce(s.versionLabel, '') = coalesce(:versionLabel, '')
+            """)
+    Optional<ExamStage> findByExamCodeNameAndVersion(@Param("examCode") String examCode,
+                                                      @Param("name") String name,
+                                                      @Param("versionLabel") String versionLabel);
+
+    /**
      * Reads a whole exam's structure. Papers are join-fetched here; sections and their
      * subjects are left to load via `hibernate.default_batch_fetch_size`, which turns
      * them into a couple of `WHERE id IN (...)` batches instead of one query per row.

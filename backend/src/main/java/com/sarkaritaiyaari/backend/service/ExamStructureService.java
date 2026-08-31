@@ -23,7 +23,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -59,6 +61,66 @@ public class ExamStructureService {
         this.subjectRepository = subjectRepository;
     }
 
+    /* -------------------------------------------------- Pattern versioning (2108) */
+
+    /**
+     * Whether a stage version is in force on a given date.
+     *
+     * <p>The single definition of "which pattern applies now". Before TICKET-2108 there was
+     * none: {@code effectiveFrom} and {@code versionLabel} existed but nothing read them, so
+     * versioning was a label an admin could type and nothing more.
+     *
+     * <p>Both bounds are open-ended by design. A null {@code effectiveFrom} means "has always
+     * applied", which is what every pre-existing row means — none of them were entered with a
+     * date, and treating them as not-yet-effective would make every exam's pattern vanish the
+     * moment this shipped. A null {@code effectiveTo} means "still current".
+     *
+     * <p>{@code effectiveTo} is inclusive: an admin entering "this pattern ran through 2023"
+     * means the whole of that day, not up to the midnight before it.
+     */
+    static boolean isEffectiveOn(ExamStage stage, LocalDate date) {
+        LocalDate from = stage.getEffectiveFrom();
+        LocalDate to = stage.getEffectiveTo();
+        if (from != null && date.isBefore(from)) return false;
+        if (to != null && date.isAfter(to)) return false;
+        return true;
+    }
+
+    /**
+     * The stages of one exam that apply today, keeping only one version per stage name.
+     *
+     * <p>Needed because relaxing the uniqueness constraint makes two versions of "Tier 2"
+     * legal, and everything downstream — mock test generation above all — assumes one. Left
+     * unhandled, a mobile client would sync both and generate tests from a superseded
+     * pattern.
+     *
+     * <p>When more than one version is somehow effective at once (overlapping windows an
+     * admin entered by hand), the most recently-started one wins, and an un-dated row loses
+     * to a dated one. That is a deterministic answer to a genuinely ambiguous input rather
+     * than the arbitrary one a plain list order would give.
+     */
+    private static List<ExamStage> effectiveStages(List<ExamStage> stages, LocalDate date) {
+        Map<String, ExamStage> winnerByName = new LinkedHashMap<>();
+        for (ExamStage stage : stages) {
+            if (!isEffectiveOn(stage, date)) continue;
+            String key = stage.getName().toLowerCase(java.util.Locale.ROOT);
+            ExamStage current = winnerByName.get(key);
+            if (current == null || startsLaterThan(stage, current)) {
+                winnerByName.put(key, stage);
+            }
+        }
+        return List.copyOf(winnerByName.values());
+    }
+
+    /** A dated start beats an undated one; between two dated starts, the later wins. */
+    private static boolean startsLaterThan(ExamStage candidate, ExamStage incumbent) {
+        LocalDate a = candidate.getEffectiveFrom();
+        LocalDate b = incumbent.getEffectiveFrom();
+        if (a == null) return false;
+        if (b == null) return true;
+        return a.isAfter(b);
+    }
+
     /* ------------------------------------------------------------------ Structure */
 
     @Transactional(readOnly = true)
@@ -66,9 +128,17 @@ public class ExamStructureService {
         Exam exam = requireExam(examCode);
         List<ExamStage> stages = stageRepository.findStructureByExamCode(examCode);
 
+        // The admin view keeps every version, each flagged with whether it is the one in
+        // force. An admin managing pattern history has to be able to see the superseded
+        // rows — filtering them here would make them uneditable and effectively invisible.
+        LocalDate today = LocalDate.now();
+        Set<UUID> activeIds = effectiveStages(stages, today).stream()
+                .map(ExamStage::getId)
+                .collect(Collectors.toSet());
+
         List<ExamStructureResponse.StageNode> stageNodes = stages.stream()
                 .sorted(Comparator.comparingInt(ExamStage::getDisplayOrder))
-                .map(ExamStructureService::toStageNode)
+                .map(stage -> toStageNode(stage, activeIds.contains(stage.getId())))
                 .toList();
 
         return new ExamStructureResponse(exam.getCode(), exam.getName(), toSyllabus(exam), stageNodes);
@@ -85,15 +155,23 @@ public class ExamStructureService {
         Map<String, List<ExamStage>> stagesByExam = stages.stream()
                 .collect(Collectors.groupingBy(s -> s.getExam().getCode()));
 
+        // The mobile sync source, unlike getStructure above, sends only the version in force.
+        // A device has no use for superseded patterns and every use for not accidentally
+        // generating a mock test from one — see effectiveStages for why that is now possible.
+        LocalDate today = LocalDate.now();
+
         return examRepository.findAllByOrderByDisplayOrderAsc().stream()
                 .filter(Exam::isActive)
                 .map(exam -> new ExamStructureResponse(
                         exam.getCode(),
                         exam.getName(),
                         toSyllabus(exam),
-                        stagesByExam.getOrDefault(exam.getCode(), List.of()).stream()
-                                .sorted(Comparator.comparingInt(ExamStage::getDisplayOrder))
-                                .map(ExamStructureService::toStageNode)
+                        effectiveStages(
+                                stagesByExam.getOrDefault(exam.getCode(), List.of()).stream()
+                                        .sorted(Comparator.comparingInt(ExamStage::getDisplayOrder))
+                                        .toList(),
+                                today).stream()
+                                .map(stage -> toStageNode(stage, true))
                                 .toList()
                 ))
                 .toList();
@@ -106,13 +184,15 @@ public class ExamStructureService {
                 .toList();
     }
 
-    private static ExamStructureResponse.StageNode toStageNode(ExamStage stage) {
+    private static ExamStructureResponse.StageNode toStageNode(ExamStage stage, boolean active) {
         return new ExamStructureResponse.StageNode(
                 stage.getId(),
                 stage.getName(),
                 stage.getDisplayOrder(),
                 stage.getEffectiveFrom(),
+                stage.getEffectiveTo(),
                 stage.getVersionLabel(),
+                active,
                 stage.getPapers().stream()
                         .sorted(Comparator.comparingInt(ExamPaper::getDisplayOrder))
                         .map(ExamStructureService::toPaperNode)
@@ -172,9 +252,16 @@ public class ExamStructureService {
 
     public ExamStageResponse createStage(ExamStageRequest request) {
         Exam exam = requireExam(request.getExamCode());
-        stageRepository.findByExamCodeAndNameIgnoreCase(exam.getCode(), request.getName())
+        // Version-aware (TICKET-2108). The old name-only check was the code-level twin of the
+        // UNIQUE constraint V16 relaxes: leaving it would mean the migration changed nothing,
+        // because the service would still refuse the second version.
+        stageRepository.findByExamCodeNameAndVersion(exam.getCode(), request.getName(), request.getVersionLabel())
                 .ifPresent(existing -> {
-                    throw new IllegalArgumentException("Stage already exists for this exam: " + request.getName());
+                    throw new IllegalArgumentException(
+                            "This exam already has a stage called \"" + request.getName() + "\""
+                                    + (request.getVersionLabel() == null || request.getVersionLabel().isBlank()
+                                        ? " with no version label. Give one of them a version label to keep both."
+                                        : " at version \"" + request.getVersionLabel() + "\"."));
                 });
         ExamStage stage = new ExamStage();
         stage.setExam(exam);
@@ -192,7 +279,16 @@ public class ExamStructureService {
 
     public ExamStageResponse updateStage(UUID id, ExamStageRequest request) {
         ExamStage stage = requireStage(id);
-        stage.setExam(requireExam(request.getExamCode()));
+        Exam exam = requireExam(request.getExamCode());
+        // Same guard as create, minus this row itself — renaming a stage to collide with a
+        // sibling version would otherwise only fail at the DB, as an unmapped 500.
+        stageRepository.findByExamCodeNameAndVersion(exam.getCode(), request.getName(), request.getVersionLabel())
+                .filter(existing -> !existing.getId().equals(id))
+                .ifPresent(existing -> {
+                    throw new IllegalArgumentException(
+                            "Another stage on this exam already uses that name and version label.");
+                });
+        stage.setExam(exam);
         applyStage(stage, request);
         return toStageResponse(stageRepository.save(stage));
     }
@@ -299,10 +395,28 @@ public class ExamStructureService {
     }
 
     private static void applyStage(ExamStage stage, ExamStageRequest request) {
+        LocalDate from = request.getEffectiveFrom();
+        LocalDate to = request.getEffectiveTo();
+        // Checked here because no field-level annotation can compare two fields. V16 has the
+        // same CHECK, but reaching it means an unmapped 500 instead of a readable message.
+        if (from != null && to != null && from.isAfter(to)) {
+            throw new IllegalArgumentException("\"Effective from\" cannot be after \"effective to\".");
+        }
         stage.setName(request.getName());
         stage.setDisplayOrder(request.getDisplayOrder());
-        stage.setEffectiveFrom(request.getEffectiveFrom());
-        stage.setVersionLabel(request.getVersionLabel());
+        stage.setEffectiveFrom(from);
+        stage.setEffectiveTo(to);
+        stage.setVersionLabel(blankToNull(request.getVersionLabel()));
+    }
+
+    /**
+     * An empty version label from a cleared form field is "un-versioned", not the empty
+     * string. This matters more than it looks: the unique index keys on
+     * {@code coalesce(version_label, '')}, so storing "" for one row and null for another
+     * would make two rows that are semantically identical pass the constraint.
+     */
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private void applyPaper(ExamPaper paper, ExamPaperRequest request) {
@@ -349,7 +463,9 @@ public class ExamStructureService {
                 stage.getName(),
                 stage.getDisplayOrder(),
                 stage.getEffectiveFrom(),
-                stage.getVersionLabel()
+                stage.getEffectiveTo(),
+                stage.getVersionLabel(),
+                isEffectiveOn(stage, LocalDate.now())
         );
     }
 

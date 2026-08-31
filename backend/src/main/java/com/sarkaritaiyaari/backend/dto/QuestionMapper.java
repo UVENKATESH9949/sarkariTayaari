@@ -32,6 +32,16 @@ public final class QuestionMapper {
                 .sorted(Comparator.comparing(t -> t.getLanguage().getCode()))
                 .map(QuestionMapper::toTranslationResponse)
                 .toList());
+
+        // TICKET-2104. Mapped unconditionally rather than behind an "is it a PYQ" check:
+        // the columns are cheap scalars already loaded with the row, and a conditional here
+        // would mean the admin form could not distinguish "not a PYQ" from "fields withheld".
+        response.setPyq(question.isPyq());
+        response.setPyqYear(question.getPyqYear());
+        response.setPyqShift(question.getPyqShift());
+        response.setSourcePaperId(question.getSourcePaperId());
+        response.setQuestionNumber(question.getQuestionNumber());
+        response.setSourceUrl(question.getSourceUrl());
         return response;
     }
 

@@ -42,6 +42,18 @@ public class ExamStage {
     @Column(name = "effective_from")
     private LocalDate effectiveFrom;
 
+    /**
+     * Closes the effectivity window opened by {@code effectiveFrom} (TICKET-2108). Null =
+     * still current, which is the correct default for every pre-existing row: a pattern is
+     * not superseded until an admin says so.
+     *
+     * <p>Needed because {@code effectiveFrom} alone cannot answer "which pattern applies
+     * now" — two versions of a stage both with a past start date are both "in effect" by
+     * that reading. Resolution lives in one place, {@code ExamStructureService.isEffectiveOn}.
+     */
+    @Column(name = "effective_to")
+    private LocalDate effectiveTo;
+
     @Column(name = "version_label")
     private String versionLabel;
 
@@ -83,6 +95,14 @@ public class ExamStage {
 
     public LocalDate getEffectiveFrom() {
         return effectiveFrom;
+    }
+
+    public LocalDate getEffectiveTo() {
+        return effectiveTo;
+    }
+
+    public void setEffectiveTo(LocalDate effectiveTo) {
+        this.effectiveTo = effectiveTo;
     }
 
     public void setEffectiveFrom(LocalDate effectiveFrom) {

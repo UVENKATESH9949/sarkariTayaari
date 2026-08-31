@@ -31,7 +31,10 @@ public record ExamStructureResponse(
             String name,
             int displayOrder,
             LocalDate effectiveFrom,
+            LocalDate effectiveTo,
             String versionLabel,
+            /** True when this version is the one in force today - see ExamStageResponse.active. */
+            boolean active,
             List<PaperNode> papers
     ) {
     }

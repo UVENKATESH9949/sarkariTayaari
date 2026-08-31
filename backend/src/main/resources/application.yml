@@ -91,3 +91,14 @@ app:
     # instead of the full ~37,900-question bank. Flip to false to serve everything again —
     # no other code change needed. See QuestionService.temporaryPoolEnabled.
     temporary-enabled: false
+
+  epic-l:
+    # Enables POST /api/admin/synthetic-curation/{seed,purge} — the synthetic Epic L
+    # curation data (topic hierarchy, prerequisites, exam topic map, PYQ tagging) used to
+    # exercise the feature before real editorial content exists.
+    #
+    # Off by default and deliberately not something a deployed instance can be talked into:
+    # the endpoints also require an admin token, and even then refuse unless this is true.
+    # An admin clicking the wrong thing on production must not overwrite real curation with
+    # demo values. See SyntheticCurationService.
+    synthetic-seed-enabled: false

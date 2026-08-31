@@ -16,6 +16,15 @@ public class ExamStageRequest {
 
     private LocalDate effectiveFrom;
 
+    /**
+     * Closes the effectivity window (TICKET-2108). Null = still current.
+     *
+     * <p>Not validated against {@code effectiveFrom} by an annotation, because a
+     * field-level constraint cannot see a sibling field. The ordering is checked in
+     * {@code ExamStructureService.applyStage} and again by a DB CHECK in V16.
+     */
+    private LocalDate effectiveTo;
+
     private String versionLabel;
 
     public String getExamCode() {
@@ -56,5 +65,13 @@ public class ExamStageRequest {
 
     public void setVersionLabel(String versionLabel) {
         this.versionLabel = versionLabel;
+    }
+
+    public LocalDate getEffectiveTo() {
+        return effectiveTo;
+    }
+
+    public void setEffectiveTo(LocalDate effectiveTo) {
+        this.effectiveTo = effectiveTo;
     }
 }

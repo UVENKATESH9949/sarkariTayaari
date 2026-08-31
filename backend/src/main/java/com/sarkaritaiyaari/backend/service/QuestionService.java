@@ -4,6 +4,7 @@ import com.sarkaritaiyaari.backend.dto.BulkImportFailure;
 import com.sarkaritaiyaari.backend.dto.BulkImportQuestionRequest;
 import com.sarkaritaiyaari.backend.dto.BulkImportResponse;
 import com.sarkaritaiyaari.backend.dto.CreateQuestionRequest;
+import com.sarkaritaiyaari.backend.dto.PyqProvenanceCarrier;
 import com.sarkaritaiyaari.backend.dto.QuestionMapper;
 import com.sarkaritaiyaari.backend.dto.QuestionResponse;
 import com.sarkaritaiyaari.backend.dto.TranslationRequest;
@@ -15,6 +16,7 @@ import com.sarkaritaiyaari.backend.entity.QuestionTranslation;
 import com.sarkaritaiyaari.backend.entity.Subject;
 import com.sarkaritaiyaari.backend.entity.Topic;
 import com.sarkaritaiyaari.backend.repository.DifficultyLevelRepository;
+import com.sarkaritaiyaari.backend.repository.ExamPaperRepository;
 import com.sarkaritaiyaari.backend.repository.ExamRepository;
 import com.sarkaritaiyaari.backend.repository.LanguageRepository;
 import com.sarkaritaiyaari.backend.repository.QuestionRepository;
@@ -74,6 +76,8 @@ public class QuestionService {
     private final SubjectRepository subjectRepository;
     private final ExamRepository examRepository;
     private final DifficultyLevelRepository difficultyLevelRepository;
+    private final ExamPaperRepository examPaperRepository;
+    private final DuplicateDetectionService duplicateDetection;
 
     public QuestionService(QuestionRepository questionRepository,
                             QuestionTranslationRepository translationRepository,
@@ -81,7 +85,9 @@ public class QuestionService {
                             TopicRepository topicRepository,
                             SubjectRepository subjectRepository,
                             ExamRepository examRepository,
-                            DifficultyLevelRepository difficultyLevelRepository) {
+                            DifficultyLevelRepository difficultyLevelRepository,
+                            ExamPaperRepository examPaperRepository,
+                            DuplicateDetectionService duplicateDetection) {
         this.questionRepository = questionRepository;
         this.translationRepository = translationRepository;
         this.languageRepository = languageRepository;
@@ -89,6 +95,59 @@ public class QuestionService {
         this.subjectRepository = subjectRepository;
         this.examRepository = examRepository;
         this.difficultyLevelRepository = difficultyLevelRepository;
+        this.examPaperRepository = examPaperRepository;
+        this.duplicateDetection = duplicateDetection;
+    }
+
+    /**
+     * Copies PYQ provenance from any write request onto the entity (TICKET-2104).
+     *
+     * <p>One method for all three write paths - create, update and bulk import all carry the
+     * same five fields via {@link PyqProvenanceCarrier}, and three copies of this would be
+     * three places for the rules below to drift apart.
+     *
+     * <p>Two rules are enforced here rather than by bean validation, because both are
+     * cross-field and a field-level annotation cannot express either:
+     *
+     * <ul>
+     *   <li>Year/shift/paper/number are cleared when {@code pyq} is false. Otherwise
+     *       un-ticking the PYQ box in the admin form would leave a stale 2019 on the row,
+     *       still visible to {@code aggregatePyqByTopicAndYear}'s not-null year filter, and
+     *       the topic would keep trending on a question nobody considers a PYQ.</li>
+     *   <li>{@code sourcePaperId} must reference a real paper. It is a plain UUID column, not
+     *       a mapped association, so nothing else would catch a bad id until the FK rejected
+     *       it as an unmapped 500.</li>
+     * </ul>
+     */
+    private void applyPyqProvenance(Question question, PyqProvenanceCarrier request) {
+        question.setPyq(request.isPyq());
+
+        if (!request.isPyq()) {
+            question.setPyqYear(null);
+            question.setPyqShift(null);
+            question.setSourcePaperId(null);
+            question.setQuestionNumber(null);
+            // sourceUrl deliberately survives: it is where the question came from, which
+            // stays true whether or not anyone has classified it as a previous-year one.
+            question.setSourceUrl(blankToNull(request.getSourceUrl()));
+            return;
+        }
+
+        question.setPyqYear(request.getPyqYear());
+        question.setPyqShift(blankToNull(request.getPyqShift()));
+        question.setQuestionNumber(request.getQuestionNumber());
+        question.setSourceUrl(blankToNull(request.getSourceUrl()));
+
+        UUID sourcePaperId = request.getSourcePaperId();
+        if (sourcePaperId != null && !examPaperRepository.existsById(sourcePaperId)) {
+            throw new IllegalArgumentException("Unknown sourcePaperId: " + sourcePaperId);
+        }
+        question.setSourcePaperId(sourcePaperId);
+    }
+
+    /** An empty string from a cleared form field means "not set", not "set to empty". */
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     /**
@@ -115,11 +174,26 @@ public class QuestionService {
         question.setUpdatedAt(OffsetDateTime.now());
         question.setDeleted(false);
 
+        applyPyqProvenance(question, request);
+
         for (TranslationRequest t : request.getTranslations()) {
             question.getTranslations().add(buildTranslation(question, t));
         }
 
-        return QuestionMapper.toResponse(questionRepository.save(question));
+        // Fingerprint before saving so the stored column is never briefly out of step with
+        // the content, and detect afterwards so the new row has an id to record an edge for.
+        duplicateDetection.refreshFingerprint(question);
+        Question saved = questionRepository.save(question);
+        UUID duplicateOf = duplicateDetection.detectAndRecord(saved);
+
+        QuestionResponse response = QuestionMapper.toResponse(saved);
+        // Reported, not blocked. Supplied section 14: a detected duplicate is recorded for
+        // review, never auto-rejected - two questions can share wording and still differ,
+        // and refusing the write would make a legitimate one impossible to enter at all.
+        if (duplicateOf != null) {
+            response.setDuplicateOfQuestionIds(List.of(duplicateOf));
+        }
+        return response;
     }
 
     @Transactional(readOnly = true)
@@ -219,6 +293,7 @@ public class QuestionService {
         question.setDifficulty(request.getDifficulty());
         question.setExams(requireExams(request.getExamCodes()));
         question.setPremium(request.isPremium());
+        applyPyqProvenance(question, request);
         question.setUpdatedAt(OffsetDateTime.now());
         return QuestionMapper.toResponse(questionRepository.save(question));
     }
@@ -240,6 +315,24 @@ public class QuestionService {
         translation.setQuestionText(request.getQuestionText());
         translation.setOptions(request.getOptions());
         translation.setExplanation(request.getExplanation());
+
+        /*
+         * Editing the English text changes what the fingerprint describes. Without this the column
+         * silently describes the *previous* wording, and dedup starts comparing against text that
+         * no longer exists anywhere.
+         *
+         * The text is resolved explicitly rather than by reading question.getTranslations(). That
+         * collection is a lazy bag with orphanRemoval, and initialising it here - after the new
+         * translation above was added to it - made Hibernate compute orphans against a stale
+         * snapshot and throw TransientObjectException, turning every add-a-new-language request
+         * into a 500. Caught by QuestionCrudTest, not by reading the code.
+         */
+        String englishText = ROOT_LANGUAGE.equals(languageCode)
+                ? request.getQuestionText()
+                : translationRepository.findByQuestionIdAndLanguageCode(questionId, ROOT_LANGUAGE)
+                        .map(QuestionTranslation::getQuestionText)
+                        .orElse(null);
+        duplicateDetection.setFingerprintFromText(question, englishText);
 
         question.setUpdatedAt(OffsetDateTime.now());
         return QuestionMapper.toResponse(questionRepository.save(question));
@@ -277,6 +370,10 @@ public class QuestionService {
         List<UUID> ids = new ArrayList<>();
         List<BulkImportFailure> failures = new ArrayList<>();
         List<Integer> pendingIndexes = new ArrayList<>();
+        // Collected so duplicate detection runs once for the whole batch instead of once per
+        // row - see DuplicateDetectionService.detectAndRecordBatch for why that matters here
+        // specifically.
+        List<Question> imported = new ArrayList<>();
 
         Set<String> validDifficulties = difficultyLevelRepository.findAll().stream()
                 .map(d -> d.getCode()).collect(Collectors.toSet());
@@ -312,6 +409,8 @@ public class QuestionService {
                 question.setUpdatedAt(OffsetDateTime.now());
                 question.setDeleted(false);
 
+                applyPyqProvenance(question, request);
+
                 for (TranslationRequest t : request.getTranslations()) {
                     QuestionTranslation translation = new QuestionTranslation();
                     translation.setQuestion(question);
@@ -322,7 +421,10 @@ public class QuestionService {
                     question.getTranslations().add(translation);
                 }
 
-                ids.add(questionRepository.save(question).getId());
+                duplicateDetection.refreshFingerprint(question);
+                Question savedQuestion = questionRepository.save(question);
+                imported.add(savedQuestion);
+                ids.add(savedQuestion.getId());
                 pendingIndexes.add(index);
                 if (pendingIndexes.size() >= FLUSH_BATCH_SIZE) {
                     flushPending(pendingIndexes, ids, failures);
@@ -333,7 +435,18 @@ public class QuestionService {
         }
         flushPending(pendingIndexes, ids, failures);
 
-        return new BulkImportResponse(ids.size(), ids, failures);
+        // After the final flush, so every row has a real id, and only for rows that actually
+        // survived (a failed chunk removes its ids above, and detecting against a rolled-back
+        // row would record an edge pointing at a question that does not exist).
+        Map<UUID, UUID> duplicatePairs = Map.of();
+        if (!imported.isEmpty()) {
+            List<Question> survived = imported.stream().filter(q -> ids.contains(q.getId())).toList();
+            if (!survived.isEmpty()) {
+                duplicatePairs = duplicateDetection.detectAndRecordBatch(survived);
+            }
+        }
+
+        return new BulkImportResponse(ids.size(), ids, failures, duplicatePairs);
     }
 
     private void flushPending(List<Integer> pendingIndexes, List<UUID> ids, List<BulkImportFailure> failures) {

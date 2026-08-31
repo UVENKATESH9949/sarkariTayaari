@@ -19,6 +19,22 @@ public class QuestionResponse {
     private boolean deleted;
     private List<TranslationResponse> translations;
 
+    /* --------------------------------------------- PYQ provenance (TICKET-2104) */
+
+    private boolean pyq;
+    private Integer pyqYear;
+    private String pyqShift;
+    private UUID sourcePaperId;
+    private Integer questionNumber;
+    private String sourceUrl;
+
+    /**
+     * Populated only on the admin CRUD reads, and only when a pair has actually been
+     * detected (TICKET-2109). Left null on the sync/public paths — a student has no use for
+     * it, and it would be dead weight on every one of ~37,900 synced rows.
+     */
+    private List<UUID> duplicateOfQuestionIds;
+
     public UUID getId() {
         return id;
     }
@@ -113,5 +129,61 @@ public class QuestionResponse {
 
     public void setTranslations(List<TranslationResponse> translations) {
         this.translations = translations;
+    }
+
+    public boolean isPyq() {
+        return pyq;
+    }
+
+    public void setPyq(boolean pyq) {
+        this.pyq = pyq;
+    }
+
+    public Integer getPyqYear() {
+        return pyqYear;
+    }
+
+    public void setPyqYear(Integer pyqYear) {
+        this.pyqYear = pyqYear;
+    }
+
+    public String getPyqShift() {
+        return pyqShift;
+    }
+
+    public void setPyqShift(String pyqShift) {
+        this.pyqShift = pyqShift;
+    }
+
+    public UUID getSourcePaperId() {
+        return sourcePaperId;
+    }
+
+    public void setSourcePaperId(UUID sourcePaperId) {
+        this.sourcePaperId = sourcePaperId;
+    }
+
+    public Integer getQuestionNumber() {
+        return questionNumber;
+    }
+
+    public void setQuestionNumber(Integer questionNumber) {
+        this.questionNumber = questionNumber;
+    }
+
+    public String getSourceUrl() {
+        return sourceUrl;
+    }
+
+    public void setSourceUrl(String sourceUrl) {
+        this.sourceUrl = sourceUrl;
+    }
+
+    public List<UUID> getDuplicateOfQuestionIds() {
+        return duplicateOfQuestionIds;
+    }
+
+    public void setDuplicateOfQuestionIds(List<UUID> duplicateOfQuestionIds) {
+        this.duplicateOfQuestionIds = duplicateOfQuestionIds;
     }
 }

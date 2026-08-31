@@ -17,3 +17,11 @@ cloudinary:
 admin:
   bootstrap-email:
   bootstrap-password:
+
+# Optional. Turn on to allow seeding synthetic Epic L curation data (topic hierarchy,
+# prerequisites, exam topic map, PYQ years) via
+# POST /api/admin/synthetic-curation/seed, and to remove it again via .../purge.
+# Local development only — never set this on a deployed instance.
+app:
+  epic-l:
+    synthetic-seed-enabled: true
