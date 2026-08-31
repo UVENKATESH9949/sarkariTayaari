@@ -1,0 +1,270 @@
+# Builds and deploys the backend to Cloud Run.
+#
+# WHY THIS EXISTS
+#   The APK has been built automatically on every push since 2026-08-21. The backend never
+#   was — it was deployed once, by hand, from a different machine. The two drifted apart
+#   silently: V11's exam difficulty/badge feature shipped on 2026-08-27 and was still not
+#   live on 2026-08-31, because every test since had been on the emulator, which talks to a
+#   *local* backend. Nobody could have noticed from the emulator.
+#
+#   So this closes the gap that made "I pushed it, so it's live" only half true.
+#
+# WHAT TRIGGERS WHAT
+#   push to main touching backend/**  -> build + deploy
+#   manual dispatch                   -> build + deploy (optionally skipping the build)
+#
+#   The path filter is deliberate. A mobile-only or docs-only push must not redeploy the
+#   backend: it would burn Cloud Build minutes, create a new revision with identical code,
+#   and — because Flyway runs at container start — restart the service for no reason.
+#
+# WHAT THIS DOES NOT DO
+#   It never passes --set-env-vars, --set-secrets, --max-instances or
+#   --allow-unauthenticated. Cloud Run persists service configuration across deploys, so a
+#   deploy that specifies only the image inherits all of it. Re-specifying them here would
+#   mean this file has to stay in sync with the live service forever, and the first time it
+#   drifted it would silently *remove* a secret or reset the instance ceiling. It also keeps
+#   the deploy identity's permissions smaller — setting the IAM policy that
+#   --allow-unauthenticated needs is a privilege this workflow does not require.
+#
+#   The locked decisions in DEPLOYMENT.md (scale to zero, --max-instances=3,
+#   --allow-unauthenticated) therefore stay exactly as they are, because nothing here
+#   touches them.
+#
+# SETUP REQUIRED (once) — see DEPLOYMENT.md, "Automated deploys".
+#   Preferred (keyless):  vars GCP_WORKLOAD_IDENTITY_PROVIDER + GCP_DEPLOY_SERVICE_ACCOUNT
+#   Fallback (key file):  secret GCP_SA_KEY
+#
+#   Keyless is strongly preferred here specifically because THIS REPOSITORY IS PUBLIC. A
+#   service-account JSON key is a long-lived credential with deploy rights to the whole GCP
+#   project; Workload Identity Federation issues a short-lived token that is bound to this
+#   repository and cannot be replayed elsewhere. The project has already had one credential
+#   incident (see the security note in memory/STATUS.md) — this is not a hypothetical.
+
+name: Backend Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_build:
+        description: "Redeploy the existing :latest image without rebuilding"
+        type: boolean
+        required: false
+        default: false
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      # So a change to this workflow is itself deployable and testable.
+      - ".github/workflows/backend-deploy.yml"
+
+# Two deploys of the same service must never overlap: Cloud Run would serve whichever
+# revision happened to finish last, which is not necessarily the newest commit.
+#
+# cancel-in-progress is deliberately FALSE here, unlike the APK workflow. Cancelling a
+# half-finished deploy can leave a revision deployed with no workflow run reporting it —
+# queuing is the safe behaviour for something that mutates production.
+concurrency:
+  group: backend-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  # Required for Workload Identity Federation to mint the OIDC token.
+  id-token: write
+
+env:
+  GCP_PROJECT: sarkaritayaari # NOTE the spelling — see below.
+  GCP_REGION: asia-south1
+  CLOUD_RUN_SERVICE: sarkaritaiyaari-backend
+  ARTIFACT_IMAGE: asia-south1-docker.pkg.dev/sarkaritayaari/backend-repo/backend
+  SERVICE_URL: https://sarkaritaiyaari-backend-815653276881.asia-south1.run.app
+
+# The GCP project is `sarkaritayaari`; the Java package and this repo are
+# `sarkarita_i_yaari`. They genuinely differ. DEPLOYMENT.md warns about it because it has
+# already cost time once — do not "fix" the spelling above.
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # Same reasoning as the APK workflow's keystore check: a missing GitHub secret or
+      # variable expands to an EMPTY STRING rather than failing. Without this step, an
+      # unconfigured identity reaches google-github-actions/auth and fails there with a
+      # message about tokens that says nothing about which value is actually missing.
+      - name: Verify deploy credentials are configured
+        id: creds
+        env:
+          WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          WIF_SA: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          set -uo pipefail
+
+          if [ -n "${WIF_PROVIDER}" ] && [ -n "${WIF_SA}" ]; then
+            echo "method=wif" >> "$GITHUB_OUTPUT"
+            echo "Using Workload Identity Federation (keyless)."
+            exit 0
+          fi
+
+          if [ -n "${SA_KEY}" ]; then
+            echo "method=key" >> "$GITHUB_OUTPUT"
+            echo "::warning::Authenticating with a long-lived service-account key. This repository is PUBLIC; prefer Workload Identity Federation. See DEPLOYMENT.md."
+            exit 0
+          fi
+
+          echo "::error::No GCP deploy credentials configured."
+          echo ""
+          echo "Set EITHER of these, under Settings -> Secrets and variables -> Actions:"
+          echo ""
+          echo "  Preferred (keyless) — as repository VARIABLES:"
+          echo "    GCP_WORKLOAD_IDENTITY_PROVIDER"
+          echo "    GCP_DEPLOY_SERVICE_ACCOUNT"
+          echo ""
+          echo "  Fallback — as a repository SECRET:"
+          echo "    GCP_SA_KEY   (the full service-account JSON)"
+          echo ""
+          echo "One-time setup walkthrough: DEPLOYMENT.md, section 'Automated deploys'."
+          exit 1
+
+      - name: Authenticate to Google Cloud (keyless)
+        if: steps.creds.outputs.method == 'wif'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Authenticate to Google Cloud (service-account key)
+        if: steps.creds.outputs.method == 'key'
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Show identity and target
+        run: |
+          set -euo pipefail
+          echo "Deploying as: $(gcloud config get-value account 2>/dev/null)"
+          echo "Project:      ${GCP_PROJECT}"
+          echo "Service:      ${CLOUD_RUN_SERVICE} (${GCP_REGION})"
+
+      # Tagged with the commit SHA as well as :latest. :latest alone makes revisions
+      # untraceable — you cannot tell which commit a running revision came from, and a
+      # rollback has nothing specific to roll back to. The SHA tag is what makes
+      # `gcloud run deploy --image ...:<sha>` a usable recovery step.
+      - name: Build image with Cloud Build
+        if: inputs.skip_build != true
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          SHA_TAG="${ARTIFACT_IMAGE}:${GITHUB_SHA}"
+          LATEST_TAG="${ARTIFACT_IMAGE}:latest"
+
+          # Builds server-side, so no Docker on the runner and no `gcloud auth
+          # configure-docker` — same reason DEPLOYMENT.md gives for the manual flow.
+          # Tests are skipped inside the Dockerfile on purpose: several of them hit the real
+          # Neon database, whose credentials do not exist in a build context.
+          gcloud builds submit \
+            --tag "${SHA_TAG}" \
+            --project "${GCP_PROJECT}" \
+            .
+
+          # Move :latest to the image just built, so the manual `gcloud run deploy` in
+          # DEPLOYMENT.md keeps working and keeps meaning "the newest build".
+          gcloud artifacts docker tags add "${SHA_TAG}" "${LATEST_TAG}" --quiet
+
+          echo "IMAGE=${SHA_TAG}" >> "$GITHUB_ENV"
+
+      - name: Resolve image for a build-skipped redeploy
+        if: inputs.skip_build == true
+        run: echo "IMAGE=${ARTIFACT_IMAGE}:latest" >> "$GITHUB_ENV"
+
+      # Only --image and --region. See "WHAT THIS DOES NOT DO" at the top of this file for
+      # why no other flags appear here.
+      #
+      # Flyway runs at container start, so this step is also what applies any pending
+      # migration. Cloud Run will not route traffic to a revision that never becomes
+      # ready, so a failed migration fails this step rather than silently going live.
+      - name: Deploy to Cloud Run
+        id: deploy
+        run: |
+          set -euo pipefail
+          gcloud run deploy "${CLOUD_RUN_SERVICE}" \
+            --image "${IMAGE}" \
+            --region "${GCP_REGION}" \
+            --project "${GCP_PROJECT}" \
+            --quiet
+
+          REVISION=$(gcloud run services describe "${CLOUD_RUN_SERVICE}" \
+            --region "${GCP_REGION}" --project "${GCP_PROJECT}" \
+            --format='value(status.latestReadyRevisionName)')
+          echo "revision=${REVISION}" >> "$GITHUB_OUTPUT"
+          echo "Ready revision: ${REVISION}"
+
+      # A ready revision is not the same as a working one. This calls the real service over
+      # the public internet, exactly as the mobile app does, and retries because the
+      # service scales to zero — the first request after idle pays a 10-20s cold start
+      # (DEPLOYMENT.md records that as a locked trade-off, not a fault).
+      - name: Smoke-test the deployed service
+        run: |
+          set -uo pipefail
+
+          echo "GET ${SERVICE_URL}/api/health"
+          for attempt in 1 2 3 4 5 6; do
+            CODE=$(curl -s -o /tmp/health.json -w '%{http_code}' --max-time 60 "${SERVICE_URL}/api/health" || echo "000")
+            if [ "${CODE}" = "200" ]; then
+              echo "health OK: $(cat /tmp/health.json)"
+              break
+            fi
+            echo "attempt ${attempt}: HTTP ${CODE} — retrying (cold start can take 10-20s)"
+            sleep 10
+            if [ "${attempt}" = "6" ]; then
+              echo "::error::Deployed revision never returned 200 from /api/health."
+              echo "Check container logs:"
+              echo "  gcloud run services logs read ${CLOUD_RUN_SERVICE} --region ${GCP_REGION} --project ${GCP_PROJECT} --limit 100"
+              exit 1
+            fi
+          done
+
+      # Proves the deploy actually shipped the code in this commit, rather than succeeding
+      # against a stale image. Without this the workflow can go green while the running
+      # revision is unchanged — which is precisely the failure this whole file exists to
+      # stop happening silently.
+      #
+      # Not fatal: the endpoint checked is Epic L's, so this step is informational on any
+      # commit that predates it. It reports loudly either way.
+      - name: Verify the new code is actually serving
+        run: |
+          set -uo pipefail
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 \
+            "${SERVICE_URL}/api/exams/SSC_CGL/topic-intelligence" || echo "000")
+          if [ "${CODE}" = "200" ]; then
+            echo "Epic L endpoints are live (topic-intelligence -> 200)."
+          else
+            echo "::warning::topic-intelligence returned HTTP ${CODE}. Expected 200 on any commit at or after Epic L; fine on older commits."
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Backend deploy"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Commit | \`${GITHUB_SHA}\` |"
+            echo "| Image | \`${IMAGE:-not built}\` |"
+            echo "| Revision | \`${{ steps.deploy.outputs.revision || 'not deployed' }}\` |"
+            echo "| Service | ${SERVICE_URL} |"
+            echo "| Auth | ${{ steps.creds.outputs.method || 'none' }} |"
+            echo ""
+            echo "Rollback: \`gcloud run deploy ${CLOUD_RUN_SERVICE} --image ${ARTIFACT_IMAGE}:<previous-sha> --region ${GCP_REGION}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

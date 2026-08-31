@@ -34,8 +34,128 @@ are `sarkarita**i**yaari`. They genuinely differ — don't autocorrect one into 
 - **`--allow-unauthenticated`** is required — the mobile app and admin site call these
   endpoints directly without a Google-issued token.
 
-## Redeploying after a code change
+## Automated deploys (the normal path)
 
+`.github/workflows/backend-deploy.yml` builds and deploys on every push to `main` that
+touches `backend/**`. Nothing manual is needed once the one-time setup below is done.
+
+### Why this was added
+
+The APK has been built automatically on every push since 2026-08-21. The backend never was
+— it was deployed once, by hand. The two then drifted apart **silently**: V11's exam
+difficulty/badge feature shipped on 2026-08-27 and was still not live on 2026-08-31,
+because every test in between ran on the emulator, which points at a *local* backend. From
+the emulator everything looked correct. Verified on 2026-08-31 against the live service:
+
+```
+GET /api/exam-badges   ->  404
+GET /api/exams         ->  no "difficulty" / "badge" fields
+```
+
+"I pushed it, so it's live" was only half true, and the half that wasn't stayed invisible
+for four days. That is what this workflow fixes.
+
+### One-time setup
+
+Run these once, from a machine that has `gcloud` (a personal laptop, or Cloud Shell in the
+browser — Cloud Shell needs nothing installed).
+
+**Use the keyless option.** This repository is **public**. A service-account JSON key is a
+long-lived credential with deploy rights to the whole GCP project; Workload Identity
+Federation issues a short-lived token bound to this one repository, which cannot be
+replayed from anywhere else. The project has already had one credential incident — see the
+security note in `memory/STATUS.md`.
+
+```bash
+PROJECT=sarkaritayaari          # note the spelling — not sarkaritaiyaari
+PROJECT_NUMBER=815653276881
+REPO=UVENKATESH9949/sarkariTayaari
+
+# 1. A dedicated deploy identity, so CI never uses your own account.
+gcloud iam service-accounts create github-deployer \
+  --project "$PROJECT" --display-name "GitHub Actions backend deployer"
+
+SA="github-deployer@${PROJECT}.iam.gserviceaccount.com"
+
+# 2. Only what a build-and-deploy needs. Deliberately not roles/owner or roles/editor.
+for ROLE in \
+  roles/cloudbuild.builds.editor \
+  roles/artifactregistry.writer \
+  roles/run.developer \
+  roles/logging.viewer
+do
+  gcloud projects add-iam-policy-binding "$PROJECT" \
+    --member "serviceAccount:${SA}" --role "$ROLE" --condition=None
+done
+
+# Cloud Build stages source in GCS, and Cloud Run deploys *as* its runtime service
+# account — which requires actAs on it. Miss either and the deploy fails late with a
+# permission error that does not name the missing role.
+gcloud projects add-iam-policy-binding "$PROJECT" \
+  --member "serviceAccount:${SA}" --role roles/storage.admin --condition=None
+
+gcloud iam service-accounts add-iam-policy-binding \
+  "${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+  --project "$PROJECT" --member "serviceAccount:${SA}" \
+  --role roles/iam.serviceAccountUser
+
+# 3. Let GitHub's OIDC tokens impersonate that identity.
+gcloud iam workload-identity-pools create github \
+  --project "$PROJECT" --location global --display-name "GitHub Actions"
+
+gcloud iam workload-identity-pools providers create-oidc github-provider \
+  --project "$PROJECT" --location global --workload-identity-pool github \
+  --display-name "GitHub" \
+  --issuer-uri "https://token.actions.githubusercontent.com" \
+  --attribute-mapping "google.subject=assertion.sub,attribute.repository=assertion.repository" \
+  --attribute-condition "assertion.repository=='${REPO}'"
+
+# The attribute-condition above is the part that matters: without it, ANY GitHub
+# repository in the world could mint a token for this identity.
+
+gcloud iam service-accounts add-iam-policy-binding "$SA" \
+  --project "$PROJECT" --role roles/iam.workloadIdentityUser \
+  --member "principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/attribute.repository/${REPO}"
+
+# 4. Print the two values to paste into GitHub.
+echo "GCP_WORKLOAD_IDENTITY_PROVIDER = projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/providers/github-provider"
+echo "GCP_DEPLOY_SERVICE_ACCOUNT     = ${SA}"
+```
+
+Then in GitHub: **Settings → Secrets and variables → Actions → Variables** (the
+*Variables* tab, not Secrets) and add both names above.
+
+Neither value is a secret — a provider path and a service-account email are not
+credentials, which is the point of the keyless approach. They are Variables rather than
+Secrets so they stay readable in logs when a deploy needs debugging.
+
+### Fallback: service-account key
+
+Only if Workload Identity Federation is genuinely not an option. Create a JSON key for the
+same service account and add it as the repository **secret** `GCP_SA_KEY`. The workflow
+accepts it and prints a warning on every run, because a long-lived deploy credential
+attached to a public repository is a standing risk rather than a one-off one.
+
+### Verifying it works
+
+Push any change under `backend/`, or run **Actions → Backend Deploy → Run workflow**. The
+run reports the image, the revision, and a rollback command in its summary, and fails if
+the deployed revision does not answer `/api/health`.
+
+### Rolling back
+
+Every build is tagged with its commit SHA, not just `:latest`, so a rollback has something
+specific to point at:
+
+```bash
+gcloud run deploy sarkaritaiyaari-backend \
+  --image asia-south1-docker.pkg.dev/sarkaritayaari/backend-repo/backend:<previous-sha> \
+  --region asia-south1
+```
+
+## Redeploying by hand
+
+Still works, and is the right tool for a one-off or when CI itself is broken.
 From `backend/`:
 
 ```
@@ -105,6 +225,6 @@ credential written into this repo must be treated as public**, and the assumptio
 - `/downloads` APK hosting no longer works: `DownloadsConfig` serves from local disk,
   which on Cloud Run is ephemeral and scales to zero. Use Firebase App Distribution or
   Play internal testing instead.
-- No custom domain, no backend CI/CD. Deploys are manual `gcloud` commands; the
-  `Jenkinsfile` builds artefacts but has no deploy stage.
+- No custom domain. **Backend CI/CD now exists** — see "Automated deploys" below. The
+  `Jenkinsfile` still builds artefacts and has no deploy stage; it is not used for this.
 - The admin site itself is **not deployed** — it still runs locally against this backend.
