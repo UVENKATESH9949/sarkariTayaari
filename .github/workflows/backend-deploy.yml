@@ -347,16 +347,41 @@ jobs:
       - name: Deploy to Cloud Run
         id: deploy
         run: |
-          set -euo pipefail
+          set -uo pipefail
+
+          # rc captured explicitly rather than relying on `bash -e`, for the same reason the
+          # build step does it: a bare non-zero exit here would put the explanation only in the
+          # collapsed step log, which needs repo-admin rights to read. ::error:: lands in the
+          # annotation box at the top of the run page instead.
+          set +e
           gcloud run deploy "${CLOUD_RUN_SERVICE}" \
             --image "${IMAGE}" \
             --region "${GCP_REGION}" \
             --project "${GCP_PROJECT}" \
-            --quiet
+            --quiet 2>/tmp/deploy.err
+          DEPLOY_RC=$?
+          set -e
+
+          echo "deploy exit code: ${DEPLOY_RC}"
+          echo "--- gcloud stderr ---"
+          cat /tmp/deploy.err || true
+          echo "---------------------"
+
+          if [ "${DEPLOY_RC}" -ne 0 ]; then
+            echo "::error::gcloud run deploy failed (exit ${DEPLOY_RC}): $(tr "\n" " " < /tmp/deploy.err | tail -c 400)"
+            echo "If this is an actAs/permission error, the deploy account needs roles/iam.serviceAccountUser on 815653276881-compute@developer.gserviceaccount.com - see BACKEND-DEPLOY-SETUP.md step B2."
+            exit 1
+          fi
 
           REVISION=$(gcloud run services describe "${CLOUD_RUN_SERVICE}" \
             --region "${GCP_REGION}" --project "${GCP_PROJECT}" \
-            --format='value(status.latestReadyRevisionName)')
+            --format='value(status.latestReadyRevisionName)' 2>/dev/null || true)
+
+          if [ -z "${REVISION}" ]; then
+            echo "::error::Deploy reported success but no ready revision could be read back."
+            exit 1
+          fi
+
           echo "revision=${REVISION}" >> "$GITHUB_OUTPUT"
           echo "Ready revision: ${REVISION}"
 
