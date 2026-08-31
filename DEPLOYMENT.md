@@ -39,6 +39,10 @@ are `sarkarita**i**yaari`. They genuinely differ — don't autocorrect one into 
 `.github/workflows/backend-deploy.yml` builds and deploys on every push to `main` that
 touches `backend/**`. Nothing manual is needed once the one-time setup below is done.
 
+**Working since 2026-08-31** — first successful automated deploy was run #11, commit
+`8d5af31`, which also closed a four-day gap where V11 had been live in the repo and absent
+from production.
+
 ### Why this was added
 
 The APK has been built automatically on every push since 2026-08-21. The backend never was

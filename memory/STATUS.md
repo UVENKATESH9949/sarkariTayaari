@@ -99,7 +99,58 @@ console errors**.
 ~35,700 templated load-test questions — but nothing in the project could detect it before
 TICKET-2109. 1,000 edges are recorded so far (the scan caps per run); the rest need further runs.
 
-### Backend deploys are now automated (and why they weren't)
+### Backend deploys are now automated, working, and Epic L is LIVE
+
+**First successful automated backend deploy: run #11, commit `8d5af31`, 2026-08-31.**
+Verified against the live service immediately afterwards:
+
+```
+/api/health                          -> {"status":"UP"}
+/api/exam-badges                     -> 200   (was 404 - V11, shipped 2026-08-27)
+/api/exams                           -> now carries "difficulty" and "badge"
+/api/exams/SSC_CGL/topic-intelligence -> 200, algorithm v2, 61 topics,
+                                         1827 PYQ appearances,
+                                         32 RISING / 24 FALLING / 5 STABLE,
+                                         2 overrides with systemPriority preserved
+                                         (36.25 and 39.69 beside overrides of 90.0)
+```
+
+So the four-day-old V11 gap is closed and all of Epic L is serving from Cloud Run.
+
+#### It took eleven runs, and what that cost was worth recording
+
+Five distinct failures. Only ONE was a real infrastructure problem:
+
+| # | Failure | Whose |
+|---|---|---|
+| 1 | Repository variables not set | expected, by design |
+| 2 | Missing `roles/iam.workloadIdentityUser` binding | real - the setup script had no `set -e`, so its failure scrolled past |
+| 3 | `setup-gcloud` step, which was never needed | mine |
+| 4 | Credential check asked `gcloud auth list`, empty under WIF by design | mine |
+| 5 | Unguarded `gcloud artifacts docker tags add` | mine |
+
+**The generalisable lesson: three of the five were not the operation failing - they were an
+unguarded non-zero exit destroying the evidence of what actually happened.** Under GitHub's
+default `bash -e`:
+
+- `VAR=$(cmd)` aborts the step *at the assignment* if `cmd` exits non-zero, discarding both
+  the exit code and stderr. This is what made runs #7-#10 fail with no annotation at all.
+- A trailing command that fails kills the step after everything meaningful has already
+  succeeded - the `tags add` case, where the image was built and pushed correctly.
+
+`gcloud builds submit` compounds it by exiting 1 when it merely cannot *stream* the build
+log (needs project Viewer), while the build itself succeeds. Its exit code describes gcloud's
+ability to watch the build, not the build.
+
+**Rule now written into the workflow: every command either handles its own failure or is
+explicitly tolerated, and decisions are made from the artifact's real state (`builds
+describe`, `run services describe`) rather than a tool's exit code.**
+
+Also worth knowing for future debugging: **workflow logs need repo-admin auth to download,
+but `::error::` annotations are readable through the public API** (`/check-runs/{id}/annotations`).
+That is the channel to push diagnostics into - it is how failure #2 was identified.
+
+### Why deploys weren't automated before
 
 `.github/workflows/backend-deploy.yml` deploys the backend on every push to `main` that
 touches `backend/**`. **This closes a structural gap that had been silently hiding shipped
@@ -131,7 +182,7 @@ and prints exactly what is missing — that first failure is by design, not a br
 Keyless (Workload Identity Federation) is the documented path rather than a
 service-account key, specifically because this repo is public.
 
-### The deployment consequence that blocked device testing (fixed by the above, once set up)
+### The deployment consequence that blocked device testing (RESOLVED 2026-08-31)
 
 The deployed Cloud Run backend still runs pre-V13 code. It starts fine (see the correction at the
 top of this file), but **it does not have the new endpoints** — `GET /api/exams/{code}/topic-intelligence`
@@ -150,9 +201,11 @@ bookmarks. Now caught per-call — mastery is additive, history is not.
 
 ### What is NOT verified
 
-- **The mobile app has not been launched.** `npx tsc --noEmit` is clean and the migration is
-  written defensively, but no screen has rendered on an emulator or device. **This is what the
-  user is about to check.**
+- **The mobile app has not been launched.** `npx tsc --noEmit` is clean, `expo lint` adds no
+  new problems, and local migration `0012` was verified against a *populated* pre-0012 SQLite
+  database (existing rows preserved, `is_pyq` defaults to 0 not NULL, all 9 guarded statements
+  re-runnable) - but no screen has rendered on an emulator or device yet. The backend it needs
+  is now live, so a fresh APK should show everything.
 - **Local migration `0012` has never executed.** Riskiest item here: SQLite has no
   `ADD COLUMN IF NOT EXISTS`, so its five ADD COLUMN statements are unguardable, and a failed
   migration is a hard gate that stops the app starting. All CREATE statements *are* guarded.
