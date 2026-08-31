@@ -12,6 +12,7 @@ import { PressableScale } from "../../ui/PressableScale";
 import { FadeInItem } from "../../ui/FadeInList";
 import { Button } from "../../ui/Button";
 import { Card } from "../../ui/Card";
+import { PreparationPlanCard } from "../../ui/PreparationPlanCard";
 import { SectionLabel } from "../../ui/SectionLabel";
 import { CardSkeleton } from "../../ui/Skeleton";
 import { colors, radius, spacing, typography } from "../../ui/theme";
@@ -28,6 +29,9 @@ export default function Home() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [followedExamName, setFollowedExamName] = useState<string | null>(null);
+  // The code as well as the name: the Preparation Plan card queries by exam code, and the name
+  // alone would mean looking the code back up from a display string.
+  const [followedExamCode, setFollowedExamCode] = useState<string | null>(null);
   const [loadingExam, setLoadingExam] = useState(true);
   const { bookmarks } = useBookmarks();
   const { sessions } = useSessionHistory();
@@ -35,7 +39,10 @@ export default function Home() {
 
   useEffect(() => {
     getFollowedExam()
-      .then((exam) => setFollowedExamName(exam?.name ?? null))
+      .then((exam) => {
+        setFollowedExamName(exam?.name ?? null);
+        setFollowedExamCode(exam?.code ?? null);
+      })
       .finally(() => setLoadingExam(false));
     // syncVersion in deps: previously missing, so this never picked up a followed-exam
     // change from a background sync — only from manual pull-to-refresh below.
@@ -49,6 +56,7 @@ export default function Home() {
     await refresh({ force: true });
     const exam = await getFollowedExam();
     setFollowedExamName(exam?.name ?? null);
+    setFollowedExamCode(exam?.code ?? null);
   };
 
   return (
@@ -87,6 +95,14 @@ export default function Home() {
           <Ionicons name="chevron-forward" size={16} color={colors.text.onAccent} />
         </View>
       </Card>
+
+      {/* Epic L's first user-facing slice. Renders nothing when no exam is followed or nothing
+          has been computed yet, so Home is unchanged until there is a real plan to show. */}
+      <PreparationPlanCard
+        examCode={followedExamCode}
+        examName={followedExamName}
+        refreshKey={syncVersion}
+      />
 
       <SectionLabel label="Revise" />
       <View style={styles.reviseRow}>

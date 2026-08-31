@@ -156,6 +156,12 @@ export async function getPracticeQuestions(
       id: q.id,
       correctIndex: resolveCorrectIndex(q.correctAnswer, englishOptions),
       translations,
+      // Epic L / TICKET-2104. `?? false` / `?? null` rather than passed straight through: this is
+      // the live path, and the backend it is talking to may predate V13 and omit the fields
+      // entirely. Undefined would render the badge as "PYQ undefined".
+      isPyq: q.pyq ?? false,
+      pyqYear: q.pyqYear ?? null,
+      pyqShift: q.pyqShift ?? null,
     };
   });
   return shuffle(result);

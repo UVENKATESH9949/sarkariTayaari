@@ -191,6 +191,16 @@ export type PracticeQuestion = {
   id: string;
   correctIndex: number;
   translations: Record<string, PracticeQuestionTranslation>;
+  /**
+   * Epic L / TICKET-2104 — previous-year provenance, rendered as a badge on the question.
+   *
+   * Optional rather than required so the live (HTTP) path can omit it when talking to a backend
+   * that predates V13, and so nothing that constructs a PracticeQuestion for another purpose
+   * has to invent values.
+   */
+  isPyq?: boolean;
+  pyqYear?: number | null;
+  pyqShift?: string | null;
 };
 
 export async function getPracticeQuestions(
@@ -205,9 +215,20 @@ export async function getPracticeQuestions(
     baseConditions.push(eq(questions.difficulty, difficulty));
   }
 
+  // The three PYQ columns are added to the existing projection rather than fetched in a second
+  // query: they are scalars already on the row this query reads, so carrying them costs nothing,
+  // where a follow-up lookup would be a second round trip on the quiz-open path.
+  const projection = {
+    id: questions.id,
+    correctAnswer: questions.correctAnswer,
+    isPyq: questions.isPyq,
+    pyqYear: questions.pyqYear,
+    pyqShift: questions.pyqShift,
+  };
+
   const matched = exam
     ? await db
-        .select({ id: questions.id, correctAnswer: questions.correctAnswer })
+        .select(projection)
         .from(questions)
         .innerJoin(questionExams, eq(questionExams.questionId, questions.id))
         .where(and(...baseConditions, eq(questionExams.examCode, exam)))
@@ -215,7 +236,7 @@ export async function getPracticeQuestions(
         .limit(PRACTICE_QUESTION_LIMIT)
         .all()
     : await db
-        .select({ id: questions.id, correctAnswer: questions.correctAnswer })
+        .select(projection)
         .from(questions)
         .where(and(...baseConditions))
         .orderBy(sql`RANDOM()`)
@@ -249,6 +270,9 @@ export async function getPracticeQuestions(
       id: q.id,
       correctIndex: resolveCorrectIndex(q.correctAnswer, englishOptions),
       translations,
+      isPyq: q.isPyq,
+      pyqYear: q.pyqYear,
+      pyqShift: q.pyqShift,
     };
   });
 }

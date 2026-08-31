@@ -4,6 +4,10 @@ import { clearSession, loadSession, saveSession } from "../db/authSession";
 import { login as apiLogin, logout as apiLogout, register as apiRegister, type AuthUser } from "../api/auth";
 import { syncProgress, uploadPendingProgress } from "../sync/progressSync";
 import { syncBookmarks, uploadPendingBookmarks } from "../sync/bookmarkSync";
+import {
+  restoreTopicProgressForDevice,
+  uploadPendingTopicProgress,
+} from "../sync/topicProgressSync";
 import { captureError, trackEvent } from "../telemetry/analytics";
 
 type AuthContextValue = {
@@ -79,16 +83,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLastError(null);
     try {
       if (full) {
-        const [progressResult, bookmarkResult] = await Promise.all([
+        const [progressResult, bookmarkResult, restoredTopics] = await Promise.all([
           syncProgress(activeToken),
           syncBookmarks(activeToken),
+          /*
+           * Epic L / TICKET-2105. Push-then-pull in one step, same as the other two: this is the
+           * moment a new phone gets its per-topic mastery back, and without it a student who signs
+           * in on a new device sees every topic reset to NOT_STARTED — which would also silently
+           * re-lock every prerequisite they had already cleared.
+           *
+           * Failures are swallowed to 0 rather than propagated, and that is load-bearing rather
+           * than defensive habit: this sits in a Promise.all with progress and bookmarks, so an
+           * unhandled rejection here would abort the *whole* full sync and skip restoring a
+           * student's practice history and bookmarks. A backend that predates TICKET-2105 returns
+           * 404 for this endpoint, which is exactly the situation on a device pointed at a
+           * not-yet-redeployed server — mastery is additive, history is not.
+           */
+          (async () => {
+            try {
+              await uploadPendingTopicProgress(activeToken);
+              return await restoreTopicProgressForDevice(activeToken);
+            } catch (err) {
+              captureError(err, { context: "authContext.topicProgressSync", full: true });
+              return 0;
+            }
+          })(),
         ]);
         // Only nudge the UI when something actually landed locally.
-        if (progressResult.restoredSessions > 0 || progressResult.restoredAttempts > 0 || bookmarkResult.restored > 0) {
+        if (
+          progressResult.restoredSessions > 0 ||
+          progressResult.restoredAttempts > 0 ||
+          bookmarkResult.restored > 0 ||
+          restoredTopics > 0
+        ) {
           setProgressVersion((v) => v + 1);
         }
       } else {
-        await Promise.all([uploadPendingProgress(activeToken), uploadPendingBookmarks(activeToken)]);
+        await Promise.all([
+          uploadPendingProgress(activeToken),
+          uploadPendingBookmarks(activeToken),
+          // Epic L / TICKET-2105. Joins the same batch rather than getting its own pass: all
+          // three are "push whatever changed locally", and running them together means one
+          // round of latency instead of three. Caught for the same reason as the full-sync
+          // branch above — an older backend 404s here, and that must not mark the other two
+          // uploads as failed.
+          uploadPendingTopicProgress(activeToken).catch((err) => {
+            captureError(err, { context: "authContext.topicProgressSync", full: false });
+            return 0;
+          }),
+        ]);
       }
     } catch (err) {
       // Never surfaced as a blocking error: the history is safe locally either way,
@@ -145,7 +188,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Last chance to save anything pending before the token goes away.
     if (current) {
       try {
-        await Promise.all([uploadPendingProgress(current), uploadPendingBookmarks(current)]);
+        await Promise.all([
+          uploadPendingProgress(current),
+          uploadPendingBookmarks(current),
+          uploadPendingTopicProgress(current).catch((err) => {
+            captureError(err, { context: "authContext.topicProgressSync", full: false });
+            return 0;
+          }),
+        ]);
       } catch {
         // Best effort — signing out must not be blocked by a bad connection.
       }

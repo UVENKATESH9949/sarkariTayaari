@@ -6,6 +6,7 @@ import {
   examPapers,
   examStages,
   examSubjects,
+  examTopicIntelligence,
   exams,
   languages,
   paperSections,
@@ -15,6 +16,7 @@ import {
   questionTranslations,
   sectionSubjects,
   subjects,
+  topicPrerequisites,
   topics,
 } from "../db/schema";
 import { getLanguages, type QuestionResponse } from "../api/questions";
@@ -22,10 +24,12 @@ import {
   getDifficultyLevels,
   getExamBadges,
   getExamStructures,
+  getExamTopicIntelligence,
   getExams,
   getPaperTypes,
   getSubjects,
   getTopics,
+  type TopicResponse,
 } from "../api/reference";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -125,6 +129,11 @@ export async function writeReferenceData() {
           subjectName: topic.subjectName,
           name: topic.name,
           displayOrder: topic.displayOrder,
+          // Epic L / TICKET-2102. `?? null` rather than a bare read: a backend that predates
+          // V12 omits these fields entirely, and writing `undefined` into a column drizzle
+          // typed as nullable text is not the same as writing null.
+          parentId: topic.parentId ?? null,
+          parentName: topic.parentName ?? null,
         })),
       )
       .onConflictDoUpdate({
@@ -133,6 +142,8 @@ export async function writeReferenceData() {
           subjectId: sql`excluded.subject_id`,
           subjectName: sql`excluded.subject_name`,
           name: sql`excluded.name`,
+          parentId: sql`excluded.parent_id`,
+          parentName: sql`excluded.parent_name`,
           displayOrder: sql`excluded.display_order`,
         },
       });
@@ -184,6 +195,99 @@ export async function writeReferenceData() {
   });
 
   await writeExamStructures(structures);
+  await writeTopicPrerequisites(topicList);
+  // Depends on the exam and topic rows written above (both are real FKs locally), so it runs
+  // last rather than in the Promise.all at the top of this function.
+  await writeTopicIntelligence(examList.map((exam) => exam.code));
+}
+
+/**
+ * Replaces the whole prerequisite graph (Epic L / TICKET-2103).
+ *
+ * A full replace rather than an upsert, same reasoning as writeExamStructures: the server sends
+ * each topic's complete prerequisite list on every sync and there is no delta concept, so an
+ * upsert-only pass would leave an edge an admin deleted on the server alive on the device
+ * forever — and a stale prerequisite silently misorders Epic D's sequencing.
+ *
+ * Edges pointing at a topic this device has not synced yet are dropped rather than inserted.
+ * `topic_prerequisites.prerequisite_topic_id` has no local FK precisely so that a mid-sync
+ * device is not broken by one, but inserting a dangling edge would still make every read of it
+ * return a prerequisite with no name to show.
+ */
+async function writeTopicPrerequisites(topicList: TopicResponse[]) {
+  const knownTopicIds = new Set(topicList.map((topic) => topic.id));
+  const rows: (typeof topicPrerequisites.$inferInsert)[] = [];
+
+  for (const topic of topicList) {
+    for (const prerequisiteTopicId of topic.prerequisiteTopicIds ?? []) {
+      if (!knownTopicIds.has(prerequisiteTopicId)) continue;
+      rows.push({ topicId: topic.id, prerequisiteTopicId });
+    }
+  }
+
+  await db.transaction(async (tx) => {
+    await tx.delete(topicPrerequisites);
+    if (rows.length > 0) await tx.insert(topicPrerequisites).values(rows);
+  });
+}
+
+/**
+ * Pulls each exam's computed topic intelligence (Epic L / TICKET-2101, 2106, 2107).
+ *
+ * One request per exam, because the endpoint is per-exam server-side — there are 11 exams, so
+ * this is a fixed small cost, and they are issued together rather than in sequence.
+ *
+ * A failure for one exam must not fail the whole sync: this data is decoration on the Practice
+ * screen, not something the app cannot run without, and an older backend has no such endpoint
+ * at all. So each request is caught individually and a failed exam simply contributes no rows.
+ * The screens already handle an empty intelligence table, since that is also what a freshly
+ * installed app looks like before its first sync.
+ */
+async function writeTopicIntelligence(examCodes: string[]) {
+  const results = await Promise.all(
+    examCodes.map(async (examCode) => {
+      try {
+        return await getExamTopicIntelligence(examCode);
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  const rows: (typeof examTopicIntelligence.$inferInsert)[] = [];
+  for (const result of results) {
+    if (!result) continue;
+    for (const topic of result.topics) {
+      rows.push({
+        examCode: result.examCode,
+        topicId: topic.topicId,
+        curatedWeightagePercent: topic.curatedWeightagePercent,
+        computedWeightagePercent: topic.computedWeightagePercent,
+        appearanceCount: topic.appearanceCount,
+        windowFromYear: topic.windowFromYear,
+        windowToYear: topic.windowToYear,
+        trendDirection: topic.trendDirection,
+        trendScore: topic.trendScore,
+        systemPriority: topic.systemPriority,
+        adminOverride: topic.adminOverride,
+        finalPriority: topic.finalPriority,
+        algorithmVersion: topic.algorithmVersion,
+      });
+    }
+  }
+
+  // Only clear what was actually re-fetched. Wiping the table first would mean an exam whose
+  // request failed loses the rows it already had, turning a transient network error into
+  // missing data on a screen that was working a moment ago.
+  const refreshedExamCodes = results.filter((r) => r !== null).map((r) => r!.examCode);
+  if (refreshedExamCodes.length === 0) return;
+
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(examTopicIntelligence)
+      .where(inArray(examTopicIntelligence.examCode, refreshedExamCodes));
+    if (rows.length > 0) await tx.insert(examTopicIntelligence).values(rows);
+  });
 }
 
 /**
@@ -311,6 +415,12 @@ export async function upsertQuestionsBatch(tx: Tx, qs: QuestionResponse[]) {
         isPremium: q.premium,
         updatedAt: new Date(q.updatedAt),
         isDeleted: q.deleted,
+        // Epic L / TICKET-2104. Defaulted rather than passed through, because an older backend
+        // omits these fields and `is_pyq` is NOT NULL locally — an undefined would fail the
+        // insert for the whole page, taking 500 questions down with it.
+        isPyq: q.pyq ?? false,
+        pyqYear: q.pyqYear ?? null,
+        pyqShift: q.pyqShift ?? null,
       })),
     )
     .onConflictDoUpdate({
@@ -325,6 +435,9 @@ export async function upsertQuestionsBatch(tx: Tx, qs: QuestionResponse[]) {
         isPremium: sql`excluded.is_premium`,
         updatedAt: sql`excluded.updated_at`,
         isDeleted: sql`excluded.is_deleted`,
+        isPyq: sql`excluded.is_pyq`,
+        pyqYear: sql`excluded.pyq_year`,
+        pyqShift: sql`excluded.pyq_shift`,
       },
     });
 

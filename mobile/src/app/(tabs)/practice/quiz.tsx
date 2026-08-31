@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { recordTopicPractice } from "../../../db/topicProgressStore";
+import { PyqBadge } from "../../../ui/PyqBadge";
 import { Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
 import { useSessionHistory } from "../../../practice/sessionHistory";
 import { useBookmarks } from "../../../practice/bookmarks";
@@ -154,6 +156,28 @@ export default function Quiz() {
         durationMs,
         results,
       });
+      /*
+       * Epic L / TICKET-2105 — fold this session into the topic's cumulative mastery.
+       *
+       * Done here rather than inside addSession() because SessionRecord carries only
+       * `topicName`, a denormalized string. That is precisely the gap the §18.2 audit found:
+       * no code could aggregate practice by topic because the topic *id* was never stored.
+       * This screen has the real id from its route params, so it is the cheapest correct place
+       * to record it - the alternative is another local migration to add topicId to
+       * practice_sessions, which buys nothing else today.
+       *
+       * Fire-and-forget, matching addSession above: finishing a quiz must never wait on a
+       * write, and a failure here costs a mastery update, not the session itself.
+       */
+      if (topicId) {
+        recordTopicPractice({
+          topicId,
+          correctCount,
+          totalCount: total,
+          durationMs: durationMs ?? undefined,
+        }).catch((err) => console.warn("Failed to record topic mastery", err));
+      }
+
       endSession();
       router.replace({ pathname: "/practice/summary", params: { sessionId } });
       return;
@@ -232,6 +256,10 @@ export default function Quiz() {
               Not yet translated to {currentLanguageName} — showing English.
             </Text>
           )}
+
+          {/* Above the question text, not beside it: this is context for what follows, and a
+              student should see "this really appeared in 2023" before reading the question. */}
+          <PyqBadge isPyq={question.isPyq} year={question.pyqYear} shift={question.pyqShift} />
 
           <Text style={styles.questionText}>{translation.questionText}</Text>
 

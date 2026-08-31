@@ -36,6 +36,56 @@ export type TopicResponse = {
   subjectName: string;
   name: string;
   displayOrder: number;
+  /** Epic L / TICKET-2102. null = top-level topic. */
+  parentId: string | null;
+  parentName: string | null;
+  /** Epic L / TICKET-2103. Topic ids a student should finish first; a DAG, not a tree. */
+  prerequisiteTopicIds: string[];
+};
+
+/**
+ * One topic's per-exam relevance and computed priority — Epic L / TICKET-2101, 2106, 2107.
+ *
+ * `curatedWeightagePercent` is the admin's own figure; `computedWeightagePercent` is derived
+ * from previous-year questions. Both are carried because the whole point of the source spec's
+ * §66 is that a human's judgement and a derived value stay distinguishable — the app shows
+ * whichever it has and says which it is.
+ *
+ * Likewise `systemPriority` / `adminOverride` / `finalPriority` are three fields, not one:
+ * `finalPriority` is what to rank by, but the app can show that a human overrode the formula.
+ */
+export type TopicIntelligenceResponse = {
+  topicId: string;
+  topicName: string;
+  subjectId: string;
+  subjectName: string;
+  parentId: string | null;
+  parentName: string | null;
+  curatedWeightagePercent: number | null;
+  computedWeightagePercent: number | null;
+  appearanceCount: number;
+  windowFromYear: number | null;
+  windowToYear: number | null;
+  /** RISING | STABLE | FALLING | INSUFFICIENT_DATA */
+  trendDirection: string;
+  trendScore: number | null;
+  systemPriority: number | null;
+  adminOverride: number | null;
+  finalPriority: number | null;
+  algorithmVersion: string;
+  computedAt: string | null;
+};
+
+export type ExamTopicIntelligenceResponse = {
+  examCode: string;
+  algorithmVersion: string;
+  /**
+   * How many of the exam's questions carry a PYQ year at all. The app needs this to tell
+   * "nothing is tagged yet" from "every topic genuinely scores the same" — an empty or flat
+   * result otherwise looks identical in both cases.
+   */
+  pyqTaggedCount: number;
+  topics: TopicIntelligenceResponse[];
 };
 
 export type DifficultyLevelResponse = {
@@ -94,7 +144,18 @@ export type StageNodeResponse = {
   name: string;
   displayOrder: number;
   effectiveFrom: string | null;
+  /** Epic L / TICKET-2108. null = still current. */
+  effectiveTo: string | null;
   versionLabel: string | null;
+  /**
+   * Whether this version of the stage is the one in force today, resolved server-side.
+   *
+   * Always true on this endpoint — `/api/exam-structures` now sends only the effective version
+   * of each stage, so a device can never generate a mock test from a superseded pattern. Kept
+   * on the type because the admin-facing `/api/exams/{code}/structure` sends every version with
+   * this flag varying, and both share the shape.
+   */
+  active: boolean;
   papers: PaperNodeResponse[];
 };
 
@@ -141,4 +202,17 @@ export function getExamBadges() {
  */
 export function getExamStructures() {
   return apiFetch<ExamStructureResponse[]>("/exam-structures");
+}
+
+/**
+ * Epic L / TICKET-2101 + 2106 + 2107 — the ranked topic map for one exam.
+ *
+ * Deliberately public on the server (no auth), like `/topics` and `/exam-structures`: every
+ * field is derived from the published question bank and the admin's own curation, so there is
+ * nothing student-specific to protect.
+ */
+export function getExamTopicIntelligence(examCode: string) {
+  return apiFetch<ExamTopicIntelligenceResponse>(
+    `/exams/${encodeURIComponent(examCode)}/topic-intelligence`,
+  );
 }

@@ -85,8 +85,112 @@ export const topics = sqliteTable(
     subjectName: text("subject_name").notNull(),
     name: text("name").notNull(),
     displayOrder: integer("display_order").notNull().default(0),
+    // Epic L / TICKET-2102. Null = top level. Deliberately NOT a `.references(() => topics.id)`
+    // self-FK: drizzle cannot express a self-reference in the same table definition without a
+    // circular initialisation, and more importantly the server already guarantees the invariant
+    // (TopicService rejects cycles and cross-subject parents). A local read cache is the wrong
+    // place to re-litigate a server-side invariant — the same reasoning as `subjects.name` not
+    // being UNIQUE here even though Postgres declares it so.
+    parentId: text("parent_id"),
+    // Denormalized, like subjectName above, so a topic list can show "Arithmetic → Percentage"
+    // without a self-join on every row.
+    parentName: text("parent_name"),
   },
-  (table) => [index("idx_topics_subject_id").on(table.subjectId)],
+  (table) => [
+    index("idx_topics_subject_id").on(table.subjectId),
+    index("idx_topics_parent_id").on(table.parentId),
+  ],
+);
+
+/**
+ * Epic L / TICKET-2103 — which topics should be studied before a given one.
+ *
+ * A directed graph, not a tree. Synced as a full replace per topic, because the server sends
+ * the complete prerequisite list on every topic row and there is no delta concept for it.
+ */
+export const topicPrerequisites = sqliteTable(
+  "topic_prerequisites",
+  {
+    topicId: text("topic_id").notNull().references(() => topics.id),
+    prerequisiteTopicId: text("prerequisite_topic_id").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.topicId, table.prerequisiteTopicId] }),
+    index("idx_topic_prerequisites_prerequisite").on(table.prerequisiteTopicId),
+  ],
+);
+
+/**
+ * Epic L / TICKET-2101 + 2106 + 2107 — per-exam topic relevance and its computed priority,
+ * synced from GET /api/exams/{code}/topic-intelligence.
+ *
+ * One flat table rather than mirroring the server's three (`exam_topics`, `topic_trend`,
+ * `topic_priority`). The server already joins them into one row per topic and the app only ever
+ * reads them together, so keeping three tables here would mean re-doing that join on a device
+ * for no benefit. The server stays the place where the three concerns are kept separable.
+ *
+ * `curatedWeightagePercent` and `computedWeightagePercent` are both carried, and both are shown
+ * — the whole point of §66 is that a human's figure and a derived one stay distinguishable, and
+ * collapsing them here would undo that at the last step.
+ */
+export const examTopicIntelligence = sqliteTable(
+  "exam_topic_intelligence",
+  {
+    examCode: text("exam_code").notNull().references(() => exams.code),
+    topicId: text("topic_id").notNull().references(() => topics.id),
+    curatedWeightagePercent: real("curated_weightage_percent"),
+    computedWeightagePercent: real("computed_weightage_percent"),
+    appearanceCount: integer("appearance_count").notNull().default(0),
+    windowFromYear: integer("window_from_year"),
+    windowToYear: integer("window_to_year"),
+    // RISING | STABLE | FALLING | INSUFFICIENT_DATA. Stored as text, not a union-typed enum,
+    // for the same reason difficulty_levels is a table: the app renders what it receives.
+    trendDirection: text("trend_direction"),
+    trendScore: real("trend_score"),
+    // Kept separate on the device too, so the UI can show that a human overrode the formula
+    // rather than silently presenting the override as if it were computed.
+    systemPriority: real("system_priority"),
+    adminOverride: real("admin_override"),
+    finalPriority: real("final_priority"),
+    algorithmVersion: text("algorithm_version"),
+  },
+  (table) => [
+    primaryKey({ columns: [table.examCode, table.topicId] }),
+    // The Topics screen orders by final priority within one exam.
+    index("idx_exam_topic_intelligence_priority").on(table.examCode, table.finalPriority),
+    index("idx_exam_topic_intelligence_topic").on(table.topicId),
+  ],
+);
+
+/**
+ * Epic L / TICKET-2105 — this device's per-topic mastery.
+ *
+ * Mutable state, so it follows the `bookmarks` pattern rather than the append-only
+ * practice_sessions one: `isSynced` queues local changes, and `updatedAt` is what the server
+ * resolves conflicting devices by (last-write-wins).
+ *
+ * No tombstone column, unlike bookmarks. Progress is never deleted — a topic only moves between
+ * states — so there is nothing for a tombstone to represent.
+ */
+export const topicProgress = sqliteTable(
+  "topic_progress",
+  {
+    topicId: text("topic_id").primaryKey(),
+    // NOT_STARTED | LEARNING | PRACTICING | MASTERED | NEEDS_REVISION
+    state: text("state").notNull().default("NOT_STARTED"),
+    accuracyPercent: real("accuracy_percent"),
+    attemptedCount: integer("attempted_count").notNull().default(0),
+    correctCount: integer("correct_count").notNull().default(0),
+    totalTimeMs: integer("total_time_ms").notNull().default(0),
+    lastPracticedAt: integer("last_practiced_at", { mode: "timestamp_ms" }),
+    isSynced: integer("is_synced", { mode: "boolean" }).notNull().default(false),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    index("idx_topic_progress_is_synced").on(table.isSynced),
+    // Serves the weak-areas read, which orders by accuracy ascending.
+    index("idx_topic_progress_accuracy").on(table.accuracyPercent),
+  ],
 );
 
 /* ------------------------------------------------------------ Exam structure */
@@ -192,6 +296,12 @@ export const questions = sqliteTable(
     isPremium: integer("is_premium", { mode: "boolean" }).notNull().default(false),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
     isDeleted: integer("is_deleted", { mode: "boolean" }).notNull().default(false),
+    // Epic L / TICKET-2104 — previous-year provenance, shown as a badge on the question itself.
+    // `isPyq` is carried separately from `pyqYear` rather than derived from it, matching the
+    // server: a question can be known to be a PYQ while its exact year is still unverified.
+    isPyq: integer("is_pyq", { mode: "boolean" }).notNull().default(false),
+    pyqYear: integer("pyq_year"),
+    pyqShift: text("pyq_shift"),
   },
   (table) => [
     index("idx_questions_subject_id").on(table.subjectId),
