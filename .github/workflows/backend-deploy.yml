@@ -30,9 +30,13 @@
 #   --allow-unauthenticated) therefore stay exactly as they are, because nothing here
 #   touches them.
 #
-# SETUP REQUIRED (once) — see DEPLOYMENT.md, "Automated deploys".
+# SETUP REQUIRED (once)
 #   Preferred (keyless):  vars GCP_WORKLOAD_IDENTITY_PROVIDER + GCP_DEPLOY_SERVICE_ACCOUNT
 #   Fallback (key file):  secret GCP_SA_KEY
+#
+#   Walkthroughs: DEPLOYMENT.md ("Automated deploys") for the gcloud script, or
+#   BACKEND-DEPLOY-SETUP.md for the same thing click-by-click in the browser Console —
+#   which is what you need on a machine that cannot install gcloud.
 #
 #   Keyless is strongly preferred here specifically because THIS REPOSITORY IS PUBLIC. A
 #   service-account JSON key is a long-lived credential with deploy rights to the whole GCP
@@ -128,7 +132,8 @@ jobs:
           echo "  Fallback — as a repository SECRET:"
           echo "    GCP_SA_KEY   (the full service-account JSON)"
           echo ""
-          echo "One-time setup walkthrough: DEPLOYMENT.md, section 'Automated deploys'."
+          echo "One-time setup: BACKEND-DEPLOY-SETUP.md (browser only, no terminal needed)"
+          echo "             or DEPLOYMENT.md -> 'Automated deploys' for the gcloud script."
           exit 1
 
       - name: Authenticate to Google Cloud (keyless)

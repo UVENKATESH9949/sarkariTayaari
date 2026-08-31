@@ -60,6 +60,11 @@ for four days. That is what this workflow fixes.
 Run these once, from a machine that has `gcloud` (a personal laptop, or Cloud Shell in the
 browser — Cloud Shell needs nothing installed).
 
+> **No terminal available?** `BACKEND-DEPLOY-SETUP.md` is the same setup click-by-click in
+> the GCP Console, plus the exact values to paste into GitHub and a troubleshooting table
+> for the three ways this typically fails. Written for a machine that cannot install
+> `gcloud` at all — which is the machine this project is developed on.
+
 **Use the keyless option.** This repository is **public**. A service-account JSON key is a
 long-lived credential with deploy rights to the whole GCP project; Workload Identity
 Federation issues a short-lived token bound to this one repository, which cannot be
