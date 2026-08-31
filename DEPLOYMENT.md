@@ -72,6 +72,11 @@ replayed from anywhere else. The project has already had one credential incident
 security note in `memory/STATUS.md`.
 
 ```bash
+# set -e matters here. Without it, one failed command scrolls past in a wall of Cloud Shell
+# output and the rest still runs — which is how a setup ends up looking complete while the
+# final binding never landed. That exact failure cost a debugging round on 2026-08-31.
+set -euo pipefail
+
 PROJECT=sarkaritayaari          # note the spelling — not sarkaritaiyaari
 PROJECT_NUMBER=815653276881
 REPO=UVENKATESH9949/sarkariTayaari
@@ -122,7 +127,27 @@ gcloud iam service-accounts add-iam-policy-binding "$SA" \
   --project "$PROJECT" --role roles/iam.workloadIdentityUser \
   --member "principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/attribute.repository/${REPO}"
 
-# 4. Print the two values to paste into GitHub.
+# 4. Assert the binding actually landed, rather than trusting that it did.
+#
+# This is the one that breaks silently, and it is also the one whose absence produces a
+# confusing failure much later: the GitHub auth step still reports "Successfully
+# authenticated" (it only writes a credential file), and the 403 only appears when
+# something first tries to *use* it.
+EXPECTED="principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/attribute.repository/${REPO}"
+
+if gcloud iam service-accounts get-iam-policy "$SA" --project "$PROJECT" --format=json \
+     | grep -qF "$EXPECTED"; then
+  echo "OK: workloadIdentityUser binding is present."
+else
+  echo "MISSING: the workloadIdentityUser binding did not land. Re-run just this:"
+  echo ""
+  echo "  gcloud iam service-accounts add-iam-policy-binding $SA \\"
+  echo "    --project $PROJECT --role roles/iam.workloadIdentityUser \\"
+  echo "    --member '$EXPECTED'"
+  exit 1
+fi
+
+# 5. Print the two values to paste into GitHub.
 echo "GCP_WORKLOAD_IDENTITY_PROVIDER = projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/providers/github-provider"
 echo "GCP_DEPLOY_SERVICE_ACCOUNT     = ${SA}"
 ```

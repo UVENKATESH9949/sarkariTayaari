@@ -161,10 +161,8 @@ jobs:
       # If a future runner image ever drops gcloud, the check below fails with a clear
       # message and the fix is to reinstate:
       #     - uses: google-github-actions/setup-gcloud@v2
-      - name: Verify gcloud is available and authenticated
+      - name: Verify gcloud can use the credential
         run: |
-          set -uo pipefail
-
           if ! command -v gcloud >/dev/null 2>&1; then
             echo "::error::gcloud is not on PATH. The runner image no longer preinstalls it."
             echo "Fix: add this step back, immediately before this one:"
@@ -172,21 +170,49 @@ jobs:
             exit 1
           fi
 
-          # Plain --version, not a --format expression: the format string needs nested quotes,
-          # which inside $( ) in a YAML block scalar is three levels of escaping deep and was
-          # already wrong once. The version line is all this needs to report.
-          gcloud --version | head -1
+          # `|| true` inside the substitution because GitHub runs `run:` as `bash -e`, and
+          # `head -1` closing the pipe early makes gcloud exit non-zero on SIGPIPE — which
+          # would abort this step over nothing more than printing a version banner.
+          echo "gcloud: $(gcloud --version 2>/dev/null | head -1 || true)"
 
-          # auth@v2 writes an external-account credential file for Workload Identity
-          # Federation rather than a stored login, so `gcloud config get-value account` can be
-          # empty even when authentication succeeded. auth list is what actually reflects it.
-          ACCOUNT=$(gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null | head -1)
-          if [ -z "${ACCOUNT}" ]; then
-            echo "::error::No active gcloud credential, even though the auth step passed."
+          # Mint a token. This is the only cheap check that actually proves the credential
+          # works end to end.
+          #
+          # Run #4 failed here because the previous version asked `gcloud auth list` instead,
+          # which reported nothing and looked like broken auth. It was not: Workload Identity
+          # Federation makes auth@v2 write an *external-account credential file* and point
+          # gcloud at it via an env var, whereas `gcloud auth list` only ever shows
+          # gcloud-*managed* logins (`gcloud auth login` / `activate-service-account`). An
+          # empty list is therefore the expected, correct output under WIF — the check was
+          # wrong, not the credential. `gcloud config get-value account` is empty for the same
+          # reason, which is exactly what the old comment here already warned about before
+          # going on to make the same mistake.
+          #
+          # print-access-token needs no IAM permission at all, so it cannot be confused with a
+          # missing role, and the output is redirected — an access token must never reach a log.
+          if ! gcloud auth print-access-token >/dev/null 2>/tmp/token.err; then
+            echo "::error::gcloud cannot use the credential from the auth step."
+            echo "gcloud said:"
+            sed -e 's/^/    /' /tmp/token.err || true
+            echo ""
+            echo "A 403 on 'iam.serviceAccounts.getAccessToken' means the Workload Identity"
+            echo "binding on the service account is missing. The auth step passing does NOT"
+            echo "rule this out - it only writes the credential config; this is the first thing"
+            echo "that actually tries to use it."
+            echo ""
+            echo "Fix (idempotent, safe to re-run) in Cloud Shell:"
+            echo ""
+            echo "  gcloud iam service-accounts add-iam-policy-binding \\"
+            echo "    github-deployer@sarkaritayaari.iam.gserviceaccount.com \\"
+            echo "    --project sarkaritayaari \\"
+            echo "    --role roles/iam.workloadIdentityUser \\"
+            echo "    --member 'principalSet://iam.googleapis.com/projects/815653276881/locations/global/workloadIdentityPools/github/attribute.repository/UVENKATESH9949/sarkariTayaari'"
+            echo ""
+            echo "See BACKEND-DEPLOY-SETUP.md -> Troubleshooting."
             exit 1
           fi
+          echo "Credential works."
 
-          echo "Deploying as: ${ACCOUNT}"
           echo "Project:      ${GCP_PROJECT}"
           echo "Service:      ${CLOUD_RUN_SERVICE} (${GCP_REGION})"
 

@@ -198,9 +198,46 @@ first request after idle takes 10–20 seconds — the service scales to zero, w
 
 ## Troubleshooting
 
-**`Permission 'iam.serviceAccounts.getAccessToken' denied`**
-B5 was missed, or the attribute value has a typo. It is case-sensitive:
-`UVENKATESH9949/sarkariTayaari`.
+**`Permission 'iam.serviceAccounts.getAccessToken' denied`** /
+**`Unable to acquire impersonated credentials`**
+
+By far the most common failure, and the most misleading one. The GitHub log says
+**"Successfully authenticated"** immediately before it — that line only means the action
+*wrote* a credential file, not that the credential works. This 403 is the first thing that
+actually tries to use it.
+
+Cause: the `workloadIdentityUser` binding from **B5** (the last command of the
+`DEPLOYMENT.md` script) is missing, or its attribute value does not match. It is
+case-sensitive: `UVENKATESH9949/sarkariTayaari`.
+
+Diagnose and fix in Cloud Shell — all three are safe to re-run:
+
+```bash
+PROJECT=sarkaritayaari
+PROJECT_NUMBER=815653276881
+REPO=UVENKATESH9949/sarkariTayaari
+SA="github-deployer@${PROJECT}.iam.gserviceaccount.com"
+
+# 1. Is the binding there at all? Look for a principalSet member ending in your repo.
+gcloud iam service-accounts get-iam-policy "$SA" --project "$PROJECT"
+
+# 2. Does the provider actually map attribute.repository? Without that mapping the
+#    principalSet in step 3 can never match anything.
+gcloud iam workload-identity-pools providers describe github-provider \
+  --project "$PROJECT" --location global --workload-identity-pool github \
+  --format='yaml(attributeMapping, attributeCondition)'
+
+# 3. Add the binding (idempotent — re-running it is harmless).
+gcloud iam service-accounts add-iam-policy-binding "$SA" \
+  --project "$PROJECT" --role roles/iam.workloadIdentityUser \
+  --member "principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/attribute.repository/${REPO}"
+```
+
+Step 2 is worth running even when step 1 looks right: if `attributeMapping` has no
+`attribute.repository` entry, the binding is syntactically fine and still matches nothing.
+
+IAM changes can take up to a minute to propagate — if you re-run the workflow instantly and
+get the same 403, wait and try once more before changing anything else.
 
 **`Unable to acquire impersonated credentials`**
 Usually the provider path. Compare the variable against
