@@ -245,6 +245,7 @@ jobs:
           # and printed here. No extra IAM, and the failure is visible without console access.
           BUILD_ID=$(gcloud builds submit \
                        --async \
+                       --timeout=20m \
                        --tag "${SHA_TAG}" \
                        --project "${GCP_PROJECT}" \
                        --format='value(id)' \
