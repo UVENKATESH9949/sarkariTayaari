@@ -19,6 +19,7 @@ import {
   topicPrerequisites,
   topics,
 } from "../db/schema";
+import { ApiError } from "../api/client";
 import { getLanguages, type QuestionResponse } from "../api/questions";
 import {
   getDifficultyLevels,
@@ -243,12 +244,35 @@ async function writeTopicPrerequisites(topicList: TopicResponse[]) {
  * The screens already handle an empty intelligence table, since that is also what a freshly
  * installed app looks like before its first sync.
  */
+/**
+ * Set once the server has told us this endpoint does not exist, so we stop asking.
+ *
+ * Module-level, i.e. per app session. It is reset by an app restart and nothing else, which is
+ * the right granularity: whether the backend has the endpoint changes on deploy, not minute to
+ * minute. A deploy mid-session therefore needs an app restart before the chips appear — a fair
+ * trade for not re-issuing a known-dead request on every sync.
+ */
+let topicIntelligenceUnsupported = false;
+
 async function writeTopicIntelligence(examCodes: string[]) {
+  // Without this, a device pointed at a backend that predates TICKET-2106 issues one request per
+  // exam on *every* sync, and this runs inside writeReferenceData - which the first-launch gate
+  // waits on. Section 9 spent real effort making that phase fast; spending it on requests already
+  // known to 404 would quietly give some of that back.
+  if (topicIntelligenceUnsupported) return;
+
   const results = await Promise.all(
     examCodes.map(async (examCode) => {
       try {
         return await getExamTopicIntelligence(examCode);
-      } catch {
+      } catch (err) {
+        // Only a 404 means "this server does not have the feature". A network failure or a 500
+        // is transient, and treating it as unsupported would disable the feature for the rest of
+        // the session over a momentary blip - the failure mode that matters here, since the
+        // reference sync also runs while connectivity is coming back.
+        if (err instanceof ApiError && err.status === 404) {
+          topicIntelligenceUnsupported = true;
+        }
         return null;
       }
     }),
