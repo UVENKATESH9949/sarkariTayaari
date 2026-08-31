@@ -142,6 +142,10 @@ export default function BulkImport() {
         attempted: validResults.length,
         createdCount: response.createdCount,
         failures,
+        // TICKET-2109. Kept separate from `failures` on purpose: these rows *were* imported.
+        // The server records a duplicate for review rather than rejecting it, because matching
+        // wording does not always mean the same question.
+        duplicatesDetected: response.duplicatesDetected || {},
       });
     } catch (err) {
       setError(err.message);
@@ -167,6 +171,15 @@ export default function BulkImport() {
           Imported {importSummary.createdCount} of {importSummary.attempted} question(s).
           {importSummary.failures.length > 0 && ` ${importSummary.failures.length} could not be imported.`}
         </div>
+
+        {Object.keys(importSummary.duplicatesDetected || {}).length > 0 && (
+          <div className="banner banner-warn">
+            {Object.keys(importSummary.duplicatesDetected).length} of the imported question(s) look
+            like duplicates of questions already in the bank. They <strong>were</strong> imported —
+            nothing was rejected — and are waiting in{" "}
+            <Link to="/duplicates">Duplicates</Link> for you to confirm or dismiss.
+          </div>
+        )}
 
         {importSummary.failures.length > 0 && (
           <div className="card" style={{ marginBottom: 20 }}>
@@ -207,6 +220,12 @@ export default function BulkImport() {
       <p className="page-intro">
         Subjects and topics are matched by name and created automatically if they don't exist yet. Exam codes are
         not — an unknown code fails that question, so create the exam first.
+      </p>
+
+      <p className="page-intro">
+        Every imported question is also checked against the <strong>entire existing bank</strong>, not
+        just this batch. Matches are recorded in <Link to="/duplicates">Duplicates</Link> for review
+        rather than rejected — two questions can share wording and still be different.
       </p>
 
       {error && <div className="banner banner-error">{error}</div>}

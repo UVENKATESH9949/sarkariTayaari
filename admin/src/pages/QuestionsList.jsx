@@ -224,6 +224,16 @@ export default function QuestionsList() {
                         <div className="cell-tags">
                           {q.deleted && <span className="badge badge-hard">Deleted</span>}
                           {q.premium && <span className="badge">Premium</span>}
+                          {/* TICKET-2104. Shows the year when there is one and a bare "PYQ" when
+                              there is not — the flag and the year are stored separately precisely
+                              so "PYQ, year unknown" is representable, and collapsing them here
+                              would hide that state. */}
+                          {q.pyq && (
+                            <span className="badge badge-easy">
+                              PYQ{q.pyqYear ? ` ${q.pyqYear}` : ""}
+                              {q.pyqShift ? ` · ${q.pyqShift}` : ""}
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td>

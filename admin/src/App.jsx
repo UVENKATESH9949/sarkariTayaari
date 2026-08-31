@@ -2,6 +2,8 @@ import { Routes, Route, NavLink } from "react-router-dom";
 import QuestionsList from "./pages/QuestionsList.jsx";
 import QuestionForm from "./pages/QuestionForm.jsx";
 import BulkImport from "./pages/BulkImport.jsx";
+import Duplicates from "./pages/Duplicates.jsx";
+import TopicIntelligence from "./pages/TopicIntelligence.jsx";
 import Subjects from "./pages/Subjects.jsx";
 import Topics from "./pages/Topics.jsx";
 import Exams from "./pages/Exams.jsx";
@@ -15,6 +17,8 @@ import {
   ListIcon,
   PlusIcon,
   UploadIcon,
+  DuplicateIcon,
+  IntelligenceIcon,
   SubjectIcon,
   TopicIcon,
   ExamIcon,
@@ -72,6 +76,10 @@ export default function App() {
           <NavLink to="/" end><ListIcon /> Questions</NavLink>
           <NavLink to="/questions/new"><PlusIcon /> Add Question</NavLink>
           <NavLink to="/bulk-import"><UploadIcon /> Bulk Import</NavLink>
+          <NavLink to="/duplicates"><DuplicateIcon /> Duplicates</NavLink>
+
+          <span className="nav-group-label">Exam intelligence</span>
+          <NavLink to="/topic-intelligence"><IntelligenceIcon /> Topic Priority</NavLink>
 
           <span className="nav-group-label">Reference data</span>
           <NavLink to="/exams"><ExamIcon /> Exams</NavLink>
@@ -94,6 +102,8 @@ export default function App() {
           <Route path="/questions/new" element={<QuestionForm mode="create" />} />
           <Route path="/questions/:id/edit" element={<QuestionForm mode="edit" />} />
           <Route path="/bulk-import" element={<BulkImport />} />
+          <Route path="/duplicates" element={<Duplicates />} />
+          <Route path="/topic-intelligence" element={<TopicIntelligence />} />
           <Route path="/exams" element={<Exams />} />
           <Route path="/exams/:examCode/structure" element={<ExamStructure />} />
           <Route path="/subjects" element={<Subjects />} />

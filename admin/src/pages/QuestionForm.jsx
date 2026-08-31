@@ -10,6 +10,7 @@ import {
   listTopics,
   listAllExams,
   listDifficultyLevels,
+  getExamStructure,
 } from "../api.js";
 import { useConfirm } from "../hooks/useConfirm.jsx";
 
@@ -23,7 +24,41 @@ const BLANK_FORM = {
   correctAnswer: "A",
   examCodes: [],
   premium: false,
+  // Epic L / TICKET-2104. Held as strings while editing (see the year input below) so a
+  // half-typed value is not coerced mid-keystroke.
+  pyq: false,
+  pyqYear: "",
+  pyqShift: "",
+  sourcePaperId: "",
+  questionNumber: "",
+  sourceUrl: "",
 };
+
+/**
+ * Sanity bounds for a PYQ year, matching the server's own @Min/@Max.
+ *
+ * Checked here too because the server's rejection is a bare 400 that loses whatever else the
+ * admin had typed — and a typo'd year is not harmless, it silently skews every trend computed
+ * from the question.
+ */
+const PYQ_YEAR_MIN = 1950;
+const PYQ_YEAR_MAX = 2100;
+
+/** Flattens an exam's stage tree into a selectable paper list for the source-paper picker. */
+function papersFromStructures(structures) {
+  const papers = [];
+  for (const structure of structures) {
+    for (const stage of structure.stages ?? []) {
+      for (const paper of stage.papers ?? []) {
+        papers.push({
+          id: paper.id,
+          label: `${structure.examCode} · ${stage.name} · ${paper.name}`,
+        });
+      }
+    }
+  }
+  return papers;
+}
 
 /** Existing rows may store the option value rather than a letter; normalise to a letter. */
 function toAnswerLetter(correctAnswer, englishOptions) {
@@ -51,6 +86,7 @@ export default function QuestionForm({ mode }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [answerNote, setAnswerNote] = useState(null);
+  const [sourcePapers, setSourcePapers] = useState([]);
   const [confirm, confirmDialog] = useConfirm();
 
   function set(field, value) {
@@ -70,6 +106,32 @@ export default function QuestionForm({ mode }) {
       })
       .catch((e) => setError(e.message));
   }, []);
+
+  /*
+   * The source-paper picker's options.
+   *
+   * Loaded per selected exam rather than all at once: `getExamStructure` is one request per exam,
+   * and fetching all 11 up front would be 11 requests on a form where most authors never open the
+   * PYQ section at all. Failures are swallowed to an empty list — a missing picker is a degraded
+   * form, not a broken one, and every other field still works.
+   */
+  useEffect(() => {
+    if (form.examCodes.length === 0) {
+      setSourcePapers([]);
+      return;
+    }
+    let cancelled = false;
+    Promise.all(form.examCodes.map((code) => getExamStructure(code).catch(() => null)))
+      .then((structures) => {
+        if (cancelled) return;
+        setSourcePapers(papersFromStructures(structures.filter(Boolean)));
+      })
+      .catch(() => setSourcePapers([]));
+    // Guarded against a late response from a previous exam selection overwriting a newer one.
+    return () => {
+      cancelled = true;
+    };
+  }, [form.examCodes]);
 
   useEffect(() => {
     if (mode !== "edit") return;
@@ -93,6 +155,14 @@ export default function QuestionForm({ mode }) {
           correctAnswer: letter,
           examCodes: q.examCodes || [],
           premium: Boolean(q.premium),
+          // Nullable columns become "" so the inputs stay controlled — same convention as the
+          // exam form's imageUrl/difficulty/badge.
+          pyq: Boolean(q.pyq),
+          pyqYear: q.pyqYear ?? "",
+          pyqShift: q.pyqShift ?? "",
+          sourcePaperId: q.sourcePaperId ?? "",
+          questionNumber: q.questionNumber ?? "",
+          sourceUrl: q.sourceUrl ?? "",
         });
         setTranslations(q.translations.map((t) => ({ ...t, explanation: t.explanation || "" })));
       })
@@ -158,6 +228,13 @@ export default function QuestionForm({ mode }) {
       return setError("English is the root language — every question needs an 'en' translation.");
     }
 
+    if (form.pyq && form.pyqYear !== "") {
+      const year = Number(form.pyqYear);
+      if (!Number.isInteger(year) || year < PYQ_YEAR_MIN || year > PYQ_YEAR_MAX) {
+        return setError(`A previous-year year must be between ${PYQ_YEAR_MIN} and ${PYQ_YEAR_MAX}.`);
+      }
+    }
+
     setSaving(true);
     const corePayload = {
       correctAnswer: form.correctAnswer,
@@ -165,6 +242,14 @@ export default function QuestionForm({ mode }) {
       difficulty: form.difficulty,
       examCodes: form.examCodes,
       premium: form.premium,
+      // Epic L / TICKET-2104. Empty strings become null rather than being sent as "": the
+      // server treats a blank as "not set", and an empty string would be stored as one.
+      pyq: form.pyq,
+      pyqYear: form.pyqYear === "" ? null : Number(form.pyqYear),
+      pyqShift: form.pyqShift.trim() || null,
+      sourcePaperId: form.sourcePaperId || null,
+      questionNumber: form.questionNumber === "" ? null : Number(form.questionNumber),
+      sourceUrl: form.sourceUrl.trim() || null,
     };
 
     try {
@@ -316,6 +401,111 @@ export default function QuestionForm({ mode }) {
                 {!exam.active && <span className="badge">inactive</span>}
               </label>
             ))}
+          </div>
+        </div>
+
+        <div className="card" style={{ marginBottom: 20 }}>
+          <h2>Previous-year question (PYQ)</h2>
+          <p className="field-note" style={{ marginTop: 0, marginBottom: 10 }}>
+            Tag a question that actually appeared in a real paper. This is what topic trend and
+            priority are computed from — an untagged bank produces no trend at all. It also shows
+            as an &quot;Asked in 2023&quot; badge to students.
+          </p>
+
+          <div className="form-field" style={{ maxWidth: "none" }}>
+            <label className="checkbox-field">
+              <input
+                type="checkbox"
+                checked={form.pyq}
+                onChange={(e) => set("pyq", e.target.checked)}
+              />
+              This question appeared in a previous year&apos;s paper
+            </label>
+          </div>
+
+          {/* Everything below is disabled rather than hidden when the box is unticked, so the
+              fields stay discoverable and an admin can see what tagging would ask for. The
+              server clears these columns when pyq is false, so leaving stale values in the
+              inputs cannot persist a contradictory row. */}
+          <div className="form-row">
+            <div className="form-field">
+              <label>Year</label>
+              <input
+                type="number"
+                value={form.pyqYear}
+                onChange={(e) => set("pyqYear", e.target.value)}
+                disabled={!form.pyq}
+                min={PYQ_YEAR_MIN}
+                max={PYQ_YEAR_MAX}
+                placeholder="2023"
+              />
+              <span className="field-note">
+                Leave blank if you know it is a PYQ but not which year — that is a real state, and
+                the trend simply ignores it.
+              </span>
+            </div>
+
+            <div className="form-field">
+              <label>Shift</label>
+              <input
+                value={form.pyqShift}
+                onChange={(e) => set("pyqShift", e.target.value)}
+                disabled={!form.pyq}
+                maxLength={30}
+                placeholder="Shift 2 / Morning"
+              />
+              <span className="field-note">Free text — shifts are named differently per exam.</span>
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-field">
+              <label>Source paper</label>
+              <select
+                value={form.sourcePaperId}
+                onChange={(e) => set("sourcePaperId", e.target.value)}
+                disabled={!form.pyq || sourcePapers.length === 0}
+              >
+                <option value="">Not set</option>
+                {sourcePapers.map((paper) => (
+                  <option key={paper.id} value={paper.id}>
+                    {paper.label}
+                  </option>
+                ))}
+              </select>
+              <span className="field-note">
+                {form.examCodes.length === 0
+                  ? "Tick an exam above to choose from its papers."
+                  : sourcePapers.length === 0
+                  ? "The selected exam(s) have no paper pattern defined yet."
+                  : "Optional — pins the question to a specific paper."}
+              </span>
+            </div>
+
+            <div className="form-field">
+              <label>Question number</label>
+              <input
+                type="number"
+                min="1"
+                value={form.questionNumber}
+                onChange={(e) => set("questionNumber", e.target.value)}
+                disabled={!form.pyq}
+                placeholder="47"
+              />
+            </div>
+          </div>
+
+          <div className="form-field" style={{ maxWidth: "none", marginBottom: 0 }}>
+            <label>Source URL</label>
+            <input
+              value={form.sourceUrl}
+              onChange={(e) => set("sourceUrl", e.target.value)}
+              placeholder="https://..."
+            />
+            <span className="field-note">
+              Deliberately still editable when the PYQ box is off — where a question came from stays
+              true whether or not anyone has classified it as a previous-year one.
+            </span>
           </div>
         </div>
 

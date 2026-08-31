@@ -27,7 +27,14 @@ import Modal from "../components/Modal.jsx";
 import { EditIcon, TrashIcon } from "../components/icons.jsx";
 import { useConfirm } from "../hooks/useConfirm.jsx";
 
-const BLANK_STAGE = { name: "", displayOrder: 1, versionLabel: "", effectiveFrom: "" };
+const BLANK_STAGE = {
+  name: "",
+  displayOrder: 1,
+  versionLabel: "",
+  effectiveFrom: "",
+  // TICKET-2108. Blank = still current, which is what every pre-existing stage means.
+  effectiveTo: "",
+};
 const BLANK_PAPER = {
   name: "",
   paperType: "objective",
@@ -106,11 +113,23 @@ function StageForm({ initial, onCancel, onSave, saving, error }) {
           <input value={form.versionLabel} onChange={(e) => set("versionLabel", e.target.value)} placeholder="2022 pattern" />
         </div>
       </div>
-      <div className="form-field" style={{ marginBottom: 0 }}>
-        <label>Effective from</label>
-        <input type="date" value={form.effectiveFrom} onChange={(e) => set("effectiveFrom", e.target.value)} />
-        <span className="field-note">Optional — for when a pattern changes between years.</span>
+      <div className="form-row">
+        <div className="form-field">
+          <label>Effective from</label>
+          <input type="date" value={form.effectiveFrom} onChange={(e) => set("effectiveFrom", e.target.value)} />
+          <span className="field-note">Blank = has always applied.</span>
+        </div>
+        <div className="form-field">
+          <label>Effective to</label>
+          <input type="date" value={form.effectiveTo} onChange={(e) => set("effectiveTo", e.target.value)} />
+          <span className="field-note">Blank = still current.</span>
+        </div>
       </div>
+      <p className="field-note" style={{ marginTop: 0, marginBottom: 0 }}>
+        Two versions of the same stage can now coexist (TICKET-2108) — give each a different
+        version label. Only the version in force today is sent to the mobile app, so a superseded
+        pattern can never generate a mock test.
+      </p>
     </Modal>
   );
 }
@@ -432,6 +451,9 @@ export default function ExamStructure() {
       displayOrder: Number(form.displayOrder) || 0,
       versionLabel: form.versionLabel ? form.versionLabel.trim() : null,
       effectiveFrom: form.effectiveFrom || null,
+      // TICKET-2108. Empty string becomes null, not "": null means "still current", and the
+      // server's window CHECK compares dates, not blanks.
+      effectiveTo: form.effectiveTo || null,
     };
     return runSave(() => (form.id ? updateStage(form.id, payload) : createStage(payload)));
   }
@@ -608,10 +630,20 @@ export default function ExamStructure() {
               <h2 style={{ marginBottom: 2 }}>{stage.name}</h2>
               <div className="cell-secondary">
                 {stage.versionLabel || "No version label"}
-                {stage.effectiveFrom ? ` · effective ${stage.effectiveFrom}` : ""}
+                {stage.effectiveFrom ? ` · from ${stage.effectiveFrom}` : ""}
+                {stage.effectiveTo ? ` · to ${stage.effectiveTo}` : ""}
                 {` · ${stage.papers.length} paper${stage.papers.length === 1 ? "" : "s"}`}
               </div>
             </div>
+            {/* TICKET-2108. This screen deliberately lists every version, including superseded
+                ones — an admin managing pattern history has to be able to edit them, and
+                filtering them out here would make them invisible and uneditable. The mobile
+                sync endpoint sends only the active one, so the app is unaffected. */}
+            {stage.active === false && (
+              <span className="badge" title="Superseded — not sent to the mobile app">
+                Superseded
+              </span>
+            )}
             <div className="row-actions">
               <button
                 className="btn btn-sm"
@@ -633,6 +665,7 @@ export default function ExamStructure() {
                     displayOrder: stage.displayOrder,
                     versionLabel: stage.versionLabel || "",
                     effectiveFrom: stage.effectiveFrom || "",
+                    effectiveTo: stage.effectiveTo || "",
                   },
                 })}
               >

@@ -116,3 +116,23 @@ export function LanguageIcon() {
     </svg>
   );
 }
+
+/** Two overlapping sheets — the duplicate review queue (TICKET-2109). */
+export function DuplicateIcon() {
+  return (
+    <svg {...base}>
+      <rect x="9" y="9" width="12" height="12" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+/** A rising bar trend — computed topic priority (TICKET-2106/2107). */
+export function IntelligenceIcon() {
+  return (
+    <svg {...base}>
+      <path d="M3 3v18h18" />
+      <polyline points="7 15 11 11 15 14 21 7" />
+    </svg>
+  );
+}

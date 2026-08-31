@@ -335,3 +335,78 @@ export function getMe() {
 export function logoutRequest() {
   return request(`/api/auth/logout`, { method: "POST" });
 }
+
+/* ------------------------------------------------- Topic intelligence (Epic L) */
+
+/**
+ * Computed trend + priority per topic for one exam (TICKET-2106/2107).
+ *
+ * Public server-side (no auth) — every field is derived from the published question bank and the
+ * admin's own curation, so there is nothing student-specific to protect. Still called through
+ * `request` so it picks up the token when there is one.
+ */
+export function getTopicIntelligence(examCode) {
+  return request(`/api/exams/${encodeURIComponent(examCode)}/topic-intelligence`);
+}
+
+/** Re-runs the computation for one exam. Admin-only, and the only way to refresh these numbers. */
+export function recomputeTopicIntelligence(examCode) {
+  return request(`/api/exams/${encodeURIComponent(examCode)}/topic-intelligence/recompute`, {
+    method: "POST",
+  });
+}
+
+/**
+ * Sets or clears the admin priority override for one topic (TICKET-2107).
+ *
+ * Pass `priority: null` to clear it and hand ranking back to the computed value. A reason is
+ * mandatory whenever a value is set — the server rejects an override without one, because an
+ * override nobody can explain later defeats the point of storing it separately.
+ */
+export function setTopicPriorityOverride(examCode, topicId, { priority, reason }) {
+  return request(
+    `/api/exams/${encodeURIComponent(examCode)}/topics/${topicId}/priority-override`,
+    jsonBody("PUT", { priority, reason }),
+  );
+}
+
+/* --------------------------------------------- Duplicate detection (TICKET-2109) */
+
+export function listQuestionDuplicates({ page = 0, size = 20 } = {}) {
+  const params = new URLSearchParams();
+  params.set("page", page);
+  params.set("size", size);
+  return request(`/api/question-duplicates?${params.toString()}`);
+}
+
+export function countQuestionDuplicates() {
+  return request(`/api/question-duplicates/count`);
+}
+
+/**
+ * Dry-run check for one question's text against the whole existing bank.
+ *
+ * POST, not GET: full question text does not belong in a URL — it exceeds practical query-string
+ * limits and would land verbatim in every access log.
+ */
+export function checkQuestionDuplicate(questionText) {
+  return request(`/api/question-duplicates/check`, jsonBody("POST", { questionText }));
+}
+
+/** resolution is "DUPLICATE" or "NOT_DUPLICATE". */
+export function resolveQuestionDuplicate(questionId, duplicateOfQuestionId, resolution) {
+  return request(
+    `/api/question-duplicates/${questionId}/${duplicateOfQuestionId}`,
+    jsonBody("PUT", { resolution }),
+  );
+}
+
+/**
+ * Re-runs detection across the whole bank.
+ *
+ * Needed because the ~37,900 questions that predate TICKET-2109 were never compared with each
+ * other — including the ~35,700 templated load-test rows, where collisions are expected.
+ */
+export function backfillQuestionDuplicates(limit = 1000) {
+  return request(`/api/question-duplicates/backfill?limit=${limit}`, { method: "POST" });
+}
