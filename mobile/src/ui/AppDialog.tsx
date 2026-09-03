@@ -5,7 +5,9 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-na
 import type { IoniconName } from "../constants/subjects";
 import { Button } from "./Button";
 import { DURATION, EASE_OUT } from "./motion";
-import { colors, radius, spacing, typography } from "./theme";
+import { radius, spacing } from "./theme";
+import { useTheme, useThemedStyles, type Theme } from "./ThemeContext";
+import { useT } from "../i18n/I18nContext";
 
 export type AppDialogButton = {
   text: string;
@@ -47,13 +49,15 @@ function resolveVariant(options: AppDialogOptions): AppDialogVariant {
   return "confirmation";
 }
 
-const VARIANT_STYLE: Record<AppDialogVariant, { icon: IoniconName; color: string; bg: string }> = {
+// A function of the palette: every tone here is brand or semantic, and both differ
+// between the two themes.
+const variantStyle = (colors: Theme["colors"]): Record<AppDialogVariant, { icon: IoniconName; color: string; bg: string }> => ({
   confirmation: { icon: "help-circle", color: colors.brand.light, bg: colors.surfaceElevated2 },
   info: { icon: "information-circle", color: colors.brand.light, bg: colors.surfaceElevated2 },
   warning: { icon: "warning-outline", color: colors.semantic.warning, bg: colors.semantic.warningBg },
   success: { icon: "checkmark-circle", color: colors.semantic.success, bg: colors.semantic.successBg },
   error: { icon: "close-circle", color: colors.semantic.error, bg: colors.semantic.errorBg },
-};
+});
 
 function buttonVariant(style: AppDialogButton["style"]): "primary" | "secondary" | "danger" {
   if (style === "destructive") return "danger";
@@ -67,6 +71,9 @@ function buttonVariant(style: AppDialogButton["style"]): "primary" | "secondary"
  * dialog through `AppAlert.alert(...)` without needing this component in its own tree.
  */
 export function AppDialogHost() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  const t = useT();
   const [options, setOptions] = useState<AppDialogOptions | null>(null);
   const visible = options !== null;
   const scale = useSharedValue(0.92);
@@ -97,16 +104,16 @@ export function AppDialogHost() {
   if (!options) return null;
 
   const variant = resolveVariant(options);
-  const variantStyle = VARIANT_STYLE[variant];
-  const buttons = options.buttons ?? [{ text: "OK" }];
+  const tone = variantStyle(colors)[variant];
+  const buttons = options.buttons ?? [{ text: t("common.ok") }];
   const dismiss = () => setOptions(null);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={dismiss}>
       <View style={styles.backdrop}>
         <Animated.View style={[styles.card, cardStyle]}>
-          <View style={[styles.iconCircle, { backgroundColor: variantStyle.bg }]}>
-            <Ionicons name={variantStyle.icon} size={26} color={variantStyle.color} />
+          <View style={[styles.iconCircle, { backgroundColor: tone.bg }]}>
+            <Ionicons name={tone.icon} size={26} color={tone.color} />
           </View>
           <Text style={styles.title}>{options.title}</Text>
           {options.message ? <Text style={styles.message}>{options.message}</Text> : null}
@@ -132,61 +139,62 @@ export function AppDialogHost() {
   );
 }
 
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(2, 3, 5, 0.7)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: spacing.xl,
-  },
-  card: {
-    width: "100%",
-    maxWidth: 380,
-    backgroundColor: colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.xl,
-    padding: spacing.xl,
-    alignItems: "center",
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.5,
-    shadowRadius: 24,
-    elevation: 8,
-  },
-  iconCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: spacing.md,
-  },
-  title: {
-    ...typography.cardTitle,
-    fontSize: 17,
-    textAlign: "center",
-  },
-  message: {
-    ...typography.secondary,
-    textAlign: "center",
-    marginTop: spacing.sm,
-    lineHeight: 20,
-  },
-  buttonRow: {
-    flexDirection: "row",
-    gap: spacing.sm + 2,
-    marginTop: spacing.xl,
-    width: "100%",
-  },
-  buttonColumn: {
-    flexDirection: "column",
-  },
-  buttonFlex: {
-    flex: 1,
-  },
-  buttonFull: {
-    width: "100%",
-  },
-});
+const buildStyles = ({ colors, typography }: Theme) =>
+  StyleSheet.create({
+    backdrop: {
+      flex: 1,
+      backgroundColor: "rgba(2, 3, 5, 0.7)",
+      justifyContent: "center",
+      alignItems: "center",
+      padding: spacing.xl,
+    },
+    card: {
+      width: "100%",
+      maxWidth: 380,
+      backgroundColor: colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.xl,
+      padding: spacing.xl,
+      alignItems: "center",
+      shadowColor: "#000000",
+      shadowOffset: { width: 0, height: 12 },
+      shadowOpacity: 0.5,
+      shadowRadius: 24,
+      elevation: 8,
+    },
+    iconCircle: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: spacing.md,
+    },
+    title: {
+      ...typography.cardTitle,
+      fontSize: 17,
+      textAlign: "center",
+    },
+    message: {
+      ...typography.secondary,
+      textAlign: "center",
+      marginTop: spacing.sm,
+      lineHeight: 20,
+    },
+    buttonRow: {
+      flexDirection: "row",
+      gap: spacing.sm + 2,
+      marginTop: spacing.xl,
+      width: "100%",
+    },
+    buttonColumn: {
+      flexDirection: "column",
+    },
+    buttonFlex: {
+      flex: 1,
+    },
+    buttonFull: {
+      width: "100%",
+    },
+  });

@@ -4,9 +4,13 @@ import { StyleSheet, Text, View } from "react-native";
 import { useSyncStatus } from "../sync/SyncContext";
 import { LoadingMark } from "./LoadingMark";
 import { QuoteRotator } from "./QuoteRotator";
-import { colors, spacing, typography } from "./theme";
+import { spacing } from "./theme";
+import { useTheme, useThemedStyles, type Theme } from "./ThemeContext";
+import { useT } from "../i18n/I18nContext";
 
 function ChecklistRow({ label, done, active }: { label: string; done: boolean; active: boolean }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   return (
     <View style={styles.checklistRow}>
       <Ionicons
@@ -47,6 +51,8 @@ const TICK_MS = 200;
  * checklist, and both are honest about being coarse.
  */
 export function PreparingApp() {
+  const styles = useThemedStyles(buildStyles);
+  const t = useT();
   const { status, synced, total, firstLaunchStartedAt, firstLaunchMaxMs } = useSyncStatus();
   const [elapsed, setElapsed] = useState(0);
 
@@ -67,10 +73,10 @@ export function PreparingApp() {
   return (
     <View style={styles.screen}>
       <View style={styles.hero}>
-        <LoadingMark label="PREPARING" percent={percent} size="hero" />
+        <LoadingMark label={t("common.preparing")} percent={percent} size="hero" />
       </View>
 
-      <Text style={styles.title}>We&rsquo;re preparing your SarkariTaayari experience.</Text>
+      <Text style={styles.title}>{t("prepare.heading")}</Text>
       <Text style={styles.subtitle}>
         We&rsquo;re getting your essential pages ready so your future navigation feels faster and smoother.
       </Text>
@@ -78,66 +84,67 @@ export function PreparingApp() {
       <QuoteRotator style={styles.quote} />
 
       <View style={styles.checklist}>
-        <ChecklistRow label="Setting up exam data" done={referenceDataDone} active={!referenceDataDone} />
+        <ChecklistRow label={t("prepare.settingUpExams")} done={referenceDataDone} active={!referenceDataDone} />
         <ChecklistRow
-          label="Downloading practice questions"
+          label={t("prepare.downloadingQuestions")}
           done={questionsDone}
           active={referenceDataDone && !questionsDone}
         />
       </View>
 
-      <Text style={styles.footNote}>This may take a moment depending on your network — please stay with us.</Text>
+      <Text style={styles.footNote}>{t("prepare.subheading")}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.bg,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: spacing.xl,
-  },
-  hero: {
-    marginBottom: spacing["2xl"],
-  },
-  title: {
-    ...typography.pageTitle,
-    fontSize: 22,
-    textAlign: "center",
-    marginBottom: spacing.sm,
-  },
-  subtitle: {
-    ...typography.body,
-    color: colors.text.secondary,
-    textAlign: "center",
-    marginBottom: spacing.xl,
-    paddingHorizontal: spacing.md,
-  },
-  quote: {
-    marginBottom: spacing["2xl"],
-    minHeight: 40,
-  },
-  checklist: {
-    width: "100%",
-    gap: spacing.sm + 2,
-    marginBottom: spacing.lg,
-  },
-  checklistRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  checklistLabel: {
-    ...typography.body,
-    color: colors.text.primary,
-  },
-  checklistLabelMuted: {
-    color: colors.text.muted,
-  },
-  footNote: {
-    ...typography.caption,
-    textAlign: "center",
-  },
-});
+const buildStyles = ({ colors, typography }: Theme) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: colors.bg,
+      alignItems: "center",
+      justifyContent: "center",
+      padding: spacing.xl,
+    },
+    hero: {
+      marginBottom: spacing["2xl"],
+    },
+    title: {
+      ...typography.pageTitle,
+      fontSize: 22,
+      textAlign: "center",
+      marginBottom: spacing.sm,
+    },
+    subtitle: {
+      ...typography.body,
+      color: colors.text.secondary,
+      textAlign: "center",
+      marginBottom: spacing.xl,
+      paddingHorizontal: spacing.md,
+    },
+    quote: {
+      marginBottom: spacing["2xl"],
+      minHeight: 40,
+    },
+    checklist: {
+      width: "100%",
+      gap: spacing.sm + 2,
+      marginBottom: spacing.lg,
+    },
+    checklistRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+    },
+    checklistLabel: {
+      ...typography.body,
+      color: colors.text.primary,
+    },
+    checklistLabelMuted: {
+      color: colors.text.muted,
+    },
+    footNote: {
+      ...typography.caption,
+      textAlign: "center",
+    },
+  });

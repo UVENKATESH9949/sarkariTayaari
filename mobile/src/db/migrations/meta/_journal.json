@@ -92,6 +92,41 @@
       "when": 1788166242662,
       "tag": "0012_epic_l_topic_model",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1788166242663,
+      "tag": "0013_app_preferences_and_attempt_split",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1788166242664,
+      "tag": "0014_exam_guide_offline_cache",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1788166242665,
+      "tag": "0015_diagnostic_attempts",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1788345606027,
+      "tag": "0016_exam_guide_overview_text",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1788345606028,
+      "tag": "0017_followed_exams_sync",
+      "breakpoints": true
     }
   ]
 }

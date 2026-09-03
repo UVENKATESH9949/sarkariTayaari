@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { View, type StyleProp, type ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { DURATION, EASE_IN_OUT } from "./motion";
-import { colors } from "./theme";
+import { useTheme } from "./ThemeContext";
 
 type Props = {
   /** 0 to 1. */
@@ -20,13 +20,12 @@ type Props = {
  * through they are. A jump reads as a redraw, whereas a short slide reads as progress
  * being made — the same information, but it feels like something was achieved.
  */
-export function AnimatedProgressBar({
-  progress,
-  height = 6,
-  trackColor = colors.surfaceElevated2,
-  fillColor = colors.brand.bright,
-  style,
-}: Props) {
+export function AnimatedProgressBar({ progress, height = 6, trackColor, fillColor, style }: Props) {
+  // Defaults are resolved here rather than as default parameter values: those are
+  // evaluated at module load, which is before any theme is known.
+  const { colors } = useTheme();
+  const track = trackColor ?? colors.surfaceElevated2;
+  const fill = fillColor ?? colors.brand.bright;
   const width = useSharedValue(0);
 
   useEffect(() => {
@@ -39,8 +38,8 @@ export function AnimatedProgressBar({
   }));
 
   return (
-    <View style={[{ height, backgroundColor: trackColor, borderRadius: height / 2, overflow: "hidden" }, style]}>
-      <Animated.View style={[{ height: "100%", backgroundColor: fillColor, borderRadius: height / 2 }, fillStyle]} />
+    <View style={[{ height, backgroundColor: track, borderRadius: height / 2, overflow: "hidden" }, style]}>
+      <Animated.View style={[{ height: "100%", backgroundColor: fill, borderRadius: height / 2 }, fillStyle]} />
     </View>
   );
 }

@@ -2,7 +2,8 @@ import { useEffect } from "react";
 import { AccessibilityInfo, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 import { DURATION, EASE_IN_OUT } from "./motion";
-import { colors, radius, spacing } from "./theme";
+import { radius, spacing } from "./theme";
+import { useTheme } from "./ThemeContext";
 
 type SkeletonProps = {
   width?: number | `${number}%`;
@@ -17,6 +18,7 @@ type SkeletonProps = {
  * not a case worth handling for a loading placeholder.
  */
 export function Skeleton({ width = "100%", height, borderRadius = radius.sm, style }: SkeletonProps) {
+  const { colors } = useTheme();
   const opacity = useSharedValue(0.5);
 
   useEffect(() => {

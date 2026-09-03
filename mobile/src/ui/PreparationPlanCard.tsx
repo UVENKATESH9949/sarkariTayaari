@@ -6,7 +6,9 @@ import { getPriorityTopics, type PriorityTopic } from "../db/topicIntelligence";
 import { Card } from "./Card";
 import { PressableScale } from "./PressableScale";
 import { MasteryChip, TrendChip } from "./TopicInsightChips";
-import { colors, radius, spacing, typography } from "./theme";
+import { radius, spacing } from "./theme";
+import { useTheme, useThemedStyles, type Theme } from "./ThemeContext";
+import { useT } from "../i18n/I18nContext";
 
 /** How many topics the card shows. Enough to be a plan, few enough not to be a list. */
 const TOPIC_COUNT = 4;
@@ -32,6 +34,9 @@ type PreparationPlanCardProps = {
  * not "Roadmap", because many aspirants will not recognise the latter.
  */
 export function PreparationPlanCard({ examCode, examName, refreshKey }: PreparationPlanCardProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  const t = useT();
   const router = useRouter();
   /*
    * The loaded rows are stored *with the exam they belong to*, rather than as a bare list.
@@ -87,9 +92,9 @@ export function PreparationPlanCard({ examCode, examName, refreshKey }: Preparat
     <Card style={styles.card}>
       <View style={styles.header}>
         <View style={styles.headerText}>
-          <Text style={styles.title}>Focus next</Text>
+          <Text style={styles.title}>{t("practice.focusNext")}</Text>
           <Text style={styles.subtitle}>
-            Highest-weightage topics for {examName ?? "your exam"}
+            {t("practice.highestWeightage", { exam: examName ?? t("practice.yourExam") })}
           </Text>
         </View>
         <Ionicons name="compass-outline" size={18} color={colors.brand.light} />
@@ -119,66 +124,67 @@ export function PreparationPlanCard({ examCode, examName, refreshKey }: Preparat
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    padding: spacing.base,
-    gap: spacing.md,
-    marginBottom: spacing.base,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: spacing.sm,
-  },
-  headerText: {
-    flex: 1,
-  },
-  title: {
-    ...typography.sectionTitle,
-  },
-  subtitle: {
-    fontSize: 12,
-    color: colors.text.muted,
-    marginTop: 2,
-  },
-  list: {
-    gap: spacing.sm,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm + 2,
-    backgroundColor: colors.surfaceElevated2,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radius.md,
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.md,
-  },
-  rank: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.brand.light,
-    width: 14,
-    textAlign: "center",
-  },
-  rowText: {
-    flex: 1,
-  },
-  topicName: {
-    fontSize: 13.5,
-    fontWeight: "600",
-    color: colors.text.primary,
-  },
-  subjectName: {
-    fontSize: 11,
-    color: colors.text.muted,
-    marginTop: 1,
-  },
-  rowChips: {
-    // Column, not row: two chips side by side on a narrow row would push the topic name into an
-    // ellipsis on a small phone, and the name is the thing being chosen between.
-    alignItems: "flex-end",
-    gap: 3,
-  },
-});
+const buildStyles = ({ colors, typography }: Theme) =>
+  StyleSheet.create({
+    card: {
+      padding: spacing.base,
+      gap: spacing.md,
+      marginBottom: spacing.base,
+    },
+    header: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: spacing.sm,
+    },
+    headerText: {
+      flex: 1,
+    },
+    title: {
+      ...typography.sectionTitle,
+    },
+    subtitle: {
+      fontSize: 12,
+      color: colors.text.muted,
+      marginTop: 2,
+    },
+    list: {
+      gap: spacing.sm,
+    },
+    row: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm + 2,
+      backgroundColor: colors.surfaceElevated2,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      borderRadius: radius.md,
+      paddingVertical: spacing.sm + 2,
+      paddingHorizontal: spacing.md,
+    },
+    rank: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.brand.light,
+      width: 14,
+      textAlign: "center",
+    },
+    rowText: {
+      flex: 1,
+    },
+    topicName: {
+      fontSize: 13.5,
+      fontWeight: "600",
+      color: colors.text.primary,
+    },
+    subjectName: {
+      fontSize: 11,
+      color: colors.text.muted,
+      marginTop: 1,
+    },
+    rowChips: {
+      // Column, not row: two chips side by side on a narrow row would push the topic name into an
+      // ellipsis on a small phone, and the name is the thing being chosen between.
+      alignItems: "flex-end",
+      gap: 3,
+    },
+  });

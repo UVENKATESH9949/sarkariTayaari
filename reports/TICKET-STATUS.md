@@ -1,6 +1,6 @@
 # Ticket Status — every ticket, one file
 
-**Last updated:** 2026-08-24
+**Last updated:** 2026-09-01
 **Purpose:** answer "where are we" in one place, without opening five different documents.
 
 **Legend**
@@ -35,10 +35,12 @@
 | Black + Blue Dark Theme (this session, unticketed) | — | 1 | 0 | 0 |
 | Resilient Initial Sync (this session, unticketed) | — | 1 | 0 | 0 |
 | Practice/Mock Test Exit Guard (this session, unticketed) | — | 1 | 0 | 0 |
-| **Current product total** | | **~83** | **2** | **8** |
+| Build Improvements — network toast, session lifecycle, quiz navigation/counting, light theme, zoom, Telugu i18n ("Doc 2", 2026-09-01, unticketed) | — | 1 | 0 | 0 |
+| Exam Guide — Phase 1 + round 2 ("Doc 1", 2026-09-01, unticketed) | — | 1 | 0 | 7 (not yet ticketed) |
+| **Current product total** | | **~85** | **2** | **8** |
 | Future Vision — Personal Preparation OS | 1001–2003 (11 epics) | 0 | 0 | 63 |
 
-**Bottom line: the shipped product is essentially feature-complete for V1.0/V1.1. What's left before it's release-ready is entirely Sprint 5 (QA/perf/release prep), where 501 and 503 are done and 505 is now half done — a real upload keystore and a signed-build pipeline exist; Play Console does not. Still untouched in Sprint 5: low-end device testing (502), branding confirmation (504), and beta recruitment (506). The Future Vision document (63 tickets) hasn't been touched at all, by design — it's explicitly a draft awaiting a greenlight.**
+**Bottom line: the shipped product is essentially feature-complete for V1.0/V1.1. What's left before it's release-ready is entirely Sprint 5 (QA/perf/release prep), where 501 and 503 are done and 505 is now half done — a real upload keystore and a signed-build pipeline exist; Play Console does not. Still untouched in Sprint 5: low-end device testing (502), branding confirmation (504), and beta recruitment (506). The Future Vision document (63 tickets) hasn't been touched at all, by design — it's explicitly a draft awaiting a greenlight. Two more un-ticketed feature bodies of work landed 2026-09-01 — see the dedicated sections below — and Exam Guide (Doc 1) still has 7 unbuilt phases of its own, listed there rather than folded into the Future Vision count above since they come from a different source document.**
 
 ---
 
@@ -219,6 +221,55 @@ Now documented — see [07-mock-test-engine/mock-test-engine.md](./07-mock-test-
 | §9 Phase 6 — temporary question pool lifted (`app.question-pool.temporary-enabled: false`); full 37,884-question bank now served and synced. **The requested "assign same questions to every query" interim hack was deliberately not built** — measurement showed the pool was the entire cause of the empty screens (107/108 topics have questions once lifted; the one gap is the `Automated Test Topic` fixture), so no query had to stop honouring its scoping | ✅ done, verified end to end — 76 pages @ ~2.7s/page server-side (≈203s, matches the ~236s in report 12), but **invisible to the user**: gate released on reference data before any question page existed, app navigated normally while pages 5–23 downloaded, sync finished `37884/37884`, 136-question quiz loaded clean, zero Metro errors. Gaps: emulator only (not low-end hardware), and the 76-page sync was never interrupted by an app kill | [19-startup-gate-and-query-limits/startup-gate-and-query-limits.md](./19-startup-gate-and-query-limits/startup-gate-and-query-limits.md) |
 | Real bug found by testing: a bare `DROP INDEX` in migration `0011` **bricked the app** — `Database migration failed`, and migration failure is a hard gate in `app/_layout.tsx`. drizzle-kit generates index DDL with no existence guards | ✅ fixed — hand-edited to `IF EXISTS`/`IF NOT EXISTS` throughout, re-verified by replaying all 12 migrations from a wiped install. **Treat generated index migrations as needing this hand-edit by default.** A related near-miss (a generated `UNIQUE` index on `subjects(name)`, which could fail permanently on a device holding a duplicate) was caught by reasoning and downgraded to a plain index | same report |
 | Exam difficulty/badge/image — **mobile side now verified on-device** (was the outstanding gap on the row above): SSC CGL rendered a POPULAR badge, a "Medium level" pill using `difficulty_levels`' own synced icon, and an admin-uploaded image in its icon box; SSC CHSL with neither set correctly rendered one pill and no badge | ✅ done and verified | same report ("Verified", incidental findings) |
+
+## This session (2026-09-01) — no ticket numbers assigned yet
+
+Two supplied requirement documents were worked through: "Doc 2" (current-build bug fixes
+and modifications) and "Doc 1" (a new Exam Guide / Exam Intelligence feature). Both were
+audited against the actual code before implementation, per the project's standing rule for
+AI-authored specs — see each report's own "audit" section for what was confirmed, wrong, or
+already ~70% built by Epic L.
+
+### Build Improvements ("Doc 2")
+
+| Task | Status | Report |
+|---|---|---|
+| Network status toast — replaces the permanent `OfflineBanner` with an edge-triggered `NetworkStatusToast` (3.5s auto-dismiss, handles flapping/backgrounding, `NetworkStatusContext` now tracks a transition, not just a level) | ✅ | [22-build-improvements-theme-zoom-i18n/build-improvements.md](./22-build-improvements-theme-zoom-i18n/build-improvements.md) |
+| Hardware back button / gesture guard on an active quiz or mock test (`useActiveTestBackGuard`) | ✅ | same report |
+| Session lifecycle fixes — `endSession` runs on unmount (fixes a false "Leave this test?" reaching Practice Home after backing out), `backBehavior="initialRoute"` on the tab navigator (fixes back-traversal crossing between modules), `useStaleStackReset` (resets a module's navigation depth after 90+ seconds away — deliberately does **not** clear an in-progress practice/mock session, since nothing is persisted until a session finishes) | ✅ | same report |
+| Quiz navigation rewrite — `answers` (not `selectedOption`) is the single source of truth, so Previous/Next both work; Finish is reachable as soon as one question is answered; `total_count` now means "answered" and a new local-only `available_count` means "offered", so early-finishing cannot silently corrupt accuracy figures (§7 and §8 were one change, not two) | ✅ | same report |
+| Light theme + centralized zoom — `useThemedStyles()` factory pattern replaces static `StyleSheet.create` across ~43 files; a full light `Palette` (`ui/palettes.ts`) alongside the existing dark one; zoom applied once, centrally, rather than per style declaration | ✅ | same report |
+| Telugu UI translation (~250 strings, `mobile/src/i18n/`) with compiler-enforced key coverage | ✅ | same report |
+| Settings screen (`app/settings.tsx`) — theme/zoom/language controls, backed by a new local-only `app_preferences` table (mobile migration `0013`, not synced, not cleared on sign-out) | ✅ | same report |
+
+**Verified:** `npx tsc --noEmit` clean; `npx expo lint` at the pre-existing baseline (9 problems, nothing new); migration `0013` tested against a populated pre-0013 database. **Not verified: never run on a device or emulator** — the light theme in particular is 43 files of colour changes that only a screen can confirm, and the Telugu wording hasn't been reviewed by a native speaker. Backend untouched, 0 files changed.
+
+### Exam Guide ("Doc 1", Phase 1 + round 2)
+
+| Task | Status | Report |
+|---|---|---|
+| Backend data model (migration `V17`) — `recruitment_cycles`, `exam_sources`, `eligibility_rules`, `important_dates`, `document_requirements` + `user_document_status`, `application_steps`, `application_mistakes`, `fee_rules` | ✅ | [23-exam-guide-phase1/exam-guide-phase1.md](./23-exam-guide-phase1/exam-guide-phase1.md) |
+| Public `GET /api/exams/{code}/guide` (one combined response per exam) + `GET /api/exam-guides` (sync-all, currently no caller — see `reports/open-questions.md`); admin CRUD for all seven resource types; signed-in document-status write | ✅ | same report |
+| Admin console — `pages/ExamGuide.jsx`, `pages/ExamSources.jsx` | 🔵 done, **not click-tested in a real browser** — verified via clean build/lint + curling the exact endpoints these pages call | same report |
+| Mobile Exam Guide screen (`app/exam-guide.tsx`) — status pill, countdown, quick facts, dates timeline, eligibility (with required disclaimer), document checklist, how-to-apply steps, mistakes, fees, non-dismissable demo banner | 🔵 done, **never run on a device/emulator** — verified only via the real backend API | same report |
+| Demo seeder (`ExamGuideDemoSeeder`) — one SSC CGL "2027 (Demo)" cycle, gated by admin token + a disabled-by-default config flag | ✅ | same report |
+| Round 2 — Progress hidden from the tab bar (`href: null`, data untouched); Eligibility Checker screen; My Exams / Exam Discovery screen; Notification History (past-cycle) endpoint + screen; source attribution (`sourceId`) surfaced per fact; Practice/Mock Test links; difficulty/badge pills; priority tiers; per-step official URLs; 5 analytics events; accessibility pass (partial) | ✅ | [23-exam-guide-phase1/exam-guide-phase1-round2.md](./23-exam-guide-phase1/exam-guide-phase1-round2.md) |
+| Real bug found and fixed: `MultipleBagFetchException` on the sync-all query (two fetch-joined collections in one JPQL query) | ✅ fixed | same report |
+| Pre-existing encoding bug found and fixed (not introduced this session): `javac` had no source-encoding configured, corrupting em-dashes in string literals compiled on this machine — affected `AuthService.java`, `TopicIntelligenceService.java` (both already shipped, user-facing) | ✅ fixed via one `pom.xml` property | [23-exam-guide-phase1/exam-guide-phase1.md](./23-exam-guide-phase1/exam-guide-phase1.md) |
+
+**Scope decision, stated rather than hidden:** Exam Guide is live-fetch only on mobile — no local SQLite cache or sync-pipeline entry, unlike every other reference type in the app (see `mobile/src/api/examGuide.ts`'s own header comment).
+
+**Exam Guide (Doc 1) — not yet built, no ticket numbers assigned:**
+
+| Feature | Status |
+|---|---|
+| Diagnostic test | ⬜ Not started |
+| Reminders | ⬜ Not started — needs push-notification infrastructure that doesn't exist in the app yet (see TICKET-705) |
+| Career information / exam comparison | ⬜ Not started |
+| "What's Changed" diffing between cycle versions | ⬜ Not started |
+| Content-validation workflow | ⬜ Not started |
+| Offline caching for Exam Guide content | ⬜ Not started — the scope decision above |
+| Search | ⬜ Not started |
 
 ---
 

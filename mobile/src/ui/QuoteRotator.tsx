@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { StyleSheet, type StyleProp, type TextStyle } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from "react-native-reanimated";
 import { DURATION, EASE_IN_OUT } from "./motion";
-import { spacing, typography } from "./theme";
+import { spacing } from "./theme";
+import { useThemedStyles, type Theme } from "./ThemeContext";
 
 const QUOTES = [
   "Patience is the first step toward success.",
@@ -18,6 +19,7 @@ const ROTATE_MS = 4000;
 
 /** Rotates through a fixed set of motivational quotes with a fade transition, changing roughly every 4s — used on the first-launch preparation screen. */
 export function QuoteRotator({ style }: { style?: StyleProp<TextStyle> }) {
+  const styles = useThemedStyles(buildStyles);
   const [index, setIndex] = useState(0);
   const opacity = useSharedValue(1);
   const swapTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -41,10 +43,11 @@ export function QuoteRotator({ style }: { style?: StyleProp<TextStyle> }) {
   return <Animated.Text style={[styles.quote, animatedStyle, style]}>&ldquo;{QUOTES[index]}&rdquo;</Animated.Text>;
 }
 
-const styles = StyleSheet.create({
-  quote: {
-    ...typography.secondary,
-    textAlign: "center",
-    paddingHorizontal: spacing.xl,
-  },
-});
+const buildStyles = ({ typography }: Theme) =>
+  StyleSheet.create({
+    quote: {
+      ...typography.secondary,
+      textAlign: "center",
+      paddingHorizontal: spacing.xl,
+    },
+  });

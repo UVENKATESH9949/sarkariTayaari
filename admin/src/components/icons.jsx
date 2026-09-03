@@ -136,3 +136,27 @@ export function IntelligenceIcon() {
     </svg>
   );
 }
+
+/** A compass-in-a-book glyph for Exam Guide — distinct from ExamIcon's plain checklist. */
+export function GuideIcon() {
+  return (
+    <svg {...base}>
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" />
+      <circle cx="12" cy="11" r="3" />
+      <path d="m10.5 12.5 3-2-3 2Z" />
+    </svg>
+  );
+}
+
+/** A citation/quote-block glyph for Exam Guide Sources. */
+export function SourceIcon() {
+  return (
+    <svg {...base}>
+      <path d="M17 6H7a2 2 0 0 0-2 2v11" />
+      <rect x="9" y="3" width="12" height="14" rx="2" />
+      <path d="M12 8h5" />
+      <path d="M12 11h5" />
+    </svg>
+  );
+}

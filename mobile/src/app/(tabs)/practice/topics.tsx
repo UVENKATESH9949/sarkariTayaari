@@ -22,11 +22,10 @@ import {
   TrendChip,
   WeightageChip,
 } from "../../../ui/TopicInsightChips";
-import { colors, radius, spacing, typography } from "../../../ui/theme";
-
-function questionsLabel(count: number): string {
-  return count === 1 ? "1 question" : `${count} questions`;
-}
+import { radius, spacing } from "../../../ui/theme";
+import { useTheme, useThemedStyles, type Theme } from "../../../ui/ThemeContext";
+import { useT } from "../../../i18n/I18nContext";
+import { questionsLabel } from "../../../i18n/counts";
 
 /** The two orderings the list can be in. */
 type SortMode = "priority" | "syllabus";
@@ -100,6 +99,12 @@ function groupByParent(rows: TopicRow[]): TopicGroup[] {
 }
 
 export default function Topics() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  const t = useT();
+  // Neutral fallback for a subject an admin hasn't given an icon colour yet; the
+  // constants module can't know the theme, so it comes from here.
+  const subjectFallback = { iconColor: colors.text.secondary, iconBg: colors.surfaceElevated2 };
   const router = useRouter();
   const { examCode, examLabel, subjectId, subjectName } = useLocalSearchParams<{
     examCode: string;
@@ -153,7 +158,7 @@ export default function Topics() {
     getSubjectMetaByName(subjectName).then(setSubjectStyle);
   }, [subjectName]);
 
-  const subjectMeta = toSubjectMeta(subjectStyle, subjectName ?? "");
+  const subjectMeta = toSubjectMeta(subjectStyle, subjectName ?? "", subjectFallback);
 
   const rows: TopicRow[] = useMemo(
     () => topics.map((topic) => ({ ...topic, insight: insights.get(topic.id) ?? null })),
@@ -238,7 +243,7 @@ export default function Topics() {
               )}
               <Text style={styles.topicName}>{row.name}</Text>
               <Text style={styles.topicStats}>
-                {disabled ? "No questions yet" : questionsLabel(row.questionCount)}
+                {disabled ? t("practice.noQuestionsForExam") : questionsLabel(row.questionCount, t)}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.text.muted} />
@@ -282,7 +287,7 @@ export default function Topics() {
         </View>
 
         <ScrollView contentContainerStyle={styles.container}>
-          <Text style={styles.heading}>Choose a topic</Text>
+          <Text style={styles.heading}>{t("practice.chooseTopic")}</Text>
           <Text style={styles.subheading}>
             {topics.length} topics under {subjectName}
           </Text>
@@ -293,8 +298,8 @@ export default function Topics() {
             <View style={styles.sortRow}>
               {(
                 [
-                  { mode: "priority" as SortMode, label: "By priority", icon: "flame-outline" },
-                  { mode: "syllabus" as SortMode, label: "Syllabus order", icon: "list-outline" },
+                  { mode: "priority" as SortMode, label: t("practice.sortByPriority"), icon: "flame-outline" },
+                  { mode: "syllabus" as SortMode, label: t("practice.sortBySyllabus"), icon: "list-outline" },
                 ] as const
               ).map((option) => {
                 const active = sortMode === option.mode;
@@ -341,8 +346,8 @@ export default function Topics() {
               {topics.length === 0 && mode !== "unavailable" && (
                 <EmptyState
                   icon="document-text-outline"
-                  title="No topics synced yet"
-                  body="Topics appear here once they're synced."
+                  title={t("practice.noTopics")}
+                  body={t("practice.noTopicsBody")}
                 />
               )}
             </View>
@@ -353,127 +358,128 @@ export default function Topics() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-  },
-  searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    backgroundColor: colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    marginHorizontal: spacing.xl,
-    marginTop: spacing.base,
-    marginBottom: spacing.xs,
-    paddingHorizontal: spacing.md + 2,
-    paddingVertical: spacing.sm + 2,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: colors.text.primary,
-    padding: 0,
-  },
-  container: {
-    padding: spacing.xl,
-    paddingTop: spacing.md,
-    paddingBottom: spacing["3xl"],
-  },
-  heading: {
-    ...typography.pageTitle,
-    fontSize: 22,
-  },
-  subheading: {
-    ...typography.secondary,
-    marginTop: spacing.xs,
-    marginBottom: spacing.base,
-  },
-  sortRow: {
-    flexDirection: "row",
-    gap: spacing.sm,
-    marginBottom: spacing.base,
-  },
-  sortChip: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: colors.text.secondary,
-    backgroundColor: colors.surfaceElevated2,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm - 2,
-    overflow: "hidden",
-  },
-  sortChipActive: {
-    color: colors.brand.light,
-    borderColor: colors.borderAccent,
-    backgroundColor: colors.brand.glowSoft,
-  },
-  list: {
-    gap: spacing.sm + 2,
-  },
-  group: {
-    marginBottom: spacing.md,
-  },
-  groupHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs + 2,
-    marginBottom: spacing.sm,
-    marginLeft: spacing.xs,
-  },
-  groupTitle: {
-    ...typography.sectionTitle,
-    fontSize: 13,
-    color: colors.text.secondary,
-  },
-  card: {
-    padding: spacing.md,
-    gap: spacing.sm,
-  },
-  cardNested: {
-    // A visible indent is what makes the hierarchy readable at a glance; the folder heading
-    // alone reads as a section label rather than a parent topic.
-    marginLeft: spacing.md,
-  },
-  cardMain: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  iconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  textBlock: {
-    flex: 1,
-  },
-  breadcrumb: {
-    fontSize: 10.5,
-    fontWeight: "600",
-    color: colors.text.muted,
-    marginBottom: 1,
-  },
-  topicName: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.text.primary,
-  },
-  topicStats: {
-    fontSize: 12,
-    color: colors.text.muted,
-    marginTop: 2,
-  },
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.xs + 2,
-  },
-});
+const buildStyles = ({ colors, typography }: Theme) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+    },
+    searchBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+      backgroundColor: colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.md,
+      marginHorizontal: spacing.xl,
+      marginTop: spacing.base,
+      marginBottom: spacing.xs,
+      paddingHorizontal: spacing.md + 2,
+      paddingVertical: spacing.sm + 2,
+    },
+    searchInput: {
+      flex: 1,
+      fontSize: 14,
+      color: colors.text.primary,
+      padding: 0,
+    },
+    container: {
+      padding: spacing.xl,
+      paddingTop: spacing.md,
+      paddingBottom: spacing["3xl"],
+    },
+    heading: {
+      ...typography.pageTitle,
+      fontSize: 22,
+    },
+    subheading: {
+      ...typography.secondary,
+      marginTop: spacing.xs,
+      marginBottom: spacing.base,
+    },
+    sortRow: {
+      flexDirection: "row",
+      gap: spacing.sm,
+      marginBottom: spacing.base,
+    },
+    sortChip: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.text.secondary,
+      backgroundColor: colors.surfaceElevated2,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      borderRadius: radius.pill,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm - 2,
+      overflow: "hidden",
+    },
+    sortChipActive: {
+      color: colors.brand.light,
+      borderColor: colors.borderAccent,
+      backgroundColor: colors.brand.glowSoft,
+    },
+    list: {
+      gap: spacing.sm + 2,
+    },
+    group: {
+      marginBottom: spacing.md,
+    },
+    groupHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.xs + 2,
+      marginBottom: spacing.sm,
+      marginLeft: spacing.xs,
+    },
+    groupTitle: {
+      ...typography.sectionTitle,
+      fontSize: 13,
+      color: colors.text.secondary,
+    },
+    card: {
+      padding: spacing.md,
+      gap: spacing.sm,
+    },
+    cardNested: {
+      // A visible indent is what makes the hierarchy readable at a glance; the folder heading
+      // alone reads as a section label rather than a parent topic.
+      marginLeft: spacing.md,
+    },
+    cardMain: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.md,
+    },
+    iconCircle: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    textBlock: {
+      flex: 1,
+    },
+    breadcrumb: {
+      fontSize: 10.5,
+      fontWeight: "600",
+      color: colors.text.muted,
+      marginBottom: 1,
+    },
+    topicName: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.text.primary,
+    },
+    topicStats: {
+      fontSize: 12,
+      color: colors.text.muted,
+      marginTop: 2,
+    },
+    chipRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing.xs + 2,
+    },
+  });

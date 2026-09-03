@@ -138,6 +138,21 @@ public class AuthService {
         return user;
     }
 
+    /**
+     * Same as {@link #requireUser}, but accepts ADMIN or REVIEWER. ADMIN is treated as a
+     * superset of REVIEWER (see {@link Role#REVIEWER}'s own doc comment) rather than two
+     * disjoint roles — used by the §36 review-workflow transitions that a plain ADMIN
+     * should still be able to perform when no separate reviewer account exists yet.
+     */
+    @Transactional(readOnly = true)
+    public User requireReviewer(String authorizationHeader) {
+        User user = requireUser(authorizationHeader);
+        if (user.getRole() != Role.ADMIN && user.getRole() != Role.REVIEWER) {
+            throw new ForbiddenException("Reviewer or admin access required");
+        }
+        return user;
+    }
+
     @Transactional(readOnly = true)
     public AuthResponse.UserResponse describe(User user) {
         return new AuthResponse.UserResponse(user.getId(), user.getEmail(), user.getDisplayName(), user.getRole().name());

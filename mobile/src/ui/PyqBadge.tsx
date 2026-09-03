@@ -1,6 +1,8 @@
 import { StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, radius, spacing } from "./theme";
+import { radius, spacing } from "./theme";
+import { useTheme, useThemedStyles, type Theme } from "./ThemeContext";
+import { useT } from "../i18n/I18nContext";
 
 type PyqBadgeProps = {
   isPyq?: boolean;
@@ -20,13 +22,18 @@ type PyqBadgeProps = {
  * representable, and this component must not invent the flag from the year.
  */
 export function PyqBadge({ isPyq, year, shift }: PyqBadgeProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  const t = useT();
   if (!isPyq) return null;
 
   // "Previous year" when the flag is set but the year is not — truthful, and better than
   // omitting the badge, which would hide the single most useful fact about the question.
-  const detail = year
-    ? `Asked in ${year}${shift ? ` · ${shift}` : ""}`
-    : "Previous year question";
+  const detail = !year
+    ? t("quiz.pyqUnknownYear")
+    : shift
+      ? t("quiz.pyqAskedWithShift", { year, shift })
+      : t("quiz.pyqAsked", { year });
 
   return (
     <View style={styles.badge}>
@@ -36,21 +43,22 @@ export function PyqBadge({ isPyq, year, shift }: PyqBadgeProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  badge: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    gap: spacing.xs + 1,
-    backgroundColor: colors.semantic.warningBg,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: 3,
-    marginBottom: spacing.sm + 2,
-  },
-  text: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: colors.semantic.warning,
-  },
-});
+const buildStyles = ({ colors }: Theme) =>
+  StyleSheet.create({
+    badge: {
+      flexDirection: "row",
+      alignItems: "center",
+      alignSelf: "flex-start",
+      gap: spacing.xs + 1,
+      backgroundColor: colors.semantic.warningBg,
+      borderRadius: radius.pill,
+      paddingHorizontal: spacing.sm + 2,
+      paddingVertical: 3,
+      marginBottom: spacing.sm + 2,
+    },
+    text: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: colors.semantic.warning,
+    },
+  });

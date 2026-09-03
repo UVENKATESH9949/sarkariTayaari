@@ -80,6 +80,41 @@ Useful specifics:
 
 ---
 
+## Mobile app — theme, zoom and language
+
+Dark/light mode, text zoom and UI language are one system, not three: all three read and
+write the same local `app_preferences` row (`mobile/src/db/preferences.ts` — a single row
+keyed `"current"`, added by mobile migration `0013`, never synced and never cleared on
+sign-out — it describes the device, not the account). Two context providers mounted in
+`app/_layout.tsx` hand them out: `ThemeProvider` and `I18nProvider`.
+
+| I want to... | File |
+|---|---|
+| Change a screen's colours, spacing or typography | its own `buildStyles(theme)` factory passed to `useThemedStyles()` — never a bare `StyleSheet.create` |
+| Add or change a colour token | `mobile/src/ui/palettes.ts` (`darkPalette` / `lightPalette`) — `lightPalette`'s type is the dark one's shape, so add to both or it won't compile |
+| Change spacing/border-radius (identical in both themes) | `mobile/src/ui/theme.ts` |
+| Change how text zoom is applied | `applyZoom()` inside `mobile/src/ui/ThemeContext.tsx` — see `05-why-its-built-this-way.md` before touching this |
+| Add or edit a UI-language string | `mobile/src/i18n/en.ts` first, then the matching key in `mobile/src/i18n/te.ts` |
+| Read the current translation in a component | `useT()` (or `useI18n()` for `language` + `t` together), from `mobile/src/i18n/I18nContext.tsx` |
+| Change what's stored as a device preference | `mobile/src/db/preferences.ts` (`AppPreferences`, `loadPreferences()` / `savePreferences()`) |
+| Change the theme/zoom/language settings screen | `mobile/src/app/settings.tsx` |
+
+**`useThemedStyles(factory)` is used by roughly 43 screen/component files** — there's no
+single folder for them; `grep -r useThemedStyles mobile/src` finds them all. Every one
+follows the same shape:
+
+```ts
+const buildStyles = ({ colors, typography, shadow }: Theme) =>
+  StyleSheet.create({ /* body reads exactly like the old static style sheet */ });
+```
+
+**Question/option/explanation text is a separate system and does not go through
+`mobile/src/i18n/`.** That's the existing per-question server translation, selected by its
+own quiz-language preference (see `02-database.md`'s `question_translations`) — the i18n
+catalogue only covers app chrome (buttons, labels, dialogs, error/empty states).
+
+---
+
 ## Admin accounts
 
 The admin console requires signing in. To create the **first** admin, set

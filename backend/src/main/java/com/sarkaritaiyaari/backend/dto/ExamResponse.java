@@ -12,12 +12,14 @@ public class ExamResponse {
     private String difficulty;
     /** exam_badges code, or null. Same join-rather-than-denormalise reasoning. */
     private String badge;
+    /** Discovery-filter facet (SSC/Banking/Railways/...), or null if uncategorized. */
+    private String category;
 
     public ExamResponse() {
     }
 
     public ExamResponse(String code, String name, String imageUrl, boolean active, int displayOrder,
-                        String difficulty, String badge) {
+                        String difficulty, String badge, String category) {
         this.code = code;
         this.name = name;
         this.imageUrl = imageUrl;
@@ -25,6 +27,7 @@ public class ExamResponse {
         this.displayOrder = displayOrder;
         this.difficulty = difficulty;
         this.badge = badge;
+        this.category = category;
     }
 
     public String getCode() {
@@ -81,5 +84,13 @@ public class ExamResponse {
 
     public void setBadge(String badge) {
         this.badge = badge;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
     }
 }

@@ -1,7 +1,8 @@
 import { StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { IoniconName } from "../constants/subjects";
-import { colors, radius, spacing } from "./theme";
+import { radius, spacing } from "./theme";
+import { useTheme, useThemedStyles, type Theme } from "./ThemeContext";
 
 type StatPillProps = {
   icon: IoniconName;
@@ -11,6 +12,8 @@ type StatPillProps = {
 
 /** The two-stat row on exam cards — "10,174 questions" / "Medium level", "24 full tests" / etc. */
 export function StatPill({ icon, value, label }: StatPillProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   return (
     <View style={styles.pill}>
       <Ionicons name={icon} size={12} color={colors.text.secondary} />
@@ -21,26 +24,27 @@ export function StatPill({ icon, value, label }: StatPillProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  pill: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs + 2,
-    backgroundColor: colors.surfaceElevated2,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radius.sm + 2,
-    paddingVertical: spacing.sm - 1,
-    paddingHorizontal: spacing.sm + 2,
-  },
-  text: {
-    fontSize: 11.5,
-    color: colors.text.secondary,
-    flexShrink: 1,
-  },
-  value: {
-    color: colors.text.primary,
-    fontWeight: "600",
-  },
-});
+const buildStyles = ({ colors }: Theme) =>
+  StyleSheet.create({
+    pill: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.xs + 2,
+      backgroundColor: colors.surfaceElevated2,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      borderRadius: radius.sm + 2,
+      paddingVertical: spacing.sm - 1,
+      paddingHorizontal: spacing.sm + 2,
+    },
+    text: {
+      fontSize: 11.5,
+      color: colors.text.secondary,
+      flexShrink: 1,
+    },
+    value: {
+      color: colors.text.primary,
+      fontWeight: "600",
+    },
+  });

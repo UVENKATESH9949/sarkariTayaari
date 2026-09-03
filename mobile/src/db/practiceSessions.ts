@@ -24,7 +24,20 @@ export type SessionRecord = {
   topicName: string;
   levelLabel: string;
   correctCount: number;
+  /**
+   * Questions ANSWERED — the denominator of every accuracy figure in the app. Equal to
+   * the size of the question set only when the user answered all of it, which stopped
+   * being mandatory when early finishing was added (Doc 2 §7).
+   */
   totalCount: number;
+  /**
+   * How many questions the set offered. Null for sessions recorded before this field
+   * existed, and for any session read back from the server, which does not carry it.
+   *
+   * For display only ("17 of 50 attempted"). Deliberately never a denominator: a student
+   * who answered 17 and got 15 right has 88% accuracy, not 30%.
+   */
+  availableCount: number | null;
   /** Null for sessions recorded before this field existed. */
   durationMs: number | null;
   results: QuestionResult[];
@@ -91,6 +104,7 @@ export async function loadSessions(): Promise<SessionRecord[]> {
     levelLabel: row.levelLabel,
     correctCount: row.correctCount,
     totalCount: row.totalCount,
+    availableCount: row.availableCount,
     durationMs: row.durationMs,
     results: resultsBySession.get(row.id) ?? [],
   }));
@@ -109,6 +123,7 @@ export async function insertSession(session: SessionRecord): Promise<void> {
       levelLabel: session.levelLabel,
       correctCount: session.correctCount,
       totalCount: session.totalCount,
+      availableCount: session.availableCount,
       durationMs: session.durationMs,
     });
 

@@ -8,7 +8,8 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
-import { colors, spacing } from "./theme";
+import { spacing } from "./theme";
+import { useThemedStyles, type Theme } from "./ThemeContext";
 
 type LoadingMarkProps = {
   /** Bold uppercase wordmark, e.g. "PREPARING". */
@@ -34,6 +35,7 @@ const FILL_EASE_MS = 240;
  * tokens — replaces the earlier owl illustration, which read as cute but not premium.
  */
 export function LoadingMark({ label = "PREPARING", percent, size = "hero" }: LoadingMarkProps) {
+  const styles = useThemedStyles(buildStyles);
   const trackWidth = TRACK_WIDTH[size];
   const cursorOpacity = useSharedValue(1);
   const sweepProgress = useSharedValue(0);
@@ -94,43 +96,44 @@ export function LoadingMark({ label = "PREPARING", percent, size = "hero" }: Loa
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    alignItems: "flex-start",
-  },
-  labelRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: spacing.sm + 2,
-  },
-  label: {
-    fontWeight: "800",
-    letterSpacing: 3,
-    color: colors.text.primary,
-  },
-  cursor: {
-    width: 3,
-    marginLeft: spacing.xs + 2,
-    backgroundColor: colors.brand.bright,
-  },
-  track: {
-    width: "100%",
-    backgroundColor: colors.surfaceElevated2,
-    overflow: "hidden",
-  },
-  fill: {
-    position: "absolute",
-    backgroundColor: colors.brand.bright,
-    shadowColor: colors.brand.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.9,
-    shadowRadius: 8,
-  },
-  percentText: {
-    marginTop: spacing.sm,
-    alignSelf: "flex-end",
-    fontSize: 13,
-    fontWeight: "700",
-    color: colors.brand.light,
-  },
-});
+const buildStyles = ({ colors }: Theme) =>
+  StyleSheet.create({
+    container: {
+      alignItems: "flex-start",
+    },
+    labelRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: spacing.sm + 2,
+    },
+    label: {
+      fontWeight: "800",
+      letterSpacing: 3,
+      color: colors.text.primary,
+    },
+    cursor: {
+      width: 3,
+      marginLeft: spacing.xs + 2,
+      backgroundColor: colors.brand.bright,
+    },
+    track: {
+      width: "100%",
+      backgroundColor: colors.surfaceElevated2,
+      overflow: "hidden",
+    },
+    fill: {
+      position: "absolute",
+      backgroundColor: colors.brand.bright,
+      shadowColor: colors.brand.primary,
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.9,
+      shadowRadius: 8,
+    },
+    percentText: {
+      marginTop: spacing.sm,
+      alignSelf: "flex-end",
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.brand.light,
+    },
+  });

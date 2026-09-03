@@ -1,6 +1,6 @@
 import { Text, View, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors } from "./theme";
+import { useTheme, useThemedStyles, type Theme } from "./ThemeContext";
 
 /**
  * Shown instead of a screen's normal "genuinely zero results" empty state when the
@@ -10,6 +10,8 @@ import { colors } from "./theme";
  * what to do about it, rather than implying the content just doesn't exist.
  */
 export function OfflineNoDataNotice() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   return (
     <View style={styles.container}>
       <Ionicons name="cloud-offline-outline" size={32} color={colors.brand.light} />
@@ -21,17 +23,18 @@ export function OfflineNoDataNotice() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 24,
-    paddingHorizontal: 20,
-  },
-  text: {
-    fontSize: 13,
-    color: colors.text.muted,
-    textAlign: "center",
-    lineHeight: 19,
-  },
-});
+const buildStyles = ({ colors }: Theme) =>
+  StyleSheet.create({
+    container: {
+      alignItems: "center",
+      gap: 10,
+      paddingVertical: 24,
+      paddingHorizontal: 20,
+    },
+    text: {
+      fontSize: 13,
+      color: colors.text.muted,
+      textAlign: "center",
+      lineHeight: 19,
+    },
+  });

@@ -3,6 +3,15 @@ import { db } from "../db/client";
 import {
   difficultyLevels,
   examBadges,
+  examGuideCareerPosts,
+  examGuideCycles,
+  examGuideDates,
+  examGuideDocuments,
+  examGuideEligibility,
+  examGuideFees,
+  examGuideMistakes,
+  examGuideSources,
+  examGuideSteps,
   examPapers,
   examStages,
   examSubjects,
@@ -20,6 +29,7 @@ import {
   topics,
 } from "../db/schema";
 import { ApiError } from "../api/client";
+import { getAllExamGuides } from "../api/examGuide";
 import { getLanguages, type QuestionResponse } from "../api/questions";
 import {
   getDifficultyLevels,
@@ -200,6 +210,189 @@ export async function writeReferenceData() {
   // Depends on the exam and topic rows written above (both are real FKs locally), so it runs
   // last rather than in the Promise.all at the top of this function.
   await writeTopicIntelligence(examList.map((exam) => exam.code));
+  // Depends on the exam rows above (examGuideCycles.examCode references exams.code).
+  await writeExamGuides();
+}
+
+/**
+ * Exam Guide spec §44 "Offline loading / caching" — the one reference-data type that
+ * previously had no local table at all (see api/examGuide.ts's own comment). One combined
+ * request, like writeExamStructures, not per-exam like writeTopicIntelligence: a failure
+ * here leaves the previous sync's cached guides in place rather than wiping anything, but
+ * a *successful* response is the complete authoritative set (every currently active,
+ * published, current cycle), so on success every table is fully replaced — an exam whose
+ * cycle was unpublished or deleted server-side must disappear from the offline cache too,
+ * not just fail to update.
+ */
+async function writeExamGuides() {
+  let guides: Awaited<ReturnType<typeof getAllExamGuides>>;
+  try {
+    guides = await getAllExamGuides();
+  } catch {
+    return;
+  }
+
+  const cycleRows: (typeof examGuideCycles.$inferInsert)[] = [];
+  const eligibilityRows: (typeof examGuideEligibility.$inferInsert)[] = [];
+  const dateRows: (typeof examGuideDates.$inferInsert)[] = [];
+  const documentRows: (typeof examGuideDocuments.$inferInsert)[] = [];
+  const stepRows: (typeof examGuideSteps.$inferInsert)[] = [];
+  const mistakeRows: (typeof examGuideMistakes.$inferInsert)[] = [];
+  const feeRows: (typeof examGuideFees.$inferInsert)[] = [];
+  const careerPostRows: (typeof examGuideCareerPosts.$inferInsert)[] = [];
+  const sourceRows: (typeof examGuideSources.$inferInsert)[] = [];
+
+  for (const guide of guides) {
+    cycleRows.push({
+      examCode: guide.examCode,
+      recruitmentCycleId: guide.recruitmentCycleId,
+      examName: guide.examName,
+      cycleName: guide.cycleName,
+      status: guide.status,
+      notificationDate: guide.notificationDate,
+      applicationStart: guide.applicationStart,
+      applicationEnd: guide.applicationEnd,
+      examStart: guide.examStart,
+      examEnd: guide.examEnd,
+      vacancyCount: guide.vacancyCount,
+      notificationUrl: guide.notificationUrl,
+      overviewText: guide.overviewText,
+      isDemo: guide.demo,
+      lastVerifiedAt: guide.lastVerifiedAt,
+    });
+
+    if (guide.eligibility) {
+      eligibilityRows.push({
+        examCode: guide.examCode,
+        minimumAge: guide.eligibility.minimumAge,
+        maximumAge: guide.eligibility.maximumAge,
+        ageCutoffDate: guide.eligibility.ageCutoffDate,
+        qualification: guide.eligibility.qualification,
+        nationality: guide.eligibility.nationality,
+        genderRequirement: guide.eligibility.genderRequirement,
+        categoryRelaxation: guide.eligibility.categoryRelaxation
+          ? JSON.stringify(guide.eligibility.categoryRelaxation)
+          : null,
+        specialRequirements: guide.eligibility.specialRequirements,
+        sourceId: guide.eligibility.sourceId,
+      });
+    }
+
+    guide.importantDates.forEach((d, index) => {
+      dateRows.push({
+        id: d.id,
+        examCode: guide.examCode,
+        eventType: d.eventType,
+        title: d.title,
+        startDate: d.startDate,
+        endDate: d.endDate,
+        official: d.official,
+        sourceId: d.sourceId,
+        displayOrder: index,
+      });
+    });
+
+    guide.documents.forEach((doc, index) => {
+      documentRows.push({
+        id: doc.id,
+        examCode: guide.examCode,
+        documentName: doc.documentName,
+        required: doc.required,
+        applicableFor: doc.applicableFor,
+        format: doc.format,
+        maxSizeKb: doc.maxSizeKb,
+        dimensions: doc.dimensions,
+        instructions: doc.instructions,
+        userStatus: doc.userStatus,
+        sourceId: doc.sourceId,
+        displayOrder: index,
+      });
+    });
+
+    guide.applicationSteps.forEach((step) => {
+      stepRows.push({
+        id: `${guide.examCode}:${step.stepNumber}`,
+        examCode: guide.examCode,
+        stepNumber: step.stepNumber,
+        title: step.title,
+        description: step.description,
+        warning: step.warning,
+        officialUrl: step.officialUrl,
+      });
+    });
+
+    guide.applicationMistakes.forEach((mistake, index) => {
+      mistakeRows.push({ id: `${guide.examCode}:${index}`, examCode: guide.examCode, mistake, displayOrder: index });
+    });
+
+    guide.fees.forEach((fee, index) => {
+      feeRows.push({
+        id: `${guide.examCode}:${fee.category}`,
+        examCode: guide.examCode,
+        category: fee.category,
+        amountRupees: fee.amountRupees,
+        exempted: fee.exempted,
+        notes: fee.notes,
+        sourceId: fee.sourceId,
+        displayOrder: index,
+      });
+    });
+
+    guide.careerPosts.forEach((post, index) => {
+      careerPostRows.push({
+        id: post.id,
+        examCode: guide.examCode,
+        postTitle: post.postTitle,
+        payLevel: post.payLevel,
+        salaryMinRupees: post.salaryMinRupees,
+        salaryMaxRupees: post.salaryMaxRupees,
+        growthPath: post.growthPath,
+        description: post.description,
+        sourceId: post.sourceId,
+        displayOrder: index,
+      });
+    });
+
+    guide.sources.forEach((source) => {
+      sourceRows.push({ id: source.id, sourceName: source.sourceName, sourceType: source.sourceType, url: source.url });
+    });
+  }
+
+  await db.transaction(async (tx) => {
+    // Children first — real FKs to examGuideCycles.
+    await tx.delete(examGuideCareerPosts);
+    await tx.delete(examGuideFees);
+    await tx.delete(examGuideMistakes);
+    await tx.delete(examGuideSteps);
+    await tx.delete(examGuideDocuments);
+    await tx.delete(examGuideDates);
+    await tx.delete(examGuideEligibility);
+    await tx.delete(examGuideCycles);
+
+    if (cycleRows.length > 0) await tx.insert(examGuideCycles).values(cycleRows);
+    if (eligibilityRows.length > 0) await tx.insert(examGuideEligibility).values(eligibilityRows);
+    if (dateRows.length > 0) await tx.insert(examGuideDates).values(dateRows);
+    if (documentRows.length > 0) await tx.insert(examGuideDocuments).values(documentRows);
+    if (stepRows.length > 0) await tx.insert(examGuideSteps).values(stepRows);
+    if (mistakeRows.length > 0) await tx.insert(examGuideMistakes).values(mistakeRows);
+    if (feeRows.length > 0) await tx.insert(examGuideFees).values(feeRows);
+    if (careerPostRows.length > 0) await tx.insert(examGuideCareerPosts).values(careerPostRows);
+    // Sources are global and upserted, not wiped: a source cited only by a cycle this
+    // pass didn't touch (e.g. a cached-but-not-current one) should keep resolving.
+    if (sourceRows.length > 0) {
+      await tx
+        .insert(examGuideSources)
+        .values(sourceRows)
+        .onConflictDoUpdate({
+          target: examGuideSources.id,
+          set: {
+            sourceName: sql`excluded.source_name`,
+            sourceType: sql`excluded.source_type`,
+            url: sql`excluded.url`,
+          },
+        });
+    }
+  });
 }
 
 /**

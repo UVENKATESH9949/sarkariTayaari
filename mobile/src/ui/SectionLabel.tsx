@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
-import { colors } from "./theme";
+import { useThemedStyles, type Theme } from "./ThemeContext";
 
 type SectionLabelProps = {
   label: string;
@@ -10,6 +10,7 @@ type SectionLabelProps = {
 
 /** Blue uppercase section header, optionally with a right-aligned count — replaces the plain-grey `typography.label` usage on redesigned screens. */
 export function SectionLabel({ label, count, style }: SectionLabelProps) {
+  const styles = useThemedStyles(buildStyles);
   return (
     <View style={[styles.row, style]}>
       <Text style={styles.label}>{label}</Text>
@@ -18,21 +19,22 @@ export function SectionLabel({ label, count, style }: SectionLabelProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 1.2,
-    color: colors.brand.light,
-    textTransform: "uppercase",
-  },
-  count: {
-    fontSize: 12,
-    color: colors.text.muted,
-  },
-});
+const buildStyles = ({ colors }: Theme) =>
+  StyleSheet.create({
+    row: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    label: {
+      fontSize: 12,
+      fontWeight: "700",
+      letterSpacing: 1.2,
+      color: colors.brand.light,
+      textTransform: "uppercase",
+    },
+    count: {
+      fontSize: 12,
+      color: colors.text.muted,
+    },
+  });

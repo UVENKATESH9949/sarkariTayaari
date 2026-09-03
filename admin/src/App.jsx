@@ -8,6 +8,8 @@ import Subjects from "./pages/Subjects.jsx";
 import Topics from "./pages/Topics.jsx";
 import Exams from "./pages/Exams.jsx";
 import ExamStructure from "./pages/ExamStructure.jsx";
+import ExamGuide from "./pages/ExamGuide.jsx";
+import ExamSources from "./pages/ExamSources.jsx";
 import Languages from "./pages/Languages.jsx";
 import DifficultyLevels from "./pages/DifficultyLevels.jsx";
 import PaperTypes from "./pages/PaperTypes.jsx";
@@ -25,6 +27,7 @@ import {
   LanguageIcon,
   LevelIcon,
   PaperTypeIcon,
+  SourceIcon,
 } from "./components/icons.jsx";
 import "./App.css";
 
@@ -80,6 +83,7 @@ export default function App() {
 
           <span className="nav-group-label">Exam intelligence</span>
           <NavLink to="/topic-intelligence"><IntelligenceIcon /> Topic Priority</NavLink>
+          <NavLink to="/exam-sources"><SourceIcon /> Exam Guide Sources</NavLink>
 
           <span className="nav-group-label">Reference data</span>
           <NavLink to="/exams"><ExamIcon /> Exams</NavLink>
@@ -106,6 +110,8 @@ export default function App() {
           <Route path="/topic-intelligence" element={<TopicIntelligence />} />
           <Route path="/exams" element={<Exams />} />
           <Route path="/exams/:examCode/structure" element={<ExamStructure />} />
+          <Route path="/exams/:examCode/guide" element={<ExamGuide />} />
+          <Route path="/exam-sources" element={<ExamSources />} />
           <Route path="/subjects" element={<Subjects />} />
           <Route path="/topics" element={<Topics />} />
           <Route path="/languages" element={<Languages />} />

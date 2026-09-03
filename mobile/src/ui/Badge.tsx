@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing } from "./theme";
+import { radius, spacing } from "./theme";
+import { useTheme, useThemedStyles, type Theme } from "./ThemeContext";
 
 type BadgeVariant = "hot" | "success";
 
@@ -13,14 +14,19 @@ type BadgeProps = {
   backgroundColor?: string | null;
 };
 
-const VARIANT_STYLE: Record<BadgeVariant, { color: string; bg: string }> = {
-  hot: { color: colors.semantic.hot, bg: colors.semantic.hotBg },
-  success: { color: colors.semantic.success, bg: colors.semantic.successBg },
-};
+// A function of the palette rather than a module constant: both variants are semantic
+// colours, and the dark palette's are unreadable on a light ground (see palettes.ts).
+function variantTone(variant: BadgeVariant, colors: Theme["colors"]) {
+  return variant === "hot"
+    ? { color: colors.semantic.hot, bg: colors.semantic.hotBg }
+    : { color: colors.semantic.success, bg: colors.semantic.successBg };
+}
 
 /** Small pill-shaped label — "TRENDING" / "POPULAR" / "BEST 142/200" style tags on exam cards. */
 export function Badge({ label, variant = "success", color, backgroundColor }: BadgeProps) {
-  const tone = VARIANT_STYLE[variant];
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  const tone = variantTone(variant, colors);
   return (
     <View style={[styles.badge, { backgroundColor: backgroundColor || tone.bg }]}>
       <Text style={[styles.text, { color: color || tone.color }]}>{label.toUpperCase()}</Text>
@@ -28,15 +34,16 @@ export function Badge({ label, variant = "success", color, backgroundColor }: Ba
   );
 }
 
-const styles = StyleSheet.create({
-  badge: {
-    paddingHorizontal: spacing.sm + 1,
-    paddingVertical: 2,
-    borderRadius: radius.pill,
-  },
-  text: {
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 0.4,
-  },
-});
+const buildStyles = (_theme: Theme) =>
+  StyleSheet.create({
+    badge: {
+      paddingHorizontal: spacing.sm + 1,
+      paddingVertical: 2,
+      borderRadius: radius.pill,
+    },
+    text: {
+      fontSize: 10,
+      fontWeight: "700",
+      letterSpacing: 0.4,
+    },
+  });

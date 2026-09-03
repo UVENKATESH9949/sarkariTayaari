@@ -197,6 +197,7 @@ public class ExamService {
         exam.setDisplayOrder(request.getDisplayOrder());
         exam.setDifficulty(normalizeDifficulty(request.getDifficulty()));
         exam.setBadge(normalizeBadge(request.getBadge()));
+        exam.setCategory(blankToNull(request.getCategory()));
     }
 
     /*
@@ -233,6 +234,6 @@ public class ExamService {
 
     private static ExamResponse toResponse(Exam exam) {
         return new ExamResponse(exam.getCode(), exam.getName(), exam.getImageUrl(), exam.isActive(),
-                exam.getDisplayOrder(), exam.getDifficulty(), exam.getBadge());
+                exam.getDisplayOrder(), exam.getDifficulty(), exam.getBadge(), exam.getCategory());
     }
 }

@@ -25,3 +25,9 @@ admin:
 app:
   epic-l:
     synthetic-seed-enabled: true
+
+# Optional. Turn on to allow seeding a demo SSC CGL recruitment cycle (Exam Guide Phase 1)
+# via POST /api/admin/exam-guide-demo/seed, and to remove it via .../purge. Local
+# development only — never set this on a deployed instance.
+  exam-guide:
+    demo-seed-enabled: true

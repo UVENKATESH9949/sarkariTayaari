@@ -10,7 +10,10 @@ import { FadeInItem } from "../../../ui/FadeInList";
 import { OfflineNoDataNotice } from "../../../ui/OfflineNoDataNotice";
 import { Card } from "../../../ui/Card";
 import { ListSkeleton } from "../../../ui/Skeleton";
-import { colors, spacing, typography } from "../../../ui/theme";
+import { spacing } from "../../../ui/theme";
+import { useTheme, useThemedStyles, type Theme } from "../../../ui/ThemeContext";
+import { useT } from "../../../i18n/I18nContext";
+import { questionsLabel } from "../../../i18n/counts";
 import type { IoniconName } from "../../../constants/subjects";
 
 type Level = {
@@ -22,14 +25,21 @@ type Level = {
   count: number;
 };
 
-// Used only where a level has no colour/icon set by the admin.
-const FALLBACK_LEVEL_STYLE = { icon: "ellipse-outline" as IoniconName, color: colors.text.secondary, bg: colors.surfaceElevated2 };
+// Used only where a level has no colour/icon set by the admin. A function of the palette
+// rather than a constant: a fallback baked from the dark palette would be the one
+// illegible row on a light screen.
+const fallbackLevelStyle = (colors: Theme["colors"]) => ({
+  icon: "ellipse-outline" as IoniconName,
+  color: colors.text.secondary,
+  bg: colors.surfaceElevated2,
+});
 
-function questionsLabel(count: number): string {
-  return count === 1 ? "1 question" : `${count} questions`;
-}
+
 
 export default function Levels() {
+  const { colors, typography } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  const t = useT();
   const router = useRouter();
   const { examCode, examLabel, subjectName, topicId, topicName } = useLocalSearchParams<{
     examCode: string;
@@ -64,18 +74,18 @@ export default function Levels() {
 
   const loading = countsLoading || levelsLoading;
 
-  const levels = useMemo<Level[]>(
-    () =>
-      syncedLevels.map((level) => ({
-        key: level.code,
-        label: level.label,
-        icon: (level.icon as IoniconName) || FALLBACK_LEVEL_STYLE.icon,
-        color: level.color || FALLBACK_LEVEL_STYLE.color,
-        bg: level.colorBg || FALLBACK_LEVEL_STYLE.bg,
-        count: counts[level.code] ?? 0,
-      })),
-    [counts, syncedLevels],
-  );
+  const levels = useMemo<Level[]>(() => {
+    // Built once per theme change rather than three times per level.
+    const fallback = fallbackLevelStyle(colors);
+    return syncedLevels.map((level) => ({
+      key: level.code,
+      label: level.label,
+      icon: (level.icon as IoniconName) || fallback.icon,
+      color: level.color || fallback.color,
+      bg: level.colorBg || fallback.bg,
+      count: counts[level.code] ?? 0,
+    }));
+  }, [counts, syncedLevels, colors]);
 
   // Summed from the real counts so "All Levels" always matches the levels below it,
   // including any level added after this screen was written.
@@ -92,11 +102,11 @@ export default function Levels() {
     <>
       <Stack.Screen options={{ title: topicName ?? "Levels" }} />
       <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.heading}>Choose a level</Text>
+        <Text style={styles.heading}>{t("practice.chooseLevel")}</Text>
         <Text style={styles.subheading}>{topicName}</Text>
 
         {loading ? (
-          <ContextualLoading message="Getting your practice levels ready..." skeleton={<ListSkeleton count={4} />} />
+          <ContextualLoading message={t("practice.loadingLevels")} skeleton={<ListSkeleton count={4} />} />
         ) : (
         <>
         <Card
@@ -109,15 +119,17 @@ export default function Levels() {
             <Ionicons name="layers-outline" size={24} color={colors.text.onAccent} />
           </View>
           <View style={styles.textBlock}>
-            <Text style={styles.allLevelsTitle}>All Levels</Text>
+            <Text style={styles.allLevelsTitle}>{t("practice.allLevels")}</Text>
             <Text style={styles.allLevelsSubtitle}>
-              {allLevelsTotal === 0 ? "No questions yet" : `${questionsLabel(allLevelsTotal)} · mixed difficulty`}
+              {allLevelsTotal === 0
+                ? t("practice.noQuestionsYet")
+                : t("practice.levelMixed", { questions: questionsLabel(allLevelsTotal, t) })}
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.7)" />
         </Card>
 
-        <Text style={[typography.label, styles.sectionLabel]}>Practice by difficulty</Text>
+        <Text style={[typography.label, styles.sectionLabel]}>{t("practice.practiceByDifficulty")}</Text>
         <View style={styles.list}>
           {levels.map((level, index) => {
             const disabled = level.count === 0;
@@ -129,7 +141,7 @@ export default function Levels() {
                   </View>
                   <View style={styles.textBlock}>
                     <Text style={styles.levelName}>{level.label}</Text>
-                    <Text style={styles.levelStats}>{disabled ? "No questions yet" : questionsLabel(level.count)}</Text>
+                    <Text style={styles.levelStats}>{disabled ? t("practice.noQuestionsYet") : questionsLabel(level.count, t)}</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color={colors.text.muted} />
                 </Card>
@@ -145,69 +157,70 @@ export default function Levels() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    padding: spacing.xl,
-    paddingTop: spacing.xl,
-    paddingBottom: spacing["3xl"],
-  },
-  heading: {
-    ...typography.pageTitle,
-    fontSize: 22,
-  },
-  subheading: {
-    ...typography.secondary,
-    marginTop: spacing.xs,
-    marginBottom: spacing.xl,
-  },
-  allLevelsCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md + 2,
-    marginBottom: spacing.xl,
-  },
-  allLevelsIconCircle: {
-    backgroundColor: "rgba(255,255,255,0.15)",
-  },
-  allLevelsTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: colors.text.onAccent,
-  },
-  allLevelsSubtitle: {
-    fontSize: 12,
-    color: "rgba(255,255,255,0.75)",
-    marginTop: 2,
-  },
-  sectionLabel: {
-    marginBottom: spacing.sm + 2,
-  },
-  list: {
-    gap: spacing.md,
-  },
-  card: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md + 2,
-  },
-  iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  textBlock: {
-    flex: 1,
-  },
-  levelName: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: colors.text.primary,
-  },
-  levelStats: {
-    fontSize: 12,
-    color: colors.text.muted,
-    marginTop: 2,
-  },
-});
+const buildStyles = ({ colors, typography }: Theme) =>
+  StyleSheet.create({
+    container: {
+      padding: spacing.xl,
+      paddingTop: spacing.xl,
+      paddingBottom: spacing["3xl"],
+    },
+    heading: {
+      ...typography.pageTitle,
+      fontSize: 22,
+    },
+    subheading: {
+      ...typography.secondary,
+      marginTop: spacing.xs,
+      marginBottom: spacing.xl,
+    },
+    allLevelsCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.md + 2,
+      marginBottom: spacing.xl,
+    },
+    allLevelsIconCircle: {
+      backgroundColor: "rgba(255,255,255,0.15)",
+    },
+    allLevelsTitle: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.text.onAccent,
+    },
+    allLevelsSubtitle: {
+      fontSize: 12,
+      color: "rgba(255,255,255,0.75)",
+      marginTop: 2,
+    },
+    sectionLabel: {
+      marginBottom: spacing.sm + 2,
+    },
+    list: {
+      gap: spacing.md,
+    },
+    card: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.md + 2,
+    },
+    iconCircle: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    textBlock: {
+      flex: 1,
+    },
+    levelName: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: colors.text.primary,
+    },
+    levelStats: {
+      fontSize: 12,
+      color: colors.text.muted,
+      marginTop: 2,
+    },
+  });

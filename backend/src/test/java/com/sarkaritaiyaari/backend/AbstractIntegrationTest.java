@@ -41,6 +41,8 @@ abstract class AbstractIntegrationTest {
     protected static final String TEST_SUBJECT_NAME = "Automated Test Subject";
     protected static final String TEST_TOPIC_NAME = "Automated Test Topic";
     protected static final String TEST_ADMIN_EMAIL = "automated-test-admin@sarkaritaiyaari.internal";
+    protected static final String TEST_REVIEWER_EMAIL = "automated-test-reviewer@sarkaritaiyaari.internal";
+    protected static final String TEST_STUDENT_EMAIL = "automated-test-student@sarkaritaiyaari.internal";
 
     @Autowired
     protected TestRestTemplate restTemplate;
@@ -70,6 +72,8 @@ abstract class AbstractIntegrationTest {
 
     protected UUID testTopicId;
     private String adminToken;
+    private String reviewerToken;
+    private String studentToken;
 
     @BeforeEach
     void ensureTestFixtures() {
@@ -113,6 +117,34 @@ abstract class AbstractIntegrationTest {
         token.setExpiresAt(OffsetDateTime.now().plusHours(1));
         userTokenRepository.save(token);
         adminToken = token.getToken();
+
+        User reviewer = userRepository.findByEmail(TEST_REVIEWER_EMAIL).orElseGet(() -> {
+            User u = new User();
+            u.setEmail(TEST_REVIEWER_EMAIL);
+            u.setPasswordHash("unused-in-tests");
+            u.setRole(Role.REVIEWER);
+            return userRepository.save(u);
+        });
+        UserToken reviewerTok = new UserToken();
+        reviewerTok.setToken("test-reviewer-token-" + UUID.randomUUID());
+        reviewerTok.setUser(reviewer);
+        reviewerTok.setExpiresAt(OffsetDateTime.now().plusHours(1));
+        userTokenRepository.save(reviewerTok);
+        reviewerToken = reviewerTok.getToken();
+
+        User student = userRepository.findByEmail(TEST_STUDENT_EMAIL).orElseGet(() -> {
+            User u = new User();
+            u.setEmail(TEST_STUDENT_EMAIL);
+            u.setPasswordHash("unused-in-tests");
+            u.setRole(Role.STUDENT);
+            return userRepository.save(u);
+        });
+        UserToken studentTok = new UserToken();
+        studentTok.setToken("test-student-token-" + UUID.randomUUID());
+        studentTok.setUser(student);
+        studentTok.setExpiresAt(OffsetDateTime.now().plusHours(1));
+        userTokenRepository.save(studentTok);
+        studentToken = studentTok.getToken();
     }
 
     @AfterEach
@@ -120,6 +152,14 @@ abstract class AbstractIntegrationTest {
         if (adminToken != null) {
             userTokenRepository.deleteById(adminToken);
             adminToken = null;
+        }
+        if (reviewerToken != null) {
+            userTokenRepository.deleteById(reviewerToken);
+            reviewerToken = null;
+        }
+        if (studentToken != null) {
+            userTokenRepository.deleteById(studentToken);
+            studentToken = null;
         }
         if (!createdIds.isEmpty()) {
             questionRepository.deleteAllById(createdIds);
@@ -148,6 +188,29 @@ abstract class AbstractIntegrationTest {
     protected <T> HttpEntity<T> adminAuth(T body) {
         HttpHeaders headers = new HttpHeaders();
         headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken);
+        return new HttpEntity<>(body, headers);
+    }
+
+    /** Same shape as {@link #adminAuth()}, but for a REVIEWER-role fixture — spec §36. */
+    protected HttpEntity<Void> reviewerAuth() {
+        return reviewerAuth(null);
+    }
+
+    protected <T> HttpEntity<T> reviewerAuth(T body) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + reviewerToken);
+        return new HttpEntity<>(body, headers);
+    }
+
+    /** Same shape as {@link #adminAuth()}, but for a plain STUDENT-role fixture — used to
+     * assert an endpoint correctly rejects a signed-in-but-unprivileged caller. */
+    protected HttpEntity<Void> sharedStudentAuth() {
+        return sharedStudentAuth(null);
+    }
+
+    protected <T> HttpEntity<T> sharedStudentAuth(T body) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + studentToken);
         return new HttpEntity<>(body, headers);
     }
 

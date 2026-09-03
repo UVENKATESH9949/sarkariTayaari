@@ -6,3 +6,6 @@ This folder is the project's own persistent memory — living documentation mean
 - Topic pages (architecture, backend, mobile sync, mock test design, etc.) — **not created yet**. Planned as a follow-up: splitting `offline-exam-app-requirements.md` (currently one large file) into focused topic pages here. Until that happens, `offline-exam-app-requirements.md` in the project root remains the detailed historical record of every phase, decision, and verification result.
 
 This is distinct from Claude's own cross-session memory (which lives outside this repo and tracks user preferences and collaboration patterns, not project facts).
+
+See also [`../AI_RULES.md`](../AI_RULES.md) — the rules and read-order for any AI session
+working in this repo, and [`../system-design/`](../system-design/) for architecture.

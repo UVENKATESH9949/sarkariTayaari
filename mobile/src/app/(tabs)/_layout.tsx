@@ -2,28 +2,43 @@ import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { useActiveSession, type TabHref } from "../../practice/activeSessionContext";
 import { AppAlert } from "../../ui/AppDialog";
-import { colors } from "../../ui/theme";
-
-const ACTIVE_COLOR = colors.brand.light;
-const INACTIVE_COLOR = colors.text.muted;
+import { useTheme } from "../../ui/ThemeContext";
+import { useT } from "../../i18n/I18nContext";
 
 // Route name -> href, for the destination handoff described below.
 const TAB_HREFS: Record<string, TabHref> = {
   index: "/",
   practice: "/practice",
   "mock-test": "/mock-test",
+  exams: "/exams",
   progress: "/progress",
   more: "/more",
 };
 
 export default function TabsLayout() {
+  const { colors } = useTheme();
+  const t = useT();
   const { activeSessionRef, abandonSession, pendingDestinationRef } = useActiveSession();
 
   return (
     <Tabs
+      /*
+       * The fix for Doc 2 §4's back-traversal, and the reason it was happening.
+       *
+       * The default here walks the *tab history*, so Back from a third module went to Mock,
+       * then continued popping Mock's stack, then landed in whatever Practice screen was
+       * still mounted — producing exactly the reported
+       * "Other Module -> Mock -> Practice Test -> Practice Level -> Practice Home" chain.
+       * Nothing was leaking; that is what tab history does.
+       *
+       * "initialRoute" makes Back from any tab go to Home and then exit the app, so it can
+       * never cross from one module into another's stack. Combined with the idle collapse in
+       * useStaleStackReset, a module is also not still four screens deep when revisited.
+       */
+      backBehavior="initialRoute"
       screenOptions={{
-        tabBarActiveTintColor: ACTIVE_COLOR,
-        tabBarInactiveTintColor: INACTIVE_COLOR,
+        tabBarActiveTintColor: colors.brand.light,
+        tabBarInactiveTintColor: colors.text.muted,
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
@@ -39,12 +54,12 @@ export default function TabsLayout() {
           if (!activeSessionRef.current) return;
           e.preventDefault();
           AppAlert.alert(
-            "Leave this test?",
-            "You are moving to another module. Your current test state may be lost if you leave now.",
+            t("session.leaveTestTitle"),
+            t("session.leaveTestMessage"),
             [
-              { text: "Stay", style: "cancel" },
+              { text: t("common.stay"), style: "cancel" },
               {
-                text: "Leave",
+                text: t("common.leave"),
                 style: "destructive",
                 onPress: () => {
                   // Don't navigate here: the abandoned screen still needs to fix up
@@ -67,8 +82,8 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Home",
-          tabBarLabel: "Home",
+          title: t("nav.home"),
+          tabBarLabel: t("nav.home"),
           headerShown: false,
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? "home" : "home-outline"} size={size} color={color} />
@@ -78,8 +93,8 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="practice"
         options={{
-          title: "Practice",
-          tabBarLabel: "Practice",
+          title: t("nav.practice"),
+          tabBarLabel: t("nav.practice"),
           headerShown: false,
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? "book" : "book-outline"} size={size} color={color} />
@@ -89,8 +104,8 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="mock-test"
         options={{
-          title: "Mock Test",
-          tabBarLabel: "Mock Test",
+          title: t("nav.mockTest"),
+          tabBarLabel: t("nav.mockTest"),
           headerShown: false,
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? "timer" : "timer-outline"} size={size} color={color} />
@@ -98,11 +113,30 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="exams"
+        options={{
+          title: t("nav.exams"),
+          tabBarLabel: t("nav.exams"),
+          headerShown: false,
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? "school" : "school-outline"} size={size} color={color} />
+          ),
+        }}
+      />
+      {/*
+        Exam Guide spec §39/§65/§72: Progress stays a real route (so Home's readiness card and
+        More's row below can still push to it, and its own screen/data/calculations are
+        completely untouched) but is no longer a primary tab. `href: null` is expo-router's
+        documented way to do exactly that — the route keeps working, the tab bar just stops
+        listing it.
+      */}
+      <Tabs.Screen
         name="progress"
         options={{
-          title: "Progress",
-          tabBarLabel: "Progress",
+          title: t("nav.progress"),
+          tabBarLabel: t("nav.progress"),
           headerShown: false,
+          href: null,
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? "stats-chart" : "stats-chart-outline"} size={size} color={color} />
           ),
@@ -111,8 +145,8 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="more"
         options={{
-          title: "More",
-          tabBarLabel: "More",
+          title: t("nav.more"),
+          tabBarLabel: t("nav.more"),
           headerShown: false,
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? "ellipsis-horizontal-circle" : "ellipsis-horizontal-circle-outline"} size={size} color={color} />

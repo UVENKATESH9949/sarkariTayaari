@@ -8,9 +8,12 @@ import { getAllSubjects, type SubjectMetaRow } from "../../../db/subjectMeta";
 import { Button } from "../../../ui/Button";
 import { ContextualLoading } from "../../../ui/ContextualLoading";
 import { CardSkeleton } from "../../../ui/Skeleton";
-import { colors, spacing, typography } from "../../../ui/theme";
+import { spacing } from "../../../ui/theme";
+import { useTheme, useThemedStyles, type Theme } from "../../../ui/ThemeContext";
+import { useT } from "../../../i18n/I18nContext";
 
-function scoreTone(percent: number): { text: string; bg: string } {
+// Takes the palette: these are semantic colours, which differ between themes.
+function scoreTone(percent: number, colors: Theme["colors"]): { text: string; bg: string } {
   if (percent >= 70) return { text: colors.semantic.success, bg: colors.semantic.successBg };
   if (percent >= 40) return { text: colors.semantic.warning, bg: colors.semantic.warningBg };
   return { text: colors.semantic.error, bg: colors.semantic.errorBg };
@@ -36,6 +39,9 @@ function QuestionResultCard({
   isExpanded: boolean;
   onToggle: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  const t = useT();
   const status = r.selectedIndex === null ? "unattempted" : r.selectedIndex === r.correctIndex ? "correct" : "wrong";
   return (
     <Pressable style={styles.card} onPress={onToggle}>
@@ -78,7 +84,7 @@ function QuestionResultCard({
             })}
           </View>
           <View style={styles.explanationBox}>
-            <Text style={styles.explanationLabel}>Explanation</Text>
+            <Text style={styles.explanationLabel}>{t("common.explanation")}</Text>
             <Text style={styles.explanationText}>{r.explanation}</Text>
           </View>
         </View>
@@ -88,6 +94,12 @@ function QuestionResultCard({
 }
 
 export default function MockTestResult() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  const t = useT();
+  // Neutral fallback for a subject an admin hasn't given an icon colour yet; the
+  // constants module can't know the theme, so it comes from here.
+  const subjectFallback = { iconColor: colors.text.secondary, iconBg: colors.surfaceElevated2 };
   const router = useRouter();
   const { attemptId } = useLocalSearchParams<{ attemptId: string }>();
   const [attempt, setAttempt] = useState<MockTestAttemptRecord | null>(null);
@@ -121,7 +133,7 @@ export default function MockTestResult() {
     return (
       <View style={styles.container}>
         <ContextualLoading
-          message="Preparing your performance report..."
+          message={t("mock.loadingResult")}
           skeleton={
             <>
               <CardSkeleton height={110} />
@@ -139,7 +151,7 @@ export default function MockTestResult() {
 
   const maxMarks = attempt.totalQuestions * attempt.marksCorrect;
   const scorePercent = maxMarks > 0 ? Math.round((attempt.totalMarksScored / maxMarks) * 100) : 0;
-  const tone = scoreTone(scorePercent);
+  const tone = scoreTone(scorePercent, colors);
 
   const header = (
     <>
@@ -153,15 +165,15 @@ export default function MockTestResult() {
       <View style={styles.statRow}>
         <View style={styles.statCard}>
           <Text style={[styles.statValue, { color: colors.semantic.success }]}>{attempt.correctCount}</Text>
-          <Text style={styles.statLabel}>Correct</Text>
+          <Text style={styles.statLabel}>{t("common.correct")}</Text>
         </View>
         <View style={styles.statCard}>
           <Text style={[styles.statValue, { color: colors.semantic.error }]}>{attempt.wrongCount}</Text>
-          <Text style={styles.statLabel}>Wrong</Text>
+          <Text style={styles.statLabel}>{t("common.wrong")}</Text>
         </View>
         <View style={styles.statCard}>
           <Text style={[styles.statValue, { color: colors.text.muted }]}>{attempt.unattemptedCount}</Text>
-          <Text style={styles.statLabel}>Unattempted</Text>
+          <Text style={styles.statLabel}>{t("common.unattempted")}</Text>
         </View>
       </View>
 
@@ -172,12 +184,13 @@ export default function MockTestResult() {
         </Text>
       </View>
 
-      <Text style={styles.sectionHeading}>Section-wise breakdown</Text>
+      <Text style={styles.sectionHeading}>{t("mock.sectionBreakdown")}</Text>
       <View style={styles.sectionList}>
         {sectionBreakdown.map((s) => {
           const meta = toSubjectMeta(
             subjectStyles.find((row) => row.name === s.subjectName),
             s.subjectName,
+            subjectFallback,
           );
           return (
             <View key={s.subjectName} style={styles.sectionRow}>
@@ -193,7 +206,7 @@ export default function MockTestResult() {
         })}
       </View>
 
-      <Text style={styles.sectionHeading}>Question by question</Text>
+      <Text style={styles.sectionHeading}>{t("summary.questionByQuestion")}</Text>
     </>
   );
 
@@ -217,185 +230,186 @@ export default function MockTestResult() {
       )}
       ListFooterComponent={
         <Button size="lg" onPress={() => router.replace("/mock-test")}>
-          Back to Mock Test
+          {t("mock.backToMock")}
         </Button>
       }
     />
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    padding: 20,
-    paddingTop: 24,
-    paddingBottom: 40,
-  },
-  loadingMessage: {
-    ...typography.secondary,
-    marginBottom: spacing.md,
-  },
-  scoreCard: {
-    borderRadius: 16,
-    paddingVertical: 28,
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  scoreValue: {
-    fontSize: 30,
-    fontWeight: "700",
-  },
-  scoreLabel: {
-    fontSize: 13,
-    marginTop: 4,
-  },
-  statRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 16,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: colors.surfaceElevated2,
-    borderRadius: 12,
-    padding: 14,
-    alignItems: "center",
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  statLabel: {
-    fontSize: 11,
-    color: colors.text.muted,
-    marginTop: 2,
-  },
-  timeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    justifyContent: "center",
-    marginBottom: 24,
-  },
-  timeText: {
-    fontSize: 12,
-    color: colors.text.muted,
-  },
-  sectionHeading: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.text.muted,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 10,
-  },
-  sectionList: {
-    gap: 8,
-    marginBottom: 24,
-  },
-  sectionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    backgroundColor: colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 12,
-  },
-  sectionIconCircle: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sectionName: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.text.primary,
-  },
-  sectionStats: {
-    fontSize: 12,
-    color: colors.text.secondary,
-  },
-  card: {
-    backgroundColor: colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
-    padding: 16,
-    // Was the wrapping `list` style's `gap` before this became a FlatList; per-cell
-    // spacing is the equivalent once the cells are separate children.
-    marginBottom: 12,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  cardHeaderLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    flex: 1,
-  },
-  cardTag: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: colors.text.secondary,
-  },
-  cardQuestion: {
-    fontSize: 15,
-    color: colors.text.primary,
-    lineHeight: 21,
-  },
-  expandedContent: {
-    marginTop: 14,
-  },
-  optionsList: {
-    gap: 8,
-  },
-  optionRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    padding: 11,
-  },
-  optionCorrect: {
-    borderColor: colors.semantic.success,
-    backgroundColor: colors.semantic.successBg,
-  },
-  optionWrong: {
-    borderColor: colors.semantic.error,
-    backgroundColor: colors.semantic.errorBg,
-  },
-  optionText: {
-    fontSize: 13,
-    color: colors.text.primary,
-    flex: 1,
-  },
-  explanationBox: {
-    marginTop: 12,
-    backgroundColor: colors.surfaceElevated2,
-    borderRadius: 10,
-    padding: 12,
-  },
-  explanationLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: colors.text.secondary,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  explanationText: {
-    fontSize: 13,
-    color: colors.text.primary,
-    lineHeight: 19,
-  },
-});
+const buildStyles = ({ colors, typography }: Theme) =>
+  StyleSheet.create({
+    container: {
+      padding: 20,
+      paddingTop: 24,
+      paddingBottom: 40,
+    },
+    loadingMessage: {
+      ...typography.secondary,
+      marginBottom: spacing.md,
+    },
+    scoreCard: {
+      borderRadius: 16,
+      paddingVertical: 28,
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    scoreValue: {
+      fontSize: 30,
+      fontWeight: "700",
+    },
+    scoreLabel: {
+      fontSize: 13,
+      marginTop: 4,
+    },
+    statRow: {
+      flexDirection: "row",
+      gap: 10,
+      marginBottom: 16,
+    },
+    statCard: {
+      flex: 1,
+      backgroundColor: colors.surfaceElevated2,
+      borderRadius: 12,
+      padding: 14,
+      alignItems: "center",
+    },
+    statValue: {
+      fontSize: 20,
+      fontWeight: "700",
+    },
+    statLabel: {
+      fontSize: 11,
+      color: colors.text.muted,
+      marginTop: 2,
+    },
+    timeRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      justifyContent: "center",
+      marginBottom: 24,
+    },
+    timeText: {
+      fontSize: 12,
+      color: colors.text.muted,
+    },
+    sectionHeading: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.text.muted,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: 10,
+    },
+    sectionList: {
+      gap: 8,
+      marginBottom: 24,
+    },
+    sectionRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      backgroundColor: colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      padding: 12,
+    },
+    sectionIconCircle: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    sectionName: {
+      flex: 1,
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.text.primary,
+    },
+    sectionStats: {
+      fontSize: 12,
+      color: colors.text.secondary,
+    },
+    card: {
+      backgroundColor: colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 14,
+      padding: 16,
+      // Was the wrapping `list` style's `gap` before this became a FlatList; per-cell
+      // spacing is the equivalent once the cells are separate children.
+      marginBottom: 12,
+    },
+    cardHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 8,
+    },
+    cardHeaderLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      flex: 1,
+    },
+    cardTag: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.text.secondary,
+    },
+    cardQuestion: {
+      fontSize: 15,
+      color: colors.text.primary,
+      lineHeight: 21,
+    },
+    expandedContent: {
+      marginTop: 14,
+    },
+    optionsList: {
+      gap: 8,
+    },
+    optionRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+      padding: 11,
+    },
+    optionCorrect: {
+      borderColor: colors.semantic.success,
+      backgroundColor: colors.semantic.successBg,
+    },
+    optionWrong: {
+      borderColor: colors.semantic.error,
+      backgroundColor: colors.semantic.errorBg,
+    },
+    optionText: {
+      fontSize: 13,
+      color: colors.text.primary,
+      flex: 1,
+    },
+    explanationBox: {
+      marginTop: 12,
+      backgroundColor: colors.surfaceElevated2,
+      borderRadius: 10,
+      padding: 12,
+    },
+    explanationLabel: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.text.secondary,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: 4,
+    },
+    explanationText: {
+      fontSize: 13,
+      color: colors.text.primary,
+      lineHeight: 19,
+    },
+  });

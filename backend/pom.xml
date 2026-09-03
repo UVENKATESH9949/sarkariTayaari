@@ -19,6 +19,18 @@
 
     <properties>
         <java.version>21</java.version>
+        <!--
+          Without this, javac on Windows falls back to the platform default charset
+          (Cp1252 here), not UTF-8. A source file with a real "—" (em dash, 3 UTF-8
+          bytes) then gets those 3 bytes decoded as 3 separate Cp1252 characters
+          ("â€"") and compiled into the String constant as those wrong codepoints —
+          which then round-trips through JDBC and comes back from the API as visible
+          mojibake. Found via the Exam Guide demo seed data actually serving garbled
+          text. Forces javac (and the compiler plugin's reports) to read UTF-8
+          regardless of the host machine's locale.
+        -->
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     </properties>
 
     <dependencies>

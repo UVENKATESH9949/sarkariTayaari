@@ -19,12 +19,17 @@ import { StatPill } from "../../../ui/StatPill";
 import { SectionLabel } from "../../../ui/SectionLabel";
 import { AnimatedProgressBar } from "../../../ui/AnimatedProgressBar";
 import { ListSkeleton } from "../../../ui/Skeleton";
-import { colors, radius, spacing } from "../../../ui/theme";
+import { radius, spacing } from "../../../ui/theme";
+import { useTheme, useThemedStyles, type Theme } from "../../../ui/ThemeContext";
+import { useT } from "../../../i18n/I18nContext";
 
 // Every exam here is real, locally-synced data, same source Practice uses. A mock
 // paper always belongs to one exam's structure, so there's no cross-exam "All Exams"
 // shortcut here the way Practice has one.
 export default function MockTestExamSelection() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  const t = useT();
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [exams, setExams] = useState<ExamOption[]>([]);
@@ -88,7 +93,7 @@ export default function MockTestExamSelection() {
         <Ionicons name="search" size={18} color={colors.text.muted} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search exams..."
+          placeholder={t("mock.searchExams")}
           placeholderTextColor={colors.text.muted}
           value={search}
           onChangeText={setSearch}
@@ -155,7 +160,7 @@ export default function MockTestExamSelection() {
                     <StatPill
                       icon="timer-outline"
                       value={totalPapers !== undefined ? String(totalPapers) : "…"}
-                      label={totalPapers === 1 ? "full test" : "full tests"}
+                      label={totalPapers === 1 ? t("mock.fullTestOne") : t("mock.fullTestOther")}
                     />
                     <StatPill
                       icon="document-text-outline"
@@ -182,8 +187,8 @@ export default function MockTestExamSelection() {
           {filteredExams.length === 0 && mode !== "unavailable" && (
             <EmptyState
               icon={searching ? "search-outline" : "timer-outline"}
-              title={searching ? `No exams match "${search.trim()}"` : "No exams synced yet"}
-              body={searching ? undefined : "More exams are added as they're synced."}
+              title={searching ? t("practice.noExamsMatch", { query: search.trim() }) : t("practice.noExamsSynced")}
+              body={searching ? undefined : t("practice.noExamsSyncedBody")}
             />
           )}
         </View>
@@ -193,88 +198,89 @@ export default function MockTestExamSelection() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-  },
-  searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    backgroundColor: colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radius.lg,
-    marginHorizontal: spacing.xl,
-    marginTop: spacing.base,
-    marginBottom: spacing.xs,
-    paddingHorizontal: spacing.md + 2,
-    paddingVertical: spacing.sm + 2,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: colors.text.primary,
-    padding: 0,
-  },
-  scrollContent: {
-    padding: spacing.xl,
-    paddingTop: spacing.md,
-    paddingBottom: spacing["3xl"],
-  },
-  sectionLabel: {
-    marginTop: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  list: {
-    gap: spacing.base,
-  },
-  examCard: {
-    gap: spacing.md + 2,
-    borderRadius: radius.xl + 2,
-    padding: spacing.base + 2,
-  },
-  examTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md + 2,
-  },
-  examTextBlock: {
-    flex: 1,
-  },
-  examTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  examLabel: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: colors.text.primary,
-    flexShrink: 1,
-  },
-  examOrg: {
-    fontSize: 12.5,
-    color: colors.text.muted,
-    marginTop: 2,
-  },
-  statRow: {
-    flexDirection: "row",
-    gap: spacing.sm + 2,
-  },
-  progressWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  progressTrack: {
-    flex: 1,
-    height: 5,
-    borderRadius: 3,
-  },
-  progressText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: colors.brand.light,
-  },
-});
+const buildStyles = ({ colors }: Theme) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+    },
+    searchBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+      backgroundColor: colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      borderRadius: radius.lg,
+      marginHorizontal: spacing.xl,
+      marginTop: spacing.base,
+      marginBottom: spacing.xs,
+      paddingHorizontal: spacing.md + 2,
+      paddingVertical: spacing.sm + 2,
+    },
+    searchInput: {
+      flex: 1,
+      fontSize: 14,
+      color: colors.text.primary,
+      padding: 0,
+    },
+    scrollContent: {
+      padding: spacing.xl,
+      paddingTop: spacing.md,
+      paddingBottom: spacing["3xl"],
+    },
+    sectionLabel: {
+      marginTop: spacing.sm,
+      marginBottom: spacing.md,
+    },
+    list: {
+      gap: spacing.base,
+    },
+    examCard: {
+      gap: spacing.md + 2,
+      borderRadius: radius.xl + 2,
+      padding: spacing.base + 2,
+    },
+    examTopRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.md + 2,
+    },
+    examTextBlock: {
+      flex: 1,
+    },
+    examTitleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+    },
+    examLabel: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: colors.text.primary,
+      flexShrink: 1,
+    },
+    examOrg: {
+      fontSize: 12.5,
+      color: colors.text.muted,
+      marginTop: 2,
+    },
+    statRow: {
+      flexDirection: "row",
+      gap: spacing.sm + 2,
+    },
+    progressWrap: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+    },
+    progressTrack: {
+      flex: 1,
+      height: 5,
+      borderRadius: 3,
+    },
+    progressText: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: colors.brand.light,
+    },
+  });

@@ -4,11 +4,13 @@ import { clearSession, loadSession, saveSession } from "../db/authSession";
 import { login as apiLogin, logout as apiLogout, register as apiRegister, type AuthUser } from "../api/auth";
 import { syncProgress, uploadPendingProgress } from "../sync/progressSync";
 import { syncBookmarks, uploadPendingBookmarks } from "../sync/bookmarkSync";
+import { syncFollowedExams, uploadPendingFollowedExams } from "../sync/followedExamSync";
 import {
   restoreTopicProgressForDevice,
   uploadPendingTopicProgress,
 } from "../sync/topicProgressSync";
 import { captureError, trackEvent } from "../telemetry/analytics";
+import { registerForPushNotifications } from "../notifications/pushRegistration";
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -83,9 +85,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLastError(null);
     try {
       if (full) {
-        const [progressResult, bookmarkResult, restoredTopics] = await Promise.all([
+        const [progressResult, bookmarkResult, followedExamResult, restoredTopics] = await Promise.all([
           syncProgress(activeToken),
           syncBookmarks(activeToken),
+          // New endpoint (Exams module Phase 2/3) — same 404-tolerant reasoning as the
+          // topic-progress block below: a device pointed at a not-yet-redeployed backend
+          // must not have its progress/bookmark restore aborted by this one failing.
+          syncFollowedExams(activeToken).catch((err) => {
+            captureError(err, { context: "authContext.followedExamSync", full: true });
+            return { uploaded: 0, restored: 0 };
+          }),
           /*
            * Epic L / TICKET-2105. Push-then-pull in one step, same as the other two: this is the
            * moment a new phone gets its per-topic mastery back, and without it a student who signs
@@ -114,6 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           progressResult.restoredSessions > 0 ||
           progressResult.restoredAttempts > 0 ||
           bookmarkResult.restored > 0 ||
+          followedExamResult.restored > 0 ||
           restoredTopics > 0
         ) {
           setProgressVersion((v) => v + 1);
@@ -122,6 +132,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await Promise.all([
           uploadPendingProgress(activeToken),
           uploadPendingBookmarks(activeToken),
+          uploadPendingFollowedExams(activeToken).catch((err) => {
+            captureError(err, { context: "authContext.followedExamSync", full: false });
+            return 0;
+          }),
           // Epic L / TICKET-2105. Joins the same batch rather than getting its own pass: all
           // three are "push whatever changed locally", and running them together means one
           // round of latency instead of three. Caught for the same reason as the full-sync
@@ -169,6 +183,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(result.token);
     setUser(result.user);
     trackEvent(source);
+    // Not awaited: a denied permission or a slow registration must not delay sign-in for
+    // a feature (reminders) nobody has asked for yet. Errors are swallowed internally.
+    registerForPushNotifications(result.token);
     // Full sync on sign-in: upload what this device has, then pull down anything it
     // is missing. This is the moment a new phone gets its history back.
     await runSync(result.token, true);
@@ -191,6 +208,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await Promise.all([
           uploadPendingProgress(current),
           uploadPendingBookmarks(current),
+          uploadPendingFollowedExams(current).catch((err) => {
+            captureError(err, { context: "authContext.followedExamSync", full: false });
+            return 0;
+          }),
           uploadPendingTopicProgress(current).catch((err) => {
             captureError(err, { context: "authContext.topicProgressSync", full: false });
             return 0;

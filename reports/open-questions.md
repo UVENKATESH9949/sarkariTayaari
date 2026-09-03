@@ -44,3 +44,30 @@ Not engineering unknowns — each of these needs an answer from a business or te
 | Low-end/throttled device testing | Technical — TICKET-502, not done |
 | Whether the Cloud Run backend needs an explicit `--memory` allocation | Technical — the likely (not confirmed via a memory graph/crash log) root cause of the intermittent mid-sync 500s that `reports/17-resilient-initial-sync/` worked around from the client side only. Combined with Hibernate's `default_batch_fetch_size: 500`, the default Cloud Run memory allocation is a plausible fit for an OOM kill under a real sync's load. Never fixed server-side. |
 | Whether "assign the same questions to every practice/mock query" is acceptable interim behaviour | **Moot — never built, and not needed.** Resolved 2026-08-27. It was requested so no screen would appear disabled for lack of content, but the temporary ~500-question pool was the entire cause: with the pool lifted, **107 of 108 topics have questions** (151–458 each), all 11 exams have 3,392–12,203, and each difficulty level holds ~12k. The one empty topic is the `Automated Test Subject / Automated Test Topic` fixture. So no query had to stop honouring its scoping and the Section 7 Phase C syllabus scoping stays intact. See `offline-exam-app-requirements.md` §9.6 Phase 6. |
+
+### Exam Guide (Doc 1) — still-unbuilt phases
+
+Not open questions in the "needs a decision" sense — genuinely unstarted future work,
+scoped out of Phase 1 + round 2 (2026-09-01) deliberately, listed here per
+`reports/23-exam-guide-phase1/exam-guide-phase1-round2.md`'s own "still not done" section so
+it isn't rediscovered as a surprise gap:
+
+| Feature | Category |
+|---|---|
+| Diagnostic test | Future work — not started |
+| Reminders | Future work — not started; needs push-notification infrastructure that doesn't exist in the app yet (same gap as TICKET-705 above) |
+| Career information / exam comparison | Future work — not started |
+| "What's Changed" diffing between recruitment-cycle versions | Future work — not started |
+| Content-validation workflow | Future work — not started |
+| Offline caching for Exam Guide content | Future work — not started. **This one is a stated scope decision, not an oversight**: Exam Guide is live-fetch only on mobile, with no local SQLite cache or sync-pipeline entry (unlike every other reference type in the app) — see `mobile/src/api/examGuide.ts`'s own header comment. Revisit if Exam Guide content needs to work without a network. |
+| Search (across exams/guide content) | Future work — not started |
+
+### Exam Guide (Doc 1) — known implementation gaps, not open questions
+
+These are real, specific bugs/inconsistencies identified by auditing `api/EXAM-GUIDE.md`
+against the actual code — not undecided questions, and not yet fixed:
+
+| Gap | Category |
+|---|---|
+| `GET /api/exam-guides` (the sync-all endpoint) has no caller anywhere in `mobile/src/api/*.ts` or `admin/src/api.js` | Technical — dead code, built for a future device-sync path that hasn't been wired up yet. Either wire it in or remove it. |
+| `ExamGuideDemoSeeder.seed()` throws a plain `IllegalStateException` when `app.exam-guide.demo-seed-enabled` is off, which is unmapped and likely surfaces as an unmapped 500 — inconsistent with Epic L's `SyntheticCurationController`, which throws a properly-mapped `ForbiddenException` (403) for the equivalent disabled-flag case | Technical — a real inconsistency in error-handling convention between two otherwise-parallel seeders, not a design decision that was ever made deliberately |

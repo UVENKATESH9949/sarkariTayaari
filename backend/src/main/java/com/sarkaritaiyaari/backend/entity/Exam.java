@@ -42,6 +42,13 @@ public class Exam {
     private String badge;
 
     /**
+     * A discovery-filter facet (SSC/Banking/Railways/UPSC/...) for the Exams module —
+     * a plain string, not an enum: it needs no per-value styling of its own the way
+     * difficulty/badge do, just something to filter by. Null means uncategorized.
+     */
+    private String category;
+
+    /**
      * The exam's syllabus — which subjects it covers. Independent of its paper
      * structure, so an exam can have a syllabus before (or without) a defined pattern.
      */
@@ -115,5 +122,13 @@ public class Exam {
 
     public void setBadge(String badge) {
         this.badge = badge;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
     }
 }

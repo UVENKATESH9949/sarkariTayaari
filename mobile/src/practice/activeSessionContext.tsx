@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useRef, useState, type MutableR
 
 type SessionKind = "practice" | "mock" | null;
 /** The 5 top-level tab routes — the only valid tab-switch destinations. */
-export type TabHref = "/" | "/practice" | "/mock-test" | "/progress" | "/more";
+export type TabHref = "/" | "/practice" | "/mock-test" | "/exams" | "/progress" | "/more";
 
 type ActiveSessionContextValue = {
   activeSession: SessionKind;

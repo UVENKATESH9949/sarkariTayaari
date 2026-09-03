@@ -1,5 +1,6 @@
 package com.sarkaritaiyaari.backend.controller;
 
+import com.sarkaritaiyaari.backend.dto.ExamDiscoveryDtos.PagedExamCards;
 import com.sarkaritaiyaari.backend.dto.ExamRequest;
 import com.sarkaritaiyaari.backend.dto.ExamResponse;
 import com.sarkaritaiyaari.backend.dto.ExamTopicResponse;
@@ -7,6 +8,8 @@ import com.sarkaritaiyaari.backend.dto.ExamTopicsRequest;
 import com.sarkaritaiyaari.backend.dto.SubjectResponse;
 import com.sarkaritaiyaari.backend.dto.SyllabusRequest;
 import com.sarkaritaiyaari.backend.service.AuthService;
+import com.sarkaritaiyaari.backend.service.ExamDiscoveryService;
+import com.sarkaritaiyaari.backend.service.ExamDiscoveryService.SortOption;
 import com.sarkaritaiyaari.backend.service.ExamService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
@@ -20,20 +23,41 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Locale;
 
 @RestController
 @RequestMapping("/api/exams")
 public class ExamController {
 
     private final ExamService examService;
+    private final ExamDiscoveryService examDiscoveryService;
     private final AuthService authService;
 
-    public ExamController(ExamService examService, AuthService authService) {
+    public ExamController(ExamService examService, ExamDiscoveryService examDiscoveryService,
+                           AuthService authService) {
         this.examService = examService;
+        this.examDiscoveryService = examDiscoveryService;
         this.authService = authService;
+    }
+
+    /**
+     * The Exams module's own listing (spec §5-15) — every active exam as a card, with
+     * pagination/sort/filter, distinct from {@link #listActive} (Home's plain list) and
+     * {@link #listAll} (admin). Deliberately public: the same "active exams are public"
+     * rule {@link #listActive} already follows.
+     */
+    @GetMapping("/discover")
+    public PagedExamCards discover(@RequestParam(defaultValue = "0") int page,
+                                    @RequestParam(defaultValue = "20") int size,
+                                    @RequestParam(required = false) String sort,
+                                    @RequestParam(required = false) String status,
+                                    @RequestParam(required = false) String category) {
+        SortOption sortOption = sort == null ? null : SortOption.valueOf(sort.trim().toUpperCase(Locale.ROOT));
+        return examDiscoveryService.discover(page, size, sortOption, status, category);
     }
 
     @PostMapping

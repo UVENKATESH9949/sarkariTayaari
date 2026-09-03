@@ -15,7 +15,17 @@ import Modal from "../components/Modal.jsx";
 import { EditIcon, TrashIcon } from "../components/icons.jsx";
 import { useConfirm } from "../hooks/useConfirm.jsx";
 
-const BLANK_EXAM = { code: "", name: "", imageUrl: "", active: true, displayOrder: 0, difficulty: "", badge: "" };
+const BLANK_EXAM = {
+  code: "", name: "", imageUrl: "", active: true, displayOrder: 0, difficulty: "", badge: "", category: "",
+};
+
+// The Exams module's discovery-filter facet (spec §6) — a plain fixed list, not a
+// lookup table with its own CRUD screen, since category needs no per-value color/icon
+// styling the way difficulty/badge do.
+const EXAM_CATEGORIES = [
+  "SSC", "Banking", "Railways", "UPSC", "State Government", "Teaching",
+  "Defence", "Police", "Insurance", "Other",
+];
 
 function ExamFormModal({ mode, initial, difficulties, badges, onCancel, onSaved }) {
   const [form, setForm] = useState(initial);
@@ -61,6 +71,7 @@ function ExamFormModal({ mode, initial, difficulties, badges, onCancel, onSaved 
       displayOrder: Number(form.displayOrder) || 0,
       difficulty: form.difficulty || null,
       badge: form.badge || null,
+      category: form.category || null,
     };
     try {
       if (mode === "create") await createExam(payload);
@@ -167,6 +178,21 @@ function ExamFormModal({ mode, initial, difficulties, badges, onCancel, onSaved 
           </div>
         </div>
 
+        <div className="form-row">
+          <div className="form-field">
+            <label>Category</label>
+            <select value={form.category} onChange={(e) => set("category", e.target.value)}>
+              <option value="">Uncategorized</option>
+              {EXAM_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+            <span className="field-note">The filter facet on the Exams discovery screen.</span>
+          </div>
+        </div>
+
         <div className="form-field" style={{ maxWidth: "none", marginBottom: 0 }}>
           <label>Image</label>
           <div className="image-picker">
@@ -265,6 +291,7 @@ export default function Exams() {
                 <th style={{ width: 60 }}></th>
                 <th>Code</th>
                 <th>Name</th>
+                <th style={{ width: 130 }}>Category</th>
                 <th style={{ width: 90 }}>Order</th>
                 <th style={{ width: 100 }}>Status</th>
                 <th style={{ width: 190 }}></th>
@@ -284,6 +311,7 @@ export default function Exams() {
                     <span className="badge">{exam.code}</span>
                   </td>
                   <td>{exam.name}</td>
+                  <td>{exam.category || <span className="field-note">—</span>}</td>
                   <td>{exam.displayOrder}</td>
                   <td>
                     <span className={exam.active ? "badge badge-easy" : "badge"}>
@@ -294,6 +322,9 @@ export default function Exams() {
                     <div className="row-actions">
                       <Link to={`/exams/${exam.code}/structure`} className="btn btn-sm">
                         Structure
+                      </Link>
+                      <Link to={`/exams/${exam.code}/guide`} className="btn btn-sm">
+                        Guide
                       </Link>
                       <button
                         className="btn btn-ghost icon-btn"
@@ -307,6 +338,7 @@ export default function Exams() {
                               imageUrl: exam.imageUrl || "",
                               difficulty: exam.difficulty || "",
                               badge: exam.badge || "",
+                              category: exam.category || "",
                             },
                           })
                         }
@@ -322,7 +354,7 @@ export default function Exams() {
               ))}
               {exams.length === 0 && (
                 <tr>
-                  <td colSpan={6}>
+                  <td colSpan={7}>
                     <div className="empty-state">No exams yet.</div>
                   </td>
                 </tr>

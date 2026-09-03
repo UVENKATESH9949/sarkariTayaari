@@ -22,6 +22,9 @@ public class ExamRequest {
     /** Optional. Must be an exam_badges code when present — validated in the service. */
     private String badge;
 
+    /** Optional discovery-filter facet (SSC/Banking/Railways/...). Free text, not FK'd. */
+    private String category;
+
     public String getCode() {
         return code;
     }
@@ -76,5 +79,13 @@ public class ExamRequest {
 
     public void setBadge(String badge) {
         this.badge = badge;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
     }
 }

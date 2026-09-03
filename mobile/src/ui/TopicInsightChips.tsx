@@ -1,7 +1,13 @@
 import { StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { TopicProgressState, TopicTrendDirection } from "../db/topicIntelligence";
-import { colors, radius, spacing } from "./theme";
+import { radius, spacing } from "./theme";
+import { useTheme, useThemedStyles, type Theme } from "./ThemeContext";
+import { useT } from "../i18n/I18nContext";
+
+// Module-scope factories cannot call a hook, so `t` is passed in — the same shape
+// these already use for the palette.
+type Translate = ReturnType<typeof useT>;
 
 /**
  * The small chips that render Epic L's topic model on a list row — mastery state, computed
@@ -14,32 +20,36 @@ import { colors, radius, spacing } from "./theme";
 
 /* ------------------------------------------------------------------- Mastery state */
 
-const STATE_STYLE: Record<
-  TopicProgressState,
-  { label: string; color: string; bg: string; icon: React.ComponentProps<typeof Ionicons>["name"] }
-> = {
+type ChipTone = {
+  label: string;
+  color: string;
+  bg: string;
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+};
+
+const stateStyle = (colors: Theme["colors"], t: Translate): Record<TopicProgressState, ChipTone> => ({
   // NOT_STARTED gets muted tones and is usually not rendered at all — see MasteryChip. Colouring
   // it would put a badge on almost every row of a fresh install, which says nothing.
   NOT_STARTED: {
-    label: "Not started",
+    label: t("topicChips.stateNotStarted"),
     color: colors.text.muted,
     bg: colors.surfaceElevated2,
     icon: "ellipse-outline",
   },
   LEARNING: {
-    label: "Learning",
+    label: t("topicChips.stateLearning"),
     color: colors.brand.light,
     bg: colors.brand.glowSoft,
     icon: "book-outline",
   },
   PRACTICING: {
-    label: "Practising",
+    label: t("topicChips.statePracticing"),
     color: colors.semantic.warning,
     bg: colors.semantic.warningBg,
     icon: "barbell-outline",
   },
   MASTERED: {
-    label: "Mastered",
+    label: t("topicChips.stateMastered"),
     color: colors.semantic.success,
     bg: colors.semantic.successBg,
     icon: "checkmark-circle",
@@ -47,12 +57,12 @@ const STATE_STYLE: Record<
   // Deliberately warning-toned, not error-toned: a regression is a prompt to revise, not a
   // failure, and colouring it red would read as the app telling the student they are bad at it.
   NEEDS_REVISION: {
-    label: "Needs revision",
+    label: t("topicChips.stateNeedsRevision"),
     color: colors.semantic.hot,
     bg: colors.semantic.hotBg,
     icon: "refresh-circle",
   },
-};
+});
 
 type MasteryChipProps = {
   state: TopicProgressState;
@@ -62,8 +72,11 @@ type MasteryChipProps = {
 };
 
 export function MasteryChip({ state, accuracyPercent, showNotStarted = false }: MasteryChipProps) {
+  const styles = useThemedStyles(buildStyles);
+  const t = useT();
+  const { colors } = useTheme();
   if (state === "NOT_STARTED" && !showNotStarted) return null;
-  const tone = STATE_STYLE[state];
+  const tone = stateStyle(colors, t)[state];
 
   // Accuracy is appended only when the state itself implies real history. Showing "Learning ·
   // 100%" after one lucky question would overstate what the app actually knows.
@@ -85,18 +98,15 @@ export function MasteryChip({ state, accuracyPercent, showNotStarted = false }: 
 
 /* --------------------------------------------------------------------------- Trend */
 
-const TREND_STYLE: Record<
-  TopicTrendDirection,
-  { label: string; color: string; bg: string; icon: React.ComponentProps<typeof Ionicons>["name"] } | null
-> = {
+const trendStyle = (colors: Theme["colors"], t: Translate): Record<TopicTrendDirection, ChipTone | null> => ({
   RISING: {
-    label: "Rising",
+    label: t("topicChips.trendRising"),
     color: colors.semantic.hot,
     bg: colors.semantic.hotBg,
     icon: "trending-up",
   },
   FALLING: {
-    label: "Falling",
+    label: t("topicChips.trendFalling"),
     color: colors.text.muted,
     bg: colors.surfaceElevated2,
     icon: "trending-down",
@@ -106,11 +116,14 @@ const TREND_STYLE: Record<
   // and inventing a neutral label there would imply it does.
   STABLE: null,
   INSUFFICIENT_DATA: null,
-};
+});
 
 export function TrendChip({ direction }: { direction: TopicTrendDirection | null }) {
+  const styles = useThemedStyles(buildStyles);
+  const t = useT();
+  const { colors } = useTheme();
   if (!direction) return null;
-  const tone = TREND_STYLE[direction];
+  const tone = trendStyle(colors, t)[direction];
   if (!tone) return null;
 
   return (
@@ -130,12 +143,12 @@ export function TrendChip({ direction }: { direction: TopicTrendDirection | null
  * curated weightage, a trend over a handful of tagged years, and how well the bank covers the
  * topic. Three bands is roughly the resolution the underlying data supports.
  */
-function priorityBand(priority: number): { label: string; color: string; bg: string } | null {
+function priorityBand(priority: number, colors: Theme["colors"], t: Translate): { label: string; color: string; bg: string } | null {
   if (priority >= 70) {
-    return { label: "High priority", color: colors.semantic.error, bg: colors.semantic.errorBg };
+    return { label: t("topicChips.priorityHigh"), color: colors.semantic.error, bg: colors.semantic.errorBg };
   }
   if (priority >= 45) {
-    return { label: "Medium priority", color: colors.semantic.warning, bg: colors.semantic.warningBg };
+    return { label: t("topicChips.priorityMedium"), color: colors.semantic.warning, bg: colors.semantic.warningBg };
   }
   // Low priority renders nothing: the useful signal is "focus here", and labelling the long tail
   // would just add noise to most rows.
@@ -149,8 +162,11 @@ type PriorityChipProps = {
 };
 
 export function PriorityChip({ finalPriority, adminOverride }: PriorityChipProps) {
+  const styles = useThemedStyles(buildStyles);
+  const t = useT();
+  const { colors } = useTheme();
   if (finalPriority === null || finalPriority === undefined) return null;
-  const band = priorityBand(finalPriority);
+  const band = priorityBand(finalPriority, colors, t);
   if (!band) return null;
 
   return (
@@ -186,6 +202,9 @@ export function WeightageChip({
   curatedWeightagePercent,
   computedWeightagePercent,
 }: WeightageChipProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  const t = useT();
   const value = computedWeightagePercent ?? curatedWeightagePercent;
   if (value === null || value === undefined) return null;
 
@@ -193,7 +212,7 @@ export function WeightageChip({
     <View style={[styles.chip, { backgroundColor: colors.surfaceElevated2 }]}>
       <Ionicons name="pie-chart-outline" size={11} color={colors.text.secondary} />
       <Text style={[styles.chipText, { color: colors.text.secondary }]}>
-        {value < 0.1 ? "<0.1" : value.toFixed(1)}% of paper
+        {t("topicChips.weightageOfPaper", { percent: value < 0.1 ? "<0.1" : value.toFixed(1) })}
       </Text>
     </View>
   );
@@ -213,44 +232,48 @@ type PrerequisiteNoticeProps = {
  * able to open whatever they want, and an app that refuses is one they stop trusting.
  */
 export function PrerequisiteNotice({ unmet }: PrerequisiteNoticeProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  const t = useT();
   if (unmet.length === 0) return null;
 
   const names = unmet.slice(0, 2).map((p) => p.topicName).join(", ");
-  const extra = unmet.length > 2 ? ` +${unmet.length - 2} more` : "";
+  const extra = unmet.length > 2 ? t("topicChips.andMore", { count: unmet.length - 2 }) : "";
 
   return (
     <View style={styles.prerequisite}>
       <Ionicons name="git-branch-outline" size={11} color={colors.text.muted} />
       <Text style={styles.prerequisiteText} numberOfLines={1}>
-        Best after: {names}
+        {t("topicChips.bestAfter", { names })}
         {extra}
       </Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  chip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: radius.pill,
-  },
-  chipText: {
-    fontSize: 10.5,
-    fontWeight: "600",
-  },
-  prerequisite: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs + 1,
-    marginTop: spacing.xs + 2,
-  },
-  prerequisiteText: {
-    fontSize: 11,
-    color: colors.text.muted,
-    flexShrink: 1,
-  },
-});
+const buildStyles = ({ colors }: Theme) =>
+  StyleSheet.create({
+    chip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 3,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 3,
+      borderRadius: radius.pill,
+    },
+    chipText: {
+      fontSize: 10.5,
+      fontWeight: "600",
+    },
+    prerequisite: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.xs + 1,
+      marginTop: spacing.xs + 2,
+    },
+    prerequisiteText: {
+      fontSize: 11,
+      color: colors.text.muted,
+      flexShrink: 1,
+    },
+  });

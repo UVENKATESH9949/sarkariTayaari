@@ -19,7 +19,14 @@ when you want to change something.
 Detailed history, decisions and verification results live in
 [`offline-exam-app-requirements.md`](offline-exam-app-requirements.md) and
 [`reports/`](reports/). Current state and next steps are in
-[`memory/STATUS.md`](memory/STATUS.md).
+[`memory/STATUS.md`](memory/STATUS.md). The API contract (separate from backend
+implementation) lives in [`api/`](api/).
+
+**Working here with AI assistance (Claude or otherwise)?** Read
+[`AI_RULES.md`](AI_RULES.md) first — it's the contract for how AI sessions should read,
+scope, and verify work in this repo, and a map of which doc to read/update for what. For
+the day-to-day operating process (task sizing, session strategy, ready-to-paste prompts),
+see [`AI_WORKFLOW.md`](AI_WORKFLOW.md).
 
 ---
 

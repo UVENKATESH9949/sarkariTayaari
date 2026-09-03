@@ -27,11 +27,16 @@ import { StatPill } from "../../../ui/StatPill";
 import { SectionLabel } from "../../../ui/SectionLabel";
 import { AnimatedProgressBar } from "../../../ui/AnimatedProgressBar";
 import { ListSkeleton } from "../../../ui/Skeleton";
-import { colors, radius, spacing } from "../../../ui/theme";
+import { radius, spacing } from "../../../ui/theme";
+import { useTheme, useThemedStyles, type Theme } from "../../../ui/ThemeContext";
+import { useT } from "../../../i18n/I18nContext";
 
 // Every exam here is real, locally-synced data — no hardcoded "coming soon" exams.
 // Adding a new exam on the backend makes it appear here automatically on next sync.
 export default function Practice() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  const t = useT();
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [exams, setExams] = useState<ExamOption[]>([]);
@@ -84,7 +89,7 @@ export default function Practice() {
         <Ionicons name="search" size={18} color={colors.text.muted} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search exams..."
+          placeholder={t("practice.searchExams")}
           placeholderTextColor={colors.text.muted}
           value={search}
           onChangeText={setSearch}
@@ -104,7 +109,7 @@ export default function Practice() {
             told us what they are looking for. */}
         {!searching && (
           <>
-            <SectionLabel label="Recommended" style={styles.sectionLabelSpacing} />
+            <SectionLabel label={t("practice.recommended")} style={styles.sectionLabelSpacing} />
             <Card variant="gradient" onPress={() => openSubjects("ALL", "All Government Exams")} style={styles.allExamsCard}>
               <View style={styles.allExamsGlow} />
               <View style={styles.allExamsTop}>
@@ -112,12 +117,12 @@ export default function Practice() {
                   <Ionicons name="earth" size={26} color={colors.text.onAccent} />
                 </View>
                 <View style={styles.allExamsTextBlock}>
-                  <Text style={styles.allExamsTitle}>All Government Exams</Text>
-                  <Text style={styles.allExamsSubtitle}>Common Quant, Reasoning, English & GA content</Text>
+                  <Text style={styles.allExamsTitle}>{t("practice.allExams")}</Text>
+                  <Text style={styles.allExamsSubtitle}>{t("practice.allExamsSubtitle")}</Text>
                 </View>
               </View>
               <View style={styles.allExamsCta}>
-                <Text style={styles.allExamsCtaText}>Start practicing</Text>
+                <Text style={styles.allExamsCtaText}>{t("practice.startPracticing")}</Text>
                 <Ionicons name="arrow-forward" size={14} color={colors.text.onAccent} />
               </View>
             </Card>
@@ -191,7 +196,7 @@ export default function Practice() {
                       <StatPill
                         icon={(level.icon as IoniconName | null) ?? "speedometer-outline"}
                         value={level.label}
-                        label="level"
+                        label={t("practice.levelPillLabel")}
                       />
                     )}
                   </View>
@@ -211,8 +216,8 @@ export default function Practice() {
           {filteredExams.length === 0 && mode !== "unavailable" && (
             <EmptyState
               icon={searching ? "search-outline" : "document-text-outline"}
-              title={searching ? `No exams match "${search.trim()}"` : "No exams synced yet"}
-              body={searching ? undefined : "More exams are added as they're synced."}
+              title={searching ? t("practice.noExamsMatch", { query: search.trim() }) : t("practice.noExamsSynced")}
+              body={searching ? undefined : t("practice.noExamsSyncedBody")}
             />
           )}
         </View>
@@ -223,148 +228,149 @@ export default function Practice() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-  },
-  searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    backgroundColor: colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radius.lg,
-    marginHorizontal: spacing.xl,
-    marginTop: spacing.base,
-    marginBottom: spacing.xs,
-    paddingHorizontal: spacing.md + 2,
-    paddingVertical: spacing.sm + 2,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: colors.text.primary,
-    padding: 0,
-  },
-  scrollContent: {
-    padding: spacing.xl,
-    paddingTop: spacing.md,
-    paddingBottom: spacing["3xl"],
-  },
-  sectionLabelSpacing: {
-    marginBottom: spacing.sm,
-  },
-  sectionLabel: {
-    marginTop: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  allExamsCard: {
-    marginTop: spacing.sm,
-    marginBottom: spacing.xl,
-  },
-  allExamsGlow: {
-    position: "absolute",
-    top: -40,
-    right: -40,
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: colors.brand.bright,
-    opacity: 0.25,
-  },
-  allExamsTop: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: spacing.md + 2,
-  },
-  allExamsIconCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.12)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  allExamsTextBlock: {
-    flex: 1,
-  },
-  allExamsTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: colors.text.onAccent,
-    marginBottom: spacing.xs,
-  },
-  allExamsSubtitle: {
-    fontSize: 13.5,
-    color: colors.text.onAccentSecondary,
-    lineHeight: 19,
-  },
-  allExamsCta: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    gap: spacing.xs + 2,
-    backgroundColor: colors.brand.primary,
-    borderRadius: radius.md,
-    paddingVertical: spacing.sm + 1,
-    paddingHorizontal: spacing.base,
-    marginTop: spacing.base,
-  },
-  allExamsCtaText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.text.onAccent,
-  },
-  list: {
-    gap: spacing.base,
-  },
-  examCard: {
-    gap: spacing.md + 2,
-    borderRadius: radius.xl + 2,
-    padding: spacing.base + 2,
-  },
-  examTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md + 2,
-  },
-  examTextBlock: {
-    flex: 1,
-  },
-  examTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  examLabel: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: colors.text.primary,
-    flexShrink: 1,
-  },
-  statRow: {
-    flexDirection: "row",
-    gap: spacing.sm + 2,
-  },
-  examOrg: {
-    fontSize: 12.5,
-    color: colors.text.muted,
-    marginTop: 2,
-  },
-  progressWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  progressTrack: {
-    flex: 1,
-    height: 5,
-    borderRadius: 3,
-  },
-  progressText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: colors.brand.light,
-  },
-});
+const buildStyles = ({ colors }: Theme) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+    },
+    searchBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+      backgroundColor: colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      borderRadius: radius.lg,
+      marginHorizontal: spacing.xl,
+      marginTop: spacing.base,
+      marginBottom: spacing.xs,
+      paddingHorizontal: spacing.md + 2,
+      paddingVertical: spacing.sm + 2,
+    },
+    searchInput: {
+      flex: 1,
+      fontSize: 14,
+      color: colors.text.primary,
+      padding: 0,
+    },
+    scrollContent: {
+      padding: spacing.xl,
+      paddingTop: spacing.md,
+      paddingBottom: spacing["3xl"],
+    },
+    sectionLabelSpacing: {
+      marginBottom: spacing.sm,
+    },
+    sectionLabel: {
+      marginTop: spacing.sm,
+      marginBottom: spacing.md,
+    },
+    allExamsCard: {
+      marginTop: spacing.sm,
+      marginBottom: spacing.xl,
+    },
+    allExamsGlow: {
+      position: "absolute",
+      top: -40,
+      right: -40,
+      width: 140,
+      height: 140,
+      borderRadius: 70,
+      backgroundColor: colors.brand.bright,
+      opacity: 0.25,
+    },
+    allExamsTop: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: spacing.md + 2,
+    },
+    allExamsIconCircle: {
+      width: 52,
+      height: 52,
+      borderRadius: 14,
+      backgroundColor: "rgba(255,255,255,0.12)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    allExamsTextBlock: {
+      flex: 1,
+    },
+    allExamsTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: colors.text.onAccent,
+      marginBottom: spacing.xs,
+    },
+    allExamsSubtitle: {
+      fontSize: 13.5,
+      color: colors.text.onAccentSecondary,
+      lineHeight: 19,
+    },
+    allExamsCta: {
+      flexDirection: "row",
+      alignItems: "center",
+      alignSelf: "flex-start",
+      gap: spacing.xs + 2,
+      backgroundColor: colors.brand.primary,
+      borderRadius: radius.md,
+      paddingVertical: spacing.sm + 1,
+      paddingHorizontal: spacing.base,
+      marginTop: spacing.base,
+    },
+    allExamsCtaText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.text.onAccent,
+    },
+    list: {
+      gap: spacing.base,
+    },
+    examCard: {
+      gap: spacing.md + 2,
+      borderRadius: radius.xl + 2,
+      padding: spacing.base + 2,
+    },
+    examTopRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.md + 2,
+    },
+    examTextBlock: {
+      flex: 1,
+    },
+    examTitleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+    },
+    examLabel: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: colors.text.primary,
+      flexShrink: 1,
+    },
+    statRow: {
+      flexDirection: "row",
+      gap: spacing.sm + 2,
+    },
+    examOrg: {
+      fontSize: 12.5,
+      color: colors.text.muted,
+      marginTop: 2,
+    },
+    progressWrap: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+    },
+    progressTrack: {
+      flex: 1,
+      height: 5,
+      borderRadius: 3,
+    },
+    progressText: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: colors.brand.light,
+    },
+  });

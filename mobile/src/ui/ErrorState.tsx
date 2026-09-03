@@ -1,7 +1,9 @@
 import { StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Button } from "./Button";
-import { colors, spacing, typography } from "./theme";
+import { spacing } from "./theme";
+import { useTheme, useThemedStyles, type Theme } from "./ThemeContext";
+import { useT } from "../i18n/I18nContext";
 
 type ErrorStateProps = {
   title: string;
@@ -13,6 +15,9 @@ type ErrorStateProps = {
 
 /** Generic error-state — replaces the one ad hoc "couldn't load" pattern per screen. */
 export function ErrorState({ title, body, onRetry }: ErrorStateProps) {
+  const { colors, typography } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  const t = useT();
   return (
     <View style={styles.container}>
       <View style={styles.iconCircle}>
@@ -22,36 +27,37 @@ export function ErrorState({ title, body, onRetry }: ErrorStateProps) {
       {body ? <Text style={[typography.secondary, styles.body]}>{body}</Text> : null}
       {onRetry ? (
         <Button variant="secondary" onPress={onRetry} style={styles.action}>
-          Try Again
+          {t("common.tryAgain")}
         </Button>
       ) : null}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    alignItems: "center",
-    paddingVertical: spacing["3xl"],
-    paddingHorizontal: spacing.xl,
-  },
-  iconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: colors.semantic.errorBg,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: spacing.base,
-  },
-  title: {
-    textAlign: "center",
-  },
-  body: {
-    textAlign: "center",
-    marginTop: spacing.xs,
-  },
-  action: {
-    marginTop: spacing.lg,
-  },
-});
+const buildStyles = ({ colors }: Theme) =>
+  StyleSheet.create({
+    container: {
+      alignItems: "center",
+      paddingVertical: spacing["3xl"],
+      paddingHorizontal: spacing.xl,
+    },
+    iconCircle: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      backgroundColor: colors.semantic.errorBg,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: spacing.base,
+    },
+    title: {
+      textAlign: "center",
+    },
+    body: {
+      textAlign: "center",
+      marginTop: spacing.xs,
+    },
+    action: {
+      marginTop: spacing.lg,
+    },
+  });

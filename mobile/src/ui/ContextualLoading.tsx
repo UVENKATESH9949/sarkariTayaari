@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { LoadingMark } from "./LoadingMark";
-import { spacing, typography } from "./theme";
+import { spacing } from "./theme";
+import { useThemedStyles, type Theme } from "./ThemeContext";
+import { useT } from "../i18n/I18nContext";
 
 type ContextualLoadingProps = {
   /** What's actually happening, e.g. "Preparing topics for SSC CGL..." — never generic "Loading...". */
@@ -20,26 +22,29 @@ type ContextualLoadingProps = {
  * the generic "Loading..." spinner the spec explicitly warns against.
  */
 export function ContextualLoading({ message, skeleton }: ContextualLoadingProps) {
+  const styles = useThemedStyles(buildStyles);
+  const t = useT();
   return (
     <View style={styles.container}>
-      <LoadingMark label="PREPARING" size="compact" />
+      <LoadingMark label={t("common.preparing")} size="compact" />
       <Text style={styles.message}>{message}</Text>
       <View style={styles.skeletonWrap}>{skeleton}</View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    alignItems: "center",
-  },
-  message: {
-    ...typography.secondary,
-    textAlign: "center",
-    marginTop: spacing.lg,
-    marginBottom: spacing.xl,
-  },
-  skeletonWrap: {
-    width: "100%",
-  },
-});
+const buildStyles = ({ typography }: Theme) =>
+  StyleSheet.create({
+    container: {
+      alignItems: "center",
+    },
+    message: {
+      ...typography.secondary,
+      textAlign: "center",
+      marginTop: spacing.lg,
+      marginBottom: spacing.xl,
+    },
+    skeletonWrap: {
+      width: "100%",
+    },
+  });

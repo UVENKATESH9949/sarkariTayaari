@@ -14,9 +14,14 @@ import { Card } from "../../../ui/Card";
 import { ContextualLoading } from "../../../ui/ContextualLoading";
 import { EmptyState } from "../../../ui/EmptyState";
 import { CardSkeleton } from "../../../ui/Skeleton";
-import { colors, radius, spacing, typography } from "../../../ui/theme";
+import { radius, spacing } from "../../../ui/theme";
+import { useTheme, useThemedStyles, type Theme } from "../../../ui/ThemeContext";
+import { useT } from "../../../i18n/I18nContext";
 
 export default function MockTestStart() {
+  const { colors, typography } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  const t = useT();
   const router = useRouter();
   const { paperId, examLabel, paperName } = useLocalSearchParams<{
     paperId: string;
@@ -55,7 +60,7 @@ export default function MockTestStart() {
     return (
       <View style={styles.container}>
         <ContextualLoading
-          message="Preparing your test details..."
+          message={t("mock.loadingDetails")}
           skeleton={
             <>
               <CardSkeleton height={28} />
@@ -76,8 +81,8 @@ export default function MockTestStart() {
       <View style={styles.centered}>
         <EmptyState
           icon="alert-circle-outline"
-          title="Test not available"
-          body="This paper is no longer part of the exam's structure."
+          title={t("mock.notAvailable")}
+          body={t("mock.notAvailableBody")}
         />
       </View>
     );
@@ -112,14 +117,14 @@ export default function MockTestStart() {
         <View style={styles.summaryCard}>
           <Ionicons name="help-circle-outline" size={20} color={colors.brand.primary} />
           <Text style={styles.summaryValue}>{totalAvailable ?? totalRequested}</Text>
-          <Text style={styles.summaryLabel}>Questions</Text>
+          <Text style={styles.summaryLabel}>{t("common.questions")}</Text>
         </View>
         <View style={styles.summaryCard}>
           <Ionicons name="ribbon-outline" size={20} color={colors.brand.primary} />
           <Text style={styles.summaryValue}>
             {paper.marksCorrect != null ? `+${paper.marksCorrect}/-${paper.marksWrong ?? 0}` : "—"}
           </Text>
-          <Text style={styles.summaryLabel}>Marking</Text>
+          <Text style={styles.summaryLabel}>{t("mock.marking")}</Text>
         </View>
       </View>
 
@@ -133,7 +138,7 @@ export default function MockTestStart() {
         </View>
       )}
 
-      <Text style={typography.label}>Sections</Text>
+      <Text style={typography.label}>{t("mock.sections")}</Text>
       <View style={styles.sectionsList}>
         {paper.sections.map((section) => {
           const availability = sections?.find((s) => s.sectionName === section.name);
@@ -155,7 +160,7 @@ export default function MockTestStart() {
       </View>
 
       <View style={styles.instructionsBox}>
-        <Text style={styles.instructionsTitle}>Before you start</Text>
+        <Text style={styles.instructionsTitle}>{t("mock.beforeYouStart")}</Text>
         <Text style={styles.instructionsItem}>• The timer starts as soon as you tap Start and auto-submits at zero.</Text>
         <Text style={styles.instructionsItem}>• Answers aren't shown right or wrong until you submit — just like the real exam.</Text>
         {paper.marksWrong != null && paper.marksWrong > 0 && (
@@ -170,119 +175,120 @@ export default function MockTestStart() {
       </View>
 
       <Button size="lg" disabled={!canStart} onPress={startTest}>
-        {canStart ? "Start Test" : "Not enough questions yet"}
+        {canStart ? t("mock.startTest") : t("mock.startTestDisabled")}
       </Button>
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    padding: spacing.lg,
-    paddingTop: spacing.xl,
-    paddingBottom: spacing["3xl"],
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: spacing["2xl"],
-  },
-  emptyText: {
-    ...typography.secondary,
-    textAlign: "center",
-  },
-  loadingMessage: {
-    ...typography.secondary,
-    marginBottom: spacing.md,
-  },
-  examName: {
-    ...typography.pageTitle,
-    fontSize: 20,
-    marginBottom: spacing.xl,
-  },
-  summaryRow: {
-    flexDirection: "row",
-    gap: spacing.sm + 2,
-    marginBottom: spacing.base,
-  },
-  summaryCard: {
-    flex: 1,
-    backgroundColor: colors.surfaceElevated2,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    alignItems: "center",
-    gap: spacing.xs,
-  },
-  summaryValue: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.text.primary,
-  },
-  summaryLabel: {
-    fontSize: 11,
-    color: colors.text.secondary,
-  },
-  cappedNote: {
-    flexDirection: "row",
-    gap: spacing.sm,
-    backgroundColor: colors.semantic.warningBg,
-    borderRadius: radius.sm,
-    padding: spacing.md,
-    marginBottom: spacing.base,
-    alignItems: "flex-start",
-  },
-  cappedNoteText: {
-    flex: 1,
-    fontSize: 12,
-    color: colors.semantic.warning,
-    lineHeight: 17,
-  },
-  sectionsList: {
-    gap: spacing.sm,
-    marginTop: spacing.md,
-    marginBottom: spacing.xl,
-  },
-  sectionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    padding: spacing.md,
-  },
-  sectionIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.surfaceElevated2,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sectionName: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.text.primary,
-  },
-  sectionCount: {
-    fontSize: 12,
-    color: colors.text.muted,
-  },
-  instructionsBox: {
-    backgroundColor: colors.surfaceElevated2,
-    borderRadius: radius.md,
-    padding: spacing.base,
-    marginBottom: spacing.xl,
-    gap: spacing.xs + 2,
-  },
-  instructionsTitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: colors.text.primary,
-    marginBottom: spacing.xs,
-  },
-  instructionsItem: {
-    fontSize: 12,
-    color: colors.text.secondary,
-    lineHeight: 18,
-  },
-});
+const buildStyles = ({ colors, typography }: Theme) =>
+  StyleSheet.create({
+    container: {
+      padding: spacing.lg,
+      paddingTop: spacing.xl,
+      paddingBottom: spacing["3xl"],
+    },
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      padding: spacing["2xl"],
+    },
+    emptyText: {
+      ...typography.secondary,
+      textAlign: "center",
+    },
+    loadingMessage: {
+      ...typography.secondary,
+      marginBottom: spacing.md,
+    },
+    examName: {
+      ...typography.pageTitle,
+      fontSize: 20,
+      marginBottom: spacing.xl,
+    },
+    summaryRow: {
+      flexDirection: "row",
+      gap: spacing.sm + 2,
+      marginBottom: spacing.base,
+    },
+    summaryCard: {
+      flex: 1,
+      backgroundColor: colors.surfaceElevated2,
+      borderRadius: radius.md,
+      padding: spacing.md,
+      alignItems: "center",
+      gap: spacing.xs,
+    },
+    summaryValue: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.text.primary,
+    },
+    summaryLabel: {
+      fontSize: 11,
+      color: colors.text.secondary,
+    },
+    cappedNote: {
+      flexDirection: "row",
+      gap: spacing.sm,
+      backgroundColor: colors.semantic.warningBg,
+      borderRadius: radius.sm,
+      padding: spacing.md,
+      marginBottom: spacing.base,
+      alignItems: "flex-start",
+    },
+    cappedNoteText: {
+      flex: 1,
+      fontSize: 12,
+      color: colors.semantic.warning,
+      lineHeight: 17,
+    },
+    sectionsList: {
+      gap: spacing.sm,
+      marginTop: spacing.md,
+      marginBottom: spacing.xl,
+    },
+    sectionRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.md,
+      padding: spacing.md,
+    },
+    sectionIconCircle: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.surfaceElevated2,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    sectionName: {
+      flex: 1,
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.text.primary,
+    },
+    sectionCount: {
+      fontSize: 12,
+      color: colors.text.muted,
+    },
+    instructionsBox: {
+      backgroundColor: colors.surfaceElevated2,
+      borderRadius: radius.md,
+      padding: spacing.base,
+      marginBottom: spacing.xl,
+      gap: spacing.xs + 2,
+    },
+    instructionsTitle: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.text.primary,
+      marginBottom: spacing.xs,
+    },
+    instructionsItem: {
+      fontSize: 12,
+      color: colors.text.secondary,
+      lineHeight: 18,
+    },
+  });

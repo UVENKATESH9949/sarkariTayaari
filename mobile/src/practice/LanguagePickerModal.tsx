@@ -2,7 +2,9 @@ import { useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { Modal, Pressable, ScrollView, Text, TextInput, View, StyleSheet } from "react-native";
 import { LANGUAGES } from "./appLanguage";
-import { colors, radius, spacing } from "../ui/theme";
+import { radius, spacing } from "../ui/theme";
+import { useTheme, useThemedStyles, type Theme } from "../ui/ThemeContext";
+import { useT } from "../i18n/I18nContext";
 
 type Props = {
   visible: boolean;
@@ -12,7 +14,13 @@ type Props = {
   title?: string;
 };
 
-export function LanguagePickerModal({ visible, selectedCode, onSelect, onClose, title = "Select language" }: Props) {
+export function LanguagePickerModal({ visible, selectedCode, onSelect, onClose, title }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  const t = useT();
+  // Default resolved here, not as a default parameter value: the fallback is a
+  // translated string and a default parameter is evaluated before any hook runs.
+  const resolvedTitle = title ?? t("languagePicker.selectLanguage");
   const [search, setSearch] = useState("");
 
   const filteredLanguages = useMemo(() => {
@@ -31,12 +39,12 @@ export function LanguagePickerModal({ visible, selectedCode, onSelect, onClose, 
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.card} onPress={(e) => e.stopPropagation()}>
-          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.title}>{resolvedTitle}</Text>
           <View style={styles.searchBar}>
             <Ionicons name="search" size={16} color={colors.text.muted} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search languages..."
+              placeholder={t("languagePicker.search")}
               placeholderTextColor={colors.text.muted}
               value={search}
               onChangeText={setSearch}
@@ -66,65 +74,66 @@ export function LanguagePickerModal({ visible, selectedCode, onSelect, onClose, 
   );
 }
 
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(2, 3, 5, 0.7)",
-    justifyContent: "center",
-    padding: spacing.xl,
-  },
-  card: {
-    backgroundColor: colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.xl,
-    padding: spacing.lg,
-    maxHeight: "70%",
-  },
-  title: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: colors.text.primary,
-    marginBottom: spacing.md + 2,
-  },
-  searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    backgroundColor: colors.surfaceElevated2,
-    borderRadius: radius.sm + 2,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 1,
-    marginBottom: spacing.md,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: colors.text.primary,
-    padding: 0,
-  },
-  list: {
-    maxHeight: 320,
-  },
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: spacing.md + 1,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  rowPressed: {
-    backgroundColor: colors.surfaceElevated2,
-  },
-  rowText: {
-    fontSize: 15,
-    color: colors.text.primary,
-  },
-  emptyText: {
-    paddingVertical: spacing.xl,
-    textAlign: "center",
-    fontSize: 13,
-    color: colors.text.muted,
-  },
-});
+const buildStyles = ({ colors }: Theme) =>
+  StyleSheet.create({
+    backdrop: {
+      flex: 1,
+      backgroundColor: "rgba(2, 3, 5, 0.7)",
+      justifyContent: "center",
+      padding: spacing.xl,
+    },
+    card: {
+      backgroundColor: colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.xl,
+      padding: spacing.lg,
+      maxHeight: "70%",
+    },
+    title: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: colors.text.primary,
+      marginBottom: spacing.md + 2,
+    },
+    searchBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+      backgroundColor: colors.surfaceElevated2,
+      borderRadius: radius.sm + 2,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm + 1,
+      marginBottom: spacing.md,
+    },
+    searchInput: {
+      flex: 1,
+      fontSize: 14,
+      color: colors.text.primary,
+      padding: 0,
+    },
+    list: {
+      maxHeight: 320,
+    },
+    row: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingVertical: spacing.md + 1,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    rowPressed: {
+      backgroundColor: colors.surfaceElevated2,
+    },
+    rowText: {
+      fontSize: 15,
+      color: colors.text.primary,
+    },
+    emptyText: {
+      paddingVertical: spacing.xl,
+      textAlign: "center",
+      fontSize: 13,
+      color: colors.text.muted,
+    },
+  });

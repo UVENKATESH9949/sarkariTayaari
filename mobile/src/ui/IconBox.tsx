@@ -3,7 +3,7 @@ import { Image, StyleSheet, View, type StyleProp, type ViewStyle } from "react-n
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import type { IoniconName } from "../constants/subjects";
-import { colors } from "./theme";
+import { useTheme, useThemedStyles, type Theme } from "./ThemeContext";
 
 type IconBoxProps = {
   icon: IoniconName;
@@ -34,12 +34,14 @@ export function IconBox({
   icon,
   size = DEFAULT_SIZE,
   iconSize,
-  iconColor = colors.text.onAccent,
+  iconColor,
   backgroundColor,
   gradientColors,
   imageUrl,
   style,
 }: IconBoxProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   // Remembers *which* url failed rather than a bare boolean, so a changed url un-suppresses
   // itself by comparison — no reset effect, and nothing to get stale.
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
@@ -50,6 +52,8 @@ export function IconBox({
     !gradientColors && { backgroundColor: backgroundColor ?? colors.surfaceElevated2 },
     style,
   ];
+  // Default resolved here rather than as a default parameter value (module-load time).
+  const resolvedIconColor = iconColor ?? colors.text.onAccent;
   const resolvedIconSize = iconSize ?? Math.round(size * 0.43);
   const showImage = Boolean(imageUrl) && failedUrl !== imageUrl;
 
@@ -61,7 +65,7 @@ export function IconBox({
       onError={() => setFailedUrl(imageUrl ?? null)}
     />
   ) : (
-    <Ionicons name={icon} size={resolvedIconSize} color={iconColor} />
+    <Ionicons name={icon} size={resolvedIconSize} color={resolvedIconColor} />
   );
 
   if (gradientColors) {
@@ -75,11 +79,12 @@ export function IconBox({
   return <View style={boxStyle}>{content}</View>;
 }
 
-const styles = StyleSheet.create({
-  box: {
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
-  },
-});
+const buildStyles = ({ colors }: Theme) =>
+  StyleSheet.create({
+    box: {
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+    },
+  });

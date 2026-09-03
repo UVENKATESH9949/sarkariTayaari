@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
@@ -13,10 +13,13 @@ import { useHybridMode } from "../../../data/hybridSource";
 import { LANGUAGES, useAppLanguage } from "../../../practice/appLanguage";
 import { LanguagePickerModal } from "../../../practice/LanguagePickerModal";
 import { useActiveSession } from "../../../practice/activeSessionContext";
+import { useActiveTestBackGuard } from "../../../practice/useActiveTestBackGuard";
 import { AppAlert } from "../../../ui/AppDialog";
 import { EmptyState } from "../../../ui/EmptyState";
 import { QuestionSkeleton } from "../../../ui/Skeleton";
-import { colors, spacing, typography } from "../../../ui/theme";
+import { spacing } from "../../../ui/theme";
+import { useTheme, useThemedStyles, type Theme } from "../../../ui/ThemeContext";
+import { useT } from "../../../i18n/I18nContext";
 
 function formatTime(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60);
@@ -39,6 +42,9 @@ function totalDurationMinutes(paper: SyncedPaper): number {
 }
 
 export default function MockTestTaking() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  const t = useT();
   const router = useRouter();
   const { paperId, examLabel, paperName } = useLocalSearchParams<{
     paperId: string;
@@ -112,6 +118,14 @@ export default function MockTestTaking() {
     })();
   }, [paperId, beginSession]);
 
+  /**
+   * Ends the session however this screen goes away — the same fix as quiz.tsx, and for the
+   * same reason: `beginSession("mock")` was set when the questions loaded and cleared only
+   * on the submit and explicit-exit paths, so a hardware Back press left the flag set and
+   * the next tab tap warned about a test that was no longer running (Doc 2 §3).
+   */
+  useEffect(() => endSession, [endSession]);
+
   const submitTest = useMemo(
     () => async (auto: boolean) => {
       if (submittedRef.current || !questions || !paper) return;
@@ -167,14 +181,14 @@ export default function MockTestTaking() {
         console.warn("Failed to save mock test attempt", err);
         submittedRef.current = false;
         setSubmitting(false);
-        AppAlert.alert("Couldn't save your result", "Please try submitting again.", undefined, "error");
+        AppAlert.alert(t("mock.saveFailed"), t("mock.saveFailedBody"), undefined, "error");
         return;
       }
 
       endSession();
       router.replace({ pathname: "/mock-test/result", params: { attemptId } });
     },
-    [questions, paper, answers, markedForReview, remainingSeconds, examLabel, paperName, router, endSession],
+    [questions, paper, answers, markedForReview, remainingSeconds, examLabel, paperName, router, endSession, t],
   );
 
   useEffect(() => {
@@ -232,36 +246,51 @@ export default function MockTestTaking() {
   const confirmSubmit = () => {
     const unanswered = total - answeredCount;
     AppAlert.alert(
-      "Submit test?",
-      `${unanswered} question${unanswered === 1 ? "" : "s"} unanswered${markedCount > 0 ? `, ${markedCount} marked for review` : ""}. You can't change answers after submitting.`,
+      t("mock.submitTitle"),
+      t("mock.submitMessage", {
+        unanswered: unanswered === 1 ? t("practice.questionsOne") : t("practice.questionsOther", { count: unanswered }),
+        marked: markedCount > 0 ? t("mock.submitMessageMarked", { count: markedCount }) : "",
+      }),
       [
-        { text: "Keep reviewing", style: "cancel" },
-        { text: "Submit", style: "destructive", onPress: () => submitTest(false) },
+        { text: t("mock.keepReviewing"), style: "cancel" },
+        { text: t("common.submit"), style: "destructive", onPress: () => submitTest(false) },
       ],
     );
   };
 
+  const exitWithoutSubmitting = useCallback(() => {
+    abandonSession();
+    router.replace("/mock-test");
+  }, [abandonSession, router]);
+
   const confirmExit = () => {
-    AppAlert.alert("Exit without submitting?", "Your progress on this attempt will be lost.", [
-      { text: "Keep going", style: "cancel" },
-      {
-        text: "Exit",
-        style: "destructive",
-        onPress: () => {
-          abandonSession();
-          router.replace("/mock-test");
-        },
-      },
+    AppAlert.alert(t("mock.exitTitle"), t("mock.exitMessage"), [
+      { text: t("mock.keepGoing"), style: "cancel" },
+      { text: t("common.exit"), style: "destructive", onPress: exitWithoutSubmitting },
     ]);
   };
+
+  /*
+   * Doc 2 §2. The stack already sets `gestureEnabled: false` for this screen, so the swipe
+   * was covered; the hardware Back button was not, and popped the attempt with no warning
+   * at all. Same wording and same action as the Exit button in the header, so all three
+   * routes out of a running attempt now behave identically.
+   */
+  useActiveTestBackGuard({
+    // `submitting` state, not `submittedRef.current` — same reasoning as quiz.tsx.
+    active: !submitting,
+    title: t("mock.exitTitle"),
+    message: t("mock.exitMessage"),
+    onConfirmLeave: exitWithoutSubmitting,
+  });
 
   if (questions && !paper) {
     return (
       <View style={styles.centered}>
         <EmptyState
           icon="alert-circle-outline"
-          title="Test not available"
-          body="This paper is no longer part of the exam's structure."
+          title={t("mock.notAvailable")}
+          body={t("mock.notAvailableBody")}
         />
       </View>
     );
@@ -277,13 +306,13 @@ export default function MockTestTaking() {
       <View style={styles.centered}>
         <EmptyState
           icon="alert-circle-outline"
-          title="No questions available"
+          title={t("quiz.noQuestions")}
           body={
             mode === "unavailable"
               ? "You're offline and this content hasn't downloaded yet. Connect to the internet once to download it."
-              : "There aren't enough questions synced for this paper yet."
+              : t("mock.notEnoughSynced")
           }
-          action={{ label: "Go back", onPress: () => router.replace("/mock-test") }}
+          action={{ label: t("common.goBack"), onPress: () => router.replace("/mock-test") }}
         />
       </View>
     );
@@ -292,7 +321,7 @@ export default function MockTestTaking() {
   if (questions === null || !question || !translation) {
     return (
       <View style={[styles.centered, { paddingTop: spacing["3xl"], alignItems: "stretch" }]}>
-        <Text style={styles.loadingMessage}>Preparing your questions...</Text>
+        <Text style={styles.loadingMessage}>{t("quiz.loading")}</Text>
         <QuestionSkeleton />
       </View>
     );
@@ -302,7 +331,7 @@ export default function MockTestTaking() {
     <View style={styles.screen}>
       <View style={styles.topBar}>
         <Pressable onPress={confirmExit} disabled={submitting}>
-          <Text style={styles.exitText}>Exit</Text>
+          <Text style={styles.exitText}>{t("common.exit")}</Text>
         </Pressable>
         <View style={styles.timerBlock}>
           <Ionicons name="time-outline" size={16} color={remainingSeconds < 300 ? colors.semantic.error : colors.text.primary} />
@@ -311,7 +340,7 @@ export default function MockTestTaking() {
           </Text>
         </View>
         <Pressable onPress={confirmSubmit} disabled={submitting}>
-          <Text style={styles.submitText}>Submit</Text>
+          <Text style={styles.submitText}>{t("common.submit")}</Text>
         </Pressable>
       </View>
 
@@ -334,7 +363,7 @@ export default function MockTestTaking() {
         <Pressable style={styles.markButton} onPress={toggleMarkForReview}>
           <Ionicons name={isMarked ? "bookmark" : "bookmark-outline"} size={16} color={isMarked ? colors.semantic.warning : colors.text.muted} />
           <Text style={[styles.markButtonText, isMarked && styles.markButtonTextActive]}>
-            {isMarked ? "Marked" : "Mark for review"}
+            {isMarked ? t("mock.marked") : t("mock.markForReview")}
           </Text>
         </Pressable>
       </View>
@@ -369,7 +398,7 @@ export default function MockTestTaking() {
 
         {answers[question.id] !== undefined && (
           <Pressable style={styles.clearButton} onPress={clearAnswer}>
-            <Text style={styles.clearButtonText}>Clear answer</Text>
+            <Text style={styles.clearButtonText}>{t("mock.clearAnswer")}</Text>
           </Pressable>
         )}
       </ScrollView>
@@ -380,33 +409,33 @@ export default function MockTestTaking() {
           disabled={currentIndex === 0}
           onPress={() => setCurrentIndex((i) => Math.max(0, i - 1))}
         >
-          <Text style={[styles.navButtonText, currentIndex === 0 && styles.navButtonTextDisabled]}>Previous</Text>
+          <Text style={[styles.navButtonText, currentIndex === 0 && styles.navButtonTextDisabled]}>{t("common.previous")}</Text>
         </Pressable>
         <Pressable
           style={[styles.navButton, styles.navButtonPrimary, currentIndex === total - 1 && styles.navButtonDisabled]}
           disabled={currentIndex === total - 1}
           onPress={() => setCurrentIndex((i) => Math.min(total - 1, i + 1))}
         >
-          <Text style={styles.navButtonPrimaryText}>Next</Text>
+          <Text style={styles.navButtonPrimaryText}>{t("common.next")}</Text>
         </Pressable>
       </View>
 
       <Modal visible={navigatorVisible} transparent animationType="slide" onRequestClose={() => setNavigatorVisible(false)}>
         <Pressable style={styles.navigatorBackdrop} onPress={() => setNavigatorVisible(false)}>
           <Pressable style={styles.navigatorCard} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.navigatorTitle}>Question Navigator</Text>
+            <Text style={styles.navigatorTitle}>{t("mock.navigator")}</Text>
             <View style={styles.navigatorLegend}>
               <View style={styles.legendItem}>
                 <View style={[styles.legendDot, styles.legendAnswered]} />
-                <Text style={styles.legendText}>Answered</Text>
+                <Text style={styles.legendText}>{t("common.answered")}</Text>
               </View>
               <View style={styles.legendItem}>
                 <View style={[styles.legendDot, styles.legendMarked]} />
-                <Text style={styles.legendText}>Marked</Text>
+                <Text style={styles.legendText}>{t("mock.marked")}</Text>
               </View>
               <View style={styles.legendItem}>
                 <View style={[styles.legendDot, styles.legendUnanswered]} />
-                <Text style={styles.legendText}>Unanswered</Text>
+                <Text style={styles.legendText}>{t("common.unanswered")}</Text>
               </View>
             </View>
             <ScrollView style={styles.navigatorGridScroll}>
@@ -453,331 +482,332 @@ export default function MockTestTaking() {
       {submitting && (
         <View style={styles.submittingOverlay}>
           <ActivityIndicator size="large" color={colors.text.onAccent} />
-          <Text style={styles.submittingText}>Submitting your test…</Text>
+          <Text style={styles.submittingText}>{t("mock.submitting")}</Text>
         </View>
       )}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    paddingTop: 50,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 32,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: colors.text.muted,
-    textAlign: "center",
-  },
-  loadingMessage: {
-    ...typography.secondary,
-    textAlign: "center",
-    marginBottom: spacing.lg,
-  },
-  topBar: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-  },
-  exitText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.text.muted,
-  },
-  submitText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.text.primary,
-  },
-  timerBlock: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: colors.surfaceElevated2,
-    borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-  timerText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: colors.text.primary,
-  },
-  timerTextLow: {
-    color: colors.semantic.error,
-  },
-  metaRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingBottom: 10,
-  },
-  metaText: {
-    fontSize: 12,
-    color: colors.text.muted,
-  },
-  navigatorButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: colors.surfaceElevated2,
-    borderRadius: 8,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-  },
-  navigatorButtonText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: colors.text.primary,
-  },
-  toolbarRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingBottom: 8,
-  },
-  languageButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: colors.surfaceElevated2,
-    borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-  },
-  languageButtonText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: colors.text.primary,
-  },
-  markButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-  },
-  markButtonText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: colors.text.muted,
-  },
-  markButtonTextActive: {
-    color: colors.semantic.warning,
-  },
-  container: {
-    padding: 20,
-    paddingTop: 8,
-    paddingBottom: 40,
-  },
-  fallbackNote: {
-    fontSize: 12,
-    color: colors.text.muted,
-    fontStyle: "italic",
-    marginBottom: 10,
-  },
-  questionText: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: colors.text.primary,
-    lineHeight: 26,
-    marginBottom: 20,
-  },
-  optionsList: {
-    gap: 12,
-  },
-  optionCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    backgroundColor: colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 14,
-  },
-  optionSelected: {
-    borderColor: colors.brand.primary,
-    backgroundColor: colors.surfaceElevated2,
-  },
-  optionBadge: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: colors.surfaceElevated2,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  optionBadgeSelected: {
-    backgroundColor: colors.brand.primary,
-  },
-  optionBadgeText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: colors.text.primary,
-  },
-  optionBadgeTextSelected: {
-    color: colors.text.onAccent,
-  },
-  optionText: {
-    flex: 1,
-    fontSize: 15,
-    color: colors.text.primary,
-  },
-  clearButton: {
-    marginTop: 16,
-    alignSelf: "center",
-  },
-  clearButtonText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.semantic.error,
-  },
-  footer: {
-    flexDirection: "row",
-    gap: 12,
-    padding: 20,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.surfaceElevated,
-  },
-  navButton: {
-    flex: 1,
-    borderRadius: 12,
-    paddingVertical: 15,
-    alignItems: "center",
-    backgroundColor: colors.surfaceElevated2,
-  },
-  navButtonPrimary: {
-    backgroundColor: colors.brand.primary,
-  },
-  navButtonDisabled: {
-    opacity: 0.4,
-  },
-  navButtonText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: colors.text.primary,
-  },
-  navButtonTextDisabled: {
-    color: colors.text.muted,
-  },
-  navButtonPrimaryText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: colors.text.onAccent,
-  },
-  navigatorBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(2, 3, 5, 0.7)",
-    justifyContent: "flex-end",
-  },
-  navigatorCard: {
-    backgroundColor: colors.surfaceElevated,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: "70%",
-  },
-  navigatorTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: colors.text.primary,
-    marginBottom: 14,
-  },
-  navigatorLegend: {
-    flexDirection: "row",
-    gap: 16,
-    marginBottom: 16,
-  },
-  legendItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  legendDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  legendAnswered: {
-    backgroundColor: colors.brand.primary,
-  },
-  legendMarked: {
-    backgroundColor: colors.semantic.warning,
-  },
-  legendUnanswered: {
-    backgroundColor: colors.border,
-  },
-  legendText: {
-    fontSize: 11,
-    color: colors.text.secondary,
-  },
-  navigatorGridScroll: {
-    maxHeight: 320,
-  },
-  navigatorGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    paddingBottom: 10,
-  },
-  navigatorCell: {
-    width: 42,
-    height: 42,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceElevated,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  navigatorCellAnswered: {
-    backgroundColor: colors.brand.primary,
-    borderColor: colors.brand.primary,
-  },
-  navigatorCellMarked: {
-    backgroundColor: colors.semantic.warning,
-    borderColor: colors.semantic.warning,
-  },
-  navigatorCellCurrent: {
-    borderWidth: 2,
-    borderColor: colors.brand.light,
-  },
-  navigatorCellText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.text.primary,
-  },
-  navigatorCellTextLight: {
-    color: colors.text.onAccent,
-  },
-  submittingOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(2, 3, 5, 0.88)",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 14,
-  },
-  submittingText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.text.onAccent,
-  },
-});
+const buildStyles = ({ colors, typography }: Theme) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      paddingTop: 50,
+    },
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 32,
+    },
+    emptyText: {
+      fontSize: 14,
+      color: colors.text.muted,
+      textAlign: "center",
+    },
+    loadingMessage: {
+      ...typography.secondary,
+      textAlign: "center",
+      marginBottom: spacing.lg,
+    },
+    topBar: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 20,
+      paddingBottom: 12,
+    },
+    exitText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.text.muted,
+    },
+    submitText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.text.primary,
+    },
+    timerBlock: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      backgroundColor: colors.surfaceElevated2,
+      borderRadius: 8,
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+    },
+    timerText: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.text.primary,
+    },
+    timerTextLow: {
+      color: colors.semantic.error,
+    },
+    metaRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 20,
+      paddingBottom: 10,
+    },
+    metaText: {
+      fontSize: 12,
+      color: colors.text.muted,
+    },
+    navigatorButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      backgroundColor: colors.surfaceElevated2,
+      borderRadius: 8,
+      paddingVertical: 5,
+      paddingHorizontal: 10,
+    },
+    navigatorButtonText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.text.primary,
+    },
+    toolbarRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 20,
+      paddingBottom: 8,
+    },
+    languageButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      backgroundColor: colors.surfaceElevated2,
+      borderRadius: 8,
+      paddingVertical: 6,
+      paddingHorizontal: 10,
+    },
+    languageButtonText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.text.primary,
+    },
+    markButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      paddingVertical: 6,
+      paddingHorizontal: 10,
+    },
+    markButtonText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.text.muted,
+    },
+    markButtonTextActive: {
+      color: colors.semantic.warning,
+    },
+    container: {
+      padding: 20,
+      paddingTop: 8,
+      paddingBottom: 40,
+    },
+    fallbackNote: {
+      fontSize: 12,
+      color: colors.text.muted,
+      fontStyle: "italic",
+      marginBottom: 10,
+    },
+    questionText: {
+      fontSize: 18,
+      fontWeight: "600",
+      color: colors.text.primary,
+      lineHeight: 26,
+      marginBottom: 20,
+    },
+    optionsList: {
+      gap: 12,
+    },
+    optionCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      backgroundColor: colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      padding: 14,
+    },
+    optionSelected: {
+      borderColor: colors.brand.primary,
+      backgroundColor: colors.surfaceElevated2,
+    },
+    optionBadge: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      backgroundColor: colors.surfaceElevated2,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    optionBadgeSelected: {
+      backgroundColor: colors.brand.primary,
+    },
+    optionBadgeText: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.text.primary,
+    },
+    optionBadgeTextSelected: {
+      color: colors.text.onAccent,
+    },
+    optionText: {
+      flex: 1,
+      fontSize: 15,
+      color: colors.text.primary,
+    },
+    clearButton: {
+      marginTop: 16,
+      alignSelf: "center",
+    },
+    clearButtonText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.semantic.error,
+    },
+    footer: {
+      flexDirection: "row",
+      gap: 12,
+      padding: 20,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      backgroundColor: colors.surfaceElevated,
+    },
+    navButton: {
+      flex: 1,
+      borderRadius: 12,
+      paddingVertical: 15,
+      alignItems: "center",
+      backgroundColor: colors.surfaceElevated2,
+    },
+    navButtonPrimary: {
+      backgroundColor: colors.brand.primary,
+    },
+    navButtonDisabled: {
+      opacity: 0.4,
+    },
+    navButtonText: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: colors.text.primary,
+    },
+    navButtonTextDisabled: {
+      color: colors.text.muted,
+    },
+    navButtonPrimaryText: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: colors.text.onAccent,
+    },
+    navigatorBackdrop: {
+      flex: 1,
+      backgroundColor: "rgba(2, 3, 5, 0.7)",
+      justifyContent: "flex-end",
+    },
+    navigatorCard: {
+      backgroundColor: colors.surfaceElevated,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      padding: 20,
+      maxHeight: "70%",
+    },
+    navigatorTitle: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: colors.text.primary,
+      marginBottom: 14,
+    },
+    navigatorLegend: {
+      flexDirection: "row",
+      gap: 16,
+      marginBottom: 16,
+    },
+    legendItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    },
+    legendDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+    },
+    legendAnswered: {
+      backgroundColor: colors.brand.primary,
+    },
+    legendMarked: {
+      backgroundColor: colors.semantic.warning,
+    },
+    legendUnanswered: {
+      backgroundColor: colors.border,
+    },
+    legendText: {
+      fontSize: 11,
+      color: colors.text.secondary,
+    },
+    navigatorGridScroll: {
+      maxHeight: 320,
+    },
+    navigatorGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 10,
+      paddingBottom: 10,
+    },
+    navigatorCell: {
+      width: 42,
+      height: 42,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surfaceElevated,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    navigatorCellAnswered: {
+      backgroundColor: colors.brand.primary,
+      borderColor: colors.brand.primary,
+    },
+    navigatorCellMarked: {
+      backgroundColor: colors.semantic.warning,
+      borderColor: colors.semantic.warning,
+    },
+    navigatorCellCurrent: {
+      borderWidth: 2,
+      borderColor: colors.brand.light,
+    },
+    navigatorCellText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.text.primary,
+    },
+    navigatorCellTextLight: {
+      color: colors.text.onAccent,
+    },
+    submittingOverlay: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: "rgba(2, 3, 5, 0.88)",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 14,
+    },
+    submittingText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.text.onAccent,
+    },
+  });

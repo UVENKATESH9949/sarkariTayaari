@@ -18,7 +18,9 @@ import { AppAlert } from "../ui/AppDialog";
 import { Button } from "../ui/Button";
 import { ContextualLoading } from "../ui/ContextualLoading";
 import { CardSkeleton } from "../ui/Skeleton";
-import { colors, radius, spacing } from "../ui/theme";
+import { radius, spacing } from "../ui/theme";
+import { useTheme, useThemedStyles, type Theme } from "../ui/ThemeContext";
+import { useT } from "../i18n/I18nContext";
 
 /**
  * Sign in / sign up, and the signed-in account view.
@@ -27,6 +29,9 @@ import { colors, radius, spacing } from "../ui/theme";
  * and a sign-up wall before the student has seen any value is where people leave.
  */
 export default function Account() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  const t = useT();
   const router = useRouter();
   const { user, loading, syncing, signIn, signUp, signOut } = useAuth();
   const { isOnline } = useNetworkStatus();
@@ -41,7 +46,7 @@ export default function Account() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <ContextualLoading message="Loading your account..." skeleton={<CardSkeleton height={140} />} />
+        <ContextualLoading message={t("account.loading")} skeleton={<CardSkeleton height={140} />} />
       </View>
     );
   }
@@ -51,12 +56,12 @@ export default function Account() {
   if (user) {
     const handleSignOut = () => {
       AppAlert.alert(
-        "Sign out?",
-        "Your progress is saved to your account first. It stays on this phone too.",
+        t("account.signOutTitle"),
+        t("account.signOutMessage"),
         [
-          { text: "Cancel", style: "cancel" },
+          { text: t("common.cancel"), style: "cancel" },
           {
-            text: "Sign out",
+            text: t("account.signOut"),
             style: "destructive",
             onPress: async () => {
               setBusy(true);
@@ -85,12 +90,12 @@ export default function Account() {
           {syncing ? (
             <>
               <ActivityIndicator size="small" color={colors.brand.primary} />
-              <Text style={styles.statusText}>Saving your progress…</Text>
+              <Text style={styles.statusText}>{t("account.saving")}</Text>
             </>
           ) : (
             <>
               <Ionicons name="checkmark-circle" size={18} color={colors.semantic.success} />
-              <Text style={styles.statusText}>Progress is backed up to your account</Text>
+              <Text style={styles.statusText}>{t("account.backedUp")}</Text>
             </>
           )}
         </View>
@@ -153,24 +158,24 @@ export default function Account() {
 
         {mode === "signup" && (
           <View style={styles.field}>
-            <Text style={styles.label}>Your name (optional)</Text>
+            <Text style={styles.label}>{t("account.name")}</Text>
             <TextInput
               style={styles.input}
               value={displayName}
               onChangeText={setDisplayName}
-              placeholder="Venkatesh"
+              placeholder={t("account.namePlaceholder")}
               autoCapitalize="words"
             />
           </View>
         )}
 
         <View style={styles.field}>
-          <Text style={styles.label}>Email</Text>
+          <Text style={styles.label}>{t("account.email")}</Text>
           <TextInput
             style={styles.input}
             value={email}
             onChangeText={setEmail}
-            placeholder="you@example.com"
+            placeholder={t("account.emailPlaceholder")}
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="email-address"
@@ -178,12 +183,12 @@ export default function Account() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Password</Text>
+          <Text style={styles.label}>{t("account.password")}</Text>
           <TextInput
             style={styles.input}
             value={password}
             onChangeText={setPassword}
-            placeholder="At least 8 characters"
+            placeholder={t("account.passwordPlaceholder")}
             secureTextEntry
             autoCapitalize="none"
           />
@@ -200,40 +205,41 @@ export default function Account() {
         </Pressable>
 
         <Text style={styles.footnote}>
-          You can keep practising without an account — this only backs your progress up.
+          {t("account.keepPractising")}
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { padding: spacing.xl, paddingTop: spacing.xl, paddingBottom: spacing["3xl"] },
-  heading: { fontSize: 22, fontWeight: "700", color: colors.text.primary },
-  subheading: { marginTop: spacing.sm - 2, marginBottom: spacing.xl, fontSize: 13.5, color: colors.text.muted, lineHeight: 19 },
-  field: { marginBottom: spacing.base },
-  label: { fontSize: 12.5, fontWeight: "600", color: colors.text.secondary, marginBottom: spacing.sm - 2 },
-  input: {
-    borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.md + 2,
-    paddingVertical: spacing.md, fontSize: 15, backgroundColor: colors.surfaceElevated, color: colors.text.primary,
-  },
-  primaryButton: { marginTop: spacing.sm },
-  secondaryButton: { marginTop: spacing["2xl"] },
-  switchText: { marginTop: spacing.lg - 2, textAlign: "center", color: colors.brand.primary, fontSize: 14, fontWeight: "600" },
-  footnote: { marginTop: spacing.xl + 2, textAlign: "center", color: colors.text.muted, fontSize: 12.5, lineHeight: 18 },
-  errorBox: { backgroundColor: colors.semantic.errorBg, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.base },
-  errorText: { color: colors.semantic.error, fontSize: 13.5 },
-  card: { alignItems: "center", paddingVertical: spacing.xl },
-  avatar: {
-    width: 64, height: 64, borderRadius: 32, backgroundColor: colors.brand.primary,
-    alignItems: "center", justifyContent: "center", marginBottom: spacing.md + 2,
-  },
-  name: { fontSize: 18, fontWeight: "700", color: colors.text.primary },
-  email: { fontSize: 13.5, color: colors.text.muted, marginTop: spacing.xs },
-  statusRow: {
-    flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.surfaceElevated2,
-    borderRadius: radius.md, padding: spacing.md + 2,
-  },
-  statusText: { fontSize: 13.5, color: colors.text.secondary, flex: 1 },
-  explainer: { marginTop: spacing.base, fontSize: 13, color: colors.text.muted, lineHeight: 19 },
-});
+const buildStyles = ({ colors }: Theme) =>
+  StyleSheet.create({
+    container: { padding: spacing.xl, paddingTop: spacing.xl, paddingBottom: spacing["3xl"] },
+    heading: { fontSize: 22, fontWeight: "700", color: colors.text.primary },
+    subheading: { marginTop: spacing.sm - 2, marginBottom: spacing.xl, fontSize: 13.5, color: colors.text.muted, lineHeight: 19 },
+    field: { marginBottom: spacing.base },
+    label: { fontSize: 12.5, fontWeight: "600", color: colors.text.secondary, marginBottom: spacing.sm - 2 },
+    input: {
+      borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.md + 2,
+      paddingVertical: spacing.md, fontSize: 15, backgroundColor: colors.surfaceElevated, color: colors.text.primary,
+    },
+    primaryButton: { marginTop: spacing.sm },
+    secondaryButton: { marginTop: spacing["2xl"] },
+    switchText: { marginTop: spacing.lg - 2, textAlign: "center", color: colors.brand.primary, fontSize: 14, fontWeight: "600" },
+    footnote: { marginTop: spacing.xl + 2, textAlign: "center", color: colors.text.muted, fontSize: 12.5, lineHeight: 18 },
+    errorBox: { backgroundColor: colors.semantic.errorBg, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.base },
+    errorText: { color: colors.semantic.error, fontSize: 13.5 },
+    card: { alignItems: "center", paddingVertical: spacing.xl },
+    avatar: {
+      width: 64, height: 64, borderRadius: 32, backgroundColor: colors.brand.primary,
+      alignItems: "center", justifyContent: "center", marginBottom: spacing.md + 2,
+    },
+    name: { fontSize: 18, fontWeight: "700", color: colors.text.primary },
+    email: { fontSize: 13.5, color: colors.text.muted, marginTop: spacing.xs },
+    statusRow: {
+      flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.surfaceElevated2,
+      borderRadius: radius.md, padding: spacing.md + 2,
+    },
+    statusText: { fontSize: 13.5, color: colors.text.secondary, flex: 1 },
+    explainer: { marginTop: spacing.base, fontSize: 13, color: colors.text.muted, lineHeight: 19 },
+  });

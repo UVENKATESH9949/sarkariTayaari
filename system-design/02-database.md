@@ -180,6 +180,7 @@ phone and are never uploaded:
 | `practice_sessions` + `practice_session_results` | past practice sessions, question by question |
 | `mock_test_attempts` + `mock_test_attempt_results` | past mock tests, with scores |
 | `bookmarks` | questions the student saved |
+| `app_preferences` | this device's theme/zoom/UI-language settings — a device setting, not account data, so it's deliberately never synced or cleared on sign-out (see `05-why-its-built-this-way.md`) |
 
 **If the student is signed out, all of this is local-only** — uninstalling the app loses
 it, same as day one. **If signed in, it's backed up automatically**: each of these rows
@@ -199,14 +200,30 @@ the change — and the backend runs it automatically on startup.
 
 ```
 backend/src/main/resources/db/migration/
-    V1__init_schema.sql              the original tables
-    V2__content_model_redesign.sql   subjects/topics/exams
-    V3__exam_structure.sql           stages/papers/sections
-    V4__exam_subjects.sql            the syllabus link
-    V5__users_and_tokens.sql         accounts and sign-in sessions
-    V6__user_progress.sql            practice sessions and mock attempts
-    V7__user_bookmarks.sql           synced bookmarks
+    V1__init_schema.sql                          the original tables
+    V2__content_model_redesign.sql               subjects/topics/exams
+    V3__exam_structure.sql                        stages/papers/sections
+    V4__exam_subjects.sql                         the syllabus link
+    V5__users_and_tokens.sql                      accounts and sign-in sessions
+    V6__user_progress.sql                         practice sessions and mock attempts
+    V7__user_bookmarks.sql                        synced bookmarks
+    V8__admin_roles.sql                           users.role (STUDENT/ADMIN) — see ADR-009
+    V9__temporary_question_pool.sql               (superseded — full bank now synced, see open-questions.md)
+    V10__temporary_question_pool_topup.sql        (superseded, same as above)
+    V11__exam_difficulty_and_badge.sql            difficulty/badge fields on exams
+    V12__topic_model_for_exam_intelligence.sql    exam_topics, topics.parent_id, topic_prerequisites
+    V13__pyq_provenance_and_duplicates.sql        PYQ tagging + fingerprint-based duplicate detection
+    V14__user_topic_progress.sql                  per-topic mastery, synced last-write-wins like bookmarks
+    V15__topic_trend_and_priority.sql             trend/priority scoring (algorithm-versioned)
+    V16__real_pattern_versioning.sql              two versions of an exam pattern can coexist
+    V17__exam_guide_phase1.sql                    recruitment_cycles, eligibility, dates, documents, fees
 ```
+
+V8–V17 add whole feature areas ("Epic L" topic intelligence, and "Exam Guide") on top of
+the four groups above rather than changing them — see
+[`../api/EXAM-INTELLIGENCE.md`](../api/EXAM-INTELLIGENCE.md) and
+[`../api/EXAM-GUIDE.md`](../api/EXAM-GUIDE.md) for their endpoints, and the matching
+`reports/<NN-topic>/` folder for the full design rationale of each.
 
 Rules: **never edit a migration that has already run** — write a new one. They run in
 order, once each, and the backend records which have been applied.

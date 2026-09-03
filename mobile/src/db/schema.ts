@@ -283,6 +283,169 @@ export const sectionSubjects = sqliteTable(
   ],
 );
 
+// ---------------------------------------------------------------------- Exam Guide (§44 offline cache)
+//
+// Mirrors the backend's combined ExamGuideResponse (GET /api/exam-guides), synced during
+// the ordinary reference-data pass alongside exam structures and topic intelligence — see
+// writeExamGuides() in sync/writeQuestions.ts. Only ever holds each exam's CURRENT,
+// published cycle (never history), so every child table is keyed by examCode rather than
+// the backend's recruitmentCycleId: there is exactly one synced cycle per exam locally,
+// which is what makes a wholesale delete+reinsert on every sync safe and simple, the same
+// pattern writeExamStructures already uses. recruitmentCycleId is still stored on the
+// parent row — screens need it for the live §30 "what's changed" and document-status calls.
+export const examGuideCycles = sqliteTable("exam_guide_cycles", {
+  examCode: text("exam_code").primaryKey().references(() => exams.code),
+  recruitmentCycleId: text("recruitment_cycle_id").notNull(),
+  examName: text("exam_name").notNull(),
+  cycleName: text("cycle_name").notNull(),
+  status: text("status").notNull(),
+  notificationDate: text("notification_date"),
+  applicationStart: text("application_start"),
+  applicationEnd: text("application_end"),
+  examStart: text("exam_start"),
+  examEnd: text("exam_end"),
+  vacancyCount: integer("vacancy_count"),
+  notificationUrl: text("notification_url"),
+  overviewText: text("overview_text"),
+  isDemo: integer("is_demo", { mode: "boolean" }).notNull().default(false),
+  lastVerifiedAt: text("last_verified_at"),
+});
+
+// 1:1 with examGuideCycles — same convention as the backend's eligibility_rules (the PK
+// IS the parent reference, not a separate surrogate id).
+export const examGuideEligibility = sqliteTable("exam_guide_eligibility", {
+  examCode: text("exam_code").primaryKey().references(() => examGuideCycles.examCode),
+  minimumAge: integer("minimum_age"),
+  maximumAge: integer("maximum_age"),
+  ageCutoffDate: text("age_cutoff_date"),
+  qualification: text("qualification"),
+  nationality: text("nationality"),
+  genderRequirement: text("gender_requirement"),
+  // JSON-encoded {"OBC": 3, "SC": 5, ...} — same shape as the backend's JSONB column.
+  categoryRelaxation: text("category_relaxation"),
+  specialRequirements: text("special_requirements"),
+  sourceId: text("source_id"),
+});
+
+export const examGuideDates = sqliteTable(
+  "exam_guide_dates",
+  {
+    id: text("id").primaryKey(),
+    examCode: text("exam_code").notNull().references(() => examGuideCycles.examCode),
+    eventType: text("event_type").notNull(),
+    title: text("title").notNull(),
+    startDate: text("start_date"),
+    endDate: text("end_date"),
+    official: integer("official", { mode: "boolean" }).notNull().default(false),
+    sourceId: text("source_id"),
+    // The server already sorts these; SQLite has no reliable "insertion order" to lean on
+    // instead, so the position is stored explicitly and read back with ORDER BY.
+    displayOrder: integer("display_order").notNull().default(0),
+  },
+  (table) => [index("idx_exam_guide_dates_exam_code").on(table.examCode)],
+);
+
+export const examGuideDocuments = sqliteTable(
+  "exam_guide_documents",
+  {
+    id: text("id").primaryKey(),
+    examCode: text("exam_code").notNull().references(() => examGuideCycles.examCode),
+    documentName: text("document_name").notNull(),
+    required: text("required").notNull(),
+    applicableFor: text("applicable_for"),
+    format: text("format"),
+    maxSizeKb: integer("max_size_kb"),
+    dimensions: text("dimensions"),
+    instructions: text("instructions"),
+    // Whatever the last sync's signed-in user saw — a snapshot, not a second source of
+    // truth. Writing a new status still goes straight to the server (see exam-guide.tsx);
+    // this column only matters for what an offline read shows in the meantime.
+    userStatus: text("user_status"),
+    sourceId: text("source_id"),
+    displayOrder: integer("display_order").notNull().default(0),
+  },
+  (table) => [index("idx_exam_guide_documents_exam_code").on(table.examCode)],
+);
+
+// ApplicationStepSummary carries no id from the server (stepNumber is unique per cycle,
+// which is exactly what ADR-005's synthetic-id convention is for).
+export const examGuideSteps = sqliteTable(
+  "exam_guide_steps",
+  {
+    id: text("id").primaryKey(),
+    examCode: text("exam_code").notNull().references(() => examGuideCycles.examCode),
+    stepNumber: integer("step_number").notNull(),
+    title: text("title").notNull(),
+    description: text("description"),
+    warning: text("warning"),
+    officialUrl: text("official_url"),
+  },
+  (table) => [index("idx_exam_guide_steps_exam_code").on(table.examCode)],
+);
+
+// applicationMistakes is a bare List<String> server-side — synthetic id "examCode:index".
+export const examGuideMistakes = sqliteTable(
+  "exam_guide_mistakes",
+  {
+    id: text("id").primaryKey(),
+    examCode: text("exam_code").notNull().references(() => examGuideCycles.examCode),
+    mistake: text("mistake").notNull(),
+    displayOrder: integer("display_order").notNull().default(0),
+  },
+  (table) => [index("idx_exam_guide_mistakes_exam_code").on(table.examCode)],
+);
+
+// FeeSummary carries no id — category is unique per cycle, so "examCode:category" is the
+// synthetic id (ADR-005), same reasoning as examGuideSteps above.
+export const examGuideFees = sqliteTable(
+  "exam_guide_fees",
+  {
+    id: text("id").primaryKey(),
+    examCode: text("exam_code").notNull().references(() => examGuideCycles.examCode),
+    category: text("category").notNull(),
+    amountRupees: integer("amount_rupees").notNull().default(0),
+    exempted: integer("exempted", { mode: "boolean" }).notNull().default(false),
+    notes: text("notes"),
+    sourceId: text("source_id"),
+    displayOrder: integer("display_order").notNull().default(0),
+  },
+  (table) => [index("idx_exam_guide_fees_exam_code").on(table.examCode)],
+);
+
+// Global, not per-exam — the same source can be (and often is) cited by several exams'
+// facts, matching the backend's shared exam_sources table. Upserted, never wiped, since a
+// source not currently cited by a synced exam guide may still be cited by a cached one.
+export const examGuideSources = sqliteTable("exam_guide_sources", {
+  id: text("id").primaryKey(),
+  sourceName: text("source_name").notNull(),
+  sourceType: text("source_type").notNull(),
+  url: text("url"),
+});
+
+// Spec §25/§26 "Career Information". Carries a real backend id (ExamCareerPost's UUID),
+// unlike the other synthetic-id child tables above — career posts are exam-scoped, not
+// cycle-scoped, on the backend too (see the backend's V19 migration comment), but they're
+// still synced and read alongside the rest of the guide since ExamGuideResponse bundles
+// them in (one combined endpoint, per §59) — so this table is keyed the same way as its
+// siblings for consistency, even though its FK is conceptually "this exam" rather than
+// "this exam's current cycle".
+export const examGuideCareerPosts = sqliteTable(
+  "exam_guide_career_posts",
+  {
+    id: text("id").primaryKey(),
+    examCode: text("exam_code").notNull().references(() => examGuideCycles.examCode),
+    postTitle: text("post_title").notNull(),
+    payLevel: text("pay_level"),
+    salaryMinRupees: integer("salary_min_rupees"),
+    salaryMaxRupees: integer("salary_max_rupees"),
+    growthPath: text("growth_path"),
+    description: text("description"),
+    sourceId: text("source_id"),
+    displayOrder: integer("display_order").notNull().default(0),
+  },
+  (table) => [index("idx_exam_guide_career_posts_exam_code").on(table.examCode)],
+);
+
 export const questions = sqliteTable(
   "questions",
   {
@@ -382,13 +545,22 @@ export const authSession = sqliteTable("auth_session", {
   expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
 });
 
-// Local-only — which exam(s) the user is preparing for. Feeds Home's
-// "Preparing for <exam>" card and a future countdown-to-exam-date feature.
-export const followedExams = sqliteTable("followed_exams", {
-  examCode: text("exam_code").primaryKey().references(() => exams.code),
-  targetDate: integer("target_date", { mode: "timestamp_ms" }),
-  followedAt: integer("followed_at", { mode: "timestamp_ms" }).notNull(),
-});
+// Which exam(s) the user is preparing for. Feeds Home's "Preparing for <exam>" card, My
+// Exams, and the Exams module's Follow star. Was local-only until the Exams module
+// (spec's own real backend Follow sync decision) — is_deleted/is_synced/updated_at mirror
+// `bookmarks` exactly, added in the same migration, for the same last-write-wins reason.
+export const followedExams = sqliteTable(
+  "followed_exams",
+  {
+    examCode: text("exam_code").primaryKey().references(() => exams.code),
+    targetDate: integer("target_date", { mode: "timestamp_ms" }),
+    followedAt: integer("followed_at", { mode: "timestamp_ms" }).notNull(),
+    isDeleted: integer("is_deleted", { mode: "boolean" }).notNull().default(false),
+    isSynced: integer("is_synced", { mode: "boolean" }).notNull().default(false),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [index("idx_followed_exams_is_synced").on(table.isSynced)],
+);
 
 // Local-only — a completed Practice session (Phase 4's session-history
 // feature). No server equivalent: practice is generated from locally-synced
@@ -408,7 +580,20 @@ export const practiceSessions = sqliteTable(
     topicName: text("topic_name").notNull(),
     levelLabel: text("level_label").notNull(),
     correctCount: integer("correct_count").notNull(),
+    // The number of questions actually ANSWERED, which is the denominator of every
+    // accuracy figure in the app. Before early finishing existed this was always equal
+    // to the size of the question set, because answering all of them was mandatory; it
+    // is no longer, so the two meanings had to be split (see availableCount below).
     totalCount: integer("total_count").notNull(),
+    // How many questions the set offered, which may now exceed totalCount because the
+    // user is allowed to stop early. Deliberately kept OUT of every accuracy
+    // calculation — a student who answered 17 of 50 correctly-answered-15 has 88%
+    // accuracy, not 30%. It exists only so the summary can say "17 of 50 attempted".
+    //
+    // Nullable, and local-only: it is not part of the server's practice-session
+    // contract, so sessions from before this column (and any session that round-trips
+    // through the server) legitimately have no value here and simply omit the row.
+    availableCount: integer("available_count"),
     // Nullable: sessions recorded before this column existed have no duration on record —
     // the review screen hides the "time taken" row rather than showing a fake 0.
     durationMs: integer("duration_ms"),
@@ -421,6 +606,23 @@ export const practiceSessions = sqliteTable(
     index("idx_practice_sessions_is_synced").on(table.isSynced),
   ],
 );
+
+// Exam Guide spec §21 "Diagnostic Test" — local-only, like practiceSessions above. Records
+// that an attempt happened, not the scoring: per-topic mastery from a diagnostic feeds the
+// SAME topicProgress table an ordinary practice session does (via recordTopicPractice), so
+// results sync and show up in the Prepare checklist through the mechanism that already
+// exists rather than a parallel progress model.
+export const diagnosticAttempts = sqliteTable("diagnostic_attempts", {
+  id: text("id").primaryKey(),
+  examCode: text("exam_code").notNull(),
+  startedAt: integer("started_at", { mode: "timestamp_ms" }).notNull(),
+  completedAt: integer("completed_at", { mode: "timestamp_ms" }).notNull(),
+  questionCount: integer("question_count").notNull(),
+  correctCount: integer("correct_count").notNull(),
+  // JSON array of {topicId, topicName, subjectName, correctCount, totalCount, state} — see
+  // the migration's own comment for why this isn't re-derived from topicProgress instead.
+  perTopicJson: text("per_topic_json").notNull(),
+});
 
 // One row per question answered in a session — the per-question detail shown
 // in Session Summary and Revise's "Wrong Answers" list.
@@ -529,3 +731,31 @@ export const bookmarks = sqliteTable(
     index("idx_bookmarks_is_synced").on(table.isSynced),
   ],
 );
+
+/**
+ * Device-local UI preferences: theme, content zoom, interface language.
+ *
+ * Single row keyed "current", matching sync_meta and auth_session. Kept in SQLite
+ * rather than adding AsyncStorage because SQLite is already a hard dependency that
+ * the app cannot start without — a second storage engine for three scalars would be
+ * a native module added for no gain.
+ *
+ * Deliberately NOT synced to the server and deliberately NOT cleared on sign-out.
+ * These describe the device (this phone's screen, the language its owner reads),
+ * not the account: a shared phone signing in to a second account should not have
+ * its text size change, and signing out should not throw away an accessibility
+ * setting someone needs in order to use the app at all.
+ *
+ * Every column is nullable so an absent value means "never chosen" and can fall
+ * back to the app default, which is distinct from having explicitly chosen the
+ * value that happens to equal the default.
+ */
+export const appPreferences = sqliteTable("app_preferences", {
+  key: text("key").primaryKey(),
+  /** "dark" | "light". Validated on read — see db/preferences.ts. */
+  themeMode: text("theme_mode"),
+  /** Content scale multiplier, e.g. 1.0 = 100%. Clamped on read. */
+  zoomLevel: real("zoom_level"),
+  /** Interface language code ("en" | "te"), NOT the quiz-content language. */
+  uiLanguage: text("ui_language"),
+});

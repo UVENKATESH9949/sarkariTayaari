@@ -410,3 +410,172 @@ export function resolveQuestionDuplicate(questionId, duplicateOfQuestionId, reso
 export function backfillQuestionDuplicates(limit = 1000) {
   return request(`/api/question-duplicates/backfill?limit=${limit}`, { method: "POST" });
 }
+
+/* ---------------------------------------------------------------- Exam Guide (Phase 1) */
+
+export function listRecruitmentCycles(examCode) {
+  return request(`/api/exams/${examCode}/recruitment-cycles`);
+}
+
+export function createRecruitmentCycle(payload) {
+  return request(`/api/recruitment-cycles`, jsonBody("POST", payload));
+}
+
+export function updateRecruitmentCycle(id, payload) {
+  return request(`/api/recruitment-cycles/${id}`, jsonBody("PUT", payload));
+}
+
+export function deleteRecruitmentCycle(id) {
+  return request(`/api/recruitment-cycles/${id}`, { method: "DELETE" });
+}
+
+export function submitCycleForReview(id) {
+  return request(`/api/recruitment-cycles/${id}/submit-for-review`, { method: "PUT" });
+}
+
+export function rejectRecruitmentCycle(id) {
+  return request(`/api/recruitment-cycles/${id}/reject`, { method: "PUT" });
+}
+
+export function publishRecruitmentCycle(id) {
+  return request(`/api/recruitment-cycles/${id}/publish`, { method: "PUT" });
+}
+
+export function unpublishRecruitmentCycle(id) {
+  return request(`/api/recruitment-cycles/${id}/unpublish`, { method: "PUT" });
+}
+
+export function listExamSources() {
+  return request(`/api/exam-sources`);
+}
+
+/* ---------------------------------------------------------------- Career posts (§25/§26) */
+
+export function listCareerPosts(examCode) {
+  return request(`/api/exams/${examCode}/career-posts`);
+}
+
+export function createCareerPost(payload) {
+  return request(`/api/career-posts`, jsonBody("POST", payload));
+}
+
+export function updateCareerPost(id, payload) {
+  return request(`/api/career-posts/${id}`, jsonBody("PUT", payload));
+}
+
+export function deleteCareerPost(id) {
+  return request(`/api/career-posts/${id}`, { method: "DELETE" });
+}
+
+export function createExamSource(payload) {
+  return request(`/api/exam-sources`, jsonBody("POST", payload));
+}
+
+export function updateExamSource(id, payload) {
+  return request(`/api/exam-sources/${id}`, jsonBody("PUT", payload));
+}
+
+export function deleteExamSource(id) {
+  return request(`/api/exam-sources/${id}`, { method: "DELETE" });
+}
+
+/** 204 (no eligibility set yet) resolves to null, not an error. */
+export function getEligibilityRule(cycleId) {
+  return request(`/api/recruitment-cycles/${cycleId}/eligibility`);
+}
+
+export function upsertEligibilityRule(cycleId, payload) {
+  return request(`/api/recruitment-cycles/${cycleId}/eligibility`, jsonBody("PUT", payload));
+}
+
+export function listImportantDates(cycleId) {
+  return request(`/api/recruitment-cycles/${cycleId}/important-dates`);
+}
+
+export function createImportantDate(cycleId, payload) {
+  return request(`/api/recruitment-cycles/${cycleId}/important-dates`, jsonBody("POST", payload));
+}
+
+export function updateImportantDate(id, payload) {
+  return request(`/api/important-dates/${id}`, jsonBody("PUT", payload));
+}
+
+export function deleteImportantDate(id) {
+  return request(`/api/important-dates/${id}`, { method: "DELETE" });
+}
+
+export function listDocumentRequirements(cycleId) {
+  return request(`/api/recruitment-cycles/${cycleId}/document-requirements`);
+}
+
+export function createDocumentRequirement(cycleId, payload) {
+  return request(`/api/recruitment-cycles/${cycleId}/document-requirements`, jsonBody("POST", payload));
+}
+
+export function updateDocumentRequirement(id, payload) {
+  return request(`/api/document-requirements/${id}`, jsonBody("PUT", payload));
+}
+
+export function deleteDocumentRequirement(id) {
+  return request(`/api/document-requirements/${id}`, { method: "DELETE" });
+}
+
+export function listApplicationSteps(cycleId) {
+  return request(`/api/recruitment-cycles/${cycleId}/application-steps`);
+}
+
+export function createApplicationStep(cycleId, payload) {
+  return request(`/api/recruitment-cycles/${cycleId}/application-steps`, jsonBody("POST", payload));
+}
+
+export function updateApplicationStep(id, payload) {
+  return request(`/api/application-steps/${id}`, jsonBody("PUT", payload));
+}
+
+export function deleteApplicationStep(id) {
+  return request(`/api/application-steps/${id}`, { method: "DELETE" });
+}
+
+export function listApplicationMistakes(cycleId) {
+  return request(`/api/recruitment-cycles/${cycleId}/application-mistakes`);
+}
+
+export function createApplicationMistake(cycleId, payload) {
+  return request(`/api/recruitment-cycles/${cycleId}/application-mistakes`, jsonBody("POST", payload));
+}
+
+export function updateApplicationMistake(id, payload) {
+  return request(`/api/application-mistakes/${id}`, jsonBody("PUT", payload));
+}
+
+export function deleteApplicationMistake(id) {
+  return request(`/api/application-mistakes/${id}`, { method: "DELETE" });
+}
+
+export function listFeeRules(cycleId) {
+  return request(`/api/recruitment-cycles/${cycleId}/fee-rules`);
+}
+
+export function createFeeRule(cycleId, payload) {
+  return request(`/api/recruitment-cycles/${cycleId}/fee-rules`, jsonBody("POST", payload));
+}
+
+export function updateFeeRule(id, payload) {
+  return request(`/api/fee-rules/${id}`, jsonBody("PUT", payload));
+}
+
+export function deleteFeeRule(id) {
+  return request(`/api/fee-rules/${id}`, { method: "DELETE" });
+}
+
+export function getExamGuideDemoSeedStatus() {
+  return request(`/api/admin/exam-guide-demo/status`);
+}
+
+export function seedExamGuideDemoData() {
+  return request(`/api/admin/exam-guide-demo/seed`, { method: "POST" });
+}
+
+export function purgeExamGuideDemoData() {
+  return request(`/api/admin/exam-guide-demo/purge`, { method: "POST" });
+}

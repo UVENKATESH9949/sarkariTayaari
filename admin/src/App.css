@@ -372,6 +372,24 @@
   opacity: 0.55;
 }
 
+/* The currently-selected recruitment cycle in the Exam Guide admin page's cycle table. */
+.selected-row {
+  background: var(--color-primary-bg);
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-primary);
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.btn-link:hover {
+  color: var(--color-primary-hover);
+}
+
 .thumb {
   display: flex;
   align-items: center;

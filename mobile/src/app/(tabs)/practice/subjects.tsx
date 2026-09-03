@@ -10,15 +10,20 @@ import { OfflineNoDataNotice } from "../../../ui/OfflineNoDataNotice";
 import { Card } from "../../../ui/Card";
 import { EmptyState } from "../../../ui/EmptyState";
 import { ListSkeleton } from "../../../ui/Skeleton";
-import { colors, radius, spacing, typography } from "../../../ui/theme";
+import { radius, spacing } from "../../../ui/theme";
+import { useTheme, useThemedStyles, type Theme } from "../../../ui/ThemeContext";
+import { useT } from "../../../i18n/I18nContext";
+import { questionsLabel } from "../../../i18n/counts";
 import { getSubjectStats, type SubjectStat } from "../../../data/practiceData";
 import { useHybridMode } from "../../../data/hybridSource";
 
-function questionsLabel(count: number): string {
-  return count === 1 ? "1 question" : `${count} questions`;
-}
-
 export default function Subjects() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  const t = useT();
+  // Neutral fallback for a subject an admin hasn't given an icon colour yet; the
+  // constants module can't know the theme, so it comes from here.
+  const subjectFallback = { iconColor: colors.text.secondary, iconBg: colors.surfaceElevated2 };
   const router = useRouter();
   const { examCode, examLabel } = useLocalSearchParams<{ examCode: string; examLabel: string }>();
   const [search, setSearch] = useState("");
@@ -53,7 +58,7 @@ export default function Subjects() {
           <Ionicons name="search" size={18} color={colors.text.muted} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search subjects..."
+            placeholder={t("practice.searchSubjects")}
             placeholderTextColor={colors.text.muted}
             value={search}
             onChangeText={setSearch}
@@ -61,18 +66,18 @@ export default function Subjects() {
         </View>
 
         <ScrollView contentContainerStyle={styles.container}>
-          <Text style={styles.heading}>Choose a subject</Text>
-          <Text style={styles.subheading}>Shared across every exam you're preparing for</Text>
+          <Text style={styles.heading}>{t("practice.chooseSubject")}</Text>
+          <Text style={styles.subheading}>{t("practice.subjectsShared")}</Text>
 
           {loading ? (
             <ContextualLoading
-              message={`Preparing subjects for ${examLabel ?? "this exam"}...`}
+              message={t("practice.loadingSubjects", { exam: examLabel ?? t("practice.thisExam") })}
               skeleton={<ListSkeleton count={5} />}
             />
           ) : (
           <View style={styles.list}>
             {filteredSubjects.map((subject, index) => {
-              const meta = toSubjectMeta(subject);
+              const meta = toSubjectMeta(subject, "", subjectFallback);
               const disabled = subject.questionCount === 0;
               return (
                 <FadeInItem key={subject.id} index={index}>
@@ -87,7 +92,7 @@ export default function Subjects() {
                     <View style={styles.textBlock}>
                       <Text style={styles.subjectName}>{subject.name}</Text>
                       <Text style={styles.subjectStats}>
-                        {disabled ? "No questions yet" : questionsLabel(subject.questionCount)}
+                        {disabled ? t("practice.noQuestionsForExam") : questionsLabel(subject.questionCount, t)}
                       </Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color={colors.text.muted} />
@@ -101,7 +106,7 @@ export default function Subjects() {
             )}
             {subjects.length === 0 && mode === "unavailable" && <OfflineNoDataNotice />}
             {subjects.length === 0 && mode !== "unavailable" && (
-              <EmptyState icon="book-outline" title="No subjects synced yet" body="Subjects appear here once they're synced." />
+              <EmptyState icon="book-outline" title={t("practice.noSubjects")} body={t("practice.noSubjectsBody")} />
             )}
           </View>
           )}
@@ -111,70 +116,71 @@ export default function Subjects() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-  },
-  searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    backgroundColor: colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    marginHorizontal: spacing.xl,
-    marginTop: spacing.base,
-    marginBottom: spacing.xs,
-    paddingHorizontal: spacing.md + 2,
-    paddingVertical: spacing.sm + 2,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: colors.text.primary,
-    padding: 0,
-  },
-  container: {
-    padding: spacing.xl,
-    paddingTop: spacing.md,
-    paddingBottom: spacing["3xl"],
-  },
-  heading: {
-    ...typography.pageTitle,
-    fontSize: 22,
-  },
-  subheading: {
-    ...typography.secondary,
-    marginTop: spacing.xs,
-    marginBottom: spacing.xl,
-  },
-  list: {
-    gap: spacing.md,
-  },
-  card: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md + 2,
-  },
-  iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  textBlock: {
-    flex: 1,
-  },
-  subjectName: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: colors.text.primary,
-  },
-  subjectStats: {
-    fontSize: 12,
-    color: colors.text.muted,
-    marginTop: 2,
-  },
-});
+const buildStyles = ({ colors, typography }: Theme) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+    },
+    searchBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+      backgroundColor: colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.md,
+      marginHorizontal: spacing.xl,
+      marginTop: spacing.base,
+      marginBottom: spacing.xs,
+      paddingHorizontal: spacing.md + 2,
+      paddingVertical: spacing.sm + 2,
+    },
+    searchInput: {
+      flex: 1,
+      fontSize: 14,
+      color: colors.text.primary,
+      padding: 0,
+    },
+    container: {
+      padding: spacing.xl,
+      paddingTop: spacing.md,
+      paddingBottom: spacing["3xl"],
+    },
+    heading: {
+      ...typography.pageTitle,
+      fontSize: 22,
+    },
+    subheading: {
+      ...typography.secondary,
+      marginTop: spacing.xs,
+      marginBottom: spacing.xl,
+    },
+    list: {
+      gap: spacing.md,
+    },
+    card: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.md + 2,
+    },
+    iconCircle: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    textBlock: {
+      flex: 1,
+    },
+    subjectName: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: colors.text.primary,
+    },
+    subjectStats: {
+      fontSize: 12,
+      color: colors.text.muted,
+      marginTop: 2,
+    },
+  });

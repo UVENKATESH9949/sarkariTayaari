@@ -7,12 +7,17 @@ import { useSessionHistory } from "../practice/sessionHistory";
 import { getWrongAnswers, type WrongAnswerItem } from "../practice/wrongAnswers";
 import { Card } from "../ui/Card";
 import { EmptyState } from "../ui/EmptyState";
-import { colors, radius, spacing } from "../ui/theme";
+import { radius, spacing } from "../ui/theme";
+import { useTheme, useThemedStyles, type Theme } from "../ui/ThemeContext";
+import { useT } from "../i18n/I18nContext";
 
 type ReviseTab = "bookmarks" | "wrong";
 type ReviseItem = WrongAnswerItem;
 
 export default function Revise() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  const t = useT();
   const { initialTab } = useLocalSearchParams<{ initialTab?: string }>();
   const { bookmarks, toggleBookmark } = useBookmarks();
   const { sessions } = useSessionHistory();
@@ -36,7 +41,7 @@ export default function Revise() {
 
   return (
     <>
-      <Stack.Screen options={{ title: "Revise" }} />
+      <Stack.Screen options={{ title: t("nav.revise") }} />
       <View style={styles.screen}>
         <View style={styles.header}>
           <View style={styles.segmentedControl}>
@@ -45,7 +50,7 @@ export default function Revise() {
               onPress={() => setActiveTab("bookmarks")}
             >
               <Text style={[styles.segmentText, activeTab === "bookmarks" && styles.segmentTextActive]}>
-                Bookmarked
+                {t("revise.bookmarked")}
               </Text>
             </Pressable>
             <Pressable
@@ -53,7 +58,7 @@ export default function Revise() {
               onPress={() => setActiveTab("wrong")}
             >
               <Text style={[styles.segmentText, activeTab === "wrong" && styles.segmentTextActive]}>
-                Wrong Answers
+                {t("revise.wrongAnswers")}
               </Text>
             </Pressable>
           </View>
@@ -119,7 +124,7 @@ export default function Revise() {
                       })}
                     </View>
                     <View style={styles.explanationBox}>
-                      <Text style={styles.explanationLabel}>Explanation</Text>
+                      <Text style={styles.explanationLabel}>{t("common.explanation")}</Text>
                       <Text style={styles.explanationText}>{item.explanation}</Text>
                     </View>
                     {activeTab === "bookmarks" && (
@@ -132,7 +137,7 @@ export default function Revise() {
                         }}
                       >
                         <Ionicons name="star" size={16} color={colors.semantic.warning} />
-                        <Text style={styles.removeButtonText}>Remove bookmark</Text>
+                        <Text style={styles.removeButtonText}>{t("revise.removeBookmark")}</Text>
                       </Pressable>
                     )}
                   </View>
@@ -146,121 +151,122 @@ export default function Revise() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-  },
-  header: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.base,
-    paddingBottom: spacing.base,
-  },
-  segmentedControl: {
-    flexDirection: "row",
-    backgroundColor: colors.surfaceElevated2,
-    borderRadius: radius.sm + 2,
-    padding: spacing.xs,
-  },
-  segment: {
-    flex: 1,
-    paddingVertical: spacing.sm + 1,
-    borderRadius: radius.sm,
-    alignItems: "center",
-  },
-  segmentActive: {
-    backgroundColor: colors.surfaceElevated2,
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
-  },
-  segmentText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.text.muted,
-  },
-  segmentTextActive: {
-    color: colors.text.primary,
-  },
-  list: {
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing["3xl"],
-    gap: spacing.md,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: spacing.sm,
-  },
-  cardTag: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: colors.text.secondary,
-  },
-  cardQuestion: {
-    fontSize: 15,
-    color: colors.text.primary,
-    lineHeight: 21,
-  },
-  expandedContent: {
-    marginTop: spacing.md + 2,
-  },
-  optionsList: {
-    gap: spacing.sm,
-  },
-  optionRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.sm + 2,
-    padding: spacing.md - 1,
-  },
-  optionCorrect: {
-    borderColor: colors.semantic.success,
-    backgroundColor: colors.semantic.successBg,
-  },
-  optionWrong: {
-    borderColor: colors.semantic.error,
-    backgroundColor: colors.semantic.errorBg,
-  },
-  optionText: {
-    fontSize: 13,
-    color: colors.text.primary,
-    flex: 1,
-  },
-  explanationBox: {
-    marginTop: spacing.md,
-    backgroundColor: colors.surfaceElevated2,
-    borderRadius: radius.sm + 2,
-    padding: spacing.md,
-  },
-  explanationLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: colors.text.secondary,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: spacing.xs,
-  },
-  explanationText: {
-    fontSize: 13,
-    color: colors.text.primary,
-    lineHeight: 19,
-  },
-  removeButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.sm - 2,
-    marginTop: spacing.md,
-    paddingVertical: spacing.sm + 2,
-  },
-  removeButtonText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.semantic.error,
-  },
-});
+const buildStyles = ({ colors }: Theme) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+    },
+    header: {
+      paddingHorizontal: spacing.xl,
+      paddingTop: spacing.base,
+      paddingBottom: spacing.base,
+    },
+    segmentedControl: {
+      flexDirection: "row",
+      backgroundColor: colors.surfaceElevated2,
+      borderRadius: radius.sm + 2,
+      padding: spacing.xs,
+    },
+    segment: {
+      flex: 1,
+      paddingVertical: spacing.sm + 1,
+      borderRadius: radius.sm,
+      alignItems: "center",
+    },
+    segmentActive: {
+      backgroundColor: colors.surfaceElevated2,
+      shadowColor: "#000",
+      shadowOpacity: 0.06,
+      shadowRadius: 4,
+      shadowOffset: { width: 0, height: 1 },
+    },
+    segmentText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.text.muted,
+    },
+    segmentTextActive: {
+      color: colors.text.primary,
+    },
+    list: {
+      paddingHorizontal: spacing.xl,
+      paddingBottom: spacing["3xl"],
+      gap: spacing.md,
+    },
+    cardHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: spacing.sm,
+    },
+    cardTag: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.text.secondary,
+    },
+    cardQuestion: {
+      fontSize: 15,
+      color: colors.text.primary,
+      lineHeight: 21,
+    },
+    expandedContent: {
+      marginTop: spacing.md + 2,
+    },
+    optionsList: {
+      gap: spacing.sm,
+    },
+    optionRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.sm + 2,
+      padding: spacing.md - 1,
+    },
+    optionCorrect: {
+      borderColor: colors.semantic.success,
+      backgroundColor: colors.semantic.successBg,
+    },
+    optionWrong: {
+      borderColor: colors.semantic.error,
+      backgroundColor: colors.semantic.errorBg,
+    },
+    optionText: {
+      fontSize: 13,
+      color: colors.text.primary,
+      flex: 1,
+    },
+    explanationBox: {
+      marginTop: spacing.md,
+      backgroundColor: colors.surfaceElevated2,
+      borderRadius: radius.sm + 2,
+      padding: spacing.md,
+    },
+    explanationLabel: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.text.secondary,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: spacing.xs,
+    },
+    explanationText: {
+      fontSize: 13,
+      color: colors.text.primary,
+      lineHeight: 19,
+    },
+    removeButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: spacing.sm - 2,
+      marginTop: spacing.md,
+      paddingVertical: spacing.sm + 2,
+    },
+    removeButtonText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.semantic.error,
+    },
+  });

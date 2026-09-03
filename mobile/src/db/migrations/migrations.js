@@ -14,6 +14,11 @@ import m0009 from './0009_solid_wolverine.sql';
 import m0010 from './0010_zippy_sleepwalker.sql';
 import m0011 from './0011_worthless_mandrill.sql';
 import m0012 from './0012_epic_l_topic_model.sql';
+import m0013 from './0013_app_preferences_and_attempt_split.sql';
+import m0014 from './0014_exam_guide_offline_cache.sql';
+import m0015 from './0015_diagnostic_attempts.sql';
+import m0016 from './0016_exam_guide_overview_text.sql';
+import m0017 from './0017_followed_exams_sync.sql';
 
   export default {
     journal,
@@ -30,7 +35,11 @@ m0008,
 m0009,
 m0010,
 m0011,
-m0012
+m0012,
+m0013,
+m0014,
+m0015,
+m0016,
+m0017
     }
   }
-  

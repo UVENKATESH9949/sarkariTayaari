@@ -1,6 +1,315 @@
 # Project Status — Resume Point
 
-**Last updated:** 2026-08-31 — see **"Session of 2026-08-31"** immediately below for the current state; everything after it is earlier history, kept for context.
+**Last updated:** 2026-09-03 — see **"Session of 2026-09-03 — A first-class 'Exams' module
+shipped end to end (7 phases): discovery listing, real Follow sync, the 5th tab, Exam
+Calendar, Syllabus & Trends"** immediately below for the current state; everything after
+it is earlier history, kept for context.
+
+## Session of 2026-09-03 — A first-class "Exams" module shipped end to end (7 phases): discovery listing, real Follow sync, the 5th tab, Exam Calendar, Syllabus & Trends
+
+**Requested:** a 74-section product spec asking to elevate exam discovery into its own
+primary navigation tab (`Home / Practice / Mock Test / Exams / More`), with Exam Guide
+becoming a detail screen one tap in rather than the primary entry point — the same
+session that originally asked for "one dedicated syllabus page, subject-wise/topic-wise,
+showing weightage." Audited the spec against the real codebase first (two Explore
+agents), then planned via `EnterPlanMode` (approved) before any code changed. Three
+explicit user decisions shaped the build: no footer of any kind (the spec's §55 "footer
+module" turned out to just be a misdescription of the Exams tab itself); **build real
+server-side pagination/sort/filter now**, despite the ~11-exam catalogue; and **give
+Follow real backend sync** (it had been local-SQLite-only, with zero backend table —
+confirmed by grepping the whole backend). After the plan was approved, the user said to
+run for as long as needed without asking again ("no need any permission... complete the
+entire tickets... use the emulator... work up to 9:00-9:30 without stopping"), so all
+seven phases shipped in one continuous, autonomous session. Reports:
+`reports/24-exams-module/` (three files — Phase 1; Phase 2/3; Phase 4-7).
+
+**Phase 1 (backend) — a `category` field and a real discovery listing.** Migration
+`V22`: `exams.category` (nullable, admin-editable via a fixed dropdown — SSC/Banking/
+Railways/UPSC/etc.). New `GET /api/exams/discover` (`ExamDiscoveryService`,
+`ExamDiscoveryDtos`) — page/size/sort/status/category, reusing the already-N+1-safe
+`findCurrentCyclesForActiveExams()` and the existing `RecruitmentCycleStatus` enum as
+the status engine rather than building a parallel one. A stated scale decision, not a
+shortcut: sort/filter/page happen in Java over the full active-exam set (today ~11
+exams), not in SQL — the API's own contract doesn't change if a later session swaps the
+implementation once the catalogue is actually large. New `ExamDiscoveryTest` (9 tests:
+sort orders, category filter, the synthetic `CLOSING_SOON` status bucket, pagination
+boundaries) — all against real seeded fixture data, all passing.
+
+**Phase 2/3 — real Follow persistence, backend and mobile.** Migration `V23`:
+`followed_exams` (userId:examCode synthetic id, `is_deleted` tombstone, `updated_at`
+last-write-wins) — `FollowedExam`/`FollowedExamService`/`FollowedExamController` mirror
+`UserBookmark`/`BookmarkService`/`BookmarkController` line-for-line, including the exact
+same batched-existence-check optimization. Mobile: local migration `0017` adds the same
+three sync columns to the local `followed_exams` table (hand-written, following the
+`0007` bookmarks-migration precedent — SQLite has no `ADD COLUMN IF NOT EXISTS`, so
+existing rows are backfilled and marked unsynced); `followExam()`/`unfollowExam()`
+became upsert/soft-delete; new `sync/followedExamSync.ts` mirrors `bookmarkSync.ts`
+(simpler, since a followed exam has no content of its own to reconstruct); wired into
+all three of `authContext.tsx`'s existing sync call sites, each independently
+error-caught so a new/unreachable endpoint can't abort progress or bookmark sync.
+
+**A real bug found by running the new test, not by review.** `FollowedExamSyncTest`'s
+own fixture data used a literal prefix plus a full `UUID.randomUUID()` as a test exam
+code (~47 characters) — `exams.code` is `VARCHAR(30)` in the real schema, so the very
+first run produced four live `DataIntegrityViolationException` 500s, not a compile or
+logic problem. Fixed by shortening the test's unique suffix to 8 hex characters,
+matching `ExamDiscoveryTest`'s own `runId` pattern. Re-ran clean: 5/5.
+
+**Two real environmental incidents this session, both caught and recovered correctly —
+worth remembering for any future long unattended run.** (1) A `mvn test-compile` was run
+in a second shell while a full `mvn test` was still executing in the first — the exact
+concurrent-Maven trap this file already documented once before. Caught via `jps`/process
+inspection before trusting the result (the interrupted run had only completed 7 of ~20
+classes); killed both processes and re-ran clean. (2) The session was left unattended for
+several hours; the machine's network dropped during that window, producing a ~7-hour
+`HikariPool` connection stall and a real `UnknownHostException`, which surfaced as three
+`SocketTimeoutException`/connection-type failures (not assertion failures) in an
+otherwise-clean run. Recognized as environmental rather than code contamination by the
+distinctive error types, confirmed the network was actually back (`nslookup`), and
+re-ran clean a fourth time: **144 tests, 0 failures, 0 errors, BUILD SUCCESS.**
+
+**Phase 4 — the Exams tab.** Registered as the 5th primary tab. New `app/(tabs)/
+exams.tsx`: search, a segmented row (All/My Exams/Applications Open/Upcoming — client-
+side, since the backend's `status` param covers exactly one status/bucket at a time and
+a second network call per tab tap would buy nothing at this catalogue size), a
+category-chip row built only from categories actually present in the data, a sort-chip
+row that does issue a real `GET /api/exams/discover` call per change, and five sections
+(Closing Soon/Applications Open/Recommended For You/Upcoming/All Exams) built from one
+fetched page. New shared `examsModule/ExamCard.tsx` (status pill, primary-action button,
+deadline/vacancy stat pills, the Follow star, a demo-content note) and `examsModule/
+statusLabels.ts`. "Recommended For You" reuses `my-exams.tsx`'s exact urgency+subject-
+overlap heuristic, simplified slightly since the discovery card already carries
+`closingSoon` computed server-side.
+
+**Phase 5 — Exam Calendar.** New `app/exam-calendar.tsx`, reached from the Exams tab's
+header: every followed-or-all exam's Important Dates merged, sorted, and grouped by
+month — reuses the existing per-exam `getExamGuideHybrid` hybrid read (Phase B's
+offline cache from an earlier session) rather than a new bulk endpoint or local query.
+
+**Phase 6 — Syllabus & Trends, the screen this whole build started from.** Exam Guide's
+"Syllabus & Practice" button renamed **"Syllabus & Trends"**, now opening a real
+overview instead of jumping straight into Practice. New `app/syllabus-trends.tsx`:
+Subject → Topic → Sub-topic, each row showing the admin-curated weightage, PYQ trend,
+computed priority, and mastery — by reusing the exact same `getTopicInsights`/
+`TopicInsightChips` that `(tabs)/practice/topics.tsx` already uses, not a new
+intelligence model. Tapping any topic opens the same `/practice/levels` screen every
+other entry point in the app already uses.
+
+**Phase 7 — integration + analytics.** Home's "Explore Exams" row now points at the new
+Exams tab instead of `/my-exams` (which stays reachable from More, untouched, per the
+plan's own Architecture Decision #7). Eight new `trackEvent` breadcrumbs across the new
+screens (`exam_module_opened`, `exam_search_used` debounced 600ms, `exam_filter_used`,
+`exam_sort_used`, `exam_card_opened`, `exam_calendar_opened`, `syllabus_trends_opened`,
+`syllabus_topic_opened`).
+
+**Three real `react-hooks/set-state-in-effect` violations found and fixed while
+building the two new data-loading screens**, using the exact keyed-loaded-state pattern
+`PreparationPlanCard` already established (store `{key, ...data}`, derive "stale/still
+loading" by comparing the key to current inputs, rather than a synchronous `setState`
+at the top of an effect body). One needed the async work wrapped in an inline IIFE
+rather than calling a `useCallback`-memoized function directly with `.catch()` chained
+at the call site — the linter flags that call shape even when the callee's own
+synchronous prefix touches no state.
+
+**A second real, previously-undetected bug found and fixed on-device, not by
+review — orphaned test data appeared in the real UI.** The Exams tab's first live
+render showed a card for "Urgent Exam" that had no business existing — traced to
+`ExamDiscoveryTest`'s own throwaway fixture, left behind because its cleanup never ran
+when this session killed two mid-run `mvn test` processes (the two environmental
+incidents above). Found and removed via a direct, scoped JDBC one-off against the real
+dev database (same technique this project's history already used once before), then
+reconfirmed clean.
+
+**Full on-device verification against the live backend** (Android emulator
+`emulator-5554`, `mvn spring-boot:run` on `localhost:8080`, signed in as the real
+`demo@sarkaritaiyaari.app` account) — not just a clean compile: the Exams tab's real
+cards (SSC CGL's actual seeded demo cycle, IBPS PO/Clerk's correct "No active cycle"
+state); **Follow sync confirmed in both directions against the real backend** via direct
+authenticated curls (followed IBPS PO and IBPS Clerk on-device, backgrounded the app,
+confirmed server-side arrival each time; unfollowed both, confirmed each tombstone
+correctly stopped being returned); Exam Calendar showing SSC CGL's six real dates
+grouped by month in the right order; Syllabus & Trends showing Quantitative Aptitude's
+28 real topics with real weightage/trend/priority; and the full loop closing correctly —
+tapping "Trigonometry" opened the real Practice → Levels screen scoped to that topic.
+The demo account was restored to its original single-follow (SSC_CGL) state afterward.
+
+**Verified, summarized:** backend `mvn compile`/`mvn test` clean (144/144, after the two
+environmental-incident reruns above); mobile `tsc --noEmit` clean and `expo lint` at the
+exact pre-existing baseline (9 problems) throughout every phase; admin `npm run build`/
+`oxlint` clean. Full detail, including the two environmental incidents and both real
+bugs, is in the three Phase reports under `reports/24-exams-module/`.
+
+**Not verified:** no physical device (emulator only, per standing project rule); the
+pagination "Load more" affordance (never triggered at today's catalogue size — its
+correctness rests on `ExamDiscoveryTest`'s server-side test, not a live device check);
+individual sort/category chip taps were confirmed via direct endpoint curls and code
+review rather than a full on-device tap-through of every chip.
+
+**Next:** author real category values for the existing 11 exams via the admin console
+(currently all `null` — the category chip row has no reason to appear yet); consider
+whether "Recommended For You"'s heuristic needs revisiting once more than one exam has
+real Guide content to differentiate against (same honest limitation `my-exams.tsx`
+already flagged); the Eligible badge and cross-exam preparation-overlap % remain
+deliberately deferred, unchanged from prior sessions.
+
+
+## Session of 2026-09-02 (6) — Exam Guide ledger closure: footer corrected, accessibility fixed at the root, a Review role shipped
+
+**Requested:** the user pushed back on the ledger's "§40 Footer module — not started / judged
+inapplicable" call, correctly pointing out this app already has a reusable footer pattern (the
+bottom action bar on Practice's quiz and Mock Test screens) the earlier judgment missed by
+reading "footer" as a web-page footer. Also asked to close the remaining ledger and write test
+coverage for what's built, the same way prior rounds did. Full report:
+`reports/23-exam-guide-phase1/exam-guide-phase1-round5-phases-f-to-i.md`. Planned first (via
+`EnterPlanMode`), including an `AskUserQuestion` on which of four previously-deliberate scope
+calls to reopen — only §36 (a Review role) was selected; §50 (Eligible badge), §44 (deeper
+offline caching) and §47 (cross-content search) stay deferred, untouched.
+
+**Phase F — Footer module (§40, closes §41/§72 too).** Researched the real pattern directly
+(`practice/quiz.tsx`, `mock-test/test.tsx`): a `View` sibling after the `ScrollView` inside a
+`flex: 1` container, border-top + elevated background, buttons that disable rather than
+disappear. Applied to `exam-guide.tsx`: Follow/Following (secondary) + View Official
+Notification (primary, disabled not hidden without a URL). Verified live: pinned through
+scrolling, follow toggle round-tripped through the local DB, notification link launches a real
+Chrome intent (confirmed via `dumpsys activity`).
+
+**Phase G — Accessibility (§52).** Found the real root cause instead of patching screens one at
+a time: the shared `ui/Button` and `Card`/`CardRow` never set `accessibilityRole` at all —
+missing on every screen in the app that uses either, not just the newer Exam Guide ones. Fixed
+once in both shared components, plus two direct-`Pressable` spots.
+
+**Phase H/H2 — small copy closures + one migration (V21).** A notification-simplifier framing
+line, a personal-plan-fit note (reusing My Exams' own urgency signal), a PYQ hint, and a
+weak-areas narrative sentence on the diagnostic results screen. Added a genuinely new
+`overview_text` field (§1/§4 "What is this exam?") — nullable, additive, wired through the
+admin form and the Guide screen.
+
+**A real near-miss, caught before and after shipping.** `drizzle-kit generate` for the matching
+local-cache column produced a **full `CREATE TABLE` for every already-existing `exam_guide_*`
+table** instead of a minimal diff (its snapshot state doesn't match this schema's real
+migration history) — replaced with the correct single `ALTER TABLE` before committing. It still
+bit once, live: a **stale Metro bundler cache served the original broken migration** on one app
+relaunch, producing the exact "Database migration failed" hard-gate this project's own docs
+warn about, even though the `.sql` file on disk was already fixed. A full `expo start --clear`
+resolved it, and the corrected migration then ran cleanly against this device's real,
+already-migrated (0011–0015) database — not just a fresh install.
+
+**Phase I — a REVIEWER role and a real three-state workflow (§36).** Checked before assuming a
+migration was needed: both `Role` and `ContentStatus` are plain `VARCHAR(20)` columns, not
+native Postgres enums, so `REVIEWER`/`REVIEW` needed zero schema change. Shipped DRAFT
+→(submit-for-review, ADMIN-only)→ REVIEW →(publish, ADMIN or REVIEWER)→ PUBLISHED, or REVIEW
+→(reject, ADMIN or REVIEWER)→ DRAFT — `publish` still accepts DRAFT directly too, so the
+existing fast path and the demo seeder are unaffected. ADMIN is a deliberate superset of
+REVIEWER (no chicken-and-egg lockout when no separate reviewer account exists). Admin UI: the
+single toggle became contextual Submit-for-review/Publish/Send-back-to-draft/Unpublish buttons.
+
+**A real cross-test-file collision found while adding shared REVIEWER/STUDENT test fixtures to
+`AbstractIntegrationTest`** (mirroring the existing ADMIN pattern): `EpicLIntelligenceTest.java`
+already had its own private, differently-scoped `studentAuth(T)` helper, and Java rejected the
+new inherited method as an illegal visibility reduction. Renamed the shared helper to
+`sharedStudentAuth` rather than touching the pre-existing, semantically different local one —
+caught only by running the **full** suite, not the new test class alone.
+
+**A process near-miss, same category as one already documented in this file.** A `mvn
+test-compile` run in a second shell overlapped with an already-running full `mvn test` sharing
+the same `target/` directory. Stopped both and re-ran the full suite cleanly from a single shell
+rather than trust a build that may have raced against concurrent compilation.
+
+**Verified:** mobile — `tsc`/`expo lint` clean at the exact pre-existing baseline (one genuine
+new violation, an unescaped quote in the new PYQ hint text, found and fixed the same pass); all
+Phase F/G/H changes confirmed live on-device after the cache-clear fix. Backend — five new test
+methods in `ExamGuideContentStatusTest` (full three-state cycle, admin-can-still-publish-
+directly-from-draft, role-gating against a plain STUDENT token on all four transition
+endpoints, REVIEWER correctly barred from authoring/submit-for-review); `mvn compile` clean;
+admin `npm run build` + `oxlint` clean. **Full suite: 129 of 130 pass.** The one failure
+(`BulkOperationsTest.bulkImport_reusesExistingSubjectAndTopicByName_doesNotDuplicate`, a global
+`subjectRepository.count()` assertion against the real shared Neon dev database, off by one)
+re-ran clean in isolation immediately after — confirmed a flake/race against other concurrent
+activity on the same shared database, not a regression from anything this session touched (no
+bulk-import/subject/topic code was changed).
+
+**Ledger updated in place** (same artifact URL): §40/§31/§36/§41/§52/§72/§73 all moved to done;
+several Q1/AX/AC breakdown rows closed too (PYQ link, personal-plan note, footer, accessible,
+weak-areas narrative); headline moved from 55/76 to 62/76. §44/§47/§50/§57/§75 remain exactly as
+they were — deliberately deferred, not silently regressed.
+
+**Admin console click-tested afterward**, via a minted `AdminTokenMintRunner` token: the full
+Draft→Review→Draft→Review→Published cycle on a throwaway test cycle, then deleted. Found a real
+testing-methodology trap along the way, not an app bug: the first several attempts looked
+exactly like a broken UI (each click appeared to leave the badge one step behind), which turned
+out to be short fixed `waitForTimeout` delays reading state before the previous request's round
+trip to the real remote Neon database had landed — switching to polling for the expected badge
+text resolved it immediately. Worth remembering next time a quick browser-driven check against
+this database looks flaky. §50/§44/§47 untouched by choice.
+
+
+## Session of 2026-09-02 (5) — Exam Guide round 3, on-device verification: one real bug fixed, one false alarm self-corrected
+
+**Requested:** "launch emulator and check current changes and continue with next task... you can
+directyl proceed dont wait for my approval" — round 3 (Phases A–E, previous session) shipped
+entirely without ever running on a device, the standing gap every one of its five phase reports
+flagged. Full report: `reports/23-exam-guide-phase1/exam-guide-phase1-round4-device-verification.md`
+(includes the in-place correction described below, not rewritten away).
+
+**Verified working, as built:** Home's deadline card/Explore Exams/Focus Next/readiness card;
+the Exam Guide screen's progress card and reminder bells (confirmed absent signed-out, present
+signed-in — checked by actually signing into the existing `demo@sarkaritaiyaari.app` account);
+a full reminder create → verify via `GET /api/reminders` → delete round trip; My Exams'
+Following/Recommended/Explore sections, search filter, and follow/unfollow (round-tripped live);
+Compare Exams' picker and empty-cycle fallback; the Eligibility Checker's date validation and a
+real age computation; and a full Diagnostic Test run from start to a working results screen.
+
+**Bug found and fixed:** `exam-compare.tsx`'s empty-cycle note read "SSC CHSL **has** a
+current recruitment cycle configured yet," missing "doesn't" — said the opposite of what it
+meant. Fixed and confirmed live via Fast Refresh.
+
+**A second finding was made, investigated further, and turned out to be a false alarm — worth
+recording precisely because of how it was caught.** Tapping "Take a Diagnostic Test" for SSC CGL
+produced "Question 1 of 1" instead of ~24. An on-device SQLite query against the emulator's local
+database showed SSC CGL's #1 priority topic (Blood Relations) with **zero** locally-tagged
+questions, and the same pattern across all 11 exams — which read exactly like a systemic Epic L
+bug (curated priority computed independently of real question coverage), and was reported as one
+mid-session. **Checking the same query against the live backend (not the device) showed every
+exam's top-8 priority topics have healthy real coverage (56–366 questions each) — no live bug.**
+The actual cause: **this specific, reused emulator's local database is a frozen snapshot from
+before the question pool was lifted (2026-08-27)** — all 460 of its locally-synced questions have
+`updated_at` timestamps between 2026-08-04 and 2026-08-18, while the live backend has 35,958.
+Delta sync (which only fetches rows changed since a watermark) cannot backfill a gap like this by
+design, which is why "Sync Now" kept advancing the watermark without the local question count ever
+moving. This is a property of this one device's history, not a bug in the sync mechanism, the
+backend, or Epic L's formula — see the report's own "Correction" section for the full chain of
+evidence.
+
+**Kept anyway, reframed honestly:** `buildDiagnosticSet.ts` (mobile) now checks the top 30
+priority topics instead of 8 and keeps the first 8 that actually returned questions, and
+`PreparePlanService.getPreparePlan` (backend) now filters out topics with zero question coverage
+before building the checklist, reusing `countByTopicForExam` (an existing `TopicIntelligenceService`
+scoring input). Both are correct, harmless defensive behavior — a topic with no available
+questions should never be surfaced as practicable, whatever the reason — but neither is fixing a
+confirmed live bug; the live data never needed either filter to produce a good result. Backend
+change verified via `PreparePlanAndCareerPostTest` (5 tests) and a full `mvn test` regression run
+(all green) before the dev server was restarted with it; confirmed live afterward via
+`curl .../prepare-plan` — the response is well-formed and unaffected, exactly as expected once the
+premise turned out to be false.
+
+**Not fixed, and now correctly scoped:** Home's "Focus next" card still reads the same unfiltered
+`getPriorityTopics` list, so on a device in this same stuck state it could still recommend an
+unpracticable topic — but this is only reachable by the same stale-sync condition, not a live
+data problem. **The more important open question this surfaced:** could a real user's device get
+stuck the same way (an old install whose original full sync predates 2026-08-27, delta-syncing
+ever since with no way to detect or self-heal the gap)? Not investigated this session — flagged
+for one that can look at sync correctness broadly, not just this feature.
+
+**Process notes worth keeping:** pulling a live SQLite DB off the emulator via
+`adb shell run-as <pkg> cat <path>` through a normal shell redirect **silently corrupts the file**
+(CRLF translation) — the file size shifts and sqlite3 reports "database disk image is malformed."
+`adb exec-out run-as <pkg> cat <path>` is binary-safe and worked correctly; needed `MSYS_NO_PATHCONV=1`
+in front of both variants for the remote path to survive Git Bash's path mangling. And the
+substantive one: **an on-device data query is evidence about that device, not about the live
+system** — the same check against the actual backend (a curl to the real endpoint) reversed the
+conclusion entirely. Worth checking the live source of truth before writing up a "systemic" finding
+from local state alone, even when the local evidence looks compelling.
+
 
 **Correction to a claim this file has repeated for several sessions.** It has said that a deployed Cloud Run instance restarting from a build lacking the applied migrations "fails Flyway validation and will not start", and treated that as the project's single most time-sensitive item. **That is not true for this situation, and it was tested rather than assumed.** Flyway's `ignoreFutureMigrations` defaults to `true`, and V11–V16 are *future* migrations relative to the deployed build (they sort above its highest local version), so Flyway logs a warning and proceeds. Direct evidence: on 2026-08-31, with the database at **v16** and the deployed build at roughly **v10**, the Cloud Run service **cold-started successfully** (a 29-second cold start, then `{"status":"UP"}`). The "will not start" failure mode belongs to a *missing intermediate* migration, not a newer one. Pushing is still worth doing promptly — but it is not the emergency this file claimed.
 
@@ -9,6 +318,471 @@
 This file exists so any future session (or teammate) can pick up exactly where things stopped, without re-reading the entire `offline-exam-app-requirements.md` history. Update this file every time work pauses for more than a few minutes, or at the end of a work session.
 
 **Related, newer files worth knowing about:** `reports/TICKET-STATUS.md` (every ticket ever, one file, with status), `reports/architecture-decisions.md` (ADRs), `reports/open-questions.md` (consolidated open business/technical decisions). This file stays the single "where do I resume" entry point; those three hold the detail so this one doesn't have to.
+## Session of 2026-09-01/02 (4) — Exam Guide coverage-ledger closure, all 5 phases: summary
+
+All five phases of the approved plan are now complete (Phase A–E reports and their own
+detailed STATUS entries are below this one). Headline results, for anyone resuming later:
+
+- **One critical, previously-undetected bug fixed**: every Exam Guide mobile API call
+  doubled its `/api` prefix (`api/examGuide.ts`), so the entire feature has never worked on
+  a real device across three prior "shipped" sessions — curl-verified (404 → 200) and fixed
+  in Phase B. This is the single most important finding of the session.
+- **One real architectural finding, fixed before it shipped wrong**: a naive `@Scheduled`
+  reminder job (Phase D) would have been silently non-functional on this project's actual
+  Cloud Run scale-to-zero deployment. Built as an externally-triggerable endpoint instead
+  (`POST /api/admin/reminders/dispatch`, meant for Cloud Scheduler).
+- **Two more real bugs found by testing against live/real data, not trusting a clean
+  compile**: the §30 cycle-diff endpoint's "previous cycle" ordering was backwards for the
+  seeded demo data (Phase B); the demo seeder would have silently unpublished itself the
+  moment content-validation states shipped, undetected until a live curl caught it (Phase
+  B).
+- **A genuinely clean full backend test suite, obtained and reconfirmed after every single
+  phase**: 126 tests, 0 failures, 0 errors at the end — closing a gap the round-2 session
+  explicitly flagged as never achieved. New test classes: `ExamGuideContentStatusTest`,
+  `PreparePlanAndCareerPostTest`, `ReminderTest`.
+- Backend migrations V18 (content status) → V20 (reminders); mobile local migrations
+  0014 (offline cache + career posts) and 0015 (diagnostic attempts).
+- Every ledger item originally "not started" that could reasonably ship without inventing
+  new product scope now has *something* real behind it — §8 reminders, §21 diagnostic
+  test, §22 roadmap-as-Prepare, §25/§26 career info, §27 comparison, §28 recommendation,
+  §30 what's-changed, §36 content states, §44 partial offline cache, §47 scoped search.
+
+**The one thing that did NOT change across all five phases: no on-device or emulator run
+happened this session.** Every phase's report says so explicitly. Given the Phase B
+discovery, this is the highest-value next action for anyone resuming — not optional
+polish. See the coverage-ledger artifact (republished with this session's changes) for the
+section-by-section detail, and `reports/23-exam-guide-phase1/exam-guide-phase1-round3-
+phase-{a,b,c,d,e}.md` for the full account of each phase.
+
+## Session of 2026-09-01/02 (4), Phase D — reminders / push notifications
+
+Report: `reports/23-exam-guide-phase1/exam-guide-phase1-round3-phase-d.md`. Migration
+**V20**. This was the phase flagged in advance as adding a genuinely new capability, and
+it surfaced a real architectural decision worth remembering:
+
+**A `@Scheduled` job would not have worked in this project's actual deployment.** The
+backend runs on Cloud Run with `--max-instances=3` and scale-to-zero — an in-process timer
+only fires while some instance happens to be alive, which on a scale-to-zero service with
+no other traffic can be never. Building the obvious "poll every 15 minutes" approach would
+have looked correct in local dev and been silently dead in production. Fixed by exposing
+dispatch as `POST /api/admin/reminders/dispatch`, an explicit admin-token-protected
+endpoint meant to be triggered by an external scheduler (Cloud Scheduler is the intended
+production trigger — one more piece of one-time `gcloud` setup this session can't
+provision, same category as the existing GitHub Actions repository variables).
+
+**Shipped:** `push_tokens` (Expo push token per user, upsert-on-(user,token)) and
+`user_reminders` tables; full create/list/cancel with ownership checks; dispatch via
+Expo's push HTTP API using the JDK's own `HttpClient` (no new backend dependency). Mobile:
+`expo-notifications` installed, permission request + token registration wired into sign-in
+(non-blocking — a slow/denied registration can't delay sign-in), a bell icon per Important
+Date with a same-day/1-day/3-day lead-time choice via a plain `Alert.alert` (no new
+settings screen, no schema change needed on the mobile side).
+
+**A real infrastructure gap found and documented, not hidden:** this app has no
+`eas.json`/`extra.eas.projectId` anywhere (checked via `npx expo config --json`), so
+`Notifications.getExpoPushTokenAsync()` will throw and silently no-op today — permission
+can be granted but no real token ever reaches the backend until an EAS project is
+provisioned (`eas init`), a one-time setup this session couldn't do. Documented in the
+code's own comment, not swept under the rug.
+
+**Verified end-to-end against Expo's real live push service, not mocked:** registered a
+syntactically-valid fake token, created an already-due reminder, triggered dispatch with a
+minted admin token, and confirmed in the backend log that Expo's actual API was called and
+correctly responded `DeviceNotRegistered`; the dispatch summary accurately reported
+`{"dueCount":1,"sentCount":0,"failedCount":1}`, and the reminder was confirmed `sent: true`
+afterward. New `ReminderTest.java` (6 tests, all passing). Mobile `tsc`/`expo lint` at
+baseline throughout.
+
+**Not verified:** still no on-device/emulator run — the standing gap across every phase,
+and the one this phase needed most (a real permission prompt and a real device token can't
+be exercised by curl). Cloud Scheduler itself was not provisioned.
+
+**Next:** Phase E (§21 diagnostic test, migration V21) — the last phase in the plan.
+
+## Session of 2026-09-01/02 (4), Phase C — roadmap-as-Prepare, career info, comparison, recommendation
+
+Report: `reports/23-exam-guide-phase1/exam-guide-phase1-round3-phase-c.md`. Migration
+**V19**. No schema surprises this phase, but real, verified new functionality:
+
+- **§22 Roadmap** built as a Prepare-section enhancement (not a new "Roadmap" module —
+  extends the earlier Doc 1 audit's finding, doesn't reopen it). New
+  `GET /api/exams/{code}/prepare-plan`, derived entirely from Epic L's already-computed
+  topic priority/prerequisite/mastery data — no new tables. Verified against real SSC_CGL
+  data: 61 topics correctly ordered by `finalPriority` descending, **exactly one**
+  `recommended: true` (counted, not eyeballed). Prepare's two static buttons became a real
+  ordered checklist with mastery icons and a "Next up" badge, tapping through to Practice
+  scoped to that topic. Deliberately live-only, not cached — per-user and cheap to refetch.
+- **§25/§26 Career info & growth** — new `exam_career_posts` table, **exam-scoped, not
+  cycle-scoped** (posts don't reset every recruitment round). Appended to the existing
+  combined guide response per §59's convention; full admin CRUD; a 9th offline-cache table
+  added to migration `0014` (safe to extend — it had executed nowhere yet this session).
+  Known, stated limitation: rides on the cycle gate, so an exam with no current published
+  cycle shows no career info either.
+- **§27 Exam comparison** — new screen `exam-compare.tsx`, capped at exactly two exams (a
+  stated scope decision — mobile width, not enough exams yet to justify more). Reads
+  through Phase B's hybrid facade, so it works offline once both exams are cached.
+- **§28 Recommendation** — a client-side heuristic on My Exams (urgency + subject overlap
+  with practice history), no new endpoint, no ML. Honest limitation: with only one exam
+  having real Guide content right now, the urgency signal can't yet show real variety.
+- **Real bugs found via curl against real data, not synthetic fixtures, again** — the same
+  discipline that caught Phase B's chronology bug: none this phase, but the full career-
+  post lifecycle (create → appears in guide → delete → gone) was verified end to end with
+  a minted admin token, not just unit-tested.
+
+**Verified:** backend `mvn compile` clean; every new endpoint curled against live seeded
+data (see above); mobile `tsc`/`expo lint` at the exact pre-existing baseline throughout —
+two more `set-state-in-effect` violations introduced and fixed with the same
+keyed-loaded-state pattern `PreparationPlanCard` established; admin `npm run build`/
+`oxlint` clean. New backend test `PreparePlanAndCareerPostTest.java`.
+
+**Not verified:** still no on-device/emulator run — same standing gap as A and B, and the
+one that mattered most so far (Phase B's `/api` prefix bug). The two-exam comparison
+picker's real tap interaction and the recommendation heuristic's real-world differentiation
+(only one exam has content to differentiate against) are both unexercised.
+
+**Next:** Phase D (§8 Reminders — new push-notification capability, migration V20) and
+Phase E (§21 diagnostic test, migration V21). Phase D specifically adds a user-facing
+permission prompt and a new outbound network dependency — worth a check-in before starting
+it, not just proceeding on the original plan's momentum.
+
+## Session of 2026-09-01 (4), Phase B — offline cache, search, cycle-diff, content states
+
+**The most important thing found this phase: the entire Exam Guide mobile feature has never
+worked on a real device or emulator, across all three prior sessions that "shipped" it.**
+`mobile/src/api/examGuide.ts` prefixed all four of its endpoint paths with `/api/...`, but
+`API_BASE_URL` already ends in `/api` (confirmed against `api/reference.ts`'s `getExams()`,
+which is extensively on-device-tested and correctly has no such prefix) — so every Exam
+Guide request was actually hitting `.../api/api/exams/...`, a guaranteed 404. Verified
+directly: curled both forms against a live backend, old path 404s, fixed path 200s. This is
+exactly why every prior session's report said "not verified on a real device" — nobody ever
+opened the screen; verification was always `curl` against the backend's own route directly,
+which is correctly `/api/exams/...` from Spring's side. Fixed in `api/examGuide.ts`; grepped
+the rest of `mobile/src/` for the same mistake, found nowhere else.
+
+Report: `reports/23-exam-guide-phase1/exam-guide-phase1-round3-phase-b.md`. Shipped:
+
+- **Offline cache for the Exam Guide screens (§44)** — 8 new local tables (mobile migration
+  `0014`, pure guarded `CREATE TABLE`), `writeExamGuides()` folded into the ordinary
+  reference sync (one combined request, full-replace on success, same pattern
+  `writeExamStructures` uses), a hybrid facade (`data/examGuideData.ts`) so
+  `exam-guide.tsx`/`eligibility-checker.tsx`/Home's countdown card read local-or-live
+  exactly like every other hybrid function in this app. Deliberately NOT cached: past-cycle
+  history and the §30 diff below — genuinely offline, those stay unavailable.
+- **Search (§47)** — scoped to filtering My Exams' Explore list, not a cross-content engine.
+- **"What's changed this cycle" (§30)** — new endpoint diffing a cycle against the exam's
+  previous published one. **A real bug found by testing against real seeded data, not a
+  synthetic fixture**: "previous" was first ordered by `createdAt`, but the demo seeder
+  inserts its current cycle *before* its past one, so a live curl against real SSC_CGL data
+  returned `hasPrevious: false` when it should have found the 2026 cycle. Fixed by ordering
+  on real-world chronology (`applicationStart` → `notificationDate` → `examStart`) instead;
+  re-verified against the same live data afterward — correctly reports 15 real changes.
+- **Content-validation states (§36)** — `DRAFT`/`PUBLISHED` on `recruitment_cycles`
+  (migration **V18**), deliberately two states not the spec's three (one admin role, no
+  reviewer to hand `REVIEW` to). **A real regression caught before shipping**: the demo
+  seeder builds cycles directly, not through the DTOs that default to the new field, so
+  without a fix the seeded demo guide would have vanished from every public read the moment
+  this migration ran. Fixed by explicitly publishing both seeded cycles. Admin gained a
+  publish/unpublish toggle and a content-status field.
+- **Backend test coverage — a real pre-existing gap closed.** No test file for any part of
+  the Exam Guide model existed before this session (confirmed by listing the test
+  directory) despite V17 shipping two sessions ago. New `ExamGuideContentStatusTest.java`
+  (3 tests) covers this phase's new behavior plus the draft/current/public-read interaction
+  that had never been exercised at all.
+- **Obtained the genuinely clean full `mvn test` run** the round-2 session flagged as never
+  achieved (undermined then by running `spring-boot:run` in the same shell as `mvn test`).
+  This time, from a shell confirmed not running the dev server first: **115 tests across 18
+  classes, 0 failures, 0 errors.**
+
+**Verified:** backend `mvn compile`/`mvn test` (115/115); every new/changed endpoint hit
+directly with curl against a real running instance including the `/api` bug reproduction
+and fix, the diff endpoint before/after the chronology fix, and a draft cycle 404ing from
+the public guide until published. Mobile `tsc`/`expo lint` at the exact pre-existing
+baseline throughout. Admin `npm run build`/`oxlint` clean.
+
+**Not verified — the one that matters most:** still no on-device/emulator run of the mobile
+app. Given the `/api` bug just found, this is not optional polish — it's the check that
+would have caught three sessions' worth of a completely non-functional feature. Also
+unverified: local migration `0014` against a real (especially populated) SQLite database,
+and the admin's new publish/unpublish UI in an actual browser (no Playwright available this
+session — covered only by the backend JUnit test hitting the same endpoints).
+
+**Next:** Phase C (§22 roadmap-as-Prepare-enhancement, §25–28 career info/comparison/
+recommendation), migration V19 — continuing in the same session per the approved plan.
+
+## Session of 2026-09-01 (4) — Exam Guide coverage-ledger closure, Phase A (wiring & polish)
+
+**Requested:** close every remaining gap in the published "Exam Guide Coverage Ledger"
+artifact (23 not-started + 12 partial of 76 sections), including the large net-new
+subsystems (diagnostic test, roadmap, career info/comparison/recommendation, reminders).
+Given the size, planned first (via Explore agents + a Plan file, approved by the user)
+into 5 phases — **A: wiring/polish, B: offline cache + search + cycle-diff + content
+states (V18), C: roadmap-as-Prepare-enhancement + career/comparison/recommendation (V19),
+D: reminders/push (V20, new mobile capability), E: diagnostic test (V21)** — each ending
+in its own report + this file's update, same rhythm as every prior Exam Guide session.
+This entry covers **Phase A only**; report:
+`reports/23-exam-guide-phase1/exam-guide-phase1-round3-phase-a.md`.
+
+**Key research finding before planning, worth remembering:** grepped the whole repo for
+push-notification infra (`fcm|push|expo-notifications|PushToken`) — **zero hits anywhere**,
+backend or mobile. Reminders (Phase D) is a from-scratch capability, not a wiring task.
+Also: no content-approval-state pattern (draft/review/published) exists anywhere in the
+backend either — Phase B's content-validation work is likewise from scratch.
+
+**Phase A shipped:**
+- "Add to My Exams" follow/unfollow toggle directly on the Guide screen (previously only
+  reachable from My Exams) — same `followed_exams` rows, both screens now agree.
+- A "Your Progress" card on the Guide screen: practice accuracy and mock-test best
+  score/attempts **for this specific exam**, entirely from existing data functions
+  (`useSessionHistory()` filtered by `examCode`, `getMockAttemptSummary`) — no new queries.
+- Home: a deadline-countdown card for the followed exam, and an "Explore Exams" link to
+  My Exams. New shared `mobile/src/examGuide/dates.ts` so Home and the Guide screen
+  compute the same priority tiers the same way.
+- **Found two ledger rows already stale** — the working tree had moved past what the
+  published ledger describes: §5's "Check eligibility" CTA and §2's syllabus/PYQ CTA path
+  both already existed. Noted for the ledger's next republish rather than rebuilt.
+- **Deliberately deferred, discovered mid-implementation, not assumed up front:** the
+  "Eligible" badge (part of §50) needs a persisted date-of-birth + category, and **no user
+  profile field for either exists anywhere in this app** (checked `account.tsx`) —
+  `eligibility-checker.tsx`'s verdict is computed from screen-local state that's thrown
+  away on close. Adding one is a schema decision this phase's "no schema changes" scope
+  explicitly excludes; flagged for a future phase rather than hacked into the
+  device-only, explicitly-not-account-data `app_preferences` table.
+
+**A real lint violation introduced and fixed the same pass:** Home's new deadline effect's
+early-return `setState` tripped `react-hooks/set-state-in-effect`. Fixed with the exact
+pattern this codebase already used for the identical shape in `PreparationPlanCard.tsx` —
+store the loaded value keyed to the id it was loaded for, derive the rendered value by
+comparing to the current id. Same fix incidentally closes the same latent bug
+`PreparationPlanCard` had already found and fixed: switching the followed exam could
+otherwise flash the *previous* exam's deadline while the new fetch was in flight.
+
+**Verified:** `tsc --noEmit` clean; `expo lint` back to the exact pre-existing baseline (9
+problems: 8 errors, 1 warning) after the fix above. **Not verified: no on-device/emulator
+run this phase** — all reasoning is from reading the existing, already-tested data
+functions this phase composes, not from opening the app. Worth an emulator pass before
+this ships, per this project's standing rule that a clean compile has repeatedly missed
+real bugs here.
+
+**Next:** Phase B (offline cache for the four Exam Guide screens, search on My Exams,
+"what's changed this cycle" diff, draft/published states on `recruitment_cycles` —
+migration V18). Continuing per the approved plan in the same session.
+
+## Session of 2026-09-01 (3) — Exam Guide round 2: closed the highest-value gaps from the coverage audit
+
+**Requested:** "continue with remaining phases and remaining tickets" — after the coverage
+ledger artifact (76 sections mapped, published this same day) showed 48 of 76 partial or
+not-started. Worked through the highest-value gaps in full rather than spreading thin
+across everything; report: `reports/23-exam-guide-phase1/exam-guide-phase1-round2.md`.
+
+**Shipped, all verified against the live backend:**
+
+- **Navigation (§39/§41/§65/§72) — the gap flagged as most worth fixing first.** Progress is no
+  longer a primary tab (`href: null`, route/data untouched); access is now Home's existing
+  readiness card + a new More → Progress row.
+- **Eligibility Checker (§9)** — new screen, computes age against min/max + category
+  relaxation from data the Guide already had; qualification is a self-declared checkbox
+  (backend field is free text), always shows the required disclaimer.
+- **My Exams + Exam Discovery (§29/§47/§48)** — new screen. `followed_exams` was never
+  actually single-exam (PK is `examCode`); added plural `getFollowedExams()`/
+  `unfollowExam()` alongside the existing single-exam query without touching Home's or
+  PreparationPlanCard's call sites.
+- **Notification History (§63/§37)** — new public endpoint + screen; past cycles were
+  already kept, never deleted — nothing could read them until now. Verified against a
+  real second (past) demo cycle, not just the empty case; the seeder now creates it by
+  default.
+- **Source attribution surfaced (§32)** — every date/document/fee/eligibility fact now
+  carries `sourceId`; the Guide screen shows a tappable "Source: ..." line per section.
+- **Practice/Mock links (§23/§24) + difficulty/badge pills + priority tiers (§67,
+  Today/Critical/High/Upcoming/Later) + per-step official URLs (§12) + 5 analytics events
+  (§56) + an accessibility pass on every new screen's Pressables (§52, partial).**
+
+**A real bug found and fixed:** `MultipleBagFetchException` on the sync-all query — two
+collection fetch-joins in one JPQL query, the exact mistake an earlier comment on
+`ExamStageRepository` warns against. Caught by calling the endpoint, not trusting the
+compile. Fixed the same way that precedent does: fetch-join only the exam, batch-fetch
+the rest.
+
+**Verified:** clean `mvn compile` throughout; every new/changed endpoint hit directly with
+curl (empty and populated cases); mobile `tsc` clean and `expo lint` held at the
+pre-existing 9 throughout (two new violations introduced and fixed same-pass: a
+`set-state-in-effect` and an unescaped apostrophe). The coverage ledger artifact was
+updated in place (same URL) — 17 sections and 10 acceptance-criteria items upgraded.
+
+**[RESOLVED 2026-09-01, later the same day] The clean full backend regression suite gap is
+closed.** With no other Maven/Spring process running (confirmed via `jps`/`netstat` first),
+`mvn test` was re-run end to end against the real Neon database with the full uncommitted
+Epic L + Exam Guide changeset in place: **111 tests, 0 failures, 0 errors, `BUILD SUCCESS`**,
+~23.5 minutes. All 16 existing test classes passed, `EpicLIntelligenceTest` included (21
+tests, the longest single class at ~400s).
+
+**Caveat found while checking this, not previously called out: there is no dedicated
+automated test class for the Doc 1 Exam Guide feature** (`recruitment_cycles`,
+`eligibility_rules`, `important_dates`, `document_requirements`, `application_steps`,
+`fee_rules`, etc. — migration V17). None of the 16 test classes cover it; its only
+verification anywhere is the curl checks described in the session above and in
+`reports/23-exam-guide-phase1/`. The 111/111 green result says the rest of the backend
+didn't regress from that work landing — it says nothing about the Exam Guide endpoints
+themselves being correct beyond what curl already checked.
+
+**Still genuinely unstarted, unchanged:** Diagnostic test, Reminders (needs push
+infrastructure that doesn't exist yet), Career info/comparison, "What's Changed" diffing,
+content-validation workflow, full offline caching, Search. New Doc 1 screens
+(eligibility-checker, my-exams, exam-guide-history) stay English-only — stated
+explicitly, not left inconsistent.
+
+## Session of 2026-09-01 (2) — Exam Guide Phase 1: backend, admin, mobile (Doc 1)
+
+**Requested:** continue with the second document ("Doc 1" — the large new Exam Guide /
+Exam Intelligence feature), deferred from the earlier Doc 2 session. Decision already
+taken then: build it all, seed demo content **labelled as demo in the UI itself**.
+
+Report: `reports/23-exam-guide-phase1/`.
+
+### Doc 1's own audit — what was wrong before writing code
+
+- **Assumes a Roadmap module that doesn't exist.** §22/§71/§72 reference it repeatedly; the
+  app's tabs are Home/Practice/Mock Test/Progress/More. Not invented to satisfy the doc.
+- **§40's "Footer Module" is a web pattern** for an app with only a bottom tab bar. Not built.
+- **Phase 2 (§16–§19: pattern, syllabus, trends, difficulty) is already ~70% built** by Epic
+  L and V11. Reused, not duplicated — Doc 1's own §59/§70 says not to rebuild what exists.
+- Phase 1 itself (discovery/overview/status/dates/eligibility/documents/fees/how-to-apply)
+  was genuine greenfield: `exams` had 5 columns before this, no cycle/date/fee/document
+  table existed at all.
+
+### What shipped
+
+**Backend** — migration `V17`: `recruitment_cycles` (admin-set `is_current`, one per exam
+via a partial unique index; persistent `is_demo` flag — not a seeding note, a permanent
+badge), `exam_sources`, `eligibility_rules` (1:1 per cycle), `important_dates`,
+`document_requirements` + `user_document_status` (synthetic id per **ADR-005**, not
+`@IdClass`), `application_steps`, `application_mistakes`, `fee_rules`. Public
+`GET /api/exams/{code}/guide` (404 when no current cycle — the normal state for 10/11
+exams) and `GET /api/exam-guides` (sync-all); full admin CRUD; a demo seeder for one SSC
+CGL "2027 (Demo)" cycle, gated the same two-lock way as Epic L's synthetic seeder
+(admin token + `app.exam-guide.demo-seed-enabled=true`, default false).
+
+**Admin** — `pages/ExamGuide.jsx` (cycle picker + eligibility/dates/documents/steps/
+mistakes/fees, all CRUD) and `pages/ExamSources.jsx`, reached via a new "Guide" button on
+the Exams list.
+
+**Mobile** — `app/exam-guide.tsx`, reached by tapping the exam card on Home. Status pill,
+countdown, quick facts, dates timeline, eligibility with the required official-source
+disclaimer, a tap-to-cycle document checklist (signed-in only), how-to-apply steps,
+mistakes, fees, and a demo banner that cannot be hidden. **Scope decision, stated rather
+than hidden: live-fetch only, no local SQLite cache/sync pipeline this pass** — unlike
+every other reference type in the app. Cost: no offline access yet (spec §44 unmet).
+
+### Two real bugs found and fixed
+
+1. **`MultipleBagFetchException`** on the very query my own earlier comment (on
+   `ExamStageRepository`) warned against — two collection fetch-joins in one JPQL query.
+   Caught by actually calling the sync-all endpoint rather than trusting a clean compile.
+   Fixed by fetch-joining only the exam and batch-fetching the five child lists.
+2. **Pre-existing, not introduced this session: `javac` on this Windows machine was never
+   told to read source files as UTF-8**, so `pom.xml` had no `sourceEncoding` set and
+   javac fell back to Cp1252. Any em dash in a STRING LITERAL (not a comment) compiled
+   into three wrong codepoints and round-tripped through JDBC as visible mojibake. This
+   was already live in shipped code — `AuthService.java`'s "Session expired — please sign
+   in again" (a real 401 body real users could see) and two `TopicIntelligenceService`
+   override-validation messages. Fixed with one `pom.xml` property; no source file needed
+   editing since the em dash was always correct UTF-8 on disk.
+
+### Verified
+
+Backend `mvn compile`/`clean compile` clean; full existing test suite reported complete,
+exit 0. Live curl checks: anonymous `GET .../guide` returns the full nested payload with
+`demo: true`; sync-all works after the fetch-join fix; an exam with no cycle 404s (mobile's
+empty-state path); the document-status write 401s with no token; em dashes render clean
+after the encoding fix + purge/reseed. Admin `npm run build` clean, `oxlint` unchanged.
+Mobile `tsc` clean; `expo lint` back to the pre-existing 9 after fixing one
+`set-state-in-effect` violation I introduced (split a combined load-and-setState function
+into a pure fetch plus a separate retry handler).
+
+**Not verified:** the admin pages in an actual browser, and the mobile screen on a real
+device/emulator — no browser-automation tool was available this session. Both are
+exercised solely through their real, working backend API surface via curl, not through
+the UI itself. Metro and the backend dev server were left running (not restarted a third
+time) since the user was mid-way through their own device check of the earlier Doc 2 work.
+
+### Next
+
+Doc 1 Phase 2 (trends/difficulty/where-to-start) is already ~70% covered by Epic L — what
+remains there is presentation, not data model. Phases 3– 4 (eligibility checker,
+diagnostic test, My Exams/reminders, notification simplifier, comparison) are genuinely
+unstarted. The mobile offline-cache gap (§44) is the most likely thing to bite first if
+Exam Guide content needs to work without a network.
+
+## Session of 2026-09-01 — Doc 2 build improvements: network toast, session lifecycle, quiz navigation, light theme, zoom, Telugu
+
+**Requested:** two documents were supplied — one of build improvements ("Doc 2"), one a large new
+Exam Guide feature ("Doc 1"). The user chose: **Doc 2 first**, theme toggle **included now**, and
+Doc 1 later with **visibly-labelled demo content**. Doc 2 is done; **Doc 1 has not been started.**
+
+Report: `reports/22-build-improvements-theme-zoom-i18n/`.
+
+### Audit first — three of Doc 2's premises were wrong
+
+Following the standing rule for AI-authored specs in this project. Doc 2 was right about §1,
+§2, §3, §6, §7, §9 and §11 (mechanisms found and recorded in the report), and wrong about:
+
+- **§8** — Progress/history/exam-progress already counted questions. The real problem it missed is
+  that `total_count` meant BOTH "answered" and "offered", which was only correct while answering
+  everything was mandatory. **§7 and §8 are therefore one change**; shipping early-finishing alone
+  would have silently corrupted every accuracy figure in the app (8 read sites + SQLite + the sync
+  payload + the backend entity + Epic L's `CHECK (correct_count <= attempted_count)`).
+- **§10** — the app was dark-only *by design*, with 496 `colors.*` references across **43** files
+  inside 38 module-level `StyleSheet.create` calls. Far larger than the doc implies.
+- **§5** — not implemented as written, deliberately. A 90s idle timer now collapses navigation
+  depth but explicitly does NOT clear an active session: nothing is persisted until a quiz is
+  finished, so clearing "temporary question state" would destroy the unsaved work of anyone who
+  took a phone call — which §5's own acceptance criterion forbids.
+
+### What shipped
+
+| § | What |
+|---|---|
+| 1 | `OfflineBanner` → `NetworkStatusToast`. The provider now tracks an **edge**, not a level — that is the whole fix; a component rendering from a level has nothing to time. 3.5s, green "Back online", handles flapping/first-reading/backgrounding |
+| 2 | `useActiveTestBackGuard`. **One `BackHandler` listener covers button AND gesture because `app.json` sets `predictiveBackGestureEnabled: false`** — a real dependency, commented in the hook |
+| 3 | `useEffect(() => endSession, [])` in quiz and mock test. The flag was set on load and cleared only on completion, so backing out left it set all the way to Practice Home |
+| 4 | `backBehavior="initialRoute"`. The reported back-traversal was **tab history**, not leaked state |
+| 5 | `useStaleStackReset` — 90s, navigation depth only, on re-entry (a background timer would pop whatever the user was looking at, since `dismissAll()` resolves against the focused stack) |
+| 6–8 | Quiz rewritten around `answers` as the single source of truth. Previous/Next, finish from the first answered question, `total_count` = answered, new local-only `available_count` = offered, `results` covers only answered questions (otherwise skipped ones flood Revise as "wrong") |
+| 9+10 | **One** refactor across 43 files. Style sheets became `buildStyles({ colors }: Theme) => ...` factories — destructuring means all 496 token references are **unchanged**, which is what makes the diff readable. Zoom is applied centrally in `useThemedStyles` (174 `fontSize` sites, impossible to forget), text only, capped at 130% |
+| 11–13 | `src/i18n/` with ~250 strings. **`te` is typed as `en`'s shape, so missing keys are a build error** — coverage is compiler-enforced. New `app/settings.tsx` for all three preferences |
+
+Migration `0013`: `app_preferences` (device-local, not synced, not cleared on sign-out) plus
+`practice_sessions.available_count`.
+
+### Verified
+
+`tsc` **clean**. `expo lint` **9 problems, all pre-existing** (baseline 11; nothing new).
+Migration `0013` tested against a **populated** pre-0013 SQLite database — rows survive
+byte-identical, `available_count` is NULL not 0, `app_preferences` upserts without clobbering
+siblings. All 39 style factories confirmed module-level (the `WeakMap` cache depends on it).
+**Backend untouched, 0 files changed.**
+
+Three lint errors I introduced and fixed, two of them real bugs: reading a **ref during render**
+to gate the back guard in both quiz and test (now reads the `finishing`/`submitting` state set in
+the same statement), and `levels.tsx` calling a palette factory three times per row inside a
+`useMemo` missing `colors`.
+
+### Still not verified — unchanged from before, and now larger
+
+**The app has still never been launched.** The light theme is 43 files of colour changes that only
+a screen can confirm, and the Telugu wording has not been reviewed by a native speaker (keys and
+coverage are correct; phrasing is not vouched for). Two screens are permanently English by
+necessity: the pre-migration "Setting up local database..." and "Database migration failed", which
+render before any provider mounts because the language preference lives in the database whose
+migration has not finished.
+
+### Next
+
+**Doc 1 — Exam Guide.** Not started. Its own audit found that it assumes a **Roadmap module that
+does not exist**, calls for a **web-style footer** in an app with a bottom tab bar, and does not
+know that its **Phase 2 is already ~70% built** by Epic L and V11. Phase 1 is genuinely greenfield:
+~11 tables, ~11 admin screens, ~15 endpoints. Decision already taken: build it all and seed content
+**labelled as demo in the UI itself**, so nothing unverified can ever look official.
+
 ## Session of 2026-08-31 — Epic L completed (TICKET-2104–2109), seeded, and admin click-tested
 
 **Requested:** "complete those all tickets with fake data … including mobile also. after
