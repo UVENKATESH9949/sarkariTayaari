@@ -15,6 +15,7 @@ import { Card } from "../../ui/Card";
 import { ListSkeleton } from "../../ui/Skeleton";
 import { radius, spacing } from "../../ui/theme";
 import { useTheme, useThemedStyles, type Theme } from "../../ui/ThemeContext";
+import { ThemeToggleButton } from "../../ui/ThemeToggleButton";
 import { useT } from "../../i18n/I18nContext";
 
 // Takes the palette rather than reading a module constant: these three thresholds map to
@@ -100,7 +101,10 @@ export default function Progress() {
 
   return (
     <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + spacing.xl }]}>
-      <Text style={styles.title}>{t("progress.title")}</Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.title}>{t("progress.title")}</Text>
+        <ThemeToggleButton />
+      </View>
 
       {mostRecentSession && (
         <PressableScale style={styles.historyCard} onPress={() => router.push("/practice/history")}>
@@ -132,6 +136,25 @@ export default function Progress() {
           </Text>
         </View>
       </Card>
+
+      {/* Weakness Radar (TASK-2201). The readiness ring above says how ready this student is;
+          this says what to do about it. Placed directly under it because that is the question
+          the ring immediately raises, and the radar screen resolves the exam itself so this
+          stays a plain tap. */}
+      <PressableScale style={styles.radarCard} onPress={() => router.push("/preparation-radar")}>
+        <View style={styles.radarIconBox}>
+          <Ionicons name="radio-outline" size={21} color={colors.brand.light} />
+        </View>
+        <View style={styles.radarInfo}>
+          <Text style={styles.radarTitle}>Preparation Radar</Text>
+          <Text style={styles.radarSub}>
+            {hasActivity
+              ? "See which topics need attention, and what to do about each"
+              : "Practise a few topics and this will show you exactly what to work on"}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={colors.brand.light} />
+      </PressableScale>
 
       <View style={styles.statRow}>
         <View style={styles.statCard}>
@@ -195,9 +218,14 @@ const buildStyles = ({ colors, typography }: Theme) =>
       paddingTop: spacing.xl,
       paddingBottom: spacing["3xl"],
     },
+    headerRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: spacing.lg,
+    },
     title: {
       ...typography.pageTitle,
-      marginBottom: spacing.lg,
     },
     historyCard: {
       flexDirection: "row",
@@ -230,6 +258,39 @@ const buildStyles = ({ colors, typography }: Theme) =>
     historySub: {
       fontSize: 12,
       color: colors.text.muted,
+    },
+    radarCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.md,
+      backgroundColor: colors.surfaceElevated,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: spacing.md,
+      marginBottom: spacing.base,
+    },
+    radarIconBox: {
+      width: 40,
+      height: 40,
+      borderRadius: radius.md,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.brand.glowSoft,
+    },
+    radarInfo: {
+      flex: 1,
+    },
+    radarTitle: {
+      fontSize: 14.5,
+      fontWeight: "700",
+      color: colors.text.primary,
+    },
+    radarSub: {
+      fontSize: 12,
+      color: colors.text.muted,
+      marginTop: 2,
+      lineHeight: 17,
     },
     readinessCard: {
       flexDirection: "row",

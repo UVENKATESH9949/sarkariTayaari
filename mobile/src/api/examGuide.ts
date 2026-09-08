@@ -1,12 +1,17 @@
 import { apiFetch, ApiError } from "./client";
 
 /**
- * Exam Guide Phase 1 (see the supplied Exam Guide spec). Live-fetched only — unlike the
- * rest of this app's reference data, there is no local SQLite table or sync pipeline for
- * this yet. That is a scope decision, not an oversight: it lets the feature ship and be
- * exercised end to end without a second migration + delta-sync integration in the same
- * pass. See the report for what that costs (no offline access to guide content, no
- * "last updated" staleness indicator) and what §44 would need for a follow-up pass.
+ * Exam Guide Phase 1 (see the supplied Exam Guide spec). This file's calls are the
+ * *live-fetch* path only — the module-level comment here previously said no local
+ * cache/sync existed for this content at all; that became stale once the offline cache
+ * shipped. It now does: `getAllExamGuides` (below) is called by
+ * `mobile/src/sync/writeQuestions.ts`'s `writeExamGuides()` as part of the ordinary
+ * reference sync, writing into the `examGuideCycles`/`examGuideEligibility`/
+ * `examGuideDates`/`examGuideDocuments`/`examGuideSteps`/`examGuideMistakes`/
+ * `examGuideFees`/`examGuideCareerPosts`/`examGuideSources` local tables (migration
+ * `0014`), read back via `mobile/src/db/examGuideLocal.ts`. Screens should go through the
+ * hybrid facade (`mobile/src/data/examGuideData.ts`'s `getExamGuideHybrid`), not this
+ * file directly, unless they specifically need a forced live read.
  */
 
 export type SourceSummary = {

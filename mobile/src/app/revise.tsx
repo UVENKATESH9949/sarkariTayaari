@@ -10,6 +10,11 @@ import { EmptyState } from "../ui/EmptyState";
 import { radius, spacing } from "../ui/theme";
 import { useTheme, useThemedStyles, type Theme } from "../ui/ThemeContext";
 import { useT } from "../i18n/I18nContext";
+import { OptionList } from "../questionRenderer/OptionList";
+import { MultiSelectOptionList } from "../questionRenderer/MultiSelectOptionList";
+import { FreeTextAnswerInput } from "../questionRenderer/FreeTextAnswerInput";
+import { describeYourAnswer } from "../questionRenderer/answerSummary";
+import { revealPlainStyles } from "../questionRenderer/optionListStyles";
 
 type ReviseTab = "bookmarks" | "wrong";
 type ReviseItem = WrongAnswerItem;
@@ -17,6 +22,7 @@ type ReviseItem = WrongAnswerItem;
 export default function Revise() {
   const { colors } = useTheme();
   const styles = useThemedStyles(buildStyles);
+  const optionListStyles = useThemedStyles(revealPlainStyles);
   const t = useT();
   const { initialTab } = useLocalSearchParams<{ initialTab?: string }>();
   const { bookmarks, toggleBookmark } = useBookmarks();
@@ -103,26 +109,60 @@ export default function Revise() {
 
                 {isExpanded && (
                   <View style={styles.expandedContent}>
-                    <View style={styles.optionsList}>
-                      {item.options.map((option, index) => {
-                        const isCorrect = index === item.correctIndex;
-                        const isPickedWrong = item.selectedIndex === index && index !== item.correctIndex;
-                        return (
-                          <View
-                            key={index}
-                            style={[
-                              styles.optionRow,
-                              isCorrect && styles.optionCorrect,
-                              isPickedWrong && styles.optionWrong,
-                            ]}
-                          >
-                            <Text style={styles.optionText}>{option}</Text>
-                            {isCorrect && <Ionicons name="checkmark-circle" size={18} color={colors.semantic.success} />}
-                            {isPickedWrong && <Ionicons name="close-circle" size={18} color={colors.semantic.error} />}
-                          </View>
-                        );
-                      })}
-                    </View>
+                    {item.questionType === "MULTIPLE_CHOICE" ? (
+                      <MultiSelectOptionList
+                        options={item.options}
+                        styles={optionListStyles}
+                        selectedIndices={
+                          Array.isArray(item.response?.selectedOptions)
+                            ? (item.response!.selectedOptions as unknown[]).filter(
+                                (v): v is number => typeof v === "number",
+                              )
+                            : []
+                        }
+                        iconSize={18}
+                      />
+                    ) : item.questionType === "TRUE_FALSE" ? (
+                      <OptionList
+                        options={[t("quiz.trueOption"), t("quiz.falseOption")]}
+                        styles={optionListStyles}
+                        badge="none"
+                        selectedIndex={
+                          typeof item.response?.selectedBoolean === "boolean" ? (item.response.selectedBoolean ? 0 : 1) : null
+                        }
+                        iconSize={18}
+                      />
+                    ) : item.questionType === "NUMERIC" ? (
+                      <FreeTextAnswerInput
+                        value={typeof item.response?.enteredValue === "number" ? String(item.response.enteredValue) : ""}
+                        disabled
+                      />
+                    ) : item.questionType === "FILL_BLANK" ? (
+                      <FreeTextAnswerInput
+                        value={typeof item.response?.enteredText === "string" ? item.response.enteredText : ""}
+                        disabled
+                      />
+                    ) : item.questionType === "MATCH" || item.questionType === "ORDERING" ? (
+                      // No per-key labels survive in a stored result snapshot — same
+                      // limitation documented on answerSummary.ts for MULTIPLE_CHOICE/TRUE_FALSE.
+                      <Text style={styles.explanationText}>
+                        Your Answer:{" "}
+                        {describeYourAnswer(item, {
+                          trueOption: t("quiz.trueOption"),
+                          falseOption: t("quiz.falseOption"),
+                          unattempted: t("common.unattempted"),
+                        })}
+                      </Text>
+                    ) : (
+                      <OptionList
+                        options={item.options}
+                        styles={optionListStyles}
+                        badge="none"
+                        selectedIndex={item.selectedIndex}
+                        correctIndex={item.correctIndex}
+                        iconSize={18}
+                      />
+                    )}
                     <View style={styles.explanationBox}>
                       <Text style={styles.explanationLabel}>{t("common.explanation")}</Text>
                       <Text style={styles.explanationText}>{item.explanation}</Text>
@@ -211,31 +251,6 @@ const buildStyles = ({ colors }: Theme) =>
     },
     expandedContent: {
       marginTop: spacing.md + 2,
-    },
-    optionsList: {
-      gap: spacing.sm,
-    },
-    optionRow: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: radius.sm + 2,
-      padding: spacing.md - 1,
-    },
-    optionCorrect: {
-      borderColor: colors.semantic.success,
-      backgroundColor: colors.semantic.successBg,
-    },
-    optionWrong: {
-      borderColor: colors.semantic.error,
-      backgroundColor: colors.semantic.errorBg,
-    },
-    optionText: {
-      fontSize: 13,
-      color: colors.text.primary,
-      flex: 1,
     },
     explanationBox: {
       marginTop: spacing.md,

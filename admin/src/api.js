@@ -253,6 +253,12 @@ export function deleteSection(id) {
   return request(`/api/paper-sections/${id}`, { method: "DELETE" });
 }
 
+/* ----------------------------------------------------------- Question types */
+
+export function listQuestionTypes() {
+  return request(`/api/question-types`);
+}
+
 /* -------------------------------------------------------- Difficulty levels */
 
 export function listDifficultyLevels() {
@@ -347,6 +353,19 @@ export function logoutRequest() {
  */
 export function getTopicIntelligence(examCode) {
   return request(`/api/exams/${encodeURIComponent(examCode)}/topic-intelligence`);
+}
+
+/**
+ * The evidence behind one student's Weakness Radar (TASK-2201, spec §22).
+ *
+ * Keyed by email rather than user id, because a support question arrives with an email. Read-
+ * only and admin-only: it exposes another person's practice history, and it never triggers a
+ * recompute, so an investigator sees what the student was actually served.
+ */
+export function inspectWeaknessRadar(email, examCode) {
+  return request(
+    `/api/admin/weakness-radar?email=${encodeURIComponent(email)}&examCode=${encodeURIComponent(examCode)}`,
+  );
 }
 
 /** Re-runs the computation for one exam. Admin-only, and the only way to refresh these numbers. */
@@ -568,6 +587,43 @@ export function deleteFeeRule(id) {
   return request(`/api/fee-rules/${id}`, { method: "DELETE" });
 }
 
+/* ------------------------------------------ Question groups & media (TASK-2301 Phase P3) */
+
+export function listQuestionGroups({ page = 0, size = 20 } = {}) {
+  const params = new URLSearchParams();
+  params.set("page", page);
+  params.set("size", size);
+  return request(`/api/question-groups?${params.toString()}`);
+}
+
+export function getQuestionGroup(id) {
+  return request(`/api/question-groups/${id}`);
+}
+
+export function createQuestionGroup(payload) {
+  return request(`/api/question-groups`, jsonBody("POST", payload));
+}
+
+export function updateQuestionGroup(id, payload) {
+  return request(`/api/question-groups/${id}`, jsonBody("PUT", payload));
+}
+
+export function upsertQuestionGroupTranslation(id, lang, payload) {
+  return request(`/api/question-groups/${id}/translations/${lang}`, jsonBody("PUT", payload));
+}
+
+export function deleteQuestionGroup(id) {
+  return request(`/api/question-groups/${id}`, { method: "DELETE" });
+}
+
+export function createQuestionMedia(payload) {
+  return request(`/api/question-media`, jsonBody("POST", payload));
+}
+
+export function deleteQuestionMedia(id) {
+  return request(`/api/question-media/${id}`, { method: "DELETE" });
+}
+
 export function getExamGuideDemoSeedStatus() {
   return request(`/api/admin/exam-guide-demo/status`);
 }
@@ -578,4 +634,91 @@ export function seedExamGuideDemoData() {
 
 export function purgeExamGuideDemoData() {
   return request(`/api/admin/exam-guide-demo/purge`, { method: "POST" });
+}
+
+/* ---------------------------------------------------------------- Ingestion (TASK-2401 Source Registry) */
+
+export function listIngestionSources() {
+  return request(`/api/admin/ingestion/sources`);
+}
+
+export function createIngestionSource(payload) {
+  return request(`/api/admin/ingestion/sources`, jsonBody("POST", payload));
+}
+
+export function updateIngestionSource(id, payload) {
+  return request(`/api/admin/ingestion/sources/${id}`, jsonBody("PUT", payload));
+}
+
+export function deleteIngestionSource(id) {
+  return request(`/api/admin/ingestion/sources/${id}`, { method: "DELETE" });
+}
+
+export function scanIngestionSource(id) {
+  return request(`/api/admin/ingestion/sources/${id}/scan`, { method: "POST" });
+}
+
+export function listIngestionNotices(id, status = "ACTIVE") {
+  return request(`/api/admin/ingestion/sources/${id}/notices?status=${status}`);
+}
+
+/* ------------------------------------------------------------ Ingestion review queue (TASK-2401) */
+
+export function listIngestionExtractionResults(sourceId) {
+  return request(`/api/admin/ingestion/sources/${sourceId}/extraction-results`);
+}
+
+export function acceptIngestionCandidate(resultId, payload) {
+  return request(`/api/admin/ingestion/review-queue/${resultId}/accept`, jsonBody("POST", payload));
+}
+
+export function rejectIngestionCandidate(resultId, reason) {
+  return request(`/api/admin/ingestion/review-queue/${resultId}/reject`, jsonBody("POST", { reason }));
+}
+
+/* ---------------------------------------------------------- Question ingestion (TASK-2501 Phase 2) */
+
+export function ingestQuestionDocument(sourceUrl) {
+  return request(`/api/admin/question-ingestion/documents`, jsonBody("POST", { sourceUrl }));
+}
+
+// Multipart, same pattern as uploadImage — field name "file", Content-Type left unset so the
+// browser supplies the boundary.
+export async function uploadQuestionDocument(file) {
+  const form = new FormData();
+  form.append("file", file);
+
+  const headers = authToken ? { Authorization: `Bearer ${authToken}` } : {};
+  const response = await fetch(`${BASE_URL}/api/admin/question-ingestion/documents/upload`, {
+    method: "POST",
+    body: form,
+    headers,
+  });
+  if (response.status === 401) onUnauthorized();
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+  return response.json();
+}
+
+export function listQuestionIngestionDocuments() {
+  return request(`/api/admin/question-ingestion/documents`);
+}
+
+export function listQuestionCandidates(documentId, status) {
+  const params = new URLSearchParams({ documentId });
+  if (status) params.set("status", status);
+  return request(`/api/admin/question-ingestion/candidates?${params}`);
+}
+
+export function acceptQuestionCandidate(candidateId, overrides) {
+  return request(`/api/admin/question-ingestion/candidates/${candidateId}/accept`, jsonBody("POST", { overrides }));
+}
+
+export function rejectQuestionCandidate(candidateId, reason) {
+  return request(`/api/admin/question-ingestion/candidates/${candidateId}/reject`, jsonBody("POST", { reason }));
+}
+
+export function setQuestionContentStatus(questionId, status) {
+  return request(`/api/questions/${questionId}/content-status`, jsonBody("PUT", { status }));
 }

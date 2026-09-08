@@ -17,6 +17,7 @@ import { ListSkeleton } from "../../ui/Skeleton";
 import { SectionLabel } from "../../ui/SectionLabel";
 import { spacing, radius } from "../../ui/theme";
 import { useTheme, useThemedStyles, type Theme } from "../../ui/ThemeContext";
+import { ThemeToggleButton } from "../../ui/ThemeToggleButton";
 import { trackEvent } from "../../telemetry/analytics";
 
 const PAGE_SIZE = 100;
@@ -320,14 +321,17 @@ export default function ExamsScreen() {
     >
       <View style={styles.headerRow}>
         <Text style={styles.title}>Exams</Text>
-        <Pressable
-          style={styles.calendarLink}
-          onPress={() => router.push("/exam-calendar")}
-          accessibilityRole="button"
-          accessibilityLabel="Exam calendar"
-        >
-          <Ionicons name="calendar-outline" size={20} color={colors.brand.light} />
-        </Pressable>
+        <View style={styles.headerActions}>
+          <ThemeToggleButton />
+          <Pressable
+            style={styles.calendarLink}
+            onPress={() => router.push("/exam-calendar")}
+            accessibilityRole="button"
+            accessibilityLabel="Exam calendar"
+          >
+            <Ionicons name="calendar-outline" size={20} color={colors.brand.light} />
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.searchBar}>
@@ -469,6 +473,10 @@ const buildStyles = ({ colors }: Theme) =>
       fontSize: 24,
       fontWeight: "800",
       color: colors.text.primary,
+    },
+    headerActions: {
+      flexDirection: "row",
+      alignItems: "center",
     },
     calendarLink: {
       padding: spacing.xs + 2,

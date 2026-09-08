@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { recordTopicPractice } from "../../../db/topicProgressStore";
+import { useQuestionTimer } from "../../../practice/useQuestionTimer";
 import { PyqBadge } from "../../../ui/PyqBadge";
 import { Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
 import { useSessionHistory } from "../../../practice/sessionHistory";
@@ -20,10 +21,38 @@ import { useTheme, useThemedStyles, type Theme } from "../../../ui/ThemeContext"
 import { useT } from "../../../i18n/I18nContext";
 import { getPracticeQuestions, type PracticeQuestion } from "../../../data/practiceData";
 import { useHybridMode } from "../../../data/hybridSource";
+import { OptionList } from "../../../questionRenderer/OptionList";
+import { MultiSelectOptionList } from "../../../questionRenderer/MultiSelectOptionList";
+import { ContentPreamble } from "../../../questionRenderer/ContentPreamble";
+import { GroupContent } from "../../../questionRenderer/GroupContent";
+import { FreeTextAnswerInput } from "../../../questionRenderer/FreeTextAnswerInput";
+import { MatchPairing, type MatchItem } from "../../../questionRenderer/MatchPairing";
+import { OrderingBuilder, type OrderingItem } from "../../../questionRenderer/OrderingBuilder";
+import { shuffled } from "../../../questionRenderer/shuffle";
+import { revealLetterComfortableStyles } from "../../../questionRenderer/optionListStyles";
+import {
+  multipleChoiceEvaluator,
+  trueFalseEvaluator,
+  numericEvaluator,
+  textAnswerEvaluator,
+  mappingEvaluator,
+  sequenceEvaluator,
+} from "../../../evaluation/questionEvaluator";
+import type { QuestionResult } from "../../../practice/sessionHistory";
+
+/** `null` for an empty/non-numeric entry — the same "not really a number" case NumericEvaluator itself treats as unattempted, not zero. */
+function parseNumericInput(raw: string | undefined): number | null {
+  if (raw === undefined) return null;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return null;
+  const n = Number(trimmed);
+  return Number.isNaN(n) ? null : n;
+}
 
 export default function Quiz() {
   const { colors } = useTheme();
   const styles = useThemedStyles(buildStyles);
+  const optionListStyles = useThemedStyles(revealLetterComfortableStyles);
   const t = useT();
   const router = useRouter();
   const { examCode, examLabel, subjectName, topicId, topicName, levelKey, levelLabel } = useLocalSearchParams<{
@@ -53,6 +82,32 @@ export default function Quiz() {
    * operation on `currentIndex` and cannot desynchronise.
    */
   const [answers, setAnswers] = useState<Record<string, number>>({});
+  /**
+   * The same "written the moment it's decided" model as `answers`, one map per response
+   * shape (TASK-2301 Phase P2 Wave A). Kept separate rather than folding into one
+   * `Record<string, StudentResponse>` map so every existing SINGLE_CHOICE/ASSERTION_REASON/
+   * STATEMENT_COMBINATION codepath above — Previous/Next, `selectedOption`, the bookmark
+   * button — stays exactly as verified, untouched by the two new types.
+   */
+  const [multiAnswers, setMultiAnswers] = useState<Record<string, number[]>>({});
+  /** Which MULTIPLE_CHOICE questions have had "Confirm Answer" pressed — see confirmMultiAnswer. */
+  const [confirmedMulti, setConfirmedMulti] = useState<Set<string>>(new Set());
+  const [boolAnswers, setBoolAnswers] = useState<Record<string, boolean>>({});
+  /**
+   * NUMERIC/FILL_BLANK/MATCH/ORDERING's answer maps (TASK-2301 Phase P2 Wave B) — one map
+   * per response shape, same reasoning as multiAnswers/boolAnswers above. Ids never collide
+   * across these four maps either, since a question only has one questionType.
+   */
+  const [numericAnswers, setNumericAnswers] = useState<Record<string, string>>({});
+  const [fillBlankAnswers, setFillBlankAnswers] = useState<Record<string, string>>({});
+  const [matchAnswers, setMatchAnswers] = useState<Record<string, Record<string, string>>>({});
+  const [orderingAnswers, setOrderingAnswers] = useState<Record<string, string[]>>({});
+  /**
+   * Shared "Confirm Answer" gate for all four Wave B types — none of them can infer "done"
+   * from a single tap the way single-choice/TRUE_FALSE can, exactly like MULTIPLE_CHOICE's
+   * own confirmedMulti above. One set rather than four, since ids never collide.
+   */
+  const [confirmedFreeform, setConfirmedFreeform] = useState<Set<string>>(new Set());
   const [reported, setReported] = useState<Set<string>>(new Set());
   const [languageCode, setLanguageCode] = useState(defaultLanguageCode);
   const [languagePickerVisible, setLanguagePickerVisible] = useState(false);
@@ -117,10 +172,38 @@ export default function Quiz() {
 
   const total = questions?.length ?? 0;
   const question = questions?.[currentIndex];
+  /*
+   * Per-question time, for the nullable `time_ms` column added by migration 0018.
+   *
+   * Nothing reads it yet -- there is no expected-time benchmark in this app, so the Weakness
+   * Radar's speed signal is deliberately off (see practice/useQuestionTimer.ts). Capturing it
+   * now is what gives a later version history to build a benchmark from.
+   */
+  const questionTimer = useQuestionTimer(question?.id ?? null);
   const isReported = question ? reported.has(question.id) : false;
   // Derived, not stored — see the note on `answers`.
   const selectedOption = question ? answers[question.id] ?? null : null;
-  const answeredCount = Object.keys(answers).length;
+  // Ids never collide across the maps — a question only has one questionType.
+  const answeredCount =
+    Object.keys(answers).length + confirmedMulti.size + Object.keys(boolAnswers).length + confirmedFreeform.size;
+  /**
+   * The one generalisation of `selectedOption !== null` the footer actually needs
+   * (Finish/Next gating, the explanation box, "finish early"). Single-select can infer
+   * "answered" from having a selection at all; MULTIPLE_CHOICE can't (see confirmedMulti),
+   * and neither can any of the four Wave B types (see confirmedFreeform).
+   */
+  const isCurrentAnswered = question
+    ? question.questionType === "MULTIPLE_CHOICE"
+      ? confirmedMulti.has(question.id)
+      : question.questionType === "TRUE_FALSE"
+        ? boolAnswers[question.id] !== undefined
+        : question.questionType === "NUMERIC" ||
+            question.questionType === "FILL_BLANK" ||
+            question.questionType === "MATCH" ||
+            question.questionType === "ORDERING"
+          ? confirmedFreeform.has(question.id)
+          : selectedOption !== null
+    : false;
   const isLastQuestion = total > 0 && currentIndex === total - 1;
 
   /*
@@ -151,7 +234,11 @@ export default function Quiz() {
   const currentLanguageName = LANGUAGES.find((l) => l.code === languageCode)?.name ?? "English";
 
   const handleToggleBookmark = () => {
-    if (!question || !translation) return;
+    // Bookmarks (schema `correct_index NOT NULL`) predate the response model and still
+    // assume a single index — deliberately out of scope for TASK-2301 Wave A. Guarded
+    // here rather than extended, so MULTIPLE_CHOICE/TRUE_FALSE questions just can't be
+    // bookmarked yet instead of writing a meaningless index.
+    if (!question || !translation || question.correctIndex === null) return;
     toggleBookmark({
       questionId: question.id,
       questionText: translation.questionText,
@@ -185,12 +272,257 @@ export default function Quiz() {
     setAnswers((prev) => ({ ...prev, [question.id]: index }));
   };
 
+  const selectBoolean = (value: boolean) => {
+    if (!question) return;
+    // Same "first tap is final" rule as selectOption — a single tap fully answers TRUE_FALSE.
+    if (boolAnswers[question.id] !== undefined) return;
+    setBoolAnswers((prev) => ({ ...prev, [question.id]: value }));
+  };
+
+  const toggleMultiOption = (index: number) => {
+    if (!question) return;
+    if (confirmedMulti.has(question.id)) return;
+    setMultiAnswers((prev) => {
+      const current = prev[question.id] ?? [];
+      const next = current.includes(index)
+        ? current.filter((i) => i !== index)
+        : [...current, index].sort((a, b) => a - b);
+      return { ...prev, [question.id]: next };
+    });
+  };
+
+  /** Locks in the ticked set and reveals — a checklist can't infer "done" from one tap. */
+  const confirmMultiAnswer = () => {
+    if (!question) return;
+    setConfirmedMulti((prev) => new Set(prev).add(question.id));
+  };
+
+  const selectNumeric = (text: string) => {
+    if (!question) return;
+    setNumericAnswers((prev) => ({ ...prev, [question.id]: text }));
+  };
+
+  const selectFillBlank = (text: string) => {
+    if (!question) return;
+    setFillBlankAnswers((prev) => ({ ...prev, [question.id]: text }));
+  };
+
+  const pairMatch = (leftKey: string, rightKey: string) => {
+    if (!question) return;
+    setMatchAnswers((prev) => ({
+      ...prev,
+      [question.id]: { ...(prev[question.id] ?? {}), [leftKey]: rightKey },
+    }));
+  };
+
+  const toggleOrderingItem = (key: string) => {
+    if (!question) return;
+    setOrderingAnswers((prev) => {
+      const current = prev[question.id] ?? [];
+      const next = current.includes(key) ? current.filter((k) => k !== key) : [...current, key];
+      return { ...prev, [question.id]: next };
+    });
+  };
+
+  /** Shared confirm for all four Wave B types — see confirmedFreeform's own comment. */
+  const confirmFreeform = () => {
+    if (!question) return;
+    setConfirmedFreeform((prev) => new Set(prev).add(question.id));
+  };
+
+  // MATCH's left column stays in authored order (it's the "given" side); the right column is
+  // shuffled once per question so its position can't give the pairing away. Re-shuffles only
+  // when the question or language changes, not on every keystroke/tap re-render.
+  const matchLeftItems: MatchItem[] = useMemo(() => {
+    if (!question || question.questionType !== "MATCH" || !translation) return [];
+    const leftKeys = (question.contentStructure?.leftKeys as string[] | undefined) ?? [];
+    const leftLabels = (translation.content?.leftLabels as Record<string, string> | undefined) ?? {};
+    return leftKeys.map((key) => ({ key, label: leftLabels[key] ?? key }));
+  }, [question, translation]);
+
+  const matchRightItems: MatchItem[] = useMemo(() => {
+    if (!question || question.questionType !== "MATCH" || !translation) return [];
+    const rightKeys = (question.contentStructure?.rightKeys as string[] | undefined) ?? [];
+    const rightLabels = (translation.content?.rightLabels as Record<string, string> | undefined) ?? {};
+    return shuffled(rightKeys.map((key) => ({ key, label: rightLabels[key] ?? key })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reshuffle only on question/language change, not on every pairing tap
+  }, [question?.id, languageCode]);
+
+  // ORDERING's pool is authored in the correct order, so it must always be shuffled for
+  // display — same reshuffle-only-on-question-change reasoning as matchRightItems above.
+  const orderingPoolItems: OrderingItem[] = useMemo(() => {
+    if (!question || question.questionType !== "ORDERING" || !translation) return [];
+    const itemKeys = (question.contentStructure?.itemKeys as string[] | undefined) ?? [];
+    const itemLabels = (translation.content?.itemLabels as Record<string, string> | undefined) ?? {};
+    return shuffled(itemKeys.map((key) => ({ key, label: itemLabels[key] ?? key })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reshuffle only on question/language change, not on every tap
+  }, [question?.id, languageCode]);
+
   const goPrevious = () => {
     setCurrentIndex((i) => Math.max(0, i - 1));
   };
 
   const goNext = () => {
     setCurrentIndex((i) => Math.min(total - 1, i + 1));
+  };
+
+  /**
+   * One result shape out of three different answer maps (TASK-2301 Phase P2 Wave A).
+   * `null` means "not answered" for that question, exactly like the old
+   * `answers[q.id] !== undefined` filter this replaces.
+   *
+   * SINGLE_CHOICE/ASSERTION_REASON/STATEMENT_COMBINATION keep the original direct
+   * `chosen === q.correctIndex` comparison rather than routing through
+   * `questionEvaluatorFor`'s SINGLE_CHOICE branch — that branch reads
+   * `answerKey.correctOption`, which legacy content synced before this phase never
+   * populated, where `correctIndex` (resolved from the always-present `correctAnswer`
+   * string) is proven correct for every question in the bank. MULTIPLE_CHOICE/TRUE_FALSE
+   * have no such fallback to protect: Wave A's own authoring validation requires an
+   * `answerKey` for both at creation time, so the evaluator is the only source of truth
+   * there — there's nothing legacy to be compatible with.
+   */
+  const buildResultForQuestion = (q: PracticeQuestion): QuestionResult | null => {
+    const type = q.questionType ?? "SINGLE_CHOICE";
+    const en = q.translations.en;
+    const timeMs = questionTimer.timeMsFor(q.id);
+
+    if (type === "MULTIPLE_CHOICE") {
+      if (!confirmedMulti.has(q.id)) return null;
+      const response = { selectedOptions: multiAnswers[q.id] ?? [] };
+      const evaluation = multipleChoiceEvaluator(q.answerKey, null, response);
+      return {
+        questionId: q.id,
+        questionText: en.questionText,
+        options: en.options,
+        selectedIndex: null,
+        correctIndex: null,
+        explanation: en.explanation,
+        isCorrect: evaluation.outcome === "CORRECT",
+        timeMs,
+        questionType: type,
+        response,
+        outcome: evaluation.outcome,
+        scoreFraction: evaluation.scoreFraction,
+      };
+    }
+
+    if (type === "TRUE_FALSE") {
+      if (boolAnswers[q.id] === undefined) return null;
+      const response = { selectedBoolean: boolAnswers[q.id] };
+      const evaluation = trueFalseEvaluator(q.answerKey, null, response);
+      return {
+        questionId: q.id,
+        questionText: en.questionText,
+        options: en.options,
+        selectedIndex: null,
+        correctIndex: null,
+        explanation: en.explanation,
+        isCorrect: evaluation.outcome === "CORRECT",
+        timeMs,
+        questionType: type,
+        response,
+        outcome: evaluation.outcome,
+        scoreFraction: evaluation.scoreFraction,
+      };
+    }
+
+    if (type === "NUMERIC") {
+      if (!confirmedFreeform.has(q.id)) return null;
+      const response = { enteredValue: parseNumericInput(numericAnswers[q.id]) };
+      const evaluation = numericEvaluator(q.answerKey, null, response);
+      return {
+        questionId: q.id,
+        questionText: en.questionText,
+        options: en.options,
+        selectedIndex: null,
+        correctIndex: null,
+        explanation: en.explanation,
+        isCorrect: evaluation.outcome === "CORRECT",
+        timeMs,
+        questionType: type,
+        response,
+        outcome: evaluation.outcome,
+        scoreFraction: evaluation.scoreFraction,
+      };
+    }
+
+    if (type === "FILL_BLANK") {
+      if (!confirmedFreeform.has(q.id)) return null;
+      const response = { enteredText: fillBlankAnswers[q.id] ?? "" };
+      const evaluation = textAnswerEvaluator(q.answerKey, null, response);
+      return {
+        questionId: q.id,
+        questionText: en.questionText,
+        options: en.options,
+        selectedIndex: null,
+        correctIndex: null,
+        explanation: en.explanation,
+        isCorrect: evaluation.outcome === "CORRECT",
+        timeMs,
+        questionType: type,
+        response,
+        outcome: evaluation.outcome,
+        scoreFraction: evaluation.scoreFraction,
+      };
+    }
+
+    if (type === "MATCH") {
+      if (!confirmedFreeform.has(q.id)) return null;
+      const response = { mapping: matchAnswers[q.id] ?? {} };
+      const evaluation = mappingEvaluator(q.answerKey, null, response);
+      return {
+        questionId: q.id,
+        questionText: en.questionText,
+        options: en.options,
+        selectedIndex: null,
+        correctIndex: null,
+        explanation: en.explanation,
+        isCorrect: evaluation.outcome === "CORRECT",
+        timeMs,
+        questionType: type,
+        response,
+        outcome: evaluation.outcome,
+        scoreFraction: evaluation.scoreFraction,
+      };
+    }
+
+    if (type === "ORDERING") {
+      if (!confirmedFreeform.has(q.id)) return null;
+      const response = { order: orderingAnswers[q.id] ?? [] };
+      const evaluation = sequenceEvaluator(q.answerKey, null, response);
+      return {
+        questionId: q.id,
+        questionText: en.questionText,
+        options: en.options,
+        selectedIndex: null,
+        correctIndex: null,
+        explanation: en.explanation,
+        isCorrect: evaluation.outcome === "CORRECT",
+        timeMs,
+        questionType: type,
+        response,
+        outcome: evaluation.outcome,
+        scoreFraction: evaluation.scoreFraction,
+      };
+    }
+
+    const chosen = answers[q.id];
+    if (chosen === undefined) return null;
+    const isCorrect = chosen === q.correctIndex;
+    return {
+      questionId: q.id,
+      questionText: en.questionText,
+      options: en.options,
+      selectedIndex: chosen,
+      correctIndex: q.correctIndex,
+      explanation: en.explanation,
+      isCorrect,
+      timeMs,
+      questionType: type,
+      response: { selectedOption: chosen },
+      outcome: isCorrect ? "CORRECT" : "INCORRECT",
+      scoreFraction: isCorrect ? 1 : 0,
+    };
   };
 
   /**
@@ -218,22 +550,13 @@ export default function Quiz() {
     if (answeredCount === 0) return;
     finishedRef.current = true;
     setFinishing(true);
+    // Banks the question still on screen. The timer's own effect cleanup only fires on
+    // unmount, which happens after these results have already been built.
+    questionTimer.commitCurrent();
 
     const results = questions
-      .filter((q) => answers[q.id] !== undefined)
-      .map((q) => {
-        const chosen = answers[q.id];
-        const t = q.translations.en;
-        return {
-          questionId: q.id,
-          questionText: t.questionText,
-          options: t.options,
-          selectedIndex: chosen,
-          correctIndex: q.correctIndex,
-          explanation: t.explanation,
-          isCorrect: chosen === q.correctIndex,
-        };
-      });
+      .map((q) => buildResultForQuestion(q))
+      .filter((r): r is QuestionResult => r !== null);
 
     const correctCount = results.filter((r) => r.isCorrect).length;
     const sessionId = `session-${Date.now()}`;
@@ -342,13 +665,15 @@ export default function Quiz() {
             <Pressable style={styles.iconButton} onPress={toggleReport}>
               <Ionicons name={isReported ? "flag" : "flag-outline"} size={20} color={isReported ? colors.semantic.error : colors.text.muted} />
             </Pressable>
-            <Pressable style={styles.iconButton} onPress={handleToggleBookmark}>
-              <Ionicons
-                name={isBookmarked(question.id) ? "star" : "star-outline"}
-                size={22}
-                color={isBookmarked(question.id) ? colors.semantic.warning : colors.text.muted}
-              />
-            </Pressable>
+            {question.correctIndex !== null && (
+              <Pressable style={styles.iconButton} onPress={handleToggleBookmark}>
+                <Ionicons
+                  name={isBookmarked(question.id) ? "star" : "star-outline"}
+                  size={22}
+                  color={isBookmarked(question.id) ? colors.semantic.warning : colors.text.muted}
+                />
+              </Pressable>
+            )}
           </View>
         </View>
 
@@ -363,50 +688,165 @@ export default function Quiz() {
               student should see "this really appeared in 2023" before reading the question. */}
           <PyqBadge isPyq={question.isPyq} year={question.pyqYear} shift={question.pyqShift} />
 
+          <GroupContent key={question.id} questionGroupId={question.questionGroupId} language={languageCode} />
+
           <Text style={styles.questionText}>{translation.questionText}</Text>
 
-          <View style={styles.optionsList}>
-            {translation.options.map((option, index) => {
-              const isCorrect = index === question.correctIndex;
-              const isPickedWrong = selectedOption === index && index !== question.correctIndex;
-              const showCorrectHighlight = selectedOption !== null && isCorrect;
-
-              return (
-                <Pressable
-                  key={index}
-                  disabled={selectedOption !== null}
-                  onPress={() => selectOption(index)}
-                  style={[
-                    styles.optionCard,
-                    showCorrectHighlight && styles.optionCorrect,
-                    isPickedWrong && styles.optionWrong,
-                  ]}
+          {question.questionType === "MULTIPLE_CHOICE" ? (
+            <>
+              <MultiSelectOptionList
+                options={translation.options}
+                styles={optionListStyles}
+                selectedIndices={multiAnswers[question.id] ?? []}
+                correctIndices={
+                  confirmedMulti.has(question.id) && Array.isArray(question.answerKey?.correctOptions)
+                    ? (question.answerKey!.correctOptions as number[])
+                    : null
+                }
+                onToggle={toggleMultiOption}
+                submitted={confirmedMulti.has(question.id)}
+                disabled={confirmedMulti.has(question.id)}
+              />
+              {!confirmedMulti.has(question.id) && (
+                <Button variant="secondary" onPress={confirmMultiAnswer} style={styles.confirmMultiButton}>
+                  {t("quiz.confirmAnswer")}
+                </Button>
+              )}
+            </>
+          ) : question.questionType === "TRUE_FALSE" ? (
+            <OptionList
+              options={[t("quiz.trueOption"), t("quiz.falseOption")]}
+              styles={optionListStyles}
+              badge="none"
+              selectedIndex={boolAnswers[question.id] === undefined ? null : boolAnswers[question.id] ? 0 : 1}
+              correctIndex={
+                typeof question.answerKey?.correctBoolean === "boolean"
+                  ? question.answerKey!.correctBoolean
+                    ? 0
+                    : 1
+                  : null
+              }
+              onSelect={(index) => selectBoolean(index === 0)}
+              disabled={boolAnswers[question.id] !== undefined}
+            />
+          ) : question.questionType === "NUMERIC" ? (
+            <>
+              <FreeTextAnswerInput
+                value={numericAnswers[question.id] ?? ""}
+                onChangeText={selectNumeric}
+                keyboardType="numeric"
+                placeholder={t("quiz.numericPlaceholder")}
+                disabled={confirmedFreeform.has(question.id)}
+                isCorrect={
+                  confirmedFreeform.has(question.id)
+                    ? numericEvaluator(question.answerKey, null, {
+                        enteredValue: parseNumericInput(numericAnswers[question.id]),
+                      }).outcome === "CORRECT"
+                    : null
+                }
+              />
+              {!confirmedFreeform.has(question.id) && (
+                <Button
+                  variant="secondary"
+                  onPress={confirmFreeform}
+                  disabled={!numericAnswers[question.id]?.trim()}
+                  style={styles.confirmMultiButton}
                 >
-                  <View
-                    style={[
-                      styles.optionBadge,
-                      showCorrectHighlight && styles.optionBadgeCorrect,
-                      isPickedWrong && styles.optionBadgeWrong,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.optionBadgeText,
-                        (showCorrectHighlight || isPickedWrong) && styles.optionBadgeTextLight,
-                      ]}
-                    >
-                      {String.fromCharCode(65 + index)}
-                    </Text>
-                  </View>
-                  <Text style={styles.optionText}>{option}</Text>
-                  {showCorrectHighlight && <Ionicons name="checkmark-circle" size={20} color={colors.semantic.success} />}
-                  {isPickedWrong && <Ionicons name="close-circle" size={20} color={colors.semantic.error} />}
-                </Pressable>
-              );
-            })}
-          </View>
+                  {t("quiz.confirmAnswer")}
+                </Button>
+              )}
+            </>
+          ) : question.questionType === "FILL_BLANK" ? (
+            <>
+              <FreeTextAnswerInput
+                value={fillBlankAnswers[question.id] ?? ""}
+                onChangeText={selectFillBlank}
+                placeholder={t("quiz.fillBlankPlaceholder")}
+                disabled={confirmedFreeform.has(question.id)}
+                isCorrect={
+                  confirmedFreeform.has(question.id)
+                    ? textAnswerEvaluator(question.answerKey, null, {
+                        enteredText: fillBlankAnswers[question.id] ?? "",
+                      }).outcome === "CORRECT"
+                    : null
+                }
+              />
+              {!confirmedFreeform.has(question.id) && (
+                <Button
+                  variant="secondary"
+                  onPress={confirmFreeform}
+                  disabled={!fillBlankAnswers[question.id]?.trim()}
+                  style={styles.confirmMultiButton}
+                >
+                  {t("quiz.confirmAnswer")}
+                </Button>
+              )}
+            </>
+          ) : question.questionType === "MATCH" ? (
+            <>
+              <MatchPairing
+                leftItems={matchLeftItems}
+                rightItems={matchRightItems}
+                mapping={matchAnswers[question.id] ?? {}}
+                onPair={confirmedFreeform.has(question.id) ? undefined : pairMatch}
+                disabled={confirmedFreeform.has(question.id)}
+                correctMapping={
+                  confirmedFreeform.has(question.id)
+                    ? ((question.answerKey?.correctMapping as Record<string, string> | undefined) ?? null)
+                    : null
+                }
+              />
+              {!confirmedFreeform.has(question.id) && (
+                <Button
+                  variant="secondary"
+                  onPress={confirmFreeform}
+                  disabled={Object.keys(matchAnswers[question.id] ?? {}).length < matchLeftItems.length}
+                  style={styles.confirmMultiButton}
+                >
+                  {t("quiz.confirmAnswer")}
+                </Button>
+              )}
+            </>
+          ) : question.questionType === "ORDERING" ? (
+            <>
+              <OrderingBuilder
+                items={orderingPoolItems}
+                order={orderingAnswers[question.id] ?? []}
+                onToggle={confirmedFreeform.has(question.id) ? undefined : toggleOrderingItem}
+                disabled={confirmedFreeform.has(question.id)}
+                correctOrder={
+                  confirmedFreeform.has(question.id)
+                    ? ((question.answerKey?.correctOrder as string[] | undefined) ?? null)
+                    : null
+                }
+              />
+              {!confirmedFreeform.has(question.id) && (
+                <Button
+                  variant="secondary"
+                  onPress={confirmFreeform}
+                  disabled={(orderingAnswers[question.id]?.length ?? 0) < orderingPoolItems.length}
+                  style={styles.confirmMultiButton}
+                >
+                  {t("quiz.confirmAnswer")}
+                </Button>
+              )}
+            </>
+          ) : (
+            <>
+              <ContentPreamble questionType={question.questionType} content={translation.content} />
+              <OptionList
+                options={translation.options}
+                styles={optionListStyles}
+                badge="letter"
+                selectedIndex={selectedOption}
+                correctIndex={question.correctIndex}
+                onSelect={selectOption}
+                disabled={selectedOption !== null}
+              />
+            </>
+          )}
 
-          {selectedOption !== null && (
+          {isCurrentAnswered && (
             <View style={styles.explanationBox}>
               <Text style={styles.explanationLabel}>{t("common.explanation")}</Text>
               <Text style={styles.explanationText}>{translation.explanation}</Text>
@@ -436,7 +876,7 @@ export default function Quiz() {
 
             {/* Doc 2 §7: finishing is available from the first answered question onward, not
                 only on the last one. On the final question it is the only forward action. */}
-            {isLastQuestion || selectedOption === null ? (
+            {isLastQuestion || !isCurrentAnswered ? (
               <Button
                 onPress={finishSession}
                 disabled={answeredCount === 0 || finishing}
@@ -454,7 +894,7 @@ export default function Quiz() {
 
           {/* Offered only where it is actually useful: mid-set, with the current question
               answered, so "Finish" is not the primary button but stopping is still allowed. */}
-          {!isLastQuestion && selectedOption !== null && answeredCount > 0 && (
+          {!isLastQuestion && isCurrentAnswered && answeredCount > 0 && (
             <Pressable style={styles.finishEarly} onPress={finishSession} disabled={finishing}>
               <Text style={styles.finishEarlyText}>
                 {t("quiz.finishNow", { answered: answeredCount, total })}
@@ -552,53 +992,8 @@ const buildStyles = ({ colors }: Theme) =>
       lineHeight: 26,
       marginBottom: spacing.xl,
     },
-    optionsList: {
-      gap: spacing.md,
-    },
-    optionCard: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.md,
-      backgroundColor: colors.surfaceElevated,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: radius.md,
-      padding: spacing.md + 2,
-    },
-    optionCorrect: {
-      borderColor: colors.semantic.success,
-      backgroundColor: colors.semantic.successBg,
-    },
-    optionWrong: {
-      borderColor: colors.semantic.error,
-      backgroundColor: colors.semantic.errorBg,
-    },
-    optionBadge: {
-      width: 30,
-      height: 30,
-      borderRadius: 15,
-      backgroundColor: colors.surfaceElevated2,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    optionBadgeCorrect: {
-      backgroundColor: colors.semantic.success,
-    },
-    optionBadgeWrong: {
-      backgroundColor: colors.semantic.error,
-    },
-    optionBadgeText: {
-      fontSize: 13,
-      fontWeight: "700",
-      color: colors.text.primary,
-    },
-    optionBadgeTextLight: {
-      color: colors.text.onAccent,
-    },
-    optionText: {
-      flex: 1,
-      fontSize: 15,
-      color: colors.text.primary,
+    confirmMultiButton: {
+      marginTop: spacing.md,
     },
     explanationBox: {
       marginTop: spacing.xl,

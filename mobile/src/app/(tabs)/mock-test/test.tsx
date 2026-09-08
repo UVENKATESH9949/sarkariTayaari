@@ -14,12 +14,40 @@ import { LANGUAGES, useAppLanguage } from "../../../practice/appLanguage";
 import { LanguagePickerModal } from "../../../practice/LanguagePickerModal";
 import { useActiveSession } from "../../../practice/activeSessionContext";
 import { useActiveTestBackGuard } from "../../../practice/useActiveTestBackGuard";
+import { useQuestionTimer } from "../../../practice/useQuestionTimer";
 import { AppAlert } from "../../../ui/AppDialog";
 import { EmptyState } from "../../../ui/EmptyState";
 import { QuestionSkeleton } from "../../../ui/Skeleton";
 import { spacing } from "../../../ui/theme";
 import { useTheme, useThemedStyles, type Theme } from "../../../ui/ThemeContext";
 import { useT } from "../../../i18n/I18nContext";
+import { OptionList } from "../../../questionRenderer/OptionList";
+import { MultiSelectOptionList } from "../../../questionRenderer/MultiSelectOptionList";
+import { ContentPreamble } from "../../../questionRenderer/ContentPreamble";
+import { GroupContent } from "../../../questionRenderer/GroupContent";
+import { FreeTextAnswerInput } from "../../../questionRenderer/FreeTextAnswerInput";
+import { MatchPairing, type MatchItem } from "../../../questionRenderer/MatchPairing";
+import { OrderingBuilder, type OrderingItem } from "../../../questionRenderer/OrderingBuilder";
+import { shuffled } from "../../../questionRenderer/shuffle";
+import { blindLetterComfortableStyles } from "../../../questionRenderer/optionListStyles";
+import {
+  multipleChoiceEvaluator,
+  trueFalseEvaluator,
+  numericEvaluator,
+  textAnswerEvaluator,
+  mappingEvaluator,
+  sequenceEvaluator,
+} from "../../../evaluation/questionEvaluator";
+import type { EvaluationOutcome } from "../../../evaluation/questionEvaluator";
+
+/** `null` for an empty/non-numeric entry — mirrors quiz.tsx's identical helper. */
+function parseNumericInput(raw: string | undefined): number | null {
+  if (raw === undefined) return null;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return null;
+  const n = Number(trimmed);
+  return Number.isNaN(n) ? null : n;
+}
 
 function formatTime(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60);
@@ -44,6 +72,7 @@ function totalDurationMinutes(paper: SyncedPaper): number {
 export default function MockTestTaking() {
   const { colors } = useTheme();
   const styles = useThemedStyles(buildStyles);
+  const optionListStyles = useThemedStyles(blindLetterComfortableStyles);
   const t = useT();
   const router = useRouter();
   const { paperId, examLabel, paperName } = useLocalSearchParams<{
@@ -58,12 +87,37 @@ export default function MockTestTaking() {
   const [questions, setQuestions] = useState<MockTestQuestion[] | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, number>>({});
+  /** MULTIPLE_CHOICE/TRUE_FALSE siblings of `answers` (TASK-2301 Phase P2 Wave A) — see
+   * quiz.tsx's identical note. Unlike quiz.tsx, nothing here locks once set: a mock
+   * attempt only scores at Submit, so every type stays freely re-selectable until then,
+   * matching `answers`' own existing behaviour (no "first tap is final" rule here). */
+  const [multiAnswers, setMultiAnswers] = useState<Record<string, number[]>>({});
+  const [boolAnswers, setBoolAnswers] = useState<Record<string, boolean>>({});
+  /**
+   * NUMERIC/FILL_BLANK/MATCH/ORDERING's answer maps (TASK-2301 Phase P2 Wave B) — same
+   * "freely re-selectable until Submit" behaviour as every other map here, no confirm gate
+   * (blind mode never reveals mid-attempt, so there's nothing for a confirm step to lock).
+   */
+  const [numericAnswers, setNumericAnswers] = useState<Record<string, string>>({});
+  const [fillBlankAnswers, setFillBlankAnswers] = useState<Record<string, string>>({});
+  const [matchAnswers, setMatchAnswers] = useState<Record<string, Record<string, string>>>({});
+  const [orderingAnswers, setOrderingAnswers] = useState<Record<string, string[]>>({});
   const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   const [navigatorVisible, setNavigatorVisible] = useState(false);
   const [languagePickerVisible, setLanguagePickerVisible] = useState(false);
   const [languageCode, setLanguageCode] = useState(defaultLanguageCode);
   const [submitting, setSubmitting] = useState(false);
+
+  /*
+   * Per-question time, for the nullable `time_ms` column added by migration 0018. Declared
+   * here rather than beside `question` further down, because the submit callback below closes
+   * over it and is defined first.
+   *
+   * Nothing reads it yet -- the Weakness Radar's speed signal is deliberately off until this
+   * app has a real expected-time benchmark (see practice/useQuestionTimer.ts).
+   */
+  const questionTimer = useQuestionTimer(questions?.[currentIndex]?.id ?? null);
 
   const endTimeRef = useRef<number | null>(null);
   const submittedRef = useRef(false);
@@ -126,15 +180,168 @@ export default function MockTestTaking() {
    */
   useEffect(() => endSession, [endSession]);
 
+  /**
+   * Whether `q` has something recorded, dispatched by type (TASK-2301 Phase P2 Wave A) —
+   * one place for the meta row's count, the navigator grid's per-cell dot, the Clear
+   * Answer button's visibility, and Submit's confirmation copy to agree.
+   */
+  const isQuestionAnswered = useCallback(
+    (q: MockTestQuestion): boolean => {
+      if (q.questionType === "MULTIPLE_CHOICE") return (multiAnswers[q.id]?.length ?? 0) > 0;
+      if (q.questionType === "TRUE_FALSE") return boolAnswers[q.id] !== undefined;
+      if (q.questionType === "NUMERIC") return Boolean(numericAnswers[q.id]?.trim());
+      if (q.questionType === "FILL_BLANK") return Boolean(fillBlankAnswers[q.id]?.trim());
+      if (q.questionType === "MATCH") return Object.keys(matchAnswers[q.id] ?? {}).length > 0;
+      if (q.questionType === "ORDERING") return (orderingAnswers[q.id]?.length ?? 0) > 0;
+      return answers[q.id] !== undefined;
+    },
+    [answers, multiAnswers, boolAnswers, numericAnswers, fillBlankAnswers, matchAnswers, orderingAnswers],
+  );
+
   const submitTest = useMemo(
     () => async (auto: boolean) => {
       if (submittedRef.current || !questions || !paper) return;
       submittedRef.current = true;
       setSubmitting(true);
+      // Banks the question still on screen -- including on an auto-submit when the clock runs
+      // out, where nothing else would.
+      questionTimer.commitCurrent();
 
       const results = questions.map((q) => {
         const translation = q.translations.en ?? Object.values(q.translations)[0];
+        const marked = markedForReview.has(q.id);
+        const timeMs = questionTimer.timeMsFor(q.id);
+        const type = q.questionType ?? "SINGLE_CHOICE";
+
+        if (type === "MULTIPLE_CHOICE") {
+          const selected = multiAnswers[q.id] ?? [];
+          const response = selected.length > 0 ? { selectedOptions: selected } : null;
+          const evaluation = multipleChoiceEvaluator(q.answerKey, null, response);
+          return {
+            questionId: q.id,
+            subjectName: q.subjectName,
+            questionText: translation.questionText,
+            options: translation.options,
+            selectedIndex: null,
+            correctIndex: null,
+            explanation: translation.explanation,
+            markedForReview: marked,
+            timeMs,
+            questionType: type,
+            response,
+            outcome: evaluation.outcome,
+            scoreFraction: evaluation.scoreFraction,
+          };
+        }
+
+        if (type === "TRUE_FALSE") {
+          const selectedBoolean = boolAnswers[q.id];
+          const response = selectedBoolean === undefined ? null : { selectedBoolean };
+          const evaluation = trueFalseEvaluator(q.answerKey, null, response);
+          return {
+            questionId: q.id,
+            subjectName: q.subjectName,
+            questionText: translation.questionText,
+            options: translation.options,
+            selectedIndex: null,
+            correctIndex: null,
+            explanation: translation.explanation,
+            markedForReview: marked,
+            timeMs,
+            questionType: type,
+            response,
+            outcome: evaluation.outcome,
+            scoreFraction: evaluation.scoreFraction,
+          };
+        }
+
+        if (type === "NUMERIC") {
+          const enteredValue = parseNumericInput(numericAnswers[q.id]);
+          const response = enteredValue === null ? null : { enteredValue };
+          const evaluation = numericEvaluator(q.answerKey, null, response);
+          return {
+            questionId: q.id,
+            subjectName: q.subjectName,
+            questionText: translation.questionText,
+            options: translation.options,
+            selectedIndex: null,
+            correctIndex: null,
+            explanation: translation.explanation,
+            markedForReview: marked,
+            timeMs,
+            questionType: type,
+            response,
+            outcome: evaluation.outcome,
+            scoreFraction: evaluation.scoreFraction,
+          };
+        }
+
+        if (type === "FILL_BLANK") {
+          const enteredText = fillBlankAnswers[q.id] ?? "";
+          const response = enteredText.trim().length === 0 ? null : { enteredText };
+          const evaluation = textAnswerEvaluator(q.answerKey, null, response);
+          return {
+            questionId: q.id,
+            subjectName: q.subjectName,
+            questionText: translation.questionText,
+            options: translation.options,
+            selectedIndex: null,
+            correctIndex: null,
+            explanation: translation.explanation,
+            markedForReview: marked,
+            timeMs,
+            questionType: type,
+            response,
+            outcome: evaluation.outcome,
+            scoreFraction: evaluation.scoreFraction,
+          };
+        }
+
+        if (type === "MATCH") {
+          const mapping = matchAnswers[q.id] ?? {};
+          const response = Object.keys(mapping).length === 0 ? null : { mapping };
+          const evaluation = mappingEvaluator(q.answerKey, null, response);
+          return {
+            questionId: q.id,
+            subjectName: q.subjectName,
+            questionText: translation.questionText,
+            options: translation.options,
+            selectedIndex: null,
+            correctIndex: null,
+            explanation: translation.explanation,
+            markedForReview: marked,
+            timeMs,
+            questionType: type,
+            response,
+            outcome: evaluation.outcome,
+            scoreFraction: evaluation.scoreFraction,
+          };
+        }
+
+        if (type === "ORDERING") {
+          const order = orderingAnswers[q.id] ?? [];
+          const response = order.length === 0 ? null : { order };
+          const evaluation = sequenceEvaluator(q.answerKey, null, response);
+          return {
+            questionId: q.id,
+            subjectName: q.subjectName,
+            questionText: translation.questionText,
+            options: translation.options,
+            selectedIndex: null,
+            correctIndex: null,
+            explanation: translation.explanation,
+            markedForReview: marked,
+            timeMs,
+            questionType: type,
+            response,
+            outcome: evaluation.outcome,
+            scoreFraction: evaluation.scoreFraction,
+          };
+        }
+
         const selectedIndex = answers[q.id] ?? null;
+        const isCorrect = selectedIndex !== null && selectedIndex === q.correctIndex;
+        const outcome: EvaluationOutcome = selectedIndex === null ? "UNATTEMPTED" : isCorrect ? "CORRECT" : "INCORRECT";
         return {
           questionId: q.id,
           subjectName: q.subjectName,
@@ -143,12 +350,17 @@ export default function MockTestTaking() {
           selectedIndex,
           correctIndex: q.correctIndex,
           explanation: translation.explanation,
-          markedForReview: markedForReview.has(q.id),
+          markedForReview: marked,
+          timeMs,
+          questionType: type,
+          response: selectedIndex === null ? null : { selectedOption: selectedIndex },
+          outcome,
+          scoreFraction: outcome === "CORRECT" ? 1 : 0,
         };
       });
 
-      const correctCount = results.filter((r) => r.selectedIndex !== null && r.selectedIndex === r.correctIndex).length;
-      const wrongCount = results.filter((r) => r.selectedIndex !== null && r.selectedIndex !== r.correctIndex).length;
+      const correctCount = results.filter((r) => r.outcome === "CORRECT").length;
+      const wrongCount = results.filter((r) => r.outcome === "INCORRECT").length;
       const unattemptedCount = results.length - correctCount - wrongCount;
       // Papers may legitimately have no marking set; fall back to a plain +1/0 count
       // rather than scoring everything as zero.
@@ -188,7 +400,25 @@ export default function MockTestTaking() {
       endSession();
       router.replace({ pathname: "/mock-test/result", params: { attemptId } });
     },
-    [questions, paper, answers, markedForReview, remainingSeconds, examLabel, paperName, router, endSession, t],
+    [
+      questions,
+      paper,
+      answers,
+      multiAnswers,
+      boolAnswers,
+      numericAnswers,
+      fillBlankAnswers,
+      matchAnswers,
+      orderingAnswers,
+      markedForReview,
+      remainingSeconds,
+      examLabel,
+      paperName,
+      router,
+      endSession,
+      questionTimer,
+      t,
+    ],
   );
 
   useEffect(() => {
@@ -210,8 +440,9 @@ export default function MockTestTaking() {
   const hasRealTranslation = question ? Boolean(question.translations[languageCode]) : false;
   const currentLanguageName = LANGUAGES.find((l) => l.code === languageCode)?.name ?? "English";
   const isMarked = question ? markedForReview.has(question.id) : false;
+  const isCurrentAnswered = question ? isQuestionAnswered(question) : false;
 
-  const answeredCount = Object.keys(answers).length;
+  const answeredCount = questions?.filter(isQuestionAnswered).length ?? 0;
   const markedCount = markedForReview.size;
 
   const toggleMarkForReview = () => {
@@ -229,8 +460,123 @@ export default function MockTestTaking() {
     setAnswers((prev) => ({ ...prev, [question.id]: index }));
   };
 
+  const selectBoolean = (value: boolean) => {
+    if (!question) return;
+    setBoolAnswers((prev) => ({ ...prev, [question.id]: value }));
+  };
+
+  const toggleMultiOption = (index: number) => {
+    if (!question) return;
+    setMultiAnswers((prev) => {
+      const current = prev[question.id] ?? [];
+      const next = current.includes(index)
+        ? current.filter((i) => i !== index)
+        : [...current, index].sort((a, b) => a - b);
+      return { ...prev, [question.id]: next };
+    });
+  };
+
+  const selectNumeric = (text: string) => {
+    if (!question) return;
+    setNumericAnswers((prev) => ({ ...prev, [question.id]: text }));
+  };
+
+  const selectFillBlank = (text: string) => {
+    if (!question) return;
+    setFillBlankAnswers((prev) => ({ ...prev, [question.id]: text }));
+  };
+
+  const pairMatch = (leftKey: string, rightKey: string) => {
+    if (!question) return;
+    setMatchAnswers((prev) => ({
+      ...prev,
+      [question.id]: { ...(prev[question.id] ?? {}), [leftKey]: rightKey },
+    }));
+  };
+
+  const toggleOrderingItem = (key: string) => {
+    if (!question) return;
+    setOrderingAnswers((prev) => {
+      const current = prev[question.id] ?? [];
+      const next = current.includes(key) ? current.filter((k) => k !== key) : [...current, key];
+      return { ...prev, [question.id]: next };
+    });
+  };
+
+  // Same reshuffle-only-on-question/language-change reasoning as quiz.tsx's identical memos.
+  const matchLeftItems: MatchItem[] = useMemo(() => {
+    if (!question || question.questionType !== "MATCH" || !translation) return [];
+    const leftKeys = (question.contentStructure?.leftKeys as string[] | undefined) ?? [];
+    const leftLabels = (translation.content?.leftLabels as Record<string, string> | undefined) ?? {};
+    return leftKeys.map((key) => ({ key, label: leftLabels[key] ?? key }));
+  }, [question, translation]);
+
+  const matchRightItems: MatchItem[] = useMemo(() => {
+    if (!question || question.questionType !== "MATCH" || !translation) return [];
+    const rightKeys = (question.contentStructure?.rightKeys as string[] | undefined) ?? [];
+    const rightLabels = (translation.content?.rightLabels as Record<string, string> | undefined) ?? {};
+    return shuffled(rightKeys.map((key) => ({ key, label: rightLabels[key] ?? key })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reshuffle only on question/language change, not on every pairing tap
+  }, [question?.id, languageCode]);
+
+  const orderingPoolItems: OrderingItem[] = useMemo(() => {
+    if (!question || question.questionType !== "ORDERING" || !translation) return [];
+    const itemKeys = (question.contentStructure?.itemKeys as string[] | undefined) ?? [];
+    const itemLabels = (translation.content?.itemLabels as Record<string, string> | undefined) ?? {};
+    return shuffled(itemKeys.map((key) => ({ key, label: itemLabels[key] ?? key })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reshuffle only on question/language change, not on every tap
+  }, [question?.id, languageCode]);
+
   const clearAnswer = () => {
     if (!question) return;
+    if (question.questionType === "MULTIPLE_CHOICE") {
+      setMultiAnswers((prev) => {
+        const next = { ...prev };
+        delete next[question.id];
+        return next;
+      });
+      return;
+    }
+    if (question.questionType === "TRUE_FALSE") {
+      setBoolAnswers((prev) => {
+        const next = { ...prev };
+        delete next[question.id];
+        return next;
+      });
+      return;
+    }
+    if (question.questionType === "NUMERIC") {
+      setNumericAnswers((prev) => {
+        const next = { ...prev };
+        delete next[question.id];
+        return next;
+      });
+      return;
+    }
+    if (question.questionType === "FILL_BLANK") {
+      setFillBlankAnswers((prev) => {
+        const next = { ...prev };
+        delete next[question.id];
+        return next;
+      });
+      return;
+    }
+    if (question.questionType === "MATCH") {
+      setMatchAnswers((prev) => {
+        const next = { ...prev };
+        delete next[question.id];
+        return next;
+      });
+      return;
+    }
+    if (question.questionType === "ORDERING") {
+      setOrderingAnswers((prev) => {
+        const next = { ...prev };
+        delete next[question.id];
+        return next;
+      });
+      return;
+    }
     setAnswers((prev) => {
       const next = { ...prev };
       delete next[question.id];
@@ -373,30 +719,65 @@ export default function MockTestTaking() {
           <Text style={styles.fallbackNote}>Not yet translated to {currentLanguageName} — showing English.</Text>
         )}
 
+        <GroupContent key={question.id} questionGroupId={question.questionGroupId} language={languageCode} />
+
         <Text style={styles.questionText}>{translation.questionText}</Text>
 
-        <View style={styles.optionsList}>
-          {translation.options.map((option, index) => {
-            const isSelected = answers[question.id] === index;
-            return (
-              <Pressable
-                key={index}
-                onPress={() => selectOption(index)}
-                style={[styles.optionCard, isSelected && styles.optionSelected]}
-              >
-                <View style={[styles.optionBadge, isSelected && styles.optionBadgeSelected]}>
-                  <Text style={[styles.optionBadgeText, isSelected && styles.optionBadgeTextSelected]}>
-                    {String.fromCharCode(65 + index)}
-                  </Text>
-                </View>
-                <Text style={styles.optionText}>{option}</Text>
-                {isSelected && <Ionicons name="checkmark-circle" size={20} color={colors.text.primary} />}
-              </Pressable>
-            );
-          })}
-        </View>
+        {question.questionType === "MULTIPLE_CHOICE" ? (
+          <MultiSelectOptionList
+            options={translation.options}
+            styles={optionListStyles}
+            selectedIndices={multiAnswers[question.id] ?? []}
+            onToggle={toggleMultiOption}
+          />
+        ) : question.questionType === "TRUE_FALSE" ? (
+          <OptionList
+            options={[t("quiz.trueOption"), t("quiz.falseOption")]}
+            styles={optionListStyles}
+            badge="letter"
+            selectedIndex={boolAnswers[question.id] === undefined ? null : boolAnswers[question.id] ? 0 : 1}
+            onSelect={(index) => selectBoolean(index === 0)}
+          />
+        ) : question.questionType === "NUMERIC" ? (
+          <FreeTextAnswerInput
+            value={numericAnswers[question.id] ?? ""}
+            onChangeText={selectNumeric}
+            keyboardType="numeric"
+            placeholder={t("quiz.numericPlaceholder")}
+          />
+        ) : question.questionType === "FILL_BLANK" ? (
+          <FreeTextAnswerInput
+            value={fillBlankAnswers[question.id] ?? ""}
+            onChangeText={selectFillBlank}
+            placeholder={t("quiz.fillBlankPlaceholder")}
+          />
+        ) : question.questionType === "MATCH" ? (
+          <MatchPairing
+            leftItems={matchLeftItems}
+            rightItems={matchRightItems}
+            mapping={matchAnswers[question.id] ?? {}}
+            onPair={pairMatch}
+          />
+        ) : question.questionType === "ORDERING" ? (
+          <OrderingBuilder
+            items={orderingPoolItems}
+            order={orderingAnswers[question.id] ?? []}
+            onToggle={toggleOrderingItem}
+          />
+        ) : (
+          <>
+            <ContentPreamble questionType={question.questionType} content={translation.content} />
+            <OptionList
+              options={translation.options}
+              styles={optionListStyles}
+              badge="letter"
+              selectedIndex={answers[question.id] ?? null}
+              onSelect={selectOption}
+            />
+          </>
+        )}
 
-        {answers[question.id] !== undefined && (
+        {isCurrentAnswered && (
           <Pressable style={styles.clearButton} onPress={clearAnswer}>
             <Text style={styles.clearButtonText}>{t("mock.clearAnswer")}</Text>
           </Pressable>
@@ -441,7 +822,7 @@ export default function MockTestTaking() {
             <ScrollView style={styles.navigatorGridScroll}>
               <View style={styles.navigatorGrid}>
                 {questions.map((q, index) => {
-                  const answered = answers[q.id] !== undefined;
+                  const answered = isQuestionAnswered(q);
                   const marked = markedForReview.has(q.id);
                   const isCurrent = index === currentIndex;
                   return (
@@ -623,47 +1004,6 @@ const buildStyles = ({ colors, typography }: Theme) =>
       color: colors.text.primary,
       lineHeight: 26,
       marginBottom: 20,
-    },
-    optionsList: {
-      gap: 12,
-    },
-    optionCard: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 12,
-      backgroundColor: colors.surfaceElevated,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 12,
-      padding: 14,
-    },
-    optionSelected: {
-      borderColor: colors.brand.primary,
-      backgroundColor: colors.surfaceElevated2,
-    },
-    optionBadge: {
-      width: 30,
-      height: 30,
-      borderRadius: 15,
-      backgroundColor: colors.surfaceElevated2,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    optionBadgeSelected: {
-      backgroundColor: colors.brand.primary,
-    },
-    optionBadgeText: {
-      fontSize: 13,
-      fontWeight: "700",
-      color: colors.text.primary,
-    },
-    optionBadgeTextSelected: {
-      color: colors.text.onAccent,
-    },
-    optionText: {
-      flex: 1,
-      fontSize: 15,
-      color: colors.text.primary,
     },
     clearButton: {
       marginTop: 16,

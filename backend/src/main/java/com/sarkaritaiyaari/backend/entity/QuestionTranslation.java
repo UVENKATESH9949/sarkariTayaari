@@ -14,6 +14,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Entity
@@ -44,6 +45,16 @@ public class QuestionTranslation {
 
     @Column(columnDefinition = "text")
     private String explanation;
+
+    /**
+     * Per-language authored content that does not fit the flat {@code options} array —
+     * Assertion & Reason's {@code {assertion, reason}}, Statement-Based's
+     * {@code {statements: [...]}} (V26, TASK-2301 Phase P2 Wave A). {@code options} stays
+     * the fixed relationship/combination phrases for those two types, unchanged.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column
+    private Map<String, Object> content;
 
     public UUID getId() {
         return id;
@@ -91,5 +102,13 @@ public class QuestionTranslation {
 
     public void setExplanation(String explanation) {
         this.explanation = explanation;
+    }
+
+    public Map<String, Object> getContent() {
+        return content;
+    }
+
+    public void setContent(Map<String, Object> content) {
+        this.content = content;
     }
 }

@@ -2,6 +2,7 @@ package com.sarkaritaiyaari.backend.dto;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public class QuestionResponse {
@@ -34,6 +35,33 @@ public class QuestionResponse {
      * it, and it would be dead weight on every one of ~37,900 synced rows.
      */
     private List<UUID> duplicateOfQuestionIds;
+
+    /* ----------------------------------- Multi-type question foundation (V25, TASK-2301) */
+
+    /** {@code correct_answer} stays authoritative; this is a structured mirror nothing reads yet. */
+    private String questionType;
+    private Map<String, Object> answerKey;
+    private Map<String, Object> answerConfig;
+    private Map<String, Object> contentStructure;
+
+    /* ------------------------------------------- Shared content / groups (V29, TASK-2301 Phase P3) */
+
+    /** Null for a standalone question — the entire bank as of P3's own migration, and most future content too. */
+    private UUID questionGroupId;
+    private Integer groupOrder;
+
+    /** This question's own media (a diagram), separate from any media attached to its {@link #questionGroupId}. */
+    private List<QuestionMediaResponse> media;
+
+    /**
+     * This question's exam appearances (TASK-2501 Phase 1). Left {@code null}/empty on the
+     * student-facing sync/live/mock-sample paths — see {@link #duplicateOfQuestionIds}'s own
+     * "dead weight on every synced row" note, same reasoning applies here.
+     */
+    private List<QuestionOccurrenceResponse> occurrences;
+
+    /** TASK-2501 Phase 2. "PUBLISHED" for every question that predates this column and everything hand-authored/bulk-imported since. */
+    private String contentStatus;
 
     public UUID getId() {
         return id;
@@ -185,5 +213,77 @@ public class QuestionResponse {
 
     public void setDuplicateOfQuestionIds(List<UUID> duplicateOfQuestionIds) {
         this.duplicateOfQuestionIds = duplicateOfQuestionIds;
+    }
+
+    public String getQuestionType() {
+        return questionType;
+    }
+
+    public void setQuestionType(String questionType) {
+        this.questionType = questionType;
+    }
+
+    public Map<String, Object> getAnswerKey() {
+        return answerKey;
+    }
+
+    public void setAnswerKey(Map<String, Object> answerKey) {
+        this.answerKey = answerKey;
+    }
+
+    public Map<String, Object> getAnswerConfig() {
+        return answerConfig;
+    }
+
+    public void setAnswerConfig(Map<String, Object> answerConfig) {
+        this.answerConfig = answerConfig;
+    }
+
+    public Map<String, Object> getContentStructure() {
+        return contentStructure;
+    }
+
+    public void setContentStructure(Map<String, Object> contentStructure) {
+        this.contentStructure = contentStructure;
+    }
+
+    public UUID getQuestionGroupId() {
+        return questionGroupId;
+    }
+
+    public void setQuestionGroupId(UUID questionGroupId) {
+        this.questionGroupId = questionGroupId;
+    }
+
+    public Integer getGroupOrder() {
+        return groupOrder;
+    }
+
+    public void setGroupOrder(Integer groupOrder) {
+        this.groupOrder = groupOrder;
+    }
+
+    public List<QuestionMediaResponse> getMedia() {
+        return media;
+    }
+
+    public void setMedia(List<QuestionMediaResponse> media) {
+        this.media = media;
+    }
+
+    public List<QuestionOccurrenceResponse> getOccurrences() {
+        return occurrences;
+    }
+
+    public void setOccurrences(List<QuestionOccurrenceResponse> occurrences) {
+        this.occurrences = occurrences;
+    }
+
+    public String getContentStatus() {
+        return contentStatus;
+    }
+
+    public void setContentStatus(String contentStatus) {
+        this.contentStatus = contentStatus;
     }
 }

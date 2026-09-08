@@ -2,7 +2,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "./client";
 import { exams, questionExams, questions, questionTranslations, subjects, topics } from "./schema";
 import { getSyllabusSubjectIds } from "./examStructure";
-import { resolveCorrectIndex } from "./answerResolution";
+import { isIndexBasedType, resolveCorrectIndex } from "./answerResolution";
 
 const ALL_EXAMS = "ALL";
 
@@ -185,11 +185,27 @@ export type PracticeQuestionTranslation = {
   questionText: string;
   options: string[];
   explanation: string;
+  /** Assertion & Reason's / Statement-Based's authored content (TASK-2301 Phase P2 Wave A). */
+  content?: Record<string, unknown> | null;
 };
 
 export type PracticeQuestion = {
   id: string;
-  correctIndex: number;
+  /**
+   * Meaningful only for SINGLE_CHOICE/ASSERTION_REASON/STATEMENT_COMBINATION — the three
+   * types with a genuine single correct index. `null` for MULTIPLE_CHOICE/TRUE_FALSE, whose
+   * `answerKey` below is the only authoritative source of truth (TASK-2301 Phase P2 Wave A).
+   * Kept rather than removed: OptionList's `correctIndex` prop and every review screen that
+   * already reads it keep working unchanged for the three types that still have one.
+   */
+  correctIndex: number | null;
+  /** "SINGLE_CHOICE" when absent — every question synced before this phase is one. */
+  questionType?: string;
+  answerKey?: Record<string, unknown> | null;
+  /** MATCH's leftKeys/rightKeys, ORDERING's itemKeys — language-independent (TASK-2301 Phase P2 Wave B). */
+  contentStructure?: Record<string, unknown> | null;
+  /** Set when this question belongs to a shared passage/group (TASK-2301 Phase P3) — null for a standalone question. */
+  questionGroupId?: string | null;
   translations: Record<string, PracticeQuestionTranslation>;
   /**
    * Epic L / TICKET-2104 — previous-year provenance, rendered as a badge on the question.
@@ -217,13 +233,18 @@ export async function getPracticeQuestions(
 
   // The three PYQ columns are added to the existing projection rather than fetched in a second
   // query: they are scalars already on the row this query reads, so carrying them costs nothing,
-  // where a follow-up lookup would be a second round trip on the quiz-open path.
+  // where a follow-up lookup would be a second round trip on the quiz-open path. questionType/
+  // answerKey (TASK-2301 Phase P2 Wave A) are the same kind of cheap addition.
   const projection = {
     id: questions.id,
     correctAnswer: questions.correctAnswer,
     isPyq: questions.isPyq,
     pyqYear: questions.pyqYear,
     pyqShift: questions.pyqShift,
+    questionType: questions.questionType,
+    answerKey: questions.answerKey,
+    contentStructure: questions.contentStructure,
+    questionGroupId: questions.questionGroupId,
   };
 
   const matched = exam
@@ -259,6 +280,7 @@ export async function getPracticeQuestions(
       questionText: row.questionText,
       options: row.options,
       explanation: row.explanation ?? "",
+      content: row.content,
     };
     translationsByQuestion.set(row.questionId, forQuestion);
   }
@@ -266,9 +288,21 @@ export async function getPracticeQuestions(
   return matched.map((q) => {
     const translations = translationsByQuestion.get(q.id) ?? {};
     const englishOptions = translations.en?.options ?? Object.values(translations)[0]?.options ?? [];
+    // MULTIPLE_CHOICE/TRUE_FALSE have no single correct index — correct_answer is a display
+    // string for those two ("A,C" / "TRUE"), not a letter matching an option, so resolving it
+    // would produce a wrong or meaningless index (TASK-2301 Phase P2 Wave A). answerKey is
+    // the only source of truth those two types' evaluators read.
+    const questionType = q.questionType ?? "SINGLE_CHOICE";
+    const correctIndex = isIndexBasedType(questionType)
+      ? resolveCorrectIndex(q.correctAnswer, englishOptions)
+      : null;
     return {
       id: q.id,
-      correctIndex: resolveCorrectIndex(q.correctAnswer, englishOptions),
+      correctIndex,
+      questionType,
+      answerKey: q.answerKey,
+      contentStructure: q.contentStructure,
+      questionGroupId: q.questionGroupId,
       translations,
       isPyq: q.isPyq,
       pyqYear: q.pyqYear,

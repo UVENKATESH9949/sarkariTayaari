@@ -1,0 +1,13 @@
+-- Multi-type question architecture, Phase P2 Wave B (TASK-2301). Found by actually running
+-- the new evaluator types against the real dev database, not by review: `correct_answer`
+-- has been VARCHAR(10) since V1 -- comfortably wide enough for a letter, "A,C", "TRUE"/
+-- "FALSE", or a short number, but FILL_BLANK's joined accepted-answer list
+-- ("New Delhi / Delhi") and MATCH's joined pair list ("L1-R2,L2-R1,...") both routinely
+-- exceed it, and Postgres rejects the insert outright rather than truncating silently.
+--
+-- Widened, not shortened at the call site: `correct_answer` for these types is already
+-- documented (V26) as a computed display string for the legacy column, never itself
+-- authoritative (answer_key is), so there is no correctness reason to keep it artificially
+-- short - only this column's own original size did. Every existing value is well under
+-- 500 characters, so this is a pure widen with no data to migrate.
+ALTER TABLE questions ALTER COLUMN correct_answer TYPE VARCHAR(500);

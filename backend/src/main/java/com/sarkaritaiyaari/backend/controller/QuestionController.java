@@ -8,6 +8,7 @@ import com.sarkaritaiyaari.backend.dto.CreateQuestionRequest;
 import com.sarkaritaiyaari.backend.dto.QuestionResponse;
 import com.sarkaritaiyaari.backend.dto.UpdateQuestionRequest;
 import com.sarkaritaiyaari.backend.dto.UpsertTranslationRequest;
+import com.sarkaritaiyaari.backend.entity.ContentStatus;
 import com.sarkaritaiyaari.backend.service.AuthService;
 import com.sarkaritaiyaari.backend.service.QuestionService;
 import jakarta.validation.Valid;
@@ -28,6 +29,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -72,12 +74,18 @@ public class QuestionController {
      * Always syncs the entire question bank (paginated by updatedAt) — clients filter by
      * exam locally. Deliberately public: this is what a signed-out student's app downloads
      * on first launch and on every delta sync after.
+     *
+     * <p>{@code supportedTypes} implements capability negotiation (TASK-2301 Phase P3) — a
+     * comma-separated list of question type codes this client can render/evaluate. Omitted
+     * entirely, a client is treated as predating this mechanism and receives SINGLE_CHOICE
+     * only, byte-identical to what every client received before any other type existed.
      */
     @GetMapping("/sync")
     public Page<QuestionResponse> sync(@RequestParam(required = false) String since,
                                         @RequestParam(defaultValue = "0") int page,
-                                        @RequestParam(defaultValue = "500") int size) {
-        return questionService.sync(since, page, size);
+                                        @RequestParam(defaultValue = "500") int size,
+                                        @RequestParam(required = false) String supportedTypes) {
+        return questionService.sync(since, page, size, supportedTypes);
     }
 
     /**
@@ -94,8 +102,9 @@ public class QuestionController {
                                         @RequestParam(required = false) UUID topicId,
                                         @RequestParam(required = false) String difficulty,
                                         @RequestParam(defaultValue = "0") int page,
-                                        @RequestParam(defaultValue = "200") int size) {
-        return questionService.listPublic(examCode, subjectId, topicId, difficulty, page, size);
+                                        @RequestParam(defaultValue = "200") int size,
+                                        @RequestParam(required = false) String supportedTypes) {
+        return questionService.listPublic(examCode, subjectId, topicId, difficulty, page, size, supportedTypes);
     }
 
     /**
@@ -146,6 +155,30 @@ public class QuestionController {
         authService.requireAdmin(authorization);
         questionService.delete(id);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * A one-click content-status change (TASK-2501 Phase 2), body {"status": "DRAFT" |
+     * "REVIEW" | "PUBLISHED"} — mirrors the Exam Guide cycle's own one-click publish/
+     * unpublish toggle. Gated with {@code requireReviewer} (ADMIN or REVIEWER), not
+     * {@code requireAdmin} — same role either can already act on for Exam Guide content.
+     */
+    @PutMapping("/{id}/content-status")
+    public QuestionResponse setContentStatus(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
+                                              @PathVariable UUID id,
+                                              @RequestBody Map<String, String> body) {
+        authService.requireReviewer(authorization);
+        String raw = body.get("status");
+        if (raw == null || raw.isBlank()) {
+            throw new IllegalArgumentException("status is required");
+        }
+        ContentStatus status;
+        try {
+            status = ContentStatus.valueOf(raw.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("status must be DRAFT, REVIEW, or PUBLISHED");
+        }
+        return questionService.setContentStatus(id, status);
     }
 
     @PostMapping("/bulk-import")

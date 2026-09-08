@@ -23,3 +23,17 @@ export function resolveCorrectIndex(correctAnswer: string, englishOptions: strin
   console.warn(`Could not resolve correctAnswer "${correctAnswer}" against options`, englishOptions);
   return 0;
 }
+
+/**
+ * Whether a question type has a genuine single correct index that {@link resolveCorrectIndex}
+ * can meaningfully compute (TASK-2301 Phase P2 Wave A). SINGLE_CHOICE/ASSERTION_REASON/
+ * STATEMENT_COMBINATION all do — the latter two reuse the same answer shape, differing only
+ * in authored content. MULTIPLE_CHOICE/TRUE_FALSE do not: `correct_answer` for those two is
+ * a computed *display* string ("A,C" / "TRUE"), and resolving it against options would
+ * produce a wrong or meaningless index — `answerKey` is their only source of truth.
+ */
+const INDEX_BASED_TYPES = new Set(["SINGLE_CHOICE", "ASSERTION_REASON", "STATEMENT_COMBINATION"]);
+
+export function isIndexBasedType(questionType: string | null | undefined): boolean {
+  return questionType == null || INDEX_BASED_TYPES.has(questionType);
+}

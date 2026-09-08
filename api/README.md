@@ -47,9 +47,12 @@ assumed from whether an endpoint happens to be public.
 | [AUTH.md](AUTH.md) | Sign-up/sign-in/sign-out, admin registration |
 | [CONTENT-CATALOG.md](CONTENT-CATALOG.md) | Exams, subjects, topics, languages, difficulty levels, paper types, exam structure (stages/papers/sections), exam badges — the reference-data layer everything else hangs off |
 | [QUESTIONS.md](QUESTIONS.md) | Question CRUD, bulk import/delete, the content-sync endpoint (`/api/questions/sync`), image upload, duplicate detection |
-| [USER-PROGRESS.md](USER-PROGRESS.md) | Practice/mock history sync, bookmark sync, per-topic mastery sync — the signed-in student's own data, uploaded from and restored to any device |
+| [QUESTION-GROUPS.md](QUESTION-GROUPS.md) | Shared passages/datasets/media a question can belong to ("question groups"), TASK-2301 Phase P3 — was missing from this index, added while updating this file for TASK-2501 |
+| [QUESTION-INTELLIGENCE.md](QUESTION-INTELLIGENCE.md) | A question's exam occurrences (one canonical question, many appearances) and the rule-based PDF-to-question ingestion pipeline — TASK-2501 Phases 1/2 |
+| [USER-PROGRESS.md](USER-PROGRESS.md) | Practice/mock history sync, bookmark sync, per-topic mastery sync, followed-exam sync — the signed-in student's own data, uploaded from and restored to any device |
 | [EXAM-INTELLIGENCE.md](EXAM-INTELLIGENCE.md) | Topic trend/priority scoring ("Epic L") and its synthetic-data seeder |
 | [EXAM-GUIDE.md](EXAM-GUIDE.md) | Recruitment cycles, eligibility, dates, documents, application steps, fees ("Exam Guide") and its demo-data seeder |
+| [WEAKNESS-RADAR.md](WEAKNESS-RADAR.md) | Per-topic health, confidence, trend and recommended action for one student ("Weakness Radar" / Preparation Intelligence), plus its admin evidence view |
 
 Not documented as separate files (trivial, not a real integration contract):
 `GET /api/health` (liveness probe) and `GET /downloads` (serves APKs from a local

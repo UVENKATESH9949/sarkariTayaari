@@ -8,6 +8,7 @@ import {
   listSubjects,
   listTopics,
   listAllDifficultyLevels,
+  setQuestionContentStatus,
 } from "../api.js";
 import QuestionDetailModal from "../components/QuestionDetailModal.jsx";
 import { EditIcon, TrashIcon } from "../components/icons.jsx";
@@ -94,6 +95,17 @@ export default function QuestionsList() {
     try {
       await deleteQuestion(id);
       setDetailQuestion(null);
+      load();
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  /** TASK-2501 Phase 2 -- a question the ingestion pipeline created stays content_status =
+   * DRAFT (invisible to students) until an admin publishes it here. */
+  async function handlePublish(id) {
+    try {
+      await setQuestionContentStatus(id, "PUBLISHED");
       load();
     } catch (e) {
       setError(e.message);
@@ -223,6 +235,9 @@ export default function QuestionsList() {
                         <div className="cell-primary">{english ? english.questionText : "(no text)"}</div>
                         <div className="cell-tags">
                           {q.deleted && <span className="badge badge-hard">Deleted</span>}
+                          {q.contentStatus && q.contentStatus !== "PUBLISHED" && (
+                            <span className="badge badge-medium">{q.contentStatus}</span>
+                          )}
                           {q.premium && <span className="badge">Premium</span>}
                           {/* TICKET-2104. Shows the year when there is one and a bare "PYQ" when
                               there is not — the flag and the year are stored separately precisely
@@ -260,6 +275,11 @@ export default function QuestionsList() {
                       <td>{new Date(q.updatedAt).toLocaleString()}</td>
                       <td onClick={(e) => e.stopPropagation()}>
                         <div className="row-actions">
+                          {q.contentStatus && q.contentStatus !== "PUBLISHED" && (
+                            <button className="btn btn-sm" onClick={() => handlePublish(q.id)}>
+                              Publish
+                            </button>
+                          )}
                           <Link to={`/questions/${q.id}/edit`} className="btn btn-ghost icon-btn" title="Edit">
                             <EditIcon />
                           </Link>

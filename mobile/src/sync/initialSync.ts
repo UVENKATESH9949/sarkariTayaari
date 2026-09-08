@@ -2,6 +2,7 @@ import { db } from "../db/client";
 import { clearResumeState, getResumeState, setLastSyncedAt, setResumeState } from "../db/syncMeta";
 import { syncQuestions } from "../api/questions";
 import { writeLanguages, writeReferenceData, upsertQuestionsBatch } from "./writeQuestions";
+import { downloadPendingMedia } from "./mediaDownload";
 import { captureError } from "../telemetry/analytics";
 
 const PAGE_SIZE = 500;
@@ -96,6 +97,11 @@ export async function runInitialSync(onProgress?: OnProgress): Promise<{ status:
 
       page += 1;
     }
+
+    // Question-owned media (TASK-2301 Phase P3) — group-owned media already downloads as
+    // part of writeReferenceData/writeQuestionGroups above; this covers the media rows just
+    // written by the question-page loop.
+    await downloadPendingMedia();
 
     // Watermark is the sync's start time, not now: anything edited while this was
     // running is then re-fetched by the next delta sync instead of being missed.

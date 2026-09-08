@@ -34,10 +34,18 @@ mobile/src/app/
   _layout.tsx              app-wide setup (sync, providers)
   revise.tsx               Revise screen (pushed, not a tab)
   account.tsx              sign in / sign up / signed-in view (pushed, not a tab)
+  exam-guide.tsx           one exam's Guide (dates/eligibility/documents/fees/etc.)
+  my-exams.tsx             Following/Recommended/Explore — reachable from More, pre-dates the Exams tab
+  exam-compare.tsx         side-by-side comparison, capped at 2 exams
+  exam-calendar.tsx        every followed-or-all exam's Important Dates, grouped by month
+  syllabus-trends.tsx      Subject -> Topic -> Sub-topic overview (weightage/trend/priority/mastery)
+  preparation-radar.tsx    Weakness Radar: which topics need attention, and why (pushed, from Progress/More)
+  radar-topic.tsx          one topic's diagnosis + recommended plan (pushed from the radar)
   (tabs)/
-    _layout.tsx            the bottom tab bar
+    _layout.tsx            the bottom tab bar (Home/Practice/Mock Test/Exams/Progress-hidden/More)
     index.tsx              Home
-    progress.tsx           Progress
+    exams.tsx              the Exams module's own discovery listing (search/filter/sort/sections)
+    progress.tsx           Progress (href: null — reachable via Home/More, not a tab button)
     more.tsx               More / settings
     practice/
       index.tsx            pick an exam
@@ -75,8 +83,15 @@ Useful specifics:
 | Change what a content sync writes | `mobile/src/sync/writeQuestions.ts` |
 | Change how the app knows it's offline | `mobile/src/sync/NetworkStatusContext.tsx` (detection) + `OfflineBanner.tsx` (the message shown) |
 | Change how bookmarks sync to the server | `mobile/src/sync/bookmarkSync.ts` (the sync logic), `mobile/src/db/bookmarks.ts` (local reads/writes), `mobile/src/api/bookmarks.ts` (the network calls) |
+| Change how followed exams sync to the server | `mobile/src/sync/followedExamSync.ts`, `mobile/src/db/followedExams.ts`, `mobile/src/api/followedExams.ts` — line-for-line mirrors the bookmark files above |
+| Change the Exams module's discovery listing (search/sort/filter/sections) | `mobile/src/app/(tabs)/exams.tsx` (the screen), `mobile/src/examsModule/ExamCard.tsx` + `statusLabels.ts` (the card), `mobile/src/api/examDiscovery.ts` (the network call) — backend side is `ExamDiscoveryService`/`ExamController` (`GET /api/exams/discover`) |
 | Change how progress (practice/mock history) syncs | `mobile/src/sync/progressSync.ts`, `mobile/src/practice/authContext.tsx` (when it runs — sign-in, background, sign-out) |
-| Add a table to the phone database | `mobile/src/db/schema.ts` then run `npx drizzle-kit generate` |
+| Change the Weakness Radar formula | `TopicHealthService.java` **and** `mobile/src/intelligence/topicHealth.ts` — the rules exist twice on purpose (signed-out students' attempts never reach a server), so change both and bump `ALGORITHM_VERSION` in both. `sample-data/weakness-radar-fixtures.json` is the agreed expected output. **Run `node scripts/check-topic-health-parity.js` afterwards** — it fails if the two sides' constants, versions or weight sums have drifted |
+| Change what the radar recommends (the action rules) | `WeaknessRadarService.recommend` **and** `mobile/src/intelligence/localRadar.ts`'s `recommend` — same two-copies rule |
+| Change radar wording, state labels or colours | `mobile/src/intelligence/radarPresentation.tsx` (shared by both radar screens, so a state can't be labelled two things) |
+| Change where the radar comes from (server / cache / on-device) | `mobile/src/data/weaknessRadarData.ts` — the only thing the screens call |
+| Change per-question time capture | `mobile/src/practice/useQuestionTimer.ts` (used by `practice/quiz.tsx` and `mock-test/test.tsx`) |
+| Add a table to the phone database | `mobile/src/db/schema.ts` then run `npx drizzle-kit generate` — but see "Two traps worth memorising" below before shipping what it generates |
 
 ---
 
@@ -150,6 +165,8 @@ from entities so a database change doesn't accidentally change your API.
 | Change a validation rule | the service (or annotations on the DTO) |
 | Add a database table | a new migration in `db/migration/`, then an entity |
 | Change what sync sends | `QuestionService` + `QuestionMapper` |
+| Change how a student's topic health is scored | `service/TopicHealthService.java` — one isolated, versioned service, and the only place the formula lives. See the two-copies note in the mobile table above |
+| Change how the radar turns health into advice | `service/WeaknessRadarService.java` (bucketing, ranking, the action rule table) |
 
 ---
 
@@ -169,6 +186,7 @@ admin/src/
 | Change the add/edit question form | `admin/src/pages/QuestionForm.jsx` |
 | Change the exam structure editor | `admin/src/pages/ExamStructure.jsx` |
 | Change bulk import checks | `admin/src/validateQuestions.js` |
+| Investigate "why does the app say I'm weak in this topic?" | `admin/src/pages/WeaknessRadar.jsx` — read-only evidence view; there is deliberately no override |
 
 ---
 
@@ -210,6 +228,16 @@ useEffect(() => {
 
 **Never edit anything inside `mobile/android/`.** That whole folder is generated from
 `mobile/app.json` and is wiped and rebuilt on the next build. Change `app.json` instead.
+
+**`npx drizzle-kit generate` cannot be trusted as-is for a local migration.** Its snapshot
+state doesn't match this schema's real migration history, so it has repeatedly produced
+a full `CREATE TABLE` for tables that already exist, or unguarded index/`ADD COLUMN` DDL
+with no `IF NOT EXISTS` — and a failed local migration is a hard gate (`app/_layout.tsx`
+renders "Database migration failed" and the app cannot start at all). Always read the
+generated `.sql` file before shipping it: guard every `CREATE TABLE`/`CREATE INDEX` with
+`IF NOT EXISTS`, and for an `ADD COLUMN` on a table that may already have rows, give it a
+`DEFAULT` (SQLite has no `ADD COLUMN IF NOT EXISTS` at all) — see migrations `0007`,
+`0011`–`0013`, `0016`, and `0017` for the corrected pattern each time this bit.
 
 **Wrapping a list row breaks any percentage width on it.** `FadeInItem` (the fade-in
 animation wrapper used on every list) inserts a view between the list container and the

@@ -465,6 +465,22 @@ export const questions = sqliteTable(
     isPyq: integer("is_pyq", { mode: "boolean" }).notNull().default(false),
     pyqYear: integer("pyq_year"),
     pyqShift: text("pyq_shift"),
+    // Multi-type question foundation (TASK-2301, Phase P1). `correctAnswer` above stays the
+    // column every existing read path actually uses; these three are a forward-looking mirror
+    // nothing reads yet — the shared OptionList/questionRenderer work is future phases, not
+    // this one. `questionType` defaults to "SINGLE_CHOICE" for the same reason the server
+    // column does: every row synced before this migration is one.
+    questionType: text("question_type").notNull().default("SINGLE_CHOICE"),
+    answerKey: text("answer_key", { mode: "json" }).$type<Record<string, unknown> | null>(),
+    answerConfig: text("answer_config", { mode: "json" }).$type<Record<string, unknown> | null>(),
+    contentStructure: text("content_structure", { mode: "json" }).$type<Record<string, unknown> | null>(),
+    // Shared content / groups (TASK-2301 Phase P3). Null for a standalone question — the
+    // entire bank as of this migration, and most future content too. No local FK to
+    // question_groups: a question's own page can arrive mid-sync before its group's page
+    // has (groups sync first, but a resumed/interrupted sync could still land here), and
+    // this app never enforces FKs at the SQLite level anyway (see 0020's own note).
+    questionGroupId: text("question_group_id"),
+    groupOrder: integer("group_order"),
   },
   (table) => [
     index("idx_questions_subject_id").on(table.subjectId),
@@ -477,6 +493,57 @@ export const questions = sqliteTable(
     // `is_deleted` is deliberate — it's the lowest-cardinality column, so it belongs last.
     index("idx_questions_topic_difficulty_deleted").on(table.topicId, table.difficulty, table.isDeleted),
     index("idx_questions_subject_deleted").on(table.subjectId, table.isDeleted),
+    index("idx_questions_question_group_id").on(table.questionGroupId),
+  ],
+);
+
+/** A shared passage/dataset parent for several child questions (TASK-2301 Phase P3). */
+export const questionGroups = sqliteTable("question_groups", {
+  id: text("id").primaryKey(),
+  groupType: text("group_type").notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  isDeleted: integer("is_deleted", { mode: "boolean" }).notNull().default(false),
+});
+
+/** One language's passage/dataset text for a group (TASK-2301 Phase P3). */
+export const questionGroupTranslations = sqliteTable(
+  "question_group_translations",
+  {
+    id: text("id").primaryKey(),
+    questionGroupId: text("question_group_id").notNull().references(() => questionGroups.id),
+    languageCode: text("language_code").notNull().references(() => languages.code),
+    passageText: text("passage_text"),
+  },
+  (table) => [
+    uniqueIndex("idx_question_group_translations_group_language").on(table.questionGroupId, table.languageCode),
+  ],
+);
+
+/**
+ * A media asset (image or map) attached to exactly one question or one group (TASK-2301
+ * Phase P3). `localUri`/`downloadedAt` are local-only (no server equivalent) — see
+ * sync/mediaDownload.ts: the renderer reads `localUri` when present, falling back to the
+ * live `url` only for an asset this device hasn't finished downloading yet, the same
+ * "local-or-live" pattern data/hybridSource.ts already establishes for questions themselves.
+ */
+export const questionMedia = sqliteTable(
+  "question_media",
+  {
+    id: text("id").primaryKey(),
+    questionId: text("question_id"),
+    questionGroupId: text("question_group_id"),
+    mediaType: text("media_type").notNull(),
+    url: text("url").notNull(),
+    mimeType: text("mime_type"),
+    displayOrder: integer("display_order").notNull().default(0),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+    isDeleted: integer("is_deleted", { mode: "boolean" }).notNull().default(false),
+    localUri: text("local_uri"),
+    downloadedAt: integer("downloaded_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    index("idx_question_media_question_id").on(table.questionId),
+    index("idx_question_media_question_group_id").on(table.questionGroupId),
   ],
 );
 
@@ -504,6 +571,11 @@ export const questionTranslations = sqliteTable(
     questionText: text("question_text").notNull(),
     options: text("options", { mode: "json" }).notNull().$type<string[]>(),
     explanation: text("explanation"),
+    // Multi-type question architecture, Phase P2 Wave A (TASK-2301). Per-language authored
+    // content that doesn't fit the flat `options` array — Assertion & Reason's
+    // {assertion, reason}, Statement-Based's {statements: [...]}. `options` stays the fixed
+    // relationship/combination phrases for those two types, unchanged.
+    content: text("content", { mode: "json" }).$type<Record<string, unknown> | null>(),
   },
   (table) => [
     // A separate index on `question_id` alone used to sit here too. It was a strict
@@ -635,10 +707,29 @@ export const practiceSessionResults = sqliteTable(
     questionId: text("question_id").notNull(),
     questionText: text("question_text").notNull(),
     options: text("options", { mode: "json" }).notNull().$type<string[]>(),
-    selectedIndex: integer("selected_index").notNull(),
-    correctIndex: integer("correct_index").notNull(),
+    // Nullable since migration 0020 (TASK-2301 Phase P2 Wave A) — a MULTIPLE_CHOICE/
+    // TRUE_FALSE answer has no single index, so both are null for those types. Still
+    // populated exactly as before for SINGLE_CHOICE/ASSERTION_REASON/STATEMENT_COMBINATION.
+    selectedIndex: integer("selected_index"),
+    correctIndex: integer("correct_index"),
     explanation: text("explanation").notNull(),
     isCorrect: integer("is_correct", { mode: "boolean" }).notNull(),
+    // How long this question was on screen, in milliseconds (migration 0018, for Weakness
+    // Radar). Nullable, and NULL means "not recorded" -- every row written before this
+    // column existed has none. Nothing reads it yet: the supplied spec's §9 speed signal
+    // needs an expected-time benchmark that does not exist in this app, and §9.2 forbids
+    // inventing one, so capture starts now and the signal stays off until there is real
+    // history to benchmark against. See practice/useQuestionTimer.ts.
+    timeMs: integer("time_ms"),
+    // Response model (migration 0020, TASK-2301 Phase P2 Wave A) — the generic, type-shaped
+    // answer, mirroring the server's response/outcome/scoreFraction/questionType columns
+    // (V26). `isCorrect` above stays the field every existing read (Summary, Revise,
+    // TopicEvidenceRepository's practice-evidence-equivalent local query) actually uses —
+    // these four are additive, not a replacement.
+    response: text("response", { mode: "json" }).$type<Record<string, unknown> | null>(),
+    outcome: text("outcome"),
+    scoreFraction: real("score_fraction"),
+    questionType: text("question_type"),
   },
   (table) => [index("idx_practice_session_results_session_id").on(table.sessionId)],
 );
@@ -690,12 +781,50 @@ export const mockTestAttemptResults = sqliteTable(
     questionText: text("question_text").notNull(),
     options: text("options", { mode: "json" }).notNull().$type<string[]>(),
     selectedIndex: integer("selected_index"),
-    correctIndex: integer("correct_index").notNull(),
+    // Nullable since migration 0020 (TASK-2301 Phase P2 Wave A) — no meaning for
+    // MULTIPLE_CHOICE/TRUE_FALSE, same reasoning as practice_session_results above.
+    correctIndex: integer("correct_index"),
     explanation: text("explanation").notNull(),
     markedForReview: integer("marked_for_review", { mode: "boolean" }).notNull().default(false),
+    // Same field, same rules as practice_session_results.time_ms above.
+    timeMs: integer("time_ms"),
+    // Response model (migration 0020) — same shape and reasoning as
+    // practice_session_results' four fields above.
+    response: text("response", { mode: "json" }).$type<Record<string, unknown> | null>(),
+    outcome: text("outcome"),
+    scoreFraction: real("score_fraction"),
+    questionType: text("question_type"),
   },
   (table) => [index("idx_mock_test_attempt_results_attempt_id").on(table.attemptId)],
 );
+
+/**
+ * The last Weakness Radar payload the server produced for one exam (migration 0018).
+ *
+ * Read-only on this device: the radar is computed server-side from a student's whole
+ * cross-device history, and this table exists so the two radar screens still render with no
+ * network -- the supplied spec's §15 offline requirement ("gracefully display the last known
+ * state") and §21's "offline student" edge case.
+ *
+ * **Stored as one JSON payload per exam rather than normalised into tables.** Unlike the Exam
+ * Guide's offline cache (migration 0014, nine tables), nothing here is ever queried by
+ * anything but "give me this exam's radar" -- there is no filtering, joining or sorting to
+ * serve, because the server already ordered the topic list. Normalising it would buy nothing
+ * and add a second thing that can be half-written. `fetchedAt` is separate from the server's
+ * own `computedAt` so the UI can distinguish "the server computed this an hour ago" from
+ * "this device last managed to reach the server an hour ago".
+ *
+ * Not synced, never uploaded, and safe to drop at any time -- it is a copy of derived data.
+ */
+export const radarCache = sqliteTable("radar_cache", {
+  examCode: text("exam_code").primaryKey(),
+  algorithmVersion: text("algorithm_version").notNull(),
+  // Nullable: a student with no attempts yet has a real radar response (the onboarding
+  // state) that no computation stands behind.
+  computedAt: integer("computed_at", { mode: "timestamp_ms" }),
+  fetchedAt: integer("fetched_at", { mode: "timestamp_ms" }).notNull(),
+  payloadJson: text("payload_json").notNull(),
+});
 
 // Bookmarked questions (Revise tab). Stores a full content snapshot rather than just a
 // question_id, same rationale as before: nothing elsewhere guarantees the synced

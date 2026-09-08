@@ -13,8 +13,10 @@ import jakarta.persistence.PersistenceContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -126,6 +128,17 @@ public class ProgressService {
             entity.setSelectedIndex(r.getSelectedIndex());
             entity.setCorrectIndex(r.getCorrectIndex());
             entity.setCorrect(r.isCorrect());
+            entity.setTimeMs(r.getTimeMs());
+            // V26 / TASK-2301 Phase P2 Wave A. A client older than this release omits these —
+            // defaulted the same way isPyq/pyqYear default on the question side (P1): every
+            // such row is, by definition, a SINGLE_CHOICE answer, mirrored from the legacy
+            // index columns rather than left null, so a reader never has to special-case it.
+            entity.setQuestionType(r.getQuestionType() != null ? r.getQuestionType() : "SINGLE_CHOICE");
+            entity.setResponse(r.getResponse() != null ? r.getResponse()
+                    : r.getSelectedIndex() != null ? Map.of("selectedOption", r.getSelectedIndex()) : null);
+            entity.setOutcome(r.getOutcome() != null ? r.getOutcome() : (r.isCorrect() ? "CORRECT" : "INCORRECT"));
+            entity.setScoreFraction(r.getScoreFraction() != null ? r.getScoreFraction()
+                    : (r.isCorrect() ? BigDecimal.ONE : BigDecimal.ZERO));
             results.add(entity);
         }
         session.setResults(results);
@@ -161,6 +174,18 @@ public class ProgressService {
             entity.setSelectedIndex(r.getSelectedIndex());
             entity.setCorrectIndex(r.getCorrectIndex());
             entity.setMarkedForReview(r.isMarkedForReview());
+            entity.setTimeMs(r.getTimeMs());
+            // V26 / TASK-2301 Phase P2 Wave A — same defaulting as the practice path above.
+            // "Unattempted" derives from selectedIndex being null, matching V6's existing rule.
+            entity.setQuestionType(r.getQuestionType() != null ? r.getQuestionType() : "SINGLE_CHOICE");
+            entity.setResponse(r.getResponse() != null ? r.getResponse()
+                    : r.getSelectedIndex() != null ? Map.of("selectedOption", r.getSelectedIndex()) : null);
+            entity.setOutcome(r.getOutcome() != null ? r.getOutcome()
+                    : r.getSelectedIndex() == null ? "UNATTEMPTED"
+                    : r.getSelectedIndex().equals(r.getCorrectIndex()) ? "CORRECT" : "INCORRECT");
+            entity.setScoreFraction(r.getScoreFraction() != null ? r.getScoreFraction()
+                    : r.getSelectedIndex() != null && r.getSelectedIndex().equals(r.getCorrectIndex())
+                            ? BigDecimal.ONE : BigDecimal.ZERO);
             results.add(entity);
         }
         attempt.setResults(results);
@@ -184,6 +209,11 @@ public class ProgressService {
             out.setSelectedIndex(r.getSelectedIndex());
             out.setCorrectIndex(r.getCorrectIndex());
             out.setCorrect(r.isCorrect());
+            out.setTimeMs(r.getTimeMs());
+            out.setQuestionType(r.getQuestionType());
+            out.setResponse(r.getResponse());
+            out.setOutcome(r.getOutcome());
+            out.setScoreFraction(r.getScoreFraction());
             return out;
         }).toList());
         return dto;
@@ -213,6 +243,11 @@ public class ProgressService {
             out.setSelectedIndex(r.getSelectedIndex());
             out.setCorrectIndex(r.getCorrectIndex());
             out.setMarkedForReview(r.isMarkedForReview());
+            out.setTimeMs(r.getTimeMs());
+            out.setQuestionType(r.getQuestionType());
+            out.setResponse(r.getResponse());
+            out.setOutcome(r.getOutcome());
+            out.setScoreFraction(r.getScoreFraction());
             return out;
         }).toList());
         return dto;

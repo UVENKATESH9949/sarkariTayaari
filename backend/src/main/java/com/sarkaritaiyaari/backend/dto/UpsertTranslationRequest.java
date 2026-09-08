@@ -1,21 +1,23 @@
 package com.sarkaritaiyaari.backend.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.NotNull;
 
 import java.util.List;
+import java.util.Map;
 
 public class UpsertTranslationRequest {
 
     @NotBlank
     private String questionText;
 
-    @NotEmpty
-    @Size(min = 4, max = 4, message = "options must contain exactly 4 entries")
+    /** Exactly-4-or-empty validated in {@code QuestionService} against the question's own type — see {@code TranslationRequest}'s note. */
+    @NotNull
     private List<String> options;
 
     private String explanation;
+
+    private Map<String, Object> content;
 
     public String getQuestionText() {
         return questionText;
@@ -39,5 +41,13 @@ public class UpsertTranslationRequest {
 
     public void setExplanation(String explanation) {
         this.explanation = explanation;
+    }
+
+    public Map<String, Object> getContent() {
+        return content;
+    }
+
+    public void setContent(Map<String, Object> content) {
+        this.content = content;
     }
 }

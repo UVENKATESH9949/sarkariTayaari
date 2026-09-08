@@ -1,6 +1,6 @@
 import type { SyncedPaper } from "../db/examStructure";
 import type { MockTestQuestion, SectionAvailability } from "../db/mockTest";
-import { resolveCorrectIndex } from "../db/answerResolution";
+import { isIndexBasedType, resolveCorrectIndex } from "../db/answerResolution";
 import { getMockAvailabilityCount, getMockSample } from "./liveQuestions";
 
 /**
@@ -39,14 +39,24 @@ export async function buildMockTestQuestionsLive(paper: SyncedPaper): Promise<Mo
     for (const q of sample) {
       const translations: MockTestQuestion["translations"] = {};
       for (const t of q.translations) {
-        translations[t.languageCode] = { questionText: t.questionText, options: t.options, explanation: t.explanation ?? "" };
+        translations[t.languageCode] = {
+          questionText: t.questionText,
+          options: t.options,
+          explanation: t.explanation ?? "",
+          content: t.content ?? null,
+        };
       }
       const englishOptions = translations.en?.options ?? Object.values(translations)[0]?.options ?? [];
+      const questionType = q.questionType ?? "SINGLE_CHOICE";
       all.push({
         id: q.id,
         sectionName: section.name,
         subjectName: q.subjectName,
-        correctIndex: resolveCorrectIndex(q.correctAnswer, englishOptions),
+        correctIndex: isIndexBasedType(questionType) ? resolveCorrectIndex(q.correctAnswer, englishOptions) : null,
+        questionType,
+        answerKey: q.answerKey ?? null,
+        contentStructure: q.contentStructure ?? null,
+        questionGroupId: q.questionGroupId ?? null,
         translations,
       });
     }

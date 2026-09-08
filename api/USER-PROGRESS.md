@@ -1,8 +1,9 @@
 # User Progress API
 
-Covers `ProgressController` (`/api/progress`), `BookmarkController` (`/api/bookmarks`), and
-`TopicProgressController` (`/api/topic-progress`) — the three endpoints that sync a signed-in
-student's own activity back to the server. For the offline-first model these sit inside (what
+Covers `ProgressController` (`/api/progress`), `BookmarkController` (`/api/bookmarks`),
+`TopicProgressController` (`/api/topic-progress`), and `FollowedExamController`
+(`/api/followed-exams`) — the endpoints that sync a signed-in student's own activity back
+to the server. For the offline-first model these sit inside (what
 works with no internet, when a sync actually runs), see
 [system-design/03-how-data-flows.md](../system-design/03-how-data-flows.md); for the schema
 these write to, see [system-design/02-database.md](../system-design/02-database.md).
@@ -24,10 +25,30 @@ wrong in a future client change silently breaks sync (see
 | `ProgressController` (practice sessions, mock attempts) | **write-once / upload-and-forget** | A session/attempt is created once, finished, and never edited again. The device's own id is reused on every upload. Re-uploading the same id **overwrites** (via JPA `merge`) rather than duplicating — safe to retry blindly, no timestamp comparison happens. |
 | `BookmarkController` | **last-write-wins** | The same question can be bookmarked and un-bookmarked repeatedly, from more than one device. Every incoming row is applied only if its `updatedAt` is strictly newer than what the server already has for that `(user, question)` pair. Un-bookmarking is a **marker** (`deleted: true`), not a row deletion — the row stays server-side forever so a later restore can't make a removed bookmark silently reappear. |
 | `TopicProgressController` | **last-write-wins**, with an added state-machine guard | Same newer-`updatedAt`-wins rule as bookmarks, since mastery is mutable per-topic state, not an event log. On top of that, a state transition can additionally be **rejected** even when the timestamp is newer, if it's an illegal move (see below) — something bookmarks have no equivalent of. |
+| `FollowedExamController` | **last-write-wins** | Identical rule and reasoning to `BookmarkController` — an exam can be followed and unfollowed repeatedly, from more than one device. `(user, examCode)` in place of `(user, questionId)`; otherwise line-for-line the same pattern (synthetic id, `deleted` marker, never-travels-back-down tombstone). |
 
 If you're adding a new synced field: append-only history (a session, an attempt, an event) wants
 the `ProgressController` pattern; current mutable state per (user, X) wants the `Bookmark`/
 `TopicProgress` pattern. Do not blend them.
+
+## Per-question time (`timeMs`) — optional, and `null` never means zero
+
+Both result shapes below carry an optional `timeMs` (milliseconds), added by migration
+`V24__weakness_radar.sql` for [Weakness Radar](WEAKNESS-RADAR.md). Three things about it:
+
+1. **It is optional in both directions.** Any client build older than that release omits it, and
+   the columns (`user_practice_session_results.time_ms`,
+   `user_mock_attempt_results.time_ms`) are nullable. `GET /api/progress` returns it, so a
+   restore on a new device brings it back rather than resetting it.
+2. **`null` means "not recorded", never "answered instantly".** Every row uploaded before the
+   field existed has none. A reader that treated absence as a fast answer would manufacture a
+   speed signal out of nothing.
+3. **Nothing consumes it yet.** The Weakness Radar's speed component is deliberately switched
+   off: computing it needs an expected-time benchmark, and none exists anywhere in this schema.
+   Capture starts now so a future version has history to derive one from — see
+   [`WEAKNESS-RADAR.md`](WEAKNESS-RADAR.md)'s "The absent speed signal" and
+   `mobile/src/practice/useQuestionTimer.ts` for the client side (including the two limitations
+   of measuring display time).
 
 ---
 
@@ -50,7 +71,27 @@ the `ProgressController` pattern; current mutable state per (user, X) wants the 
       correctCount: number,
       totalCount: number,
       results: [
-        { orderIndex: number, questionId: uuid, selectedIndex: number, correctIndex: number, correct: boolean }
+        { orderIndex: number, questionId: uuid,
+          selectedIndex: number | null,   // null since V26 (TASK-2301 Phase P2 Wave A) —
+                                            // no single index for any of the six non-index types
+          correctIndex: number | null,    // null for the same six types
+          correct: boolean,
+          timeMs: number | null,          // optional, added by V24 — see "Per-question time" below
+
+          // Response model, added by V26 (TASK-2301 Phase P2 Wave A), extended by Wave B's four
+          // new response shapes. All four fields optional — omitted by any client built before
+          // V26, in which case the server defaults questionType to "SINGLE_CHOICE" and leaves
+          // the other three null.
+          questionType: string | null,     // "SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE",
+                                             // "NUMERIC", "FILL_BLANK", "MATCH", "ORDERING", ...
+          response: object | null,         // { selectedOptions: [0,2] } (MULTIPLE_CHOICE),
+                                             // { selectedBoolean: true } (TRUE_FALSE),
+                                             // { enteredValue: 42 } (NUMERIC, Phase P2 Wave B),
+                                             // { enteredText: "New Delhi" } (FILL_BLANK, Wave B),
+                                             // { mapping: { "L1": "R1" } } (MATCH, Wave B),
+                                             // { order: ["I1","I2"] } (ORDERING, Wave B)
+          outcome: string | null,          // "CORRECT" | "INCORRECT" | "UNATTEMPTED"
+          scoreFraction: number | null }    // 0.0–1.0
       ]
     }
   ],
@@ -72,8 +113,18 @@ the `ProgressController` pattern; current mutable state per (user, X) wants the 
       totalQuestions: number,
       results: [
         { orderIndex: number, subjectName: string | null, questionId: uuid,
-          selectedIndex: number | null,   // null = left unattempted
-          correctIndex: number, markedForReview: boolean }
+          selectedIndex: number | null,   // null = left unattempted, or (since V26) any of the
+                                            // six non-index types' answer
+          correctIndex: number | null,    // null since V26 for the same six types
+          markedForReview: boolean,
+          timeMs: number | null,          // optional, added by V24 — see "Per-question time" below
+
+          // Response model, added by V26 (TASK-2301 Phase P2 Wave A), extended by Wave B — same
+          // shape and same defaulting-when-omitted rule as the practice results above.
+          questionType: string | null,
+          response: object | null,
+          outcome: string | null,
+          scoreFraction: number | null }
       ]
     }
   ]
@@ -96,7 +147,8 @@ rather than accumulate a second copy of every answer.
 **Auth:** user
 **Request:** none
 **Response:** `{ practiceSessions: [...], mockAttempts: [...] }` — same per-item shapes as the
-sync request above, ordered by `completedAt` descending.
+sync request above, including `timeMs` where it was recorded, ordered by `completedAt`
+descending.
 **Errors:** 401.
 **Business rules:** Returns full history, unfiltered — there is no pagination or date-range
 param on this endpoint today.
@@ -143,6 +195,46 @@ the server never learned about.
 **Business rules:** Only returns **active** (non-deleted) bookmarks — `deleted: true` tombstones
 exist in the database to enforce last-write-wins on future syncs, but they never travel back down
 to a client. A client should never expect to see `deleted: true` in a restore response.
+**Consumers:** Mobile
+
+---
+
+## FollowedExamController — `/api/followed-exams`
+
+Mirrors `BookmarkController` line-for-line, entity and all — a followed exam carries no content
+of its own beyond the exam code and the toggle state, since the exam itself is already on-device
+from reference sync. Built for the Exams module (spec §5-15) to replace what had been a
+local-SQLite-only "My Exams" list with no backend table at all.
+
+### POST /api/followed-exams/sync
+**Purpose:** Upload whatever follow/unfollow state changed locally since the last sync.
+**Auth:** user
+**Request:**
+```
+{
+  exams: [
+    { examCode: string, deleted: boolean, updatedAt: ISO-8601 timestamp }
+  ]
+}
+```
+`examCode` and `updatedAt` are required per row; `exams` defaults to empty if omitted.
+**Response:** `{ "stored": number }` — count of rows actually **applied** (a stale row is
+silently skipped and not counted, same as bookmarks).
+**Errors:** 401, 400 validation (missing `examCode`/`updatedAt`).
+**Business rules:** **Last-write-wins**, identical mechanics to `BookmarkController`: primary key
+is the synthetic string `userId:examCode` (ADR-005 pattern); an incoming row is applied only if
+its `updatedAt` is strictly after the server's stored value for that pair; `deleted: true` is a
+tombstone marker, not a row deletion.
+**Consumers:** Mobile
+
+### GET /api/followed-exams
+**Purpose:** Restore everything currently followed, for rebuilding a fresh install.
+**Auth:** user
+**Request:** none
+**Response:** `{ exams: [ { examCode, deleted, updatedAt } ] }`.
+**Errors:** 401.
+**Business rules:** Only returns **active** (non-deleted) follows — tombstones exist server-side
+to enforce last-write-wins but never travel back down, same as bookmarks.
 **Consumers:** Mobile
 
 ---

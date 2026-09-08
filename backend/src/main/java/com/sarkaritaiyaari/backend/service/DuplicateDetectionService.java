@@ -2,8 +2,10 @@ package com.sarkaritaiyaari.backend.service;
 
 import com.sarkaritaiyaari.backend.entity.Question;
 import com.sarkaritaiyaari.backend.entity.QuestionDuplicate;
+import com.sarkaritaiyaari.backend.entity.QuestionOccurrence;
 import com.sarkaritaiyaari.backend.entity.QuestionTranslation;
 import com.sarkaritaiyaari.backend.repository.QuestionDuplicateRepository;
+import com.sarkaritaiyaari.backend.repository.QuestionOccurrenceRepository;
 import com.sarkaritaiyaari.backend.repository.QuestionRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -46,14 +48,17 @@ public class DuplicateDetectionService {
 
     private final QuestionRepository questionRepository;
     private final QuestionDuplicateRepository duplicates;
+    private final QuestionOccurrenceRepository occurrenceRepository;
 
     @PersistenceContext
     private EntityManager entityManager;
 
     public DuplicateDetectionService(QuestionRepository questionRepository,
-                                      QuestionDuplicateRepository duplicates) {
+                                      QuestionDuplicateRepository duplicates,
+                                      QuestionOccurrenceRepository occurrenceRepository) {
         this.questionRepository = questionRepository;
         this.duplicates = duplicates;
+        this.occurrenceRepository = occurrenceRepository;
     }
 
     /**
@@ -250,7 +255,18 @@ public class DuplicateDetectionService {
                 .toList();
     }
 
-    /** Marks a detected pair as reviewed. Idempotent — re-resolving just restamps it. */
+    /**
+     * Marks a detected pair as reviewed. Idempotent — re-resolving just restamps it.
+     *
+     * <p>{@code DUPLICATE} (TASK-2501 Phase 1) is now a real merge, not just a label: every
+     * {@code question_occurrences} row on {@code questionId} (the loser — this pair's own
+     * existing parameter naming already says {@code questionId} "is a duplicate of"
+     * {@code duplicateOfQuestionId}) is re-parented onto the survivor, and the loser is
+     * soft-deleted through the same tombstone {@code QuestionService.delete()} already uses.
+     * Re-resolving an already-merged pair finds nothing left to move and no-ops on the
+     * soft-delete, so this stays safe to call twice. {@code NOT_DUPLICATE} is unchanged — no
+     * merge, both questions stay exactly as they are.
+     */
     public void resolve(UUID questionId, UUID duplicateOfQuestionId, QuestionDuplicate.Resolution resolution) {
         QuestionDuplicate edge = duplicates
                 .findById(new QuestionDuplicate.Key(questionId, duplicateOfQuestionId))
@@ -258,6 +274,25 @@ public class DuplicateDetectionService {
                         "No detected duplicate pair for " + questionId + " -> " + duplicateOfQuestionId));
         edge.setResolution(resolution);
         edge.setResolvedAt(OffsetDateTime.now());
+
+        if (resolution == QuestionDuplicate.Resolution.DUPLICATE) {
+            mergeOccurrencesAndSoftDelete(questionId, duplicateOfQuestionId);
+        }
+    }
+
+    private void mergeOccurrencesAndSoftDelete(UUID loserId, UUID survivorId) {
+        Question survivor = questionRepository.findById(survivorId)
+                .orElseThrow(() -> new NoSuchElementException("Question not found: " + survivorId));
+        for (QuestionOccurrence occurrence : occurrenceRepository.findByQuestion_Id(loserId)) {
+            occurrence.setQuestion(survivor);
+        }
+
+        Question loser = questionRepository.findById(loserId)
+                .orElseThrow(() -> new NoSuchElementException("Question not found: " + loserId));
+        if (!loser.isDeleted()) {
+            loser.setDeleted(true);
+            loser.setUpdatedAt(OffsetDateTime.now());
+        }
     }
 
     /**

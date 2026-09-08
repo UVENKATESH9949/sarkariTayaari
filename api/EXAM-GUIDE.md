@@ -8,12 +8,18 @@ I apply" domain. Introduced by migration
 syllabus are deliberately *not* part of this model — they already exist
 (`ExamStructureService`, `exam_subjects`/`topics`) and are reused rather than duplicated.
 
-Unlike the rest of the app, the mobile Exam Guide screen (`mobile/src/app/exam-guide.tsx`,
-fetching via `mobile/src/api/examGuide.ts`) is **live-fetch only** — there is no local SQLite
-table or delta-sync pipeline for this content yet (see the comment at the top of
-`examGuide.ts`). That's a deliberate Phase-1 scope decision, not an oversight: it means no
-offline access to guide content and no "last updated" staleness indicator, both flagged as
-follow-up work in the report.
+**Corrected 2026-09-05 — this section was stale.** It previously said the mobile Exam
+Guide screen was live-fetch only with no local cache. That shipped later and is real:
+`GET /api/exam-guides` is called by `writeExamGuides()`
+(`mobile/src/sync/writeQuestions.ts`) as part of the ordinary reference sync, writing into
+local tables (`examGuideCycles`/`examGuideEligibility`/`examGuideDates`/
+`examGuideDocuments`/`examGuideSteps`/`examGuideMistakes`/`examGuideFees`/
+`examGuideCareerPosts`/`examGuideSources`, mobile migration `0014`). Reads go through
+`mobile/src/db/examGuideLocal.ts` and the hybrid facade
+`mobile/src/data/examGuideData.ts`'s `getExamGuideHybrid`, the same shape every other
+reference type in the app uses. `mobile/src/api/examGuide.ts` remains the *live-fetch*
+path specifically (used by the hybrid facade's live branch, and directly wherever a
+forced live read is wanted) — its header comment has been corrected to say so.
 
 ## Key model facts
 
@@ -55,8 +61,8 @@ follow-up work in the report.
 **Request:** none
 **Response:** `ExamGuideResponse[]`
 **Errors:** none exam-specific (exams with no current cycle are simply absent from the list, not an error)
-**Business rules:** Documented in the controller as "what mobile syncs," but as of this writing **no caller was found** in `mobile/src/api/*.ts` or `admin/src/api.js` — mobile fetches per-exam via `getExamGuide` instead. Worth flagging: this bulk endpoint appears unused by either client right now.
-**Consumers:** none found (see note above)
+**Business rules:** Documented in the controller as "what mobile syncs." **Corrected 2026-09-05** — this previously said no caller existed; that was stale. `mobile/src/sync/writeQuestions.ts`'s `writeExamGuides()` calls this as part of the ordinary reference sync (see the module note above).
+**Consumers:** Mobile (`writeExamGuides()` in `mobile/src/sync/writeQuestions.ts`, full-replace into the local offline cache); `getExamGuide` (per-exam, live) is used separately by the screens themselves
 
 ### GET /api/exams/{examCode}/recruitment-cycles/history
 **Purpose:** Every *non-current* (past) cycle for this exam — spec §63 "Notification History."

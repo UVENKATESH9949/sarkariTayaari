@@ -20,6 +20,7 @@ import { SectionLabel } from "../../ui/SectionLabel";
 import { CardSkeleton } from "../../ui/Skeleton";
 import { radius, spacing } from "../../ui/theme";
 import { useTheme, useThemedStyles, type Theme } from "../../ui/ThemeContext";
+import { ThemeToggleButton } from "../../ui/ThemeToggleButton";
 import { useT } from "../../i18n/I18nContext";
 
 // Streak/readiness are still mock — real streak computation and the final
@@ -111,8 +112,13 @@ export default function Home() {
       contentContainerStyle={[styles.container, { paddingTop: insets.top + spacing.xl }]}
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
     >
-      <Text style={styles.greeting}>{t("home.welcome")}</Text>
-      <Text style={styles.title}>{t("common.appName")}</Text>
+      <View style={styles.headerRow}>
+        <View style={styles.headerTextBlock}>
+          <Text style={styles.greeting}>{t("home.welcome")}</Text>
+          <Text style={styles.title}>{t("common.appName")}</Text>
+        </View>
+        <ThemeToggleButton />
+      </View>
 
       <View style={styles.streakCard}>
         <Ionicons name="flame" size={22} color={colors.semantic.warning} />
@@ -220,6 +226,14 @@ const buildStyles = ({ colors, typography }: Theme) =>
       paddingTop: spacing.xl,
       paddingBottom: spacing["3xl"],
       gap: spacing.base,
+    },
+    headerRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+    },
+    headerTextBlock: {
+      flex: 1,
     },
     greeting: {
       ...typography.secondary,

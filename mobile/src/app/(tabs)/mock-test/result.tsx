@@ -11,6 +11,11 @@ import { CardSkeleton } from "../../../ui/Skeleton";
 import { spacing } from "../../../ui/theme";
 import { useTheme, useThemedStyles, type Theme } from "../../../ui/ThemeContext";
 import { useT } from "../../../i18n/I18nContext";
+import { OptionList } from "../../../questionRenderer/OptionList";
+import { MultiSelectOptionList } from "../../../questionRenderer/MultiSelectOptionList";
+import { FreeTextAnswerInput } from "../../../questionRenderer/FreeTextAnswerInput";
+import { describeYourAnswer } from "../../../questionRenderer/answerSummary";
+import { revealPlainStyles } from "../../../questionRenderer/optionListStyles";
 
 // Takes the palette: these are semantic colours, which differ between themes.
 function scoreTone(percent: number, colors: Theme["colors"]): { text: string; bg: string } {
@@ -27,6 +32,21 @@ function formatDuration(totalSeconds: number): string {
 
 type QuestionResult = MockTestAttemptRecord["results"][number];
 
+/**
+ * `selectedIndex === correctIndex` was the whole rule before TASK-2301 Phase P2 Wave A —
+ * both are always null for MULTIPLE_CHOICE/TRUE_FALSE, which would read as permanently
+ * "unattempted" under that rule alone. `outcome` is the type-agnostic source of truth for
+ * every result saved since Wave A; a result saved before it (no stored `outcome`) falls
+ * back to the original index comparison, which is the only signal it has.
+ */
+function resultStatus(r: QuestionResult): "correct" | "wrong" | "unattempted" {
+  if (r.outcome === "CORRECT") return "correct";
+  if (r.outcome === "INCORRECT") return "wrong";
+  if (r.outcome === "UNATTEMPTED") return "unattempted";
+  if (r.selectedIndex === null) return "unattempted";
+  return r.selectedIndex === r.correctIndex ? "correct" : "wrong";
+}
+
 /** Extracted so the FlatList's renderItem stays small — the body is unchanged. */
 function QuestionResultCard({
   result: r,
@@ -41,8 +61,9 @@ function QuestionResultCard({
 }) {
   const { colors } = useTheme();
   const styles = useThemedStyles(buildStyles);
+  const optionListStyles = useThemedStyles(revealPlainStyles);
   const t = useT();
-  const status = r.selectedIndex === null ? "unattempted" : r.selectedIndex === r.correctIndex ? "correct" : "wrong";
+  const status = resultStatus(r);
   return (
     <Pressable style={styles.card} onPress={onToggle}>
       <View style={styles.cardHeader}>
@@ -67,22 +88,56 @@ function QuestionResultCard({
 
       {isExpanded && (
         <View style={styles.expandedContent}>
-          <View style={styles.optionsList}>
-            {r.options.map((option, optIndex) => {
-              const isCorrect = optIndex === r.correctIndex;
-              const isPickedWrong = r.selectedIndex === optIndex && optIndex !== r.correctIndex;
-              return (
-                <View
-                  key={optIndex}
-                  style={[styles.optionRow, isCorrect && styles.optionCorrect, isPickedWrong && styles.optionWrong]}
-                >
-                  <Text style={styles.optionText}>{option}</Text>
-                  {isCorrect && <Ionicons name="checkmark-circle" size={18} color={colors.semantic.success} />}
-                  {isPickedWrong && <Ionicons name="close-circle" size={18} color={colors.semantic.error} />}
-                </View>
-              );
-            })}
-          </View>
+          {r.questionType === "MULTIPLE_CHOICE" ? (
+            <MultiSelectOptionList
+              options={r.options}
+              styles={optionListStyles}
+              selectedIndices={
+                Array.isArray(r.response?.selectedOptions)
+                  ? (r.response!.selectedOptions as unknown[]).filter((v): v is number => typeof v === "number")
+                  : []
+              }
+              iconSize={18}
+            />
+          ) : r.questionType === "TRUE_FALSE" ? (
+            <OptionList
+              options={[t("quiz.trueOption"), t("quiz.falseOption")]}
+              styles={optionListStyles}
+              badge="none"
+              selectedIndex={typeof r.response?.selectedBoolean === "boolean" ? (r.response.selectedBoolean ? 0 : 1) : null}
+              iconSize={18}
+            />
+          ) : r.questionType === "NUMERIC" ? (
+            <FreeTextAnswerInput
+              value={typeof r.response?.enteredValue === "number" ? String(r.response.enteredValue) : ""}
+              disabled
+            />
+          ) : r.questionType === "FILL_BLANK" ? (
+            <FreeTextAnswerInput
+              value={typeof r.response?.enteredText === "string" ? r.response.enteredText : ""}
+              disabled
+            />
+          ) : r.questionType === "MATCH" || r.questionType === "ORDERING" ? (
+            // No per-key labels survive in a stored result snapshot — same limitation
+            // documented on answerSummary.ts for MULTIPLE_CHOICE/TRUE_FALSE.
+            <Text style={styles.explanationText}>
+              Your Answer:{" "}
+              {describeYourAnswer(r, {
+                trueOption: t("quiz.trueOption"),
+                falseOption: t("quiz.falseOption"),
+                unattempted: t("common.unattempted"),
+              })}
+            </Text>
+          ) : (
+            <OptionList
+              options={r.options}
+              styles={optionListStyles}
+              badge="none"
+              selectedIndex={r.selectedIndex}
+              correctIndex={r.correctIndex}
+              iconSize={18}
+            />
+          )}
           <View style={styles.explanationBox}>
             <Text style={styles.explanationLabel}>{t("common.explanation")}</Text>
             <Text style={styles.explanationText}>{r.explanation}</Text>
@@ -121,8 +176,9 @@ export default function MockTestResult() {
     for (const r of attempt.results) {
       const bucket = bySubject.get(r.subjectName) ?? { correct: 0, wrong: 0, unattempted: 0, total: 0 };
       bucket.total += 1;
-      if (r.selectedIndex === null) bucket.unattempted += 1;
-      else if (r.selectedIndex === r.correctIndex) bucket.correct += 1;
+      const status = resultStatus(r);
+      if (status === "unattempted") bucket.unattempted += 1;
+      else if (status === "correct") bucket.correct += 1;
       else bucket.wrong += 1;
       bySubject.set(r.subjectName, bucket);
     }
@@ -367,31 +423,6 @@ const buildStyles = ({ colors, typography }: Theme) =>
     },
     expandedContent: {
       marginTop: 14,
-    },
-    optionsList: {
-      gap: 8,
-    },
-    optionRow: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 10,
-      padding: 11,
-    },
-    optionCorrect: {
-      borderColor: colors.semantic.success,
-      backgroundColor: colors.semantic.successBg,
-    },
-    optionWrong: {
-      borderColor: colors.semantic.error,
-      backgroundColor: colors.semantic.errorBg,
-    },
-    optionText: {
-      fontSize: 13,
-      color: colors.text.primary,
-      flex: 1,
     },
     explanationBox: {
       marginTop: 12,

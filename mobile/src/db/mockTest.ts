@@ -3,14 +3,62 @@ import { db } from "./client";
 import { mockTestAttemptResults, mockTestAttempts, questionExams, questions, questionTranslations } from "./schema";
 import type { SyncedPaper } from "./examStructure";
 import { trackEvent } from "../telemetry/analytics";
-import { resolveCorrectIndex } from "./answerResolution";
+import { isIndexBasedType, resolveCorrectIndex } from "./answerResolution";
+import { packRandomSample } from "./questionGroupAssembly";
+
+/**
+ * How much bigger the random candidate pool is than the number of questions actually
+ * needed, before group-aware packing (TASK-2301 Phase P3) whittles it down — mirrors the
+ * backend's `QuestionRepositoryImpl.sampleForMock` bounds exactly, so a section's grouped
+ * content has the same real chance of being represented locally as it does server-side.
+ */
+const CANDIDATE_POOL_MULTIPLIER = 20;
+const CANDIDATE_POOL_MIN = 500;
+const CANDIDATE_POOL_MAX = 5000;
+
+type MockCandidateRow = {
+  id: string;
+  correctAnswer: string;
+  subjectName: string;
+  questionType: string | null;
+  answerKey: Record<string, unknown> | null;
+  contentStructure: Record<string, unknown> | null;
+  questionGroupId: string | null;
+};
+
+/** Every non-deleted sibling of a group, in authoring order — a group is always sampled as one atomic unit, never split. */
+async function fullGroupChildren(groupId: string): Promise<MockCandidateRow[]> {
+  return db
+    .select({
+      id: questions.id,
+      correctAnswer: questions.correctAnswer,
+      subjectName: questions.subjectName,
+      questionType: questions.questionType,
+      answerKey: questions.answerKey,
+      contentStructure: questions.contentStructure,
+      questionGroupId: questions.questionGroupId,
+    })
+    .from(questions)
+    .where(and(eq(questions.questionGroupId, groupId), eq(questions.isDeleted, false)))
+    .orderBy(questions.groupOrder)
+    .all();
+}
 
 export type MockTestQuestion = {
   id: string;
   sectionName: string;
   subjectName: string;
-  correctIndex: number;
-  translations: Record<string, { questionText: string; options: string[]; explanation: string }>;
+  /** null for MULTIPLE_CHOICE/TRUE_FALSE — see PracticeQuestion's identical note (TASK-2301 Phase P2 Wave A). */
+  correctIndex: number | null;
+  questionType?: string;
+  answerKey?: Record<string, unknown> | null;
+  contentStructure?: Record<string, unknown> | null;
+  /** Set when this question belongs to a shared passage/group (TASK-2301 Phase P3) — null for a standalone question. */
+  questionGroupId?: string | null;
+  translations: Record<
+    string,
+    { questionText: string; options: string[]; explanation: string; content?: Record<string, unknown> | null }
+  >;
 };
 
 export type SectionAvailability = {
@@ -63,11 +111,20 @@ export async function buildMockTestQuestions(paper: SyncedPaper): Promise<MockTe
   for (const section of paper.sections) {
     if (section.subjectIds.length === 0) continue;
 
-    const matched = await db
+    const sampleSize = Math.min(
+      Math.max(section.questionCount * CANDIDATE_POOL_MULTIPLIER, CANDIDATE_POOL_MIN),
+      CANDIDATE_POOL_MAX,
+    );
+
+    const candidates = await db
       .select({
         id: questions.id,
         correctAnswer: questions.correctAnswer,
         subjectName: questions.subjectName,
+        questionType: questions.questionType,
+        answerKey: questions.answerKey,
+        contentStructure: questions.contentStructure,
+        questionGroupId: questions.questionGroupId,
       })
       .from(questions)
       .innerJoin(questionExams, eq(questionExams.questionId, questions.id))
@@ -79,8 +136,12 @@ export async function buildMockTestQuestions(paper: SyncedPaper): Promise<MockTe
         ),
       )
       .orderBy(sql`RANDOM()`)
-      .limit(section.questionCount)
+      .limit(sampleSize)
       .all();
+
+    if (candidates.length === 0) continue;
+
+    const matched = await packRandomSample(candidates, section.questionCount, fullGroupChildren);
 
     if (matched.length === 0) continue;
 
@@ -91,13 +152,17 @@ export async function buildMockTestQuestions(paper: SyncedPaper): Promise<MockTe
       .where(inArray(questionTranslations.questionId, questionIds))
       .all();
 
-    const translationsByQuestion = new Map<string, Record<string, { questionText: string; options: string[]; explanation: string }>>();
+    const translationsByQuestion = new Map<
+      string,
+      Record<string, { questionText: string; options: string[]; explanation: string; content?: Record<string, unknown> | null }>
+    >();
     for (const row of translationRows) {
       const forQuestion = translationsByQuestion.get(row.questionId) ?? {};
       forQuestion[row.languageCode] = {
         questionText: row.questionText,
         options: row.options,
         explanation: row.explanation ?? "",
+        content: row.content,
       };
       translationsByQuestion.set(row.questionId, forQuestion);
     }
@@ -105,13 +170,20 @@ export async function buildMockTestQuestions(paper: SyncedPaper): Promise<MockTe
     for (const q of matched) {
       const translations = translationsByQuestion.get(q.id) ?? {};
       const englishOptions = translations.en?.options ?? Object.values(translations)[0]?.options ?? [];
-      const correctIndex = resolveCorrectIndex(q.correctAnswer, englishOptions);
+      const questionType = q.questionType ?? "SINGLE_CHOICE";
+      const correctIndex = isIndexBasedType(questionType)
+        ? resolveCorrectIndex(q.correctAnswer, englishOptions)
+        : null;
 
       all.push({
         id: q.id,
         sectionName: section.name,
         subjectName: q.subjectName,
         correctIndex,
+        questionType,
+        answerKey: q.answerKey,
+        contentStructure: q.contentStructure,
+        questionGroupId: q.questionGroupId,
         translations,
       });
     }
@@ -126,9 +198,25 @@ export type MockTestResultItem = {
   questionText: string;
   options: string[];
   selectedIndex: number | null;
-  correctIndex: number;
+  /** Nullable since TASK-2301 Phase P2 Wave A — no meaning for MULTIPLE_CHOICE/TRUE_FALSE. */
+  correctIndex: number | null;
   explanation: string;
   markedForReview: boolean;
+  /**
+   * Milliseconds this question was on screen, or null when it was not measured (§9).
+   *
+   * Nothing reads it yet -- see practice/useQuestionTimer.ts for why capture starts before
+   * the signal is usable. Null, never 0: a zero would claim an instant answer.
+   */
+  timeMs?: number | null;
+
+  /* -------------------------- Response model (TASK-2301 Phase P2 Wave A) */
+
+  /** "SINGLE_CHOICE" when absent — every question built before this phase is one. */
+  questionType?: string | null;
+  response?: Record<string, unknown> | null;
+  outcome?: string | null;
+  scoreFraction?: number | null;
 };
 
 export type MockTestAttemptRecord = {
@@ -185,6 +273,11 @@ export async function insertMockTestAttempt(attempt: MockTestAttemptRecord): Pro
         correctIndex: result.correctIndex,
         explanation: result.explanation,
         markedForReview: result.markedForReview,
+        timeMs: result.timeMs ?? null,
+        questionType: result.questionType ?? "SINGLE_CHOICE",
+        response: result.response ?? null,
+        outcome: result.outcome ?? null,
+        scoreFraction: result.scoreFraction ?? null,
       })),
     );
   });
@@ -231,6 +324,11 @@ export async function getMockTestAttempt(attemptId: string): Promise<MockTestAtt
       correctIndex: r.correctIndex,
       explanation: r.explanation,
       markedForReview: r.markedForReview,
+      timeMs: r.timeMs,
+      questionType: r.questionType,
+      response: r.response,
+      outcome: r.outcome,
+      scoreFraction: r.scoreFraction,
     })),
   };
 }

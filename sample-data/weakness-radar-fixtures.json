@@ -1,0 +1,308 @@
+{
+  "_comment": [
+    "Deterministic fixtures for the Weakness Radar topic-health algorithm (TASK-2201).",
+    "",
+    "WHY THIS FILE EXISTS. The scoring rules are implemented twice on purpose: in Java",
+    "(backend/.../service/TopicHealthService.java) for signed-in students, and in TypeScript",
+    "(mobile/src/intelligence/topicHealth.ts) for signed-out students whose attempts never",
+    "reach a server. That duplication follows the precedent this codebase already set for the",
+    "mastery ladder, but it can drift. This file is the one agreed statement of what the",
+    "algorithm should produce, so both copies can be checked against the same cases rather",
+    "than against each other's behaviour.",
+    "",
+    "The Java side asserts against it in TopicHealthScoringTest. The mobile side has no test",
+    "runner in this project (no jest/vitest is configured), so its copy is verified by reading",
+    "and on the emulator - stated plainly rather than implied.",
+    "",
+    "Every case maps to a numbered requirement in the supplied spec's section 23. Expectations",
+    "are deliberately partial: a case asserts the thing it is about (a state, a trend, a bound,",
+    "a relation to another case) and not every number, so tuning an unrelated weight does not",
+    "produce a wall of false failures.",
+    "",
+    "Event fields: eventId groups answers from one sitting (consistency is measured across",
+    "sittings, so this matters); daysAgo is relative to the injected 'now'; difficulty is a",
+    "difficulty_levels code, or null for 'no metadata'; pyq marks previous-year questions."
+  ],
+  "algorithmVersion": "TOPIC_HEALTH_V1",
+  "now": "2026-09-03T12:00:00Z",
+  "difficultyLevels": ["easy", "medium", "hard"],
+  "cases": [
+    {
+      "name": "one-wrong-answer-is-not-a-weakness",
+      "specCase": "23.1",
+      "why": "A single mistake must never produce a weakness. This is the failure mode the whole evidence-level idea exists to prevent.",
+      "events": [
+        { "eventId": "e1", "daysAgo": 0, "difficulty": "medium", "pyq": false, "answered": 1, "correct": 0 }
+      ],
+      "expect": { "state": "INSUFFICIENT_DATA", "evidenceLevel": "INSUFFICIENT_DATA" }
+    },
+    {
+      "name": "few-attempts-stay-insufficient",
+      "specCase": "23.2",
+      "why": "Four answered questions is under the evidence floor, however badly they went.",
+      "events": [
+        { "eventId": "e1", "daysAgo": 2, "difficulty": "medium", "pyq": false, "answered": 2, "correct": 0 },
+        { "eventId": "e2", "daysAgo": 1, "difficulty": "medium", "pyq": false, "answered": 2, "correct": 1 }
+      ],
+      "expect": { "state": "INSUFFICIENT_DATA", "evidenceLevel": "INSUFFICIENT_DATA" }
+    },
+    {
+      "name": "sustained-poor-performance-needs-attention",
+      "specCase": "23.3",
+      "why": "Repeated weak sessions on reliable evidence is the one case that should assert a problem.",
+      "events": [
+        { "eventId": "e1", "daysAgo": 25, "difficulty": "medium", "pyq": false, "answered": 6, "correct": 2 },
+        { "eventId": "e2", "daysAgo": 20, "difficulty": "medium", "pyq": false, "answered": 6, "correct": 2 },
+        { "eventId": "e3", "daysAgo": 14, "difficulty": "medium", "pyq": false, "answered": 6, "correct": 2 },
+        { "eventId": "e4", "daysAgo": 8, "difficulty": "medium", "pyq": false, "answered": 6, "correct": 2 },
+        { "eventId": "e5", "daysAgo": 2, "difficulty": "medium", "pyq": false, "answered": 6, "correct": 2 }
+      ],
+      "expect": {
+        "state": "NEEDS_ATTENTION",
+        "evidenceLevel": "RELIABLE",
+        "healthAtMost": 55,
+        "confidenceAtLeast": 45
+      }
+    },
+    {
+      "name": "sustained-good-performance-is-strong",
+      "specCase": "23.4",
+      "why": "The mirror of the case above: the same volume answered well must come out strong.",
+      "events": [
+        { "eventId": "e1", "daysAgo": 25, "difficulty": "medium", "pyq": false, "answered": 6, "correct": 5 },
+        { "eventId": "e2", "daysAgo": 20, "difficulty": "medium", "pyq": false, "answered": 6, "correct": 5 },
+        { "eventId": "e3", "daysAgo": 14, "difficulty": "medium", "pyq": false, "answered": 6, "correct": 5 },
+        { "eventId": "e4", "daysAgo": 8, "difficulty": "medium", "pyq": false, "answered": 6, "correct": 5 },
+        { "eventId": "e5", "daysAgo": 2, "difficulty": "medium", "pyq": false, "answered": 6, "correct": 5 }
+      ],
+      "expect": { "state": "STRONG", "evidenceLevel": "RELIABLE", "healthAtLeast": 70 }
+    },
+    {
+      "name": "recent-improvement-changes-the-trend",
+      "specCase": "23.5",
+      "why": "50% historically, 87% recently. The trend must read IMPROVING even though the state may well be STRONG by then - trend and state are separate dimensions (spec 12).",
+      "events": [
+        { "eventId": "h1", "daysAgo": 70, "difficulty": "medium", "pyq": false, "answered": 8, "correct": 4 },
+        { "eventId": "h2", "daysAgo": 62, "difficulty": "medium", "pyq": false, "answered": 8, "correct": 4 },
+        { "eventId": "h3", "daysAgo": 55, "difficulty": "medium", "pyq": false, "answered": 8, "correct": 4 },
+        { "eventId": "r1", "daysAgo": 9, "difficulty": "medium", "pyq": false, "answered": 8, "correct": 7 },
+        { "eventId": "r2", "daysAgo": 5, "difficulty": "medium", "pyq": false, "answered": 8, "correct": 7 },
+        { "eventId": "r3", "daysAgo": 1, "difficulty": "medium", "pyq": false, "answered": 8, "correct": 7 }
+      ],
+      "expect": { "trend": "IMPROVING", "trendDeltaAtLeast": 30, "stateNot": "NEEDS_ATTENTION" }
+    },
+    {
+      "name": "improving-from-weak-is-not-labelled-weak",
+      "specCase": "23.5",
+      "why": "Spec 6 and 12's own example: 30% historically, 60% recently, health around the low 60s. Must be IMPROVING, never NEEDS_ATTENTION - this is the case where a naive accuracy threshold gets it wrong.",
+      "events": [
+        { "eventId": "h1", "daysAgo": 70, "difficulty": "medium", "pyq": false, "answered": 10, "correct": 3 },
+        { "eventId": "h2", "daysAgo": 62, "difficulty": "medium", "pyq": false, "answered": 10, "correct": 3 },
+        { "eventId": "h3", "daysAgo": 55, "difficulty": "medium", "pyq": false, "answered": 10, "correct": 3 },
+        { "eventId": "r1", "daysAgo": 9, "difficulty": "medium", "pyq": false, "answered": 10, "correct": 6 },
+        { "eventId": "r2", "daysAgo": 5, "difficulty": "medium", "pyq": false, "answered": 10, "correct": 6 },
+        { "eventId": "r3", "daysAgo": 1, "difficulty": "medium", "pyq": false, "answered": 10, "correct": 6 }
+      ],
+      "expect": { "state": "IMPROVING", "trend": "IMPROVING" }
+    },
+    {
+      "name": "historical-strength-then-decline-needs-revision",
+      "specCase": "23.6",
+      "why": "90% historically, 50% recently. This must be its own finding, not flattened into NEEDS_ATTENTION - the student once knew this, which changes what they should do about it.",
+      "events": [
+        { "eventId": "h1", "daysAgo": 70, "difficulty": "medium", "pyq": false, "answered": 10, "correct": 9 },
+        { "eventId": "h2", "daysAgo": 62, "difficulty": "medium", "pyq": false, "answered": 10, "correct": 9 },
+        { "eventId": "h3", "daysAgo": 55, "difficulty": "medium", "pyq": false, "answered": 10, "correct": 9 },
+        { "eventId": "r1", "daysAgo": 9, "difficulty": "medium", "pyq": false, "answered": 10, "correct": 5 },
+        { "eventId": "r2", "daysAgo": 5, "difficulty": "medium", "pyq": false, "answered": 10, "correct": 5 },
+        { "eventId": "r3", "daysAgo": 1, "difficulty": "medium", "pyq": false, "answered": 10, "correct": 5 }
+      ],
+      "expect": { "state": "NEEDS_REVISION", "trend": "DECLINING", "historicalAccuracyAtLeast": 85 }
+    },
+    {
+      "name": "variance-steady-baseline",
+      "specCase": "23.7",
+      "why": "76 correct out of 100, spread evenly. Paired with the case below, which has the SAME total accuracy but swings wildly - the two must not read as the same preparation state.",
+      "events": [
+        { "eventId": "e1", "daysAgo": 20, "difficulty": "medium", "pyq": false, "answered": 20, "correct": 15 },
+        { "eventId": "e2", "daysAgo": 16, "difficulty": "medium", "pyq": false, "answered": 20, "correct": 15 },
+        { "eventId": "e3", "daysAgo": 12, "difficulty": "medium", "pyq": false, "answered": 20, "correct": 16 },
+        { "eventId": "e4", "daysAgo": 8, "difficulty": "medium", "pyq": false, "answered": 20, "correct": 15 },
+        { "eventId": "e5", "daysAgo": 4, "difficulty": "medium", "pyq": false, "answered": 20, "correct": 15 }
+      ],
+      "expect": { "consistencyAtLeast": 90 }
+    },
+    {
+      "name": "variance-erratic-same-average",
+      "specCase": "23.7",
+      "why": "Also 76 of 100, but 100/40/100/40/100. Consistency must collapse and confidence must end up strictly below the steady case - spec 10 and 11.",
+      "events": [
+        { "eventId": "e1", "daysAgo": 20, "difficulty": "medium", "pyq": false, "answered": 20, "correct": 20 },
+        { "eventId": "e2", "daysAgo": 16, "difficulty": "medium", "pyq": false, "answered": 20, "correct": 8 },
+        { "eventId": "e3", "daysAgo": 12, "difficulty": "medium", "pyq": false, "answered": 20, "correct": 20 },
+        { "eventId": "e4", "daysAgo": 8, "difficulty": "medium", "pyq": false, "answered": 20, "correct": 8 },
+        { "eventId": "e5", "daysAgo": 4, "difficulty": "medium", "pyq": false, "answered": 20, "correct": 20 }
+      ],
+      "expect": { "consistencyAtMost": 50, "confidenceBelowCase": "variance-steady-baseline" }
+    },
+    {
+      "name": "difficulty-easy-questions-at-60-percent",
+      "specCase": "23.8",
+      "why": "60% on easy questions. Paired with the hard-question case below: identical accuracy, and the hard one must score higher - but by a bounded amount (spec 7 forbids hard questions swinging the score).",
+      "events": [
+        { "eventId": "e1", "daysAgo": 12, "difficulty": "easy", "pyq": false, "answered": 10, "correct": 6 },
+        { "eventId": "e2", "daysAgo": 8, "difficulty": "easy", "pyq": false, "answered": 10, "correct": 6 },
+        { "eventId": "e3", "daysAgo": 4, "difficulty": "easy", "pyq": false, "answered": 10, "correct": 6 }
+      ],
+      "expect": {}
+    },
+    {
+      "name": "difficulty-hard-questions-at-60-percent",
+      "specCase": "23.8",
+      "why": "Same 60%, on hard questions. Should read better than the easy case, and the whole difference must stay inside the difficulty term's bounded contribution.",
+      "events": [
+        { "eventId": "e1", "daysAgo": 12, "difficulty": "hard", "pyq": false, "answered": 10, "correct": 6 },
+        { "eventId": "e2", "daysAgo": 8, "difficulty": "hard", "pyq": false, "answered": 10, "correct": 6 },
+        { "eventId": "e3", "daysAgo": 4, "difficulty": "hard", "pyq": false, "answered": 10, "correct": 6 }
+      ],
+      "expect": {
+        "healthAboveCase": "difficulty-easy-questions-at-60-percent",
+        "healthAboveCaseByAtMost": 20
+      }
+    },
+    {
+      "name": "missing-difficulty-metadata-falls-back-safely",
+      "specCase": "23.8",
+      "why": "Spec 21: no difficulty metadata must drop the signal, not be bucketed as medium. The topic still gets a health score from the signals that do exist.",
+      "events": [
+        { "eventId": "e1", "daysAgo": 12, "difficulty": null, "pyq": false, "answered": 10, "correct": 6 },
+        { "eventId": "e2", "daysAgo": 8, "difficulty": null, "pyq": false, "answered": 10, "correct": 6 },
+        { "eventId": "e3", "daysAgo": 4, "difficulty": null, "pyq": false, "answered": 10, "correct": 6 }
+      ],
+      "expect": { "droppedComponent": "difficultyHandling", "healthAtLeast": 1 }
+    },
+    {
+      "name": "pyq-weakness-lowers-health",
+      "specCase": "23.9",
+      "why": "80% on ordinary questions, 20% on real previous-year ones. Paired with the identical-answers-untagged case below: the ONLY difference is the PYQ tag, so the gap isolates the PYQ signal exactly.",
+      "events": [
+        { "eventId": "e1", "daysAgo": 10, "difficulty": "medium", "pyq": false, "answered": 5, "correct": 4 },
+        { "eventId": "e2", "daysAgo": 8, "difficulty": "medium", "pyq": false, "answered": 5, "correct": 4 },
+        { "eventId": "e3", "daysAgo": 6, "difficulty": "medium", "pyq": false, "answered": 5, "correct": 4 },
+        { "eventId": "e4", "daysAgo": 4, "difficulty": "medium", "pyq": false, "answered": 5, "correct": 4 },
+        { "eventId": "e5", "daysAgo": 2, "difficulty": "medium", "pyq": true, "answered": 5, "correct": 1 },
+        { "eventId": "e6", "daysAgo": 1, "difficulty": "medium", "pyq": true, "answered": 5, "correct": 1 }
+      ],
+      "expect": { "pyqAccuracyAtMost": 25, "pyqAttemptedCount": 10 }
+    },
+    {
+      "name": "pyq-control-same-answers-untagged",
+      "specCase": "23.9",
+      "why": "Identical answers with the PYQ tag removed. Health must come out HIGHER than the tagged case (the PYQ signal is real) but not wildly so (spec 8: PYQ must not override everything else).",
+      "events": [
+        { "eventId": "e1", "daysAgo": 10, "difficulty": "medium", "pyq": false, "answered": 5, "correct": 4 },
+        { "eventId": "e2", "daysAgo": 8, "difficulty": "medium", "pyq": false, "answered": 5, "correct": 4 },
+        { "eventId": "e3", "daysAgo": 6, "difficulty": "medium", "pyq": false, "answered": 5, "correct": 4 },
+        { "eventId": "e4", "daysAgo": 4, "difficulty": "medium", "pyq": false, "answered": 5, "correct": 4 },
+        { "eventId": "e5", "daysAgo": 2, "difficulty": "medium", "pyq": false, "answered": 5, "correct": 1 },
+        { "eventId": "e6", "daysAgo": 1, "difficulty": "medium", "pyq": false, "answered": 5, "correct": 1 }
+      ],
+      "expect": {
+        "pyqAttemptedCount": 0,
+        "pyqAccuracyNull": true,
+        "healthAboveCase": "pyq-weakness-lowers-health",
+        "healthAboveCaseByAtMost": 15
+      }
+    },
+    {
+      "name": "too-few-pyqs-drops-the-pyq-signal",
+      "specCase": "23.9",
+      "why": "Spec 21: missing PYQ evidence excludes the signal rather than assuming anything. Four PYQ answers is under the floor.",
+      "events": [
+        { "eventId": "e1", "daysAgo": 10, "difficulty": "medium", "pyq": false, "answered": 10, "correct": 7 },
+        { "eventId": "e2", "daysAgo": 6, "difficulty": "medium", "pyq": false, "answered": 10, "correct": 7 },
+        { "eventId": "e3", "daysAgo": 2, "difficulty": "medium", "pyq": true, "answered": 4, "correct": 0 }
+      ],
+      "expect": { "droppedComponent": "pyqPerformance", "pyqAccuracyNull": true, "pyqAttemptedCount": 4 }
+    },
+    {
+      "name": "no-timing-data-produces-no-speed-signal",
+      "specCase": "23.10",
+      "why": "Spec 9: a missing signal must not become fake data. No fixture carries timing, so speed must be absent - not 1.0x, not a neutral 50 folded into health.",
+      "events": [
+        { "eventId": "e1", "daysAgo": 10, "difficulty": "medium", "pyq": false, "answered": 10, "correct": 7 },
+        { "eventId": "e2", "daysAgo": 6, "difficulty": "medium", "pyq": false, "answered": 10, "correct": 7 },
+        { "eventId": "e3", "daysAgo": 2, "difficulty": "medium", "pyq": false, "answered": 10, "correct": 7 }
+      ],
+      "expect": { "speedRatioNull": true, "droppedComponent": "speed", "timedAnswerCount": 0 }
+    },
+    {
+      "name": "strong-topic-survives-one-mistake",
+      "specCase": "23.12",
+      "why": "Fifty answers at 100%, then one wrong. Must stay STRONG. If a single error can move a well-established topic out of STRONG, the recency weighting is too aggressive.",
+      "events": [
+        { "eventId": "e1", "daysAgo": 24, "difficulty": "medium", "pyq": false, "answered": 5, "correct": 5 },
+        { "eventId": "e2", "daysAgo": 22, "difficulty": "medium", "pyq": false, "answered": 5, "correct": 5 },
+        { "eventId": "e3", "daysAgo": 20, "difficulty": "medium", "pyq": false, "answered": 5, "correct": 5 },
+        { "eventId": "e4", "daysAgo": 18, "difficulty": "medium", "pyq": false, "answered": 5, "correct": 5 },
+        { "eventId": "e5", "daysAgo": 16, "difficulty": "medium", "pyq": false, "answered": 5, "correct": 5 },
+        { "eventId": "e6", "daysAgo": 12, "difficulty": "medium", "pyq": false, "answered": 5, "correct": 5 },
+        { "eventId": "e7", "daysAgo": 9, "difficulty": "medium", "pyq": false, "answered": 5, "correct": 5 },
+        { "eventId": "e8", "daysAgo": 6, "difficulty": "medium", "pyq": false, "answered": 5, "correct": 5 },
+        { "eventId": "e9", "daysAgo": 4, "difficulty": "medium", "pyq": false, "answered": 5, "correct": 5 },
+        { "eventId": "e10", "daysAgo": 2, "difficulty": "medium", "pyq": false, "answered": 5, "correct": 5 },
+        { "eventId": "e11", "daysAgo": 0, "difficulty": "medium", "pyq": false, "answered": 1, "correct": 0 }
+      ],
+      "expect": { "state": "STRONG", "healthAtLeast": 70 }
+    },
+    {
+      "name": "one-bad-session-does-not-destroy-health",
+      "specCase": "23.13",
+      "why": "Sixty answers at 83%, then one six-question session at 17%. Health should fall - that is real evidence - but nowhere near NEEDS_ATTENTION.",
+      "events": [
+        { "eventId": "e1", "daysAgo": 26, "difficulty": "medium", "pyq": false, "answered": 6, "correct": 5 },
+        { "eventId": "e2", "daysAgo": 24, "difficulty": "medium", "pyq": false, "answered": 6, "correct": 5 },
+        { "eventId": "e3", "daysAgo": 22, "difficulty": "medium", "pyq": false, "answered": 6, "correct": 5 },
+        { "eventId": "e4", "daysAgo": 20, "difficulty": "medium", "pyq": false, "answered": 6, "correct": 5 },
+        { "eventId": "e5", "daysAgo": 17, "difficulty": "medium", "pyq": false, "answered": 6, "correct": 5 },
+        { "eventId": "e6", "daysAgo": 14, "difficulty": "medium", "pyq": false, "answered": 6, "correct": 5 },
+        { "eventId": "e7", "daysAgo": 11, "difficulty": "medium", "pyq": false, "answered": 6, "correct": 5 },
+        { "eventId": "e8", "daysAgo": 8, "difficulty": "medium", "pyq": false, "answered": 6, "correct": 5 },
+        { "eventId": "e9", "daysAgo": 5, "difficulty": "medium", "pyq": false, "answered": 6, "correct": 5 },
+        { "eventId": "e10", "daysAgo": 3, "difficulty": "medium", "pyq": false, "answered": 6, "correct": 5 },
+        { "eventId": "e11", "daysAgo": 0, "difficulty": "medium", "pyq": false, "answered": 6, "correct": 1 }
+      ],
+      "expect": { "stateNot": "NEEDS_ATTENTION", "healthAtLeast": 65 }
+    },
+    {
+      "name": "recent-evidence-baseline",
+      "specCase": "23.7 / spec 21",
+      "why": "Thirty answers at 30%, all inside the recent window. Paired with the eight-month-old case below, which has IDENTICAL answers - so the confidence gap between them is purely the effect of age.",
+      "events": [
+        { "eventId": "e1", "daysAgo": 20, "difficulty": "medium", "pyq": false, "answered": 10, "correct": 3 },
+        { "eventId": "e2", "daysAgo": 15, "difficulty": "medium", "pyq": false, "answered": 10, "correct": 3 },
+        { "eventId": "e3", "daysAgo": 10, "difficulty": "medium", "pyq": false, "answered": 10, "correct": 3 }
+      ],
+      "expect": { "state": "NEEDS_ATTENTION", "staleRecentWindow": false }
+    },
+    {
+      "name": "very-old-evidence-lowers-confidence",
+      "specCase": "23.7 / spec 21",
+      "why": [
+        "The same thirty answers, eight months old. Spec 21 asks for old data to be de-emphasised rather than treated as current, so the requirement is stated as a RELATION to the fresh twin above, not as an absolute bound - an absolute number here would just be asserting the current weights back at themselves.",
+        "",
+        "Worth knowing what it actually produces: confidence lands around 71, down from around 89 fresh. That is deliberately still above the floor at which a verdict is asserted, so the topic does read as NEEDS_ATTENTION. That is the right answer rather than a gap: if the student had practised this since, there would be newer evidence, so 'you were weak here and have not been back' is both well-evidenced and actionable. What makes it honest is the staleRecentWindow flag, which raises a STALE_PRACTICE reason code so the UI says the diagnosis rests on older practice instead of implying it is current."
+      ],
+      "events": [
+        { "eventId": "e1", "daysAgo": 250, "difficulty": "medium", "pyq": false, "answered": 10, "correct": 3 },
+        { "eventId": "e2", "daysAgo": 245, "difficulty": "medium", "pyq": false, "answered": 10, "correct": 3 },
+        { "eventId": "e3", "daysAgo": 240, "difficulty": "medium", "pyq": false, "answered": 10, "correct": 3 }
+      ],
+      "expect": {
+        "staleRecentWindow": true,
+        "confidenceBelowCase": "recent-evidence-baseline",
+        "confidenceAtMost": 80
+      }
+    }
+  ]
+}

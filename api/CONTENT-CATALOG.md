@@ -23,10 +23,10 @@ see `api/AUTH.md`.
 ### POST /api/exams
 **Purpose:** Create an exam.
 **Auth:** admin
-**Request:** `{ code: string, name: string, imageUrl?: string, active: boolean, displayOrder: int, difficulty?: string, badge?: string }`
-**Response:** `201 Created` — `ExamResponse`: `{ code, name, imageUrl, active, displayOrder, difficulty, badge }`
+**Request:** `{ code: string, name: string, imageUrl?: string, active: boolean, displayOrder: int, difficulty?: string, badge?: string, category?: string }`
+**Response:** `201 Created` — `ExamResponse`: `{ code, name, imageUrl, active, displayOrder, difficulty, badge, category }`
 **Errors:** 400 validation (blank code/name); 400 `"Exam code already exists: <code>"`; 400 `"Unknown difficulty: <value>"` / `"Unknown badge: <value>"` if those optional codes don't match an existing `difficulty_levels`/`exam_badges` row.
-**Business rules:** `code` is the primary key (not a generated id) — it's the human-chosen exam code (e.g. `SSC_CGL`), immutable identity for the row. `difficulty`/`badge` are optional FKs; blank string is normalised to `null` rather than tripping a constraint.
+**Business rules:** `code` is the primary key (not a generated id) — it's the human-chosen exam code (e.g. `SSC_CGL`), immutable identity for the row. `difficulty`/`badge` are optional FKs; blank string is normalised to `null` rather than tripping a constraint. `category` (Exams module, spec §6) is a plain string filter facet — SSC/Banking/Railways/UPSC/State Government/Teaching/Defence/Police/Insurance/Other in the admin's fixed dropdown, but not DB-enforced — no per-value styling the way `difficulty`/`badge` have, so it's not a lookup table.
 **Consumers:** Admin.
 
 ### GET /api/exams/{code}
@@ -54,6 +54,15 @@ see `api/AUTH.md`.
 **Response:** `ExamResponse[]`, ordered by `displayOrder`, unfiltered.
 **Errors:** 401/403 if not an admin.
 **Consumers:** Admin.
+
+### GET /api/exams/discover
+**Purpose:** The Exams module's own listing (spec §5-15) — every active exam as a card, with real pagination/sort/status/category filtering. Distinct from the plain `GET /api/exams` above (Home's simple list, no cycle/status data) and `/all` (admin, unfiltered).
+**Auth:** none — same "active exams are public" rule `GET /api/exams` already follows.
+**Request (query params, all optional):** `page` (default 0), `size` (default 20), `sort` (`DEADLINE` | `EXAM_DATE` | `NEWLY_ANNOUNCED` | `RECENTLY_UPDATED` | `POPULAR` | `ALPHABETICAL`, default `ALPHABETICAL`), `status` (a `RecruitmentCycleStatus` name, or the synthetic bucket `CLOSING_SOON`), `category` (matches `Exam.category`, case-insensitive).
+**Response:** `PagedExamCards`: `{ content: ExamCardResponse[], page, size, totalElements, hasMore }`. Each `ExamCardResponse`: `{ examCode, examName, imageUrl, category, difficulty, badge, recruitmentCycleId, cycleName, status, closingSoon, daysUntilDeadline, notificationDate, applicationStart, applicationEnd, examStart, examEnd, vacancyCount, demo, lastVerifiedAt, primaryAction }`. `status`/cycle fields are `null` when the exam has no current published `RecruitmentCycle`. `primaryAction` is one of `APPLY_NOW` | `PREPARE_NOW` | `VIEW_EXAM` | `VIEW_RESULT_INFO` (spec §52's "one primary action per lifecycle state," computed server-side).
+**Errors:** 400 `IllegalArgumentException` if `sort` doesn't match a known enum value.
+**Business rules:** `closingSoon` is true only when status is an "open" one (`APPLICATION_OPEN`/`APPLICATION_CLOSING_SOON`) and the deadline is within 14 days — the same threshold mobile's own `priorityTier()` (`examGuide/dates.ts`) uses for its "High" urgency tier, deliberately duplicated rather than shared so both sides agree on what "urgent" means for the same date. Sort/filter/page happen in Java over the full active-exam set, not in SQL — a stated scale decision for today's ~11-exam catalogue (see `ExamDiscoveryService`'s class comment); the endpoint's own contract doesn't change if a later change swaps the implementation for real SQL-level pagination.
+**Consumers:** Mobile only — the Exams tab (`app/(tabs)/exams.tsx`). A sort or category change issues a fresh call with those params; the tab's own segmented row (All/My Exams/Applications Open/Upcoming) and search box are client-side filters over one fetched page instead, since `status` only ever expresses one bucket at a time.
 
 ### GET /api/exams/{code}/subjects
 **Purpose:** Get the exam's syllabus — every subject it covers (`exam_subjects`), independent of whether a paper pattern exists yet.

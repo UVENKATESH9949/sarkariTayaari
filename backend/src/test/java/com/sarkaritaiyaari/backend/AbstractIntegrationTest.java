@@ -9,6 +9,8 @@ import com.sarkaritaiyaari.backend.entity.Topic;
 import com.sarkaritaiyaari.backend.entity.User;
 import com.sarkaritaiyaari.backend.entity.UserToken;
 import com.sarkaritaiyaari.backend.repository.ExamRepository;
+import com.sarkaritaiyaari.backend.repository.QuestionGroupRepository;
+import com.sarkaritaiyaari.backend.repository.QuestionMediaRepository;
 import com.sarkaritaiyaari.backend.repository.QuestionRepository;
 import com.sarkaritaiyaari.backend.repository.SubjectRepository;
 import com.sarkaritaiyaari.backend.repository.TopicRepository;
@@ -65,10 +67,18 @@ abstract class AbstractIntegrationTest {
     @Autowired
     protected UserTokenRepository userTokenRepository;
 
+    @Autowired
+    protected QuestionGroupRepository questionGroupRepository;
+
+    @Autowired
+    protected QuestionMediaRepository questionMediaRepository;
+
     protected final List<UUID> createdIds = new ArrayList<>();
     protected final List<UUID> createdTopicIds = new ArrayList<>();
     protected final List<UUID> createdSubjectIds = new ArrayList<>();
     protected final List<String> createdExamCodes = new ArrayList<>();
+    protected final List<UUID> createdGroupIds = new ArrayList<>();
+    protected final List<UUID> createdMediaIds = new ArrayList<>();
 
     protected UUID testTopicId;
     private String adminToken;
@@ -161,9 +171,17 @@ abstract class AbstractIntegrationTest {
             userTokenRepository.deleteById(studentToken);
             studentToken = null;
         }
+        if (!createdMediaIds.isEmpty()) {
+            questionMediaRepository.deleteAllById(createdMediaIds);
+            createdMediaIds.clear();
+        }
         if (!createdIds.isEmpty()) {
             questionRepository.deleteAllById(createdIds);
             createdIds.clear();
+        }
+        if (!createdGroupIds.isEmpty()) {
+            questionGroupRepository.deleteAllById(createdGroupIds);
+            createdGroupIds.clear();
         }
         if (!createdTopicIds.isEmpty()) {
             topicRepository.deleteAllById(createdTopicIds);

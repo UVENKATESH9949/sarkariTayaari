@@ -11,6 +11,7 @@ import {
 } from "../sync/topicProgressSync";
 import { captureError, trackEvent } from "../telemetry/analytics";
 import { registerForPushNotifications } from "../notifications/pushRegistration";
+import { clearCachedRadars } from "../db/radarCache";
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -227,6 +228,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     await clearSession();
+    /*
+     * The cached Weakness Radar is this student's own diagnosis, not device state -- leaving
+     * it behind would show the next person to pick up the phone someone else's weaknesses.
+     * Deliberately unlike `app_preferences` (theme/zoom/language), which is a device setting
+     * and is never cleared on sign-out.
+     *
+     * Best effort, and after clearSession() rather than before: a failed local delete must
+     * not leave the student still signed in.
+     */
+    await clearCachedRadars().catch((err) =>
+      captureError(err, { context: "authContext.clearCachedRadars", full: false }),
+    );
     setToken(null);
     setUser(null);
   }, [token]);

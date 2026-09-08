@@ -21,6 +21,9 @@ import {
   paperSections,
   paperTypes,
   questionExams,
+  questionGroups,
+  questionGroupTranslations,
+  questionMedia,
   questions,
   questionTranslations,
   sectionSubjects,
@@ -31,6 +34,8 @@ import {
 import { ApiError } from "../api/client";
 import { getAllExamGuides } from "../api/examGuide";
 import { getLanguages, type QuestionResponse } from "../api/questions";
+import { syncQuestionGroups } from "../api/questionGroups";
+import { deleteLocalMediaFiles, deleteMediaFileAtUri, downloadPendingMedia } from "./mediaDownload";
 import {
   getDifficultyLevels,
   getExamBadges,
@@ -212,6 +217,89 @@ export async function writeReferenceData() {
   await writeTopicIntelligence(examList.map((exam) => exam.code));
   // Depends on the exam rows above (examGuideCycles.examCode references exams.code).
   await writeExamGuides();
+  // Groups sync before question pages (both initial and delta sync call writeReferenceData
+  // before their own question-page loop) so a question's question_group_id already resolves
+  // locally by the time that question's own page arrives — TASK-2301 Phase P3.
+  await writeQuestionGroups();
+}
+
+/**
+ * Shared passages/datasets (TASK-2301 Phase P3). Full replace on every reference sync, same
+ * reasoning as writeExamStructures/writeTopicPrerequisites: group volume is small and
+ * admin-curated (unlike the question bank), so there is no need yet for the question sync's
+ * own resumable-pagination/delta-watermark machinery — a future phase can add that if group
+ * volume ever grows large enough to need it.
+ *
+ * Deliberately only touches *group-owned* media rows (`questionGroupId IS NOT NULL`) —
+ * question-owned media is written by upsertQuestionsBatch below, on the same shared
+ * `question_media` table, and must not be disturbed by this pass.
+ */
+async function writeQuestionGroups() {
+  const groupRows: (typeof questionGroups.$inferInsert)[] = [];
+  const translationRows: (typeof questionGroupTranslations.$inferInsert)[] = [];
+  const mediaRows: (typeof questionMedia.$inferInsert)[] = [];
+
+  let page = 0;
+  while (true) {
+    let result;
+    try {
+      result = await syncQuestionGroups("0", page, 500);
+    } catch {
+      // A backend predating this phase (or a transient failure) simply means no groups yet —
+      // reference sync must not fail the whole pass over a feature that may not exist server-side.
+      return;
+    }
+
+    for (const group of result.content) {
+      if (group.deleted) continue;
+      groupRows.push({ id: group.id, groupType: group.groupType, updatedAt: new Date(group.updatedAt), isDeleted: false });
+      for (const t of group.translations) {
+        translationRows.push({
+          id: `${group.id}:${t.languageCode}`,
+          questionGroupId: group.id,
+          languageCode: t.languageCode,
+          passageText: t.passageText,
+        });
+      }
+      for (const m of group.media) {
+        mediaRows.push({
+          id: m.id,
+          questionGroupId: group.id,
+          questionId: null,
+          mediaType: m.mediaType,
+          url: m.url,
+          mimeType: m.mimeType,
+          displayOrder: m.displayOrder,
+          updatedAt: new Date(),
+          isDeleted: false,
+        });
+      }
+    }
+
+    if (result.last) break;
+    page += 1;
+  }
+
+  // Existing local files for group media about to be replaced — deleted before the DB rows
+  // are gone, so deleteLocalMediaFiles can still read each row's localUri.
+  const existingGroupMediaIds = (
+    await db.select({ id: questionMedia.id }).from(questionMedia).where(sql`${questionMedia.questionGroupId} is not null`).all()
+  ).map((r) => r.id);
+  await deleteLocalMediaFiles(existingGroupMediaIds);
+
+  await db.transaction(async (tx) => {
+    await tx.delete(questionMedia).where(sql`${questionMedia.questionGroupId} is not null`);
+    await tx.delete(questionGroupTranslations);
+    await tx.delete(questionGroups);
+
+    if (groupRows.length > 0) await tx.insert(questionGroups).values(groupRows);
+    if (translationRows.length > 0) await tx.insert(questionGroupTranslations).values(translationRows);
+    if (mediaRows.length > 0) await tx.insert(questionMedia).values(mediaRows);
+  });
+
+  // Outside the transaction, same as the rest of this file's media handling — a slow/failed
+  // download must not roll back data that already wrote successfully.
+  await downloadPendingMedia();
 }
 
 /**
@@ -638,6 +726,16 @@ export async function upsertQuestionsBatch(tx: Tx, qs: QuestionResponse[]) {
         isPyq: q.pyq ?? false,
         pyqYear: q.pyqYear ?? null,
         pyqShift: q.pyqShift ?? null,
+        // Multi-type question foundation (TASK-2301, Phase P1). Same defaulting reasoning as
+        // the PYQ fields above — a backend that predates V25 omits these entirely, and
+        // `question_type` is NOT NULL locally.
+        questionType: q.questionType ?? "SINGLE_CHOICE",
+        answerKey: q.answerKey ?? null,
+        answerConfig: q.answerConfig ?? null,
+        contentStructure: q.contentStructure ?? null,
+        // Shared content / groups (TASK-2301 Phase P3).
+        questionGroupId: q.questionGroupId ?? null,
+        groupOrder: q.groupOrder ?? null,
       })),
     )
     .onConflictDoUpdate({
@@ -655,6 +753,12 @@ export async function upsertQuestionsBatch(tx: Tx, qs: QuestionResponse[]) {
         isPyq: sql`excluded.is_pyq`,
         pyqYear: sql`excluded.pyq_year`,
         pyqShift: sql`excluded.pyq_shift`,
+        questionType: sql`excluded.question_type`,
+        answerKey: sql`excluded.answer_key`,
+        answerConfig: sql`excluded.answer_config`,
+        contentStructure: sql`excluded.content_structure`,
+        questionGroupId: sql`excluded.question_group_id`,
+        groupOrder: sql`excluded.group_order`,
       },
     });
 
@@ -671,10 +775,72 @@ export async function upsertQuestionsBatch(tx: Tx, qs: QuestionResponse[]) {
       questionText: t.questionText,
       options: t.options,
       explanation: t.explanation,
+      // Multi-type question architecture, Phase P2 Wave A (TASK-2301). Assertion &
+      // Reason's / Statement-Based's per-language authored content; null for every other
+      // type and for a backend that predates V26.
+      content: t.content ?? null,
     })),
   );
   if (translationRows.length > 0) {
     await tx.insert(questionTranslations).values(translationRows);
+  }
+
+  // Question-owned media (TASK-2301 Phase P3) — upserted by id, not delete-and-reinsert like
+  // the two above: a media row carries local-only state (`localUri`/`downloadedAt`) that a
+  // blind clear-and-reinsert would silently wipe on every sync, forcing a full re-download of
+  // every asset every time nothing about it changed. `onConflictDoUpdate` only touches the
+  // server-owned columns below, so an existing row's local download state survives untouched.
+  // Any existing question-owned row no longer present in the incoming set (an admin removed a
+  // question's diagram) is deleted, since ids are stable per asset and a genuinely new image
+  // gets a new id.
+  const incomingMediaIds = qs.flatMap((q) => (q.media ?? []).map((m) => m.id));
+  const existingMediaRows = await tx
+    .select({ id: questionMedia.id, localUri: questionMedia.localUri })
+    .from(questionMedia)
+    .where(inArray(questionMedia.questionId, ids))
+    .all();
+  const staleMediaRows = existingMediaRows.filter((r) => !incomingMediaIds.includes(r.id));
+  if (staleMediaRows.length > 0) {
+    // Read via `tx` above, deleted via the low-level per-uri primitive below — not
+    // `deleteLocalMediaFiles`, which reads through the module-level `db` and would race
+    // against this still-open transaction.
+    for (const row of staleMediaRows) {
+      await deleteMediaFileAtUri(row.localUri);
+    }
+    await tx.delete(questionMedia).where(
+      inArray(
+        questionMedia.id,
+        staleMediaRows.map((r) => r.id),
+      ),
+    );
+  }
+
+  const mediaRows = qs.flatMap((q) =>
+    (q.media ?? []).map((m) => ({
+      id: m.id,
+      questionId: q.id,
+      questionGroupId: null,
+      mediaType: m.mediaType,
+      url: m.url,
+      mimeType: m.mimeType,
+      displayOrder: m.displayOrder,
+      updatedAt: new Date(),
+      isDeleted: false,
+    })),
+  );
+  if (mediaRows.length > 0) {
+    await tx
+      .insert(questionMedia)
+      .values(mediaRows)
+      .onConflictDoUpdate({
+        target: questionMedia.id,
+        set: {
+          mediaType: sql`excluded.media_type`,
+          url: sql`excluded.url`,
+          mimeType: sql`excluded.mime_type`,
+          displayOrder: sql`excluded.display_order`,
+        },
+      });
   }
 }
 
@@ -692,5 +858,19 @@ export async function deleteQuestionsLocally(tx: Tx, questionIds: string[]) {
   if (questionIds.length === 0) return;
   await tx.delete(questionTranslations).where(inArray(questionTranslations.questionId, questionIds));
   await tx.delete(questionExams).where(inArray(questionExams.questionId, questionIds));
+
+  // Question-owned media (TASK-2301 Phase P3) — its on-disk file is deleted too, or a
+  // hard-deleted question's downloaded image would sit on local storage forever with
+  // nothing left in the database pointing at it.
+  const mediaRows = await tx
+    .select({ localUri: questionMedia.localUri })
+    .from(questionMedia)
+    .where(inArray(questionMedia.questionId, questionIds))
+    .all();
+  for (const row of mediaRows) {
+    await deleteMediaFileAtUri(row.localUri);
+  }
+  await tx.delete(questionMedia).where(inArray(questionMedia.questionId, questionIds));
+
   await tx.delete(questions).where(inArray(questions.id, questionIds));
 }

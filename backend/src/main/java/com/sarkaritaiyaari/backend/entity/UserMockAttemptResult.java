@@ -7,7 +7,11 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
+import java.math.BigDecimal;
+import java.util.Map;
 import java.util.UUID;
 
 /** One question within a mock attempt. selectedIndex is null when left unattempted. */
@@ -34,11 +38,40 @@ public class UserMockAttemptResult {
     @Column(name = "selected_index")
     private Integer selectedIndex;
 
-    @Column(name = "correct_index", nullable = false)
-    private int correctIndex;
+    /** Nullable since V26 — no meaning for MULTIPLE_CHOICE/TRUE_FALSE, same reasoning as {@link UserPracticeSessionResult#getCorrectIndex()}. */
+    @Column(name = "correct_index")
+    private Integer correctIndex;
 
     @Column(name = "marked_for_review", nullable = false)
     private boolean markedForReview;
+
+    /**
+     * Milliseconds spent on this question, or null when the client did not record one.
+     *
+     * <p>Added by V24 for Weakness Radar. <strong>Null means unknown, never zero.</strong>
+     * Every row uploaded before that release has none, and older clients still omit it, so a
+     * reader that treated absence as a fast answer would manufacture a speed signal out of
+     * nothing -- which is what the spec's §9 forbids. There is also no expected-time
+     * benchmark in this schema yet, so nothing consumes this field in v1; it is captured now
+     * so a later version has history to derive one from.
+     */
+    @Column(name = "time_ms")
+    private Integer timeMs;
+
+    /* ------------------------------ Response model (V26, TASK-2301 Phase P2 Wave A) */
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column
+    private Map<String, Object> response;
+
+    @Column(length = 20)
+    private String outcome;
+
+    @Column(name = "score_fraction", precision = 4, scale = 3)
+    private BigDecimal scoreFraction;
+
+    @Column(name = "question_type", length = 40)
+    private String questionType;
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -58,9 +91,24 @@ public class UserMockAttemptResult {
     public Integer getSelectedIndex() { return selectedIndex; }
     public void setSelectedIndex(Integer selectedIndex) { this.selectedIndex = selectedIndex; }
 
-    public int getCorrectIndex() { return correctIndex; }
-    public void setCorrectIndex(int correctIndex) { this.correctIndex = correctIndex; }
+    public Integer getCorrectIndex() { return correctIndex; }
+    public void setCorrectIndex(Integer correctIndex) { this.correctIndex = correctIndex; }
 
     public boolean isMarkedForReview() { return markedForReview; }
     public void setMarkedForReview(boolean markedForReview) { this.markedForReview = markedForReview; }
+
+    public Integer getTimeMs() { return timeMs; }
+    public void setTimeMs(Integer timeMs) { this.timeMs = timeMs; }
+
+    public Map<String, Object> getResponse() { return response; }
+    public void setResponse(Map<String, Object> response) { this.response = response; }
+
+    public String getOutcome() { return outcome; }
+    public void setOutcome(String outcome) { this.outcome = outcome; }
+
+    public BigDecimal getScoreFraction() { return scoreFraction; }
+    public void setScoreFraction(BigDecimal scoreFraction) { this.scoreFraction = scoreFraction; }
+
+    public String getQuestionType() { return questionType; }
+    public void setQuestionType(String questionType) { this.questionType = questionType; }
 }

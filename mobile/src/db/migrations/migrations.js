@@ -19,6 +19,10 @@ import m0014 from './0014_exam_guide_offline_cache.sql';
 import m0015 from './0015_diagnostic_attempts.sql';
 import m0016 from './0016_exam_guide_overview_text.sql';
 import m0017 from './0017_followed_exams_sync.sql';
+import m0018 from './0018_weakness_radar.sql';
+import m0019 from './0019_multi_type_question_foundation.sql';
+import m0020 from './0020_wave_a_option_set_types.sql';
+import m0021 from './0021_question_groups_and_media.sql';
 
   export default {
     journal,
@@ -40,6 +44,10 @@ m0013,
 m0014,
 m0015,
 m0016,
-m0017
+m0017,
+m0018,
+m0019,
+m0020,
+m0021
     }
   }

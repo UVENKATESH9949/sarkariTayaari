@@ -44,6 +44,19 @@ you add a language), each language gets its own row. Adding Telugu is then just 
 
 English is always required. Other languages are optional per question.
 
+**A question can now have more than one real-world appearance** (TASK-2501, V36):
+`question_occurrences` holds "which exam, year, shift, paper" facts that used to be columns
+directly on `questions` (still there, unchanged, for backward compatibility — kept in sync
+automatically) — so the *same* question appearing in both SSC CGL 2021 and SSC CHSL 2022 is one
+`questions` row with two occurrence rows, not two duplicate questions. `question_raw_extractions`
+(immutable, straight off a PDF) and `question_candidates` (staged, reviewable — becomes a real
+`questions` row only once an admin accepts it) exist for a rule-based PDF-to-question ingestion
+pipeline, sharing its document storage with TASK-2401's exam-guidance pipeline rather than a
+second copy — see [`../api/QUESTION-INTELLIGENCE.md`](../api/QUESTION-INTELLIGENCE.md).
+`questions` also gained a plain `content_status` column (V39, reusing the DRAFT/REVIEW/PUBLISHED
+enum V18 introduced for `recruitment_cycles`) — every existing question defaults `PUBLISHED`
+(unchanged), and only a question this new pipeline creates ever starts as `DRAFT`.
+
 ### Group 2: how content is organised
 
 ```
@@ -95,6 +108,11 @@ just *"Reasoning"*. The section name is what the real exam calls it; the subject
 where the questions actually live. That's why they're linked rather than being the
 same thing.
 
+`exams` also carries a plain `category` column (V22 — SSC/Banking/Railways/UPSC/etc.),
+the Exams module's discovery-filter facet. Deliberately not a lookup table like
+`difficulty_levels`/`exam_badges` below — a category needs no per-value colour/icon
+styling of its own, just a value to filter `GET /api/exams/discover` by.
+
 ### Group 4: lookup lists
 
 Small tables that exist so these things aren't hardcoded in the apps:
@@ -116,15 +134,34 @@ users                one row per signed-in student (email, password hash)
   +-- user_practice_sessions       + user_practice_session_results
   +-- user_mock_attempts           + user_mock_attempt_results
   +-- user_bookmarks
+  +-- followed_exams
 ```
 
 Accounts are optional — the app works fully signed out. Signing in only adds one
 thing: this activity now survives losing the phone, because it's also stored here.
 
+One more table hangs off `users` as of V24: **`user_topic_health`** (Weakness Radar). It is
+unlike everything else in this group, and the difference matters — it holds no student
+*input* at all. It is a **derived cache**: one row per (student, topic) holding a computed
+health score, a confidence score, a trend and a recommended state, all recalculated from the
+practice and mock attempt rows above. Delete the whole table and the next read rebuilds it
+identically. That is what makes changing the formula a code change rather than a data
+migration (see [`../api/WEAKNESS-RADAR.md`](../api/WEAKNESS-RADAR.md)).
+
+V24 also added a nullable `time_ms` to `user_practice_session_results` and
+`user_mock_attempt_results` — how long each question was on screen. **Nothing reads it yet**,
+deliberately: a speed signal needs an expected-time benchmark to compare against, and this
+database has none. Capture starts now so a later version has history to derive one from.
+`NULL` means "not recorded", never zero.
+
 `user_practice_sessions`/`user_mock_attempts` only ever grow — a session is uploaded
 once, finished, never edited. `user_bookmarks` is different: it's the *current state* of
 one (student, question) pair, not a log — see "Why bookmark sync needed its own rule"
-in [05-why-its-built-this-way.md](05-why-its-built-this-way.md).
+in [05-why-its-built-this-way.md](05-why-its-built-this-way.md). `followed_exams`
+(Exams module, V23) is the same shape as `user_bookmarks` — current state of one
+(student, exam) pair, same synthetic `userId:examCode` id, same tombstone-on-unfollow
+rule — it replaced what had been a local-SQLite-only "My Exams" list with no backend
+table at all.
 
 ---
 
@@ -181,6 +218,7 @@ phone and are never uploaded:
 | `mock_test_attempts` + `mock_test_attempt_results` | past mock tests, with scores |
 | `bookmarks` | questions the student saved |
 | `app_preferences` | this device's theme/zoom/UI-language settings — a device setting, not account data, so it's deliberately never synced or cleared on sign-out (see `05-why-its-built-this-way.md`) |
+| `radar_cache` | the last Weakness Radar the server sent, one JSON payload per exam, so the radar screens still work offline. Account data, not a device setting — it's cleared on sign-out, unlike `app_preferences` above |
 
 **If the student is signed out, all of this is local-only** — uninstalling the app loses
 it, same as day one. **If signed in, it's backed up automatically**: each of these rows
@@ -217,12 +255,42 @@ backend/src/main/resources/db/migration/
     V15__topic_trend_and_priority.sql             trend/priority scoring (algorithm-versioned)
     V16__real_pattern_versioning.sql              two versions of an exam pattern can coexist
     V17__exam_guide_phase1.sql                    recruitment_cycles, eligibility, dates, documents, fees
+    V18__exam_guide_content_status.sql            DRAFT/REVIEW/PUBLISHED on recruitment_cycles
+    V19__exam_career_posts.sql                    exam-scoped (not cycle-scoped) career info
+    V20__reminders_and_push_tokens.sql            push_tokens, user_reminders
+    V21__exam_guide_overview_text.sql             recruitment_cycles.overview_text
+    V22__exam_category.sql                        exams.category — Exams module discovery filter
+    V23__followed_exams.sql                       followed_exams — real backend Follow sync
+    V24__weakness_radar.sql                       user_topic_health (derived), + per-question time_ms
 ```
 
-V8–V17 add whole feature areas ("Epic L" topic intelligence, and "Exam Guide") on top of
-the four groups above rather than changing them — see
-[`../api/EXAM-INTELLIGENCE.md`](../api/EXAM-INTELLIGENCE.md) and
-[`../api/EXAM-GUIDE.md`](../api/EXAM-GUIDE.md) for their endpoints, and the matching
+**V25-V35 were missing from this list** (found while adding V36-39 below, not something that
+changed just now) — added here rather than left for the next session to rediscover, per
+`AI_RULES.md` §6:
+
+```
+    V25__multi_type_question_foundation.sql       question_type discriminator, answer_key/content_structure JSONB
+    V26__wave_a_option_set_types.sql              MULTIPLE_CHOICE/TRUE_FALSE/ASSERTION_REASON/STATEMENT_COMBINATION
+    V27__wave_b_free_input_types.sql               NUMERIC/FILL_BLANK/MATCH/ORDERING
+    V28__widen_correct_answer_column.sql          correct_answer VARCHAR(10) -> VARCHAR(500)
+    V29__question_groups_and_media.sql            question_groups (shared passages/DI/images), question_media
+    V30__ingestion_sources.sql                    ingestion_sources — exam-guidance document discovery (TASK-2401)
+    V31__ingestion_notices.sql                    ingestion_notices — discovered notice tracking
+    V32__ingestion_documents.sql                  ingestion_documents — sha256-deduped raw PDF storage
+    V33__ingestion_extraction_jobs.sql            ingestion_extraction_jobs — per-document processing attempts
+    V34__ingestion_extraction_results.sql         ingestion_extraction_results — staged exam-guidance candidates
+    V35__ingestion_extraction_result_rejection_reason.sql  reject reason column
+    V36__question_occurrences.sql                 question_occurrences — one canonical question, many exam appearances (TASK-2501)
+    V37__question_raw_extractions.sql             question_raw_extractions — immutable PDF-to-question extraction output
+    V38__question_candidates.sql                  question_candidates — staged, reviewable prospective questions
+    V39__questions_content_status.sql             questions.content_status (DRAFT/REVIEW/PUBLISHED, reused from V18)
+```
+
+V8–V24 add whole feature areas ("Epic L" topic intelligence, "Exam Guide", the Exams
+module, and Weakness Radar) on top of the four groups above rather than changing them — see
+[`../api/EXAM-INTELLIGENCE.md`](../api/EXAM-INTELLIGENCE.md),
+[`../api/EXAM-GUIDE.md`](../api/EXAM-GUIDE.md) and
+[`../api/WEAKNESS-RADAR.md`](../api/WEAKNESS-RADAR.md) for their endpoints, and the matching
 `reports/<NN-topic>/` folder for the full design rationale of each.
 
 Rules: **never edit a migration that has already run** — write a new one. They run in

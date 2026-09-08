@@ -68,6 +68,11 @@ export async function uploadPendingProgress(token: string): Promise<{ sessions: 
           selectedIndex: r.selectedIndex,
           correctIndex: r.correctIndex,
           correct: r.isCorrect,
+          timeMs: r.timeMs,
+          questionType: r.questionType,
+          response: r.response,
+          outcome: r.outcome,
+          scoreFraction: r.scoreFraction,
         })),
     })),
     mockAttempts: pendingAttempts.map<MockAttemptPayload>((attempt) => ({
@@ -94,6 +99,11 @@ export async function uploadPendingProgress(token: string): Promise<{ sessions: 
           selectedIndex: r.selectedIndex,
           correctIndex: r.correctIndex,
           markedForReview: r.markedForReview,
+          timeMs: r.timeMs,
+          questionType: r.questionType,
+          response: r.response,
+          outcome: r.outcome,
+          scoreFraction: r.scoreFraction,
         })),
     })),
   };
@@ -162,6 +172,16 @@ export async function restoreProgressFromServer(token: string): Promise<{ sessio
               correctIndex: r.correctIndex,
               explanation: q?.explanation ?? "",
               isCorrect: r.correct,
+              // Same reasoning as the mock restore below: the server holds it, so a restore
+              // must bring it back rather than quietly resetting it to unrecorded.
+              timeMs: r.timeMs ?? null,
+              // Response model (TASK-2301 Phase P2 Wave A) — carried back down too, not just
+              // up, same reasoning as timeMs: dropping it here would silently discard a
+              // MULTIPLE_CHOICE/TRUE_FALSE answer's only source of truth on a new device.
+              questionType: r.questionType ?? "SINGLE_CHOICE",
+              response: r.response ?? null,
+              outcome: r.outcome ?? null,
+              scoreFraction: r.scoreFraction ?? null,
             };
           }),
         );
@@ -203,6 +223,13 @@ export async function restoreProgressFromServer(token: string): Promise<{ sessio
               correctIndex: r.correctIndex,
               explanation: q?.explanation ?? "",
               markedForReview: r.markedForReview,
+              // Carried back down too, not just up: the server returns it on restore, and
+              // dropping it here would silently lose timing history on a new device.
+              timeMs: r.timeMs ?? null,
+              questionType: r.questionType ?? "SINGLE_CHOICE",
+              response: r.response ?? null,
+              outcome: r.outcome ?? null,
+              scoreFraction: r.scoreFraction ?? null,
             };
           }),
         );

@@ -15,11 +15,10 @@ export type AppPreferences = {
 };
 
 /**
- * Dark, 100%, English — the app as it shipped before any of this existed, so an
- * existing user who never opens Settings sees no change whatsoever.
+ * Light, 100%, English.
  */
 export const DEFAULT_PREFERENCES: AppPreferences = {
-  themeMode: "dark",
+  themeMode: "light",
   zoomLevel: 1,
   uiLanguage: "en",
 };

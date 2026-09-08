@@ -1,9 +1,1334 @@
 # Project Status — Resume Point
 
-**Last updated:** 2026-09-03 — see **"Session of 2026-09-03 — A first-class 'Exams' module
-shipped end to end (7 phases): discovery listing, real Follow sync, the 5th tab, Exam
-Calendar, Syllabus & Trends"** immediately below for the current state; everything after
+**Last updated:** 2026-09-07 — see **"Session of 2026-09-07 — TASK-2501 Question
+Intelligence & Ingestion System: Phase 1 + Phase 2 shipped, fully verified including a
+real admin-UI click-through"** immediately below for the current state; everything after
 it is earlier history, kept for context.
+
+## Session of 2026-09-07 — TASK-2501 Question Intelligence & Ingestion System: Phase 1 + Phase 2 shipped and verified end-to-end
+
+**User asked to complete TASK-2501** (`tasks/TASK-2501-question-intelligence-and-ingestion-system.md`),
+an already-written architecture proposal (a supplied brief's response) — not built yet. The
+proposal's own finding: this codebase already has most of the "Question DNA" scaffolding
+the brief asked for (question types, groups, PYQ tags, exact-duplicate detection, all from
+TASK-2301/TICKET-2109), and the **one real gap** is that `questions` can only hold one PYQ
+occurrence (exam/year/shift) per row, so the same real-world question appearing in two
+exams has always meant two duplicate rows dedup can flag but never merge. Per
+`AI_RULES.md` §5 (schema + new API surface), explicit scope sign-off was obtained via
+`AskUserQuestion` before any code changed — the user chose **"Phase 1 + Phase 2"** (not
+Phase 3's AI layer, gated on this project's still-open LLM provider/budget decision, and
+not Phase 4's relationships). A concrete implementation plan was then written and approved
+via `EnterPlanMode`/`ExitPlanMode` before implementing, grounded in the actual current code
+(not just the proposal's prose) via direct reads of `QuestionService`, `DuplicateDetectionService`,
+`DocumentStoreService`, `ExtractionJobService`, `ReviewQueueService`, and the existing
+ingestion admin pages.
+
+**Phase 1 — `question_occurrences` + a real merge-on-duplicate.** Migration
+`V36__question_occurrences.sql` (additive; backfills one `is_legacy_derived` occurrence
+row per existing PYQ question, best-effort single exam code via a real subquery run
+against the live ~37,900-row bank — verified to apply cleanly). New
+`entity/QuestionOccurrence`, `repository/QuestionOccurrenceRepository`,
+`service/QuestionOccurrenceService`, `controller/QuestionOccurrenceController`
+(`/api/questions/{id}/occurrences`, full CRUD, admin-gated) — this is the actual new
+capability: an admin can now record more than one exam appearance for an already-existing
+question. `QuestionService` gained `syncLegacyOccurrence`, called after every
+create/update/bulk-import save that touches PYQ provenance, so the new table and the
+legacy singular columns (still fully functional, unchanged) can never drift apart.
+`DuplicateDetectionService.resolve()` now performs a real merge on `"DUPLICATE"`
+resolution — every occurrence moves from the loser question onto the survivor, and the
+loser is soft-deleted — idempotent, confirmed by re-resolving an already-merged pair and
+seeing no double-merge. `QuestionResponse`/`QuestionMapper` gained `occurrences`
+(admin-CRUD-reads only, same "dead weight on every synced row" reasoning as
+`duplicateOfQuestionIds` — which was found, while writing this doc's API reference, to
+have been **inaccurately documented for a long time**: `api/QUESTIONS.md` claimed
+get/list/update all populate it, but only `create()` ever has; fixed in place per
+`AI_RULES.md` §6, not something this session's own change caused).
+
+**Phase 2 — a rule-based (no AI) question-ingestion pipeline.** Reuses TASK-2401's
+`DocumentFetcher`/`DocumentStorage`/`PdfTextExtractor` completely as-is — a question-paper
+document is simply one with `notice_id IS NULL`, which that table already allowed — the
+single highest-leverage integration point the design flagged, resolved by sharing rather
+than building a second document-ingestion core. New migrations
+`V37__question_raw_extractions.sql` (immutable per extractor_version),
+`V38__question_candidates.sql` (the staged, reviewable row — reuses the *existing*
+`ExtractionReviewStatus`/`ExtractionConfidence` enums TASK-2401 already introduced, no
+duplicate enums created), `V39__questions_content_status.sql` (`questions.content_status`,
+reusing `ContentStatus` from Exam Guide; every existing/hand-authored row defaults
+`PUBLISHED` explicitly at the schema level — the exact V18 lesson this design called out
+in advance, not repeated). New `ingestion/QuestionRawExtractor` (question-number/option/
+answer-line regex splitting of raw PDF text) and `ingestion/QuestionCandidateBuilder`
+(confidence: HIGH = 4 options + a resolved answer, MEDIUM = 4 options no answer, LOW =
+anything else — a block that doesn't look like a clean MCQ is still recorded, never
+silently dropped). New `service/QuestionIngestionService` (orchestrator: fetch → store →
+extract → split → stage → validate → duplicate-check → Accept/Reject) and
+`service/QuestionCandidateStagingService` (one candidate's staging, its own
+`REQUIRES_NEW` transaction). New `controller/QuestionIngestionController`
+(`/api/admin/question-ingestion`). Read-path filtering added to
+`QuestionService.sync/listPublic/sampleForMock/countsGroupedBy` (a new
+`QuestionSpecifications.published()` plus an added predicate on the Mock Test
+`examAndSubjectsIn` specification) so a DRAFT candidate can never reach a student before
+an admin publishes it. New one-click `PUT /api/questions/{id}/content-status`, mirroring
+`ExamGuideService.setCycleContentStatus` exactly, gated `requireReviewer`.
+
+**Two real bugs found by running the new tests, not by review — both matching this
+project's own already-documented "shared transaction marked rollback-only" trap, just in a
+new pair of classes.** (1) `QuestionService.validateTranslationShape` — reused by the
+ingestion pipeline per the design's own "no new validation logic" instruction — was
+package-private but still an *instance* method on a `@Transactional` class; a garbled
+extracted block's validation failure, even though caught locally inside
+`QuestionCandidateStagingService`, had already marked that method's own `REQUIRES_NEW`
+transaction rollback-only via `QuestionService`'s own Spring proxy before the catch block
+ran — silently losing that whole candidate. Fixed by making it `static` (a plain static
+call goes through no proxy at all, so this class of trap becomes structurally impossible,
+not just avoided this once). (2) `QuestionIngestionService`'s "already reviewed" guard
+threw `IllegalStateException`, which `GlobalExceptionHandler` has no handler for — would
+have surfaced as a bare 500 instead of a 400. Fixed to `IllegalArgumentException`, which
+the handler already maps correctly. A third, smaller one: `QuestionCandidateRepository`'s
+derived-name status-filter query looked syntactically fine but a live browser click-through
+caught it returning empty results when it shouldn't have (see the click-through account
+below) — replaced with an explicit `@Query` (JPQL) for certainty, matching this codebase's
+own established preference for anything non-trivial; the investigation that led to fixing
+it in fact revealed the *underlying data* was correct all along (see below) but the
+explicit query is a strict improvement regardless.
+
+**Admin console:** new `pages/QuestionIngestion.jsx` (paste a source URL → ingest →
+summary card → per-candidate cards with topic/exam/difficulty override fields → Accept/
+Reject). `pages/QuestionsList.jsx` gained a content-status badge + a "Publish" action per
+non-`PUBLISHED` row, so a DRAFT question is reachable from the ordinary question list too,
+not only the new ingestion page.
+
+**Verified at every layer, including a real admin-console click-through — not just a clean
+compile.** New `QuestionOccurrenceTest` (5/5) and `QuestionIngestionTest` (3/3, a synthetic
+PDF built with PDFBox at test time, never a real scraped paper, matching
+`PdfTextExtractorTest`'s own precedent) pass against the real dev Neon database.
+Regression-checked the classes most directly touched by the content-status/occurrence
+changes (`QuestionCrudTest`, `BulkOperationsTest`, `LiveQuestionsTest`, `SyncEndpointTest`,
+`QuestionGroupsAndMediaTest`, `WaveAOptionSetTypesTest`, `WaveBFreeInputTypesTest`,
+`QuestionTypeFoundationTest` — 50 tests, all green) before committing to the design, then
+**ran the full backend suite end to end: 256 tests, 0 failures, 0 errors** (44 classes,
+~56 minutes) — a genuinely clean regression, not assumed. Admin `npm run build`/`oxlint`
+clean at the exact pre-existing one-warning baseline.
+
+**Then a real, live click-through in a real browser via Playwright — the standard this
+project holds every phase to, not skipped this time.** Minted a 45-minute admin token via
+the existing `AdminTokenMintRunner` fixture mechanism (same harmless
+`automated-test-admin@sarkaritaiyaari.internal` account this project already uses for this
+exact purpose). **A real stale backend process from an earlier session, still running and
+listening on port 8080 since 12:01 that day (pre-dating every change this session made),
+was found and stopped before it could silently serve outdated code for this
+verification** — worth remembering: always check what's actually listening on a dev port
+before trusting a health check's "UP" as evidence *your* build is what's being served.
+Seeded one real document + candidate directly (this project's own established precedent
+for "a live scan can't produce a real candidate in this environment" — no real PYQ paper
+URL was in hand this session) via a temporary, not-committed scratch runner (deleted
+after use, same discipline `AdminTokenMintRunner`'s own doc comment describes for its
+class of tool). On screen, for real: the Question Ingestion page rendered correctly with
+the seeded candidate; clicking **Accept** (with the default-selected topic/exam/difficulty)
+**created a real `questions` row** — confirmed via the API afterward: correct
+`answerKey`/`translations`, `content_status: "DRAFT"`, and a real `question_occurrences`
+row pointing at the source document/page; the Questions list showed the DRAFT badge and a
+Publish button; clicking **Publish** set `content_status` to `PUBLISHED`, confirmed on a
+completely fresh page reload (a first same-session check looked like the click hadn't
+taken effect — a stale in-page re-render within a tight 2-second wait in the throwaway
+verification script, not a real bug; a fresh `page.reload()` immediately after showed the
+DRAFT badge correctly gone). Zero browser console errors throughout. **Full cleanup
+afterward**: the real created question and both ingestion-pipeline documents (cascading
+away their raw extractions/candidates) deleted via a temporary cleanup runner (correct
+order matters here — deleting the document *before* the question, since
+`question_candidates.applied_question_id` has no `ON DELETE` clause and would otherwise
+reject deleting the question first — found by hitting exactly that FK violation, not by
+foresight), the admin token revoked, both temporary scratch runner files deleted (never
+committed), and both dev servers (backend + admin) stopped — nothing left running or left
+in the database from this verification pass.
+
+**Documentation updated in the same change, per `AI_RULES.md` §5**: `api/QUESTIONS.md`
+(new `content-status` endpoint, `occurrences`/`contentStatus` fields, content-status filter
+notes on every public read, plus the `duplicateOfQuestionIds` correction above); new
+`api/QUESTION-INTELLIGENCE.md` (occurrences + ingestion pipeline, full contract);
+`api/README.md`'s index (which was also missing a `QUESTION-GROUPS.md` row from TASK-2301
+— added while here, per §6); `system-design/02-database.md` (new tables/column, plus its
+own pre-existing gap — the migration list stopped at V24, missing all of TASK-2301's
+V25-V29 and TASK-2401's V30-V35 — fixed in place, found while adding V36-39, not caused by
+this session). The task doc's own "Implementation status" section updated with the full
+account.
+
+**A genuinely pre-existing finding, not this session's doing, left as disclosed
+clutter**: while listing ingestion documents during verification, ~34 leftover
+`ingestion_documents` rows (all `sourceUrl: "https://example.invalid/a.pdf"`, dated
+2026-09-06) were found with no notice attached and zero candidates — most likely orphaned
+by `DocumentStoreServiceTest`'s own test runs across an earlier session (a document's
+`notice_id` is `ON DELETE SET NULL`, not cascade, per V32's own design, so a test's source/
+notice cleanup can legitimately leave a document behind under some interruption patterns).
+Harmless (same category as this project's other long-documented test-fixture leftovers —
+`Automated Test Subject`, etc.) and not cleaned up this session since they predate it and
+aren't part of this task's own scope — flagged here for whoever next does a content/
+fixture cleanup pass.
+
+**Explicitly not done this session, disclosed per the approved plan**: no separate
+extraction-job-tracking table (raw-extraction rows double as the job record for this
+rule-only MVP); no AI/pattern taxonomy/semantic duplicate detection (Phase 3, gated on the
+still-open LLM provider/budget decision); no distinct "submit for review" step (one
+content-status setter covers DRAFT/REVIEW/PUBLISHED, matching Exam Guide's own precedent);
+zero mobile changes (matches the design's own explicit "no mobile changes" statement).
+
+**Follow-up, same session: local file upload added after the user noticed its absence.**
+The MVP above shipped URL-fetch-only; the user pointed out there was no way to upload a
+PDF from their own computer. Added `POST /api/admin/question-ingestion/documents/upload`
+(`multipart/form-data`), reusing `QuestionIngestionService.ingestBytes` directly — the
+ingestion pipeline itself doesn't care whether bytes arrived via a fetched URL or a direct
+upload. `DocumentFetcher.MAX_BYTES` (20MB) made `public` so both entry points share one
+cap; `application.yml`'s global multipart limit raised from 5MB/10MB (sized only for admin
+image uploads before this) to 20MB/20MB to match. Admin UI: a file input next to the URL
+field on `QuestionIngestion.jsx`. New `QuestionIngestionTest` case exercising a real HTTP
+multipart POST via `TestRestTemplate` — **4/4 pass**. `mvn compile`/admin `npm run build`/
+`oxlint` all clean. `api/QUESTION-INTELLIGENCE.md` updated with the new endpoint.
+
+
+
+## Session of 2026-09-06 (2) — TASK-2401 Exam Guidance Data Platform: Tasks 1-9 of 10 done; Task 10 genuinely blocked, not faked
+
+**User asked to start TASK-2401** (`tasks/TASK-2401-exam-guidance-data-platform.md`), an
+already-written architecture proposal — not built yet — for an automated pipeline that
+discovers government exam notifications (starting with SSC), downloads/extracts their
+PDFs, and feeds candidates through a human review queue into the **existing**
+`recruitment_cycles` model (shipped 2026-09-01/02) rather than a new parallel one. Per the
+doc's own status line and `AI_RULES.md` §5.2 (touches DB schema + a new API surface), the
+user's explicit sign-off was obtained via `AskUserQuestion` before any code changed —
+**"Approve as-is."**
+
+**Task 1 (resolve SSC's real technical behavior) — done, with a better result than the
+doc's own cautious estimate.** The doc's existing text left most of this as OPEN QUESTION,
+reasoning that no tool available to a session could see a live site's real network
+traffic. That turned out to be wrong this session: a headless **Playwright** browser
+(already installed in this dev environment for admin-console testing) was pointed at
+`https://ssc.gov.in/home/notice-board` and its real network requests captured directly.
+Found: `robots.txt` genuinely doesn't exist (confirmed real nginx 404, not a soft
+redirect); the site is a plain Angular SPA (confirmed via raw `curl`, zero content in
+server HTML); and — the big one — a real, clean, **unauthenticated JSON REST API**
+(`GET https://ssc.gov.in/api/general-website/portal/records?contentType=notice-boards&...`)
+that returns paginated notices with a genuine **stable id** per notice plus full
+attachment metadata (filename/size/path). This is strictly better than the doc's own
+fallback plan (content-hashing title+URL, since no stable id was assumed to exist) and
+changes the recommended MVP adapter from a heavier `PlaywrightHtmlAdapter` (render the
+page every scan) to a much simpler, cheaper `SscNoticeBoardApiAdapter` (one direct HTTP
+GET). The task doc was updated in place (Document 4, the MVP task table, the open-
+questions list) to record this, per `AI_RULES.md` §6 ("fix stale docs in place and say
+so") — though this wasn't stale so much as an open question resolved with real evidence.
+
+**Task 2 (Source Registry: table + entity + admin CRUD, no scanning yet) — done and
+verified against the real database, not just compiled.** Migration
+**`V30__ingestion_sources.sql`** (`ingestion_sources`, additive only, no existing table
+touched). Followed this codebase's existing flat `entity/`/`repository/`/`dto/`/
+`service/`/`controller/` layering (per `AI_RULES.md` §8) rather than the task doc's
+originally-proposed nested `ingestion/` package — that nested structure doesn't match how
+this backend is actually organized anywhere else (`evaluation/` is the one precedent for a
+feature package, and it holds pure interface+implementations with no entities/DB, unlike
+this). New `IngestionSource`/`IngestionSourceType` entities, `IngestionSourceRepository`,
+`IngestionSourceService`, `IngestionAdminController` (`/api/admin/ingestion/sources`, full
+CRUD, `requireAdmin`-gated, mirroring `ExamGuideAdminController`'s exact shape). Admin
+console: new `IngestionSources.jsx` (list/create/edit/delete, a JSON textarea for the
+adapter-specific `config` column), wired into `App.jsx`'s sidebar/router, reusing the
+existing `SourceIcon`.
+
+**A real environmental finding, resolved rather than left as a gap.** No
+`application-local.yml` existed on this machine at session start (same recurring
+"does it exist on this machine right now" caveat this file has flagged before) — but the
+shell environment already had real Neon credentials set as `DB_URL`/`DB_USERNAME`/
+`DB_PASSWORD` env vars, unused by the app because `application.yml` only optionally
+imports `application-local.yml` and has no `${DB_URL}`-style binding of its own. Created a
+local `application-local.yml` from those already-present credentials (gitignored, not
+committed) plus harmless placeholder Cloudinary values (needed only so the
+`CloudinaryConfig` bean can construct at context startup; nothing in this task's own test
+calls any Cloudinary path) — this made a real database connection available for the first
+time this session.
+
+**Verified for real, not just a clean compile**: `mvn compile` clean; admin
+`npm run build` clean, `oxlint` at the exact pre-existing one-warning baseline (an
+untouched file). New `IngestionSourceTest` (create+list, update, delete, unknown-
+source-type rejected 400, non-admin token rejected 403) run against the actual shared
+Neon dev database — **5/5 pass**, and migration V30 applied cleanly to that real database
+(Flyway: "Successfully applied 1 migration ... now at version v30"). **Not run: the full
+backend regression suite** — deliberately, given this project's own repeatedly-documented
+memory-pressure history; judged low-risk since this task only added new files and touched
+no existing entity/service/controller/migration.
+
+**Task 3 (SscNoticeBoardApiAdapter + notice discovery) — done, and verified more
+thoroughly than any other piece of this task so far.** New `ingestion/` package:
+`NoticeSourceAdapter` interface + `DiscoveredNotice` record (mirrors how
+`QuestionEvaluator`'s registry works in the `evaluation` package — a Spring
+`Map<String, NoticeSourceAdapter>` keyed by bean name/`parser_key`, not an inheritance
+tree); `OutboundUrlGuard` (Document 16's SSRF guard — rejects non-http(s) schemes and any
+hostname resolving to a loopback/link-local/site-local/multicast address, built in from
+the first line since this pipeline is the first place in this backend that fetches an
+arbitrary external URL server-side); `SscNoticeBoardApiAdapter` (bean name
+`ssc_notice_board_v1`, calls the real JSON API found in Task 1 directly, self-imposed page
+cap + an honest identifying User-Agent). New `IngestionNotice` entity + repository
+(migration `V31__ingestion_notices.sql`, cascades from `ingestion_sources`). New
+`NoticeDiscoveryService` — the actual NEW/UPDATED/UNCHANGED/REMOVED diffing engine,
+matched primarily by SSC's own real stable `id` (an upgrade over Document 9's original
+content-hash-only fallback plan, since Task 1 found a real id exists), content-hash kept
+as a secondary "did the content actually change" signal; never deletes a notice, only sets
+`removedAt`. `POST /sources/{id}/scan` and `GET /sources/{id}/notices?status=` added to
+`IngestionAdminController`. Admin UI: a "Scan now" button and a "View notices" modal
+(Active/Removed/All tabs) added to the existing `IngestionSources.jsx` page from Task 2.
+
+**Verified at a level beyond every other Task-2401 piece so far — real database, real
+tests, real live external site, and a real browser click-through, all four.** New
+`IngestionSourceTest`/`NoticeDiscoveryTest` (10 tests total) run against the real shared
+Neon dev database — all pass; `NoticeDiscoveryTest` uses a fake test-source-only
+`FixtureNoticeSourceAdapter` to exercise the real diffing logic (NEW/UPDATED/UNCHANGED/
+REMOVED, confirmed via a scripted two-scan sequence) without ever calling the live SSC
+site from an automated test — deliberately, matching this project's own stance (Document
+16/17) against hammering a live government site on every test run. **Separately, a
+genuine one-off manual check of the real adapter class against the real live SSC site**
+(compiled standalone, run directly, not embedded as a repeatable test): correctly
+discovered 5 real live notices with correct fields, matching Task 1's raw investigation
+exactly. **Then a full real click-through in a real browser via Playwright**: started a
+real dev backend + admin dev server, minted a short-lived admin token via the existing
+`AdminTokenMintRunner` fixture, authenticated by injecting the token into `localStorage`
+(this project's established pattern), and — for real, on screen — added a real SSC
+`ingestion_sources` row, clicked "Scan now" (a real network call to the live SSC site),
+watched the success banner correctly report "5 discovered — 5 new, 0 updated, 0 unchanged,
+0 removed", and opened "View notices" to see all 5 real notices with real titles/dates
+rendered. Zero browser console errors. **Full housekeeping done afterward**: the test
+source (and its cascade-deleted notices) removed via the existing `DELETE` endpoint, the
+admin token revoked, and both dev servers stopped — nothing left running or left in the
+database from this verification pass. Backend `mvn compile`/`test-compile` clean; admin
+`npm run build` clean, `oxlint` at the exact pre-existing one-warning baseline.
+
+**A real environmental fix made mid-session, worth remembering**: a Playwright script's
+literal `/tmp/...`-style path strings (passed to `page.screenshot({path: ...})`) are
+**not** translated by Git Bash's MSYS path-mangling the way shell command-line arguments
+are — Node.js (a native Windows binary) receives them literally and resolves a leading
+`/` against the current drive root, silently writing to `C:\tmp\...` instead of the
+intended `C:\Users\...\AppData\Local\Temp\...`. Fixed by using either `cygpath -w` to
+convert the path before handing it to a script, or (simpler) just writing an explicit
+Windows-style path with forward slashes directly into the script. Cost real time via a
+confusing early "timeout waiting for a button" failure that was actually caused by a
+stale screenshot silently landing in the wrong directory two steps earlier — worth
+checking screenshot output paths first the next time a Playwright script "can't find" an
+element that's clearly visible in a manually-taken screenshot.
+
+**Task 4 (ingestion_documents + DocumentStore) — done, and a real bug caught by the test
+written to prove the design, not by review.** Migration `V32__ingestion_documents.sql`
+(`sha256_hash` UNIQUE for dedup, `notice_id` `ON DELETE SET NULL`). New
+`ingestion/DocumentFetcher` (SSRF-guarded via the same `OutboundUrlGuard` from Task 3,
+20MB cap), `ingestion/DocumentStorage` interface + `CloudinaryDocumentStorage` (reuses the
+existing Cloudinary bean/credential `ImageUploadService` already uses, `resource_type:
+raw`). New `DocumentStoreService` — sha256 dedup regardless of source URL/notice, and
+chains a same-notice content change via `supersedesDocument` rather than overwriting.
+Wired into `NoticeDiscoveryService.scan()`: only CREATE/UPDATE notices trigger a document
+fetch (never UNCHANGED, to avoid re-downloading from the live source pointlessly every
+scan), and a fetch failure is caught per-notice, never failing the scan (Document 15).
+
+**The real bug**: a new resilience test (`documentFetchFailure_doesNotFailTheNoticeOrTheScan`
+— a private-IP attachment URL, rejected instantly by `OutboundUrlGuard`, no real network
+needed) failed on its first run: `scan()` returned 500, not 200, despite the code visibly
+catching the exception. Root cause: `DocumentStoreService.fetchAndStore()`'s own
+`@Transactional` was joining `scan()`'s already-open transaction (default propagation) —
+the instant it threw, Spring marked that *shared* transaction rollback-only before
+`scan()`'s own catch block ever ran, so the later commit failed with
+`UnexpectedRollbackException` regardless of the catch. **The first fix attempted
+(`Propagation.REQUIRES_NEW`) would have traded this bug for a worse one**: a REQUIRES_NEW
+transaction runs on a separate DB connection that can't see the outer transaction's
+still-uncommitted `INSERT` of a brand-new notice, so even a *successful* document fetch
+for a newly-created notice would have hit a foreign-key violation. Caught this by
+reasoning about it before running it, not by a second failed test. **The actual fix**:
+removed `scan()`'s own top-level `@Transactional` entirely — each notice save and each
+document fetch now commits independently, matching Document 15's own already-established
+"partial completion is a normal, retried-next-time outcome" stance elsewhere in this same
+pipeline, not a new concession invented to route around this bug.
+
+**Verified at every layer, re-confirmed by a real live-network run after the fix, not just
+a passing unit test**: new `DocumentStoreServiceTest` (4 tests — create, sha256 dedup,
+supersede-chaining, magic-byte rejection of a non-PDF) uses a `FakeDocumentStorage` test
+fixture (`@Primary`, replaces the real Cloudinary implementation in every test run — a
+functional necessity, not a preference, since this dev environment has no real Cloudinary
+credentials). **All 15 ingestion tests pass** (`IngestionSourceTest` 5,
+`NoticeDiscoveryTest` 6, `DocumentStoreServiceTest` 4) against the real dev database,
+confirmed via the surefire reports directly — 1 failure before the fix, 0 after. **Then a
+real live re-verification against the real SSC site** (not assumed sufficient by the
+unit-level fix alone): created a real SSC source, scanned it —
+`{"discovered":3,"created":3,...}`, identical shape to Task 3's own already-verified
+result (no regression) — and the real backend log showed the real PDF download from
+`ssc.gov.in` succeeding for all 3 notices, with only the Cloudinary *upload* step failing
+(`Unknown API key unused-placeholder` — the disclosed gap below), each caught and logged
+per-notice exactly as designed, never failing the scan. Confirmed via the API that
+`documentUrl` is correctly `null` for all three. Test source deleted, admin token
+revoked, dev backend stopped afterward. Backend `mvn compile` clean; admin
+`npm run build` clean, `oxlint` at the exact pre-existing one-warning baseline. Admin UI
+gained a "Document" column (View PDF link, or "—") in the existing Notices modal.
+
+**Disclosed gap, not hidden: the real Cloudinary upload path has never actually succeeded
+in this environment**, because no real Cloudinary credentials exist here (a placeholder
+`application-local.yml` was created earlier this session from already-present database
+env vars, with Cloudinary left as unused placeholder values). Every layer up to and
+including the real PDF download, magic-byte validation, sha256 hashing, and the
+resilience/retry behavior around a storage failure is genuinely verified against the real
+live site; only "does a real upload with real credentials actually produce a working
+Cloudinary URL" is not, and can't be from this machine. Whoever has real credentials (or
+the deployed Cloud Run environment, which already has them per `DEPLOYMENT.md`) should do
+one real scan-with-a-successful-upload check before trusting this path fully in
+production.
+
+**Task 5 (PDFBox text extraction + section detection) — done, and a real parsing bug found
+by testing against a real downloaded government PDF, not a synthetic fixture.** Apache
+PDFBox 3.0.3 added to `pom.xml` — the one new dependency the original architecture
+proposal flagged in advance. New `PdfTextExtractor` (per-page text via PDFBox;
+`isTextExtractable = false` when extracted text is negligible, routed to manual review
+rather than guessing — no OCR in MVP scope) and `SectionDetector` (a fixed taxonomy —
+`IMPORTANT_DATES`/`VACANCY`/`ELIGIBILITY`/`APPLICATION_FEE`/`HOW_TO_APPLY`/
+`SELECTION_PROCESS`/`PAY_SCALE`/`DOCUMENTS`/`OTHER`, config-driven heading variants,
+unmapped headings kept as `OTHER` with raw text preserved, never dropped). New
+`IngestionExtractionJob`/`ExtractionJobService` (migration `V33`, idempotent job
+tracking). Wired into `scan()` as three separate top-level calls (fetch → store →
+extract), applying Task 4's transaction lesson proactively this time rather than
+re-discovering it via a failing test.
+
+**The real bug**: downloaded a genuine live SSC corrigendum PDF and ran the new section
+detector against its real text (not a synthetic fixture) — a short all-caps abbreviation
+that PDF line-wrapping had placed alone on its own line (`"OTR."`, from "...map their
+Scribe \nOTR.") was misclassified as an unmapped section heading, splitting one
+continuous paragraph in two. Fixed by requiring a candidate unmapped heading to be
+multi-word or at least 8 letters; re-verified against the same real document afterward —
+the whole corrigendum now correctly stays one `OTHER` section (it genuinely has no real
+headings at all, a correct result once the false split was gone).
+
+**A second real-document check, informative rather than just reassuring**: downloaded a
+real 97-page, 3.4MB full recruitment advertisement (found by querying the live SSC
+listing API for its largest recent attachment) and ran extraction + section detection
+directly against it. **3 of the 8 taxonomy sections confirmed matching correctly on real
+content** (`VACANCY` on "3. Vacancies:", `SELECTION_PROCESS` on "13 Scheme of
+Examination:", `ELIGIBILITY` on "Educational Qualification"). **The other 5 did not match
+anywhere in this document** — honestly unclear whether that's because this specific
+document genuinely doesn't carry those sections under any name, or because the built-in
+default heading-variant guesses just don't match its actual phrasing — disclosed as an
+open, unresolved question for whoever curates real per-organization heading config later
+(Task 8/9), not guessed at further. A table-heavy vacancy-matrix section also produced
+several noisy but harmless `OTHER` fragments (short comma-separated category-code table
+cells still pass the multi-word check) — no data lost, just noisier than ideal on
+table-heavy pages; not further tightened this session without more real documents to
+validate against.
+
+**Verified**: new `PdfTextExtractorTest` (3) and `SectionDetectorTest` (5) — plain JUnit,
+synthetic PDFBox-built fixtures (never a real scraped government document committed to
+the repo, per this task's own testing philosophy) — plus `ExtractionJobServiceTest` (2,
+real dev DB) for the job-tracking/idempotency integration. **All 25 ingestion-related
+tests pass** (5+6+4+2+3+5), confirmed via surefire reports — one run took an unusually
+long 2451s (vs. the typical ~60-100s), consistent with this project's own documented
+history of environmental memory-pressure slowdowns rather than a code issue; it still
+passed cleanly. Backend `mvn compile` clean. No admin UI change this task — extraction is
+invisible internal processing at this stage; Task 6's `ingestion_extraction_results` is
+what the review queue (Task 8/9) will actually surface to a human.
+
+**Task 6 (rule-based extractor → `ingestion_extraction_results`) — done, verified with
+both synthetic fixtures and the same real 97-page live notification, results honestly
+disclosed either way.** Migration `V34` (additive). Five new enums
+(`ExtractionTargetType`/`ExtractionOperation`/`ExtractionMethod`/`ExtractionConfidence`/
+`ExtractionReviewStatus` — deliberately separate from the existing `ContentStatus`, a
+different concept). New `RuleBasedExtractor`: `name`/`notificationDate` come from the
+notice's own structured metadata (`HIGH` confidence); dates/vacancies/age/fee are
+keyword-anchored regex over free text (`MEDIUM`); qualification/selection-process are
+capped raw section text (`LOW`) — a candidate row's overall confidence is the weakest
+among its populated fields. Wired into `ExtractionJobService`; new read-only
+`GET /sources/{id}/extraction-results`.
+
+**Verified at two levels.** New `RuleBasedExtractorTest` (6, plain JUnit) plus an
+`ExtractionJobServiceTest` addition (real dev DB, a synthetic multi-line PDF proving the
+real end-to-end store→extract→persist path). **All 32 ingestion-related tests pass**
+(5+6+4+3+3+5+6).
+
+**Then, honestly, the harder check**: ran the complete real pipeline (PDFBox → sections →
+rules) against the same real 97-page live SSC notice Task 5 already downloaded. Real
+successes: `cycleName`/`notificationDate` (from metadata) and a plausible
+`notificationUrl` all came through correctly, plus genuinely useful (if messy) raw
+`qualification`/`selectionProcess` text captures. **Real, disclosed gap**:
+`applicationStart`/`applicationEnd`/`vacancyCount`/age-range did NOT extract from this
+document, even though `SectionDetector` correctly classified its `VACANCY`/`ELIGIBILITY`
+sections — this real document's actual phrasing for dates/vacancy-counts/ages doesn't
+match the keyword/regex patterns this MVP rule set assumes. **Not patched by guessing at
+more regexes against one example** — recorded as real, load-bearing evidence that the
+architecture's own premise ("rules alone won't get everything, a human reviewer and
+eventually AI are genuinely needed") is correct, not just a theoretical hedge; Task 8/9's
+review queue and a future AI layer (explicitly out of MVP scope) are where this gets
+closed, not more regex guessing now.
+
+**Task 7 (deterministic validation engine) — done, small.** New `ValidationEngine`:
+advisory-only checks (`applicationStart <= applicationEnd`, `notificationDate <=
+applicationStart`, `minimumAge <= maximumAge`) run right after `RuleBasedExtractor`
+produces each candidate, stored into the already-existing `validation_warnings` JSONB
+column. Two of Document 8's originally-sketched rules (corrigendum date-pair, vacancy-
+sum-by-category) are honestly not implemented — no extractor in this pipeline produces
+those fields yet, not faked with invented inputs. New `ValidationEngineTest` (7, plain
+JUnit) plus a real end-to-end `ExtractionJobServiceTest` case (inverted dates → a real
+warning persisted and correctly round-tripped through JSONB). **All 40 ingestion-related
+tests pass** (5+6+4+4+3+5+6+7).
+
+**Task 8 (review-queue backend) — done. First task where a candidate actually becomes a
+real Exam Guide row, not just something visible.** Migration `V35` (additive
+`rejection_reason` column — **a real gap between this task's own two design documents,
+found while implementing**: Document 12 requires a reject reason, Document 9's schema had
+nowhere to put one). New `ReviewQueueService`: Accept merges reviewer `overrides` into the
+stored payload (covers `examCode`/`status` — fields a rule-based extractor can never know
+on its own) and calls the **exact same existing `ExamGuideService` method** the admin
+console's own CRUD forms already use — this is what makes the result indistinguishable
+from hand-typed. Every non-`RECRUITMENT_CYCLE_CORE` candidate needs a reviewer-supplied
+`recruitmentCycleId` (matching a candidate to a cycle stays a reviewer action, never
+automated, per Document 9's own Q12).
+
+**Verified at three levels.** New `ReviewQueueServiceTest` (8 tests): Accept genuinely
+creates a real `RecruitmentCycle`, verified through `ExamGuideService`'s own existing,
+completely unchanged read method — not a special ingestion-only check; a sibling
+`ELIGIBILITY_RULE` candidate correctly attaches to that same cycle. **Three HTTP-level
+tests added specifically to close a self-noticed gap**: the first pass only called the
+service directly, unlike every prior task's tests (which hit real HTTP endpoints via
+`restTemplate`) — added tests confirming the real controller/JSON layer works too,
+including a required-field 400 on a blank reject reason. **All 48 ingestion-related
+tests pass** (5+6+4+4+3+5+6+7+8).
+
+**A live accept-from-a-real-scan attempt hit the same already-disclosed Cloudinary gap
+from Task 4, not a new one**: a real scan produced 0 candidates because document storage
+still fails at the Cloudinary-upload step in this environment, so extraction never runs
+for a live document at all (exactly Document 15's designed resilience, not a bug) —
+`ReviewQueueServiceTest`'s direct-database verification is the stronger, already-complete
+proof here regardless. **The full ~30-class regression suite was deliberately skipped
+this pass** — a first attempt was still running after ~10 minutes and was stopped at the
+user's explicit direction (it usually takes ~1hr+); judged low-risk since Task 8 only
+added new files plus one additive `ALTER TABLE`, no existing entity/service/controller
+touched. A leftover `surefirebooter` JVM from the stopped run was found and killed
+afterward to avoid this project's own documented overlapping-Maven-processes trap.
+
+**Task 9 (admin review-queue UI) — done, and genuinely click-tested against a real
+candidate, not just built and assumed.** New `admin/src/pages/IngestionReview.jsx`:
+source picker, status filter, one card per candidate (per-row, not per-field — matches
+Task 6's own candidate granularity). Each card shows the payload table, source excerpt,
+any validation-warning banner (Task 7), and once reviewed, the rejection reason or the
+real applied cycle id. Accept prompts for exam+status (`RECRUITMENT_CYCLE_CORE`) or an
+existing cycle id (every other type) — the fields a rule-based extractor can never supply
+on its own. New `api.js` functions; wired into the sidebar/router.
+
+**Verified**: `npm run build`/`oxlint` clean at baseline, then a real Playwright
+click-through. Since a live scan can't produce a real candidate in this environment (same
+disclosed Cloudinary gap), one was seeded directly via a scoped JDBC one-off (this
+project's own established precedent for this exact situation) with a genuinely
+inconsistent date pair so the warning banner would show real, accurate data. On screen:
+payload table, source excerpt, and a correct validation warning all rendered right;
+clicking Accept **actually created a real `RecruitmentCycle`**, confirmed both via the
+API response and, after a fresh page reload, via the Accepted filter showing the same
+card with the real applied cycle id. **A first click-test pass looked like a bug (stuck
+on the pending form) but was an ambiguous selector in the test script itself** — a second,
+carefully-scoped pass on a fresh page load confirmed the app is correct. Worth
+remembering: check a suspected UI bug against a fresh page load before concluding the app
+is wrong. **Careful cleanup afterward, closing a real gap the seeding itself created**:
+deleting the source alone would have left an orphaned document+job+result behind (since
+`ingestion_documents.notice_id` is `ON DELETE SET NULL`, not cascade, by Task 4's own
+design) — deleted the real created cycle via the existing API, then the document directly
+(cascades job+results), then the source (cascades notice); confirmed nothing seeded
+remains. Admin token revoked, both dev servers stopped.
+
+**Task 10 — genuinely blocked, not attempted with a substitute.** The user asked to
+"continue with all tasks" and this session did, through Task 9 — but Task 10 ("end-to-end
+dry run against a real SSC notice, reviewed and published by a human") hits two real
+blockers that can't be resolved from inside an autonomous session, and rather than fake
+it with more synthetic seeding (as every prior task could still get genuine live evidence
+one way or another), the honest call was to stop and disclose exactly why:
+
+1. **No real Cloudinary credentials exist on this machine.** Confirmed repeatedly across
+   Tasks 4/8/9's own live verification passes: a real SSC document downloads correctly
+   every time, but storage always fails at the Cloudinary *upload* step, so no
+   `ingestion_documents` row (and therefore no candidate) has ever existed for a
+   genuinely live-scanned document in this environment. Needs either real credentials
+   somewhere (this machine, or the deployed Cloud Run environment, which already has
+   them per `DEPLOYMENT.md`) — there's no way around this one.
+2. **"Reviewed and published by a human" is this task's own explicit design** (Document
+   26 requires mandatory human review before Accept for date/vacancy/eligibility/fee
+   fields), not just wording to route around. Publishing a real row into the live Exam
+   Guide data ~37,900 real questions and real users depend on is the project owner's
+   call, not something to rubber-stamp with an admin token while they're away.
+
+**What this session leaves ready**: Tasks 1-9 complete, tested (56 tests across 9 test
+classes, all passing against the real dev database), and click-tested for real at every
+layer that doesn't require a real document to exist — including the admin review UI
+genuinely accepting a seeded candidate and creating a real `RecruitmentCycle`. The exact
+remaining steps once real Cloudinary credentials are available: scan a real SSC source →
+confirm real candidates appear (the pipeline logic itself is fully proven, only the
+storage credential is missing) → a human reviews and Accepts in `IngestionReview.jsx` →
+the resulting `DRAFT` cycle goes through the *existing*, unchanged submit-for-review/
+publish workflow → confirm it's visible on the public API and on a real device.
+
+**This closes the session's TASK-2401 work at Task 9 of 10.** Full detail, including the
+precise remaining steps, is in `tasks/TASK-2401-exam-guidance-data-platform.md`'s own
+updated Implementation status section.
+
+
+## Session of 2026-09-06 — Multi-Type Question Architecture: Phase P4 (descriptive, schema/evaluator only), closes the P0–P4 plan, fully verified
+
+**Continuation of TASK-2301** (P0 through P3, recorded immediately below this entry). User
+instruction this session was "To start Phase P4," direct authorization to proceed under the same
+standing directive every phase of this task has run under. Full detail:
+`tasks/TASK-2301-multi-type-question-architecture.md`'s own "P4" status entry — this is the
+summary.
+
+**P4's own scope was already narrow and already signed off**: "Schema plus `ManualEvaluator` plus
+`PENDING_REVIEW` only; no student UI," with "Descriptive question UI and human evaluation
+workflow" explicitly Out of scope. Read literally, not expanded: `SHORT_ANSWER`/`LONG_ANSWER`
+already existed as `question_types` rows since V25 and the response-model columns already existed
+since V26, with `outcome` a plain unconstrained `VARCHAR(20)` — **no new migration was needed at
+all**, and `EvaluationOutcome.PENDING_REVIEW` already existed in the Java enum (added in P1,
+unused until now). Shipped: a `ManualEvaluator` (Java) — `response` is `{"enteredText": string |
+null}`, same shape `TextAnswerEvaluator` uses; blank/null/missing evaluates `UNATTEMPTED`, any
+real attempt evaluates `PENDING_REVIEW` with a placeholder `scoreFraction` of `0.0` (never
+CORRECT/INCORRECT — a descriptive answer needs a human reader, not a comparison, and this phase
+deliberately doesn't build one) — registered for both `SHORT_ANSWER`/`LONG_ANSWER` (one shared
+instance, same pattern `ASSERTION_REASON`/`STATEMENT_COMBINATION` already established). Mirrored
+exactly in `mobile/src/evaluation/questionEvaluator.ts` as `manualEvaluator`.
+
+**Deliberately not done, matching scope exactly:** `is_authoring_enabled` stays `false` for both
+types (unreachable from any live codepath, same as P1's `SingleChoiceEvaluator` briefly was); no
+admin authoring UI, no mobile renderer, no review/grading workflow, no `api/QUESTIONS.md` change
+(the wire contract is completely unchanged).
+
+**Verified:** new fixture cases in `sample-data/question-evaluator-fixtures.json` (tagged
+`LONG_ANSWER` only — `SHORT_ANSWER` shares the same evaluator instance, needs no cases of its
+own); `QuestionEvaluatorsTest` (a plain JUnit test, no Spring context) re-ran clean — 1/1, all
+cases including the four new ones pass, confirmed via the surefire report directly. Its own
+class-doc comment was stale (still described "P2 Wave A" as current, missing Wave B and now P4) —
+fixed in place. `mvn compile` clean. Mobile `tsc --noEmit` clean; `expo lint` at the exact
+pre-existing 9-problem baseline.
+
+**[RESOLVED, later the same day] Full `mvn test` regression run completed clean.** Re-run once
+the unrelated memory pressure eased on its own (3.1GB free, up from 0.76GB): **198 tests across
+28 classes, 0 failures, 0 errors**, confirmed via the surefire reports directly.
+`LiveQuestionsTest` specifically re-ran 7/7 clean, confirming the P3 session's fixture cleanup
+held. No on-device pass — correctly so: this phase adds no renderer and nothing new can be
+authored to render, matching P1's own precedent.
+
+**This closes every phase in the original P0–P4 plan.** Whichever work follows needs its own
+fresh scoping and sign-off.
+
+## Session of 2026-09-05 (2) — Multi-Type Question Architecture: Phase P3 (shared content — groups, media, group-aware assembly), shipped and verified on-device
+
+## Session of 2026-09-05 (2) — Multi-Type Question Architecture: Phase P3 (shared content — groups, media, group-aware assembly), shipped and verified on-device
+
+**Continuation of TASK-2301** (assessment through Wave B, recorded immediately below this entry).
+User instruction this session was "ok continue with remaining phases," read as authorization to
+proceed under the same standing "no permission needed unless blocker" directive every phase of
+this task has run under. Full detail: `tasks/TASK-2301-multi-type-question-architecture.md`'s own
+"P3" status entry — this is the summary.
+
+**One real architectural fork was put to the user rather than decided unilaterally**, via
+`AskUserQuestion`, since it affects the safety of the existing, heavily-relied-upon random Mock
+Test sampler for ~37,900 questions: a group (a passage with several child questions) must never
+be split across a section's random selection — should Mock Test's assembly be made fully
+group-aware (higher risk, matching the original architecture proposal exactly), or should groups
+be scoped to Practice only for now, deferring Mock Test? **The user chose the former** — Mock
+Test's sampler is fully group-aware, not scoped down.
+
+**Shipped:** Migration **V29** (`question_groups`, `question_group_translations`,
+`questions.question_group_id`/`group_order` — both nullable, no existing row touched,
+`question_media` with a CHECK enforcing exactly one of `question_id`/`question_group_id`).
+`group_type` (`PASSAGE`/`DATA_INTERPRETATION`/`IMAGE`/`MAP`) validated against a new
+`QuestionGroupType` Java enum at the service layer — the same "table can describe, only the enum
+decides what's renderable" defence `question_types`/`QuestionTypeCode` already established.
+
+**Backend:** new `QuestionGroupService`/`Controller` (full CRUD + its own `/sync` — deliberately
+separate from `/api/questions/sync` rather than embedding a group's content per child question,
+which would re-download the same shared passage once per question referencing it on every sync
+page) and `QuestionMediaService`/`Controller` (attach/detach an already-Cloudinary-uploaded URL
+to exactly one owner; creating/deleting bumps that owner's `updatedAt`, since media has no sync
+endpoint of its own). `QuestionResponse`/both request DTOs gained `questionGroupId`/`groupOrder`
+(mutable post-creation, unlike `questionType`/`contentStructure`) and a batch-fetched `media`
+list.
+
+**The highest-risk piece, per the user's own choice: group-aware Mock Test assembly.** New
+`QuestionGroupAssembly.packRandomSample()` — fetches a bounded random candidate pool
+(`min(max(limit*20, 500), 5000)`), expands each group hit to its FULL sibling set (loaded once
+per distinct group id), shuffles the resulting units in Java, then greedily packs without ever
+exceeding `limit` — a unit that would overflow is skipped, not split, extending ADR-008's
+already-accepted "may undershoot" trade-off to whole groups.
+`mobile/src/db/questionGroupAssembly.ts` mirrors this exactly (async loader, since a mobile
+group lookup is a real SQLite query), wired into `db/mockTest.ts`'s `buildMockTestQuestions`.
+The live pre-first-sync Mock Test path needed no separate mirror — it already calls the
+backend's now-group-aware `/mock-sample`.
+
+**Capability negotiation — a mechanism from the ORIGINAL P1 architecture proposal that had never
+actually been implemented.** `/sync`/`/live` now accept `supportedTypes`, defaulting to
+SINGLE_CHOICE-only when absent (a tombstone still passes through regardless of type).
+**Implementing only the backend side would have been a real, shipped regression** — this
+project's own already-live mobile client renders all 9 types today but declared no
+`supportedTypes` before this phase, so its very next sync would have silently stopped receiving
+every non-SINGLE_CHOICE question. Fixed by shipping both sides together: a new
+`mobile/src/evaluation/supportedQuestionTypes.ts` (all 9 types) is now always sent by
+`syncQuestions()`/`getLiveQuestions()`, so current mobile code is unaffected while a genuinely
+old pre-P3 APK safely degrades — the exact scenario the mechanism protects against.
+
+**Mobile sync/storage.** Local migration **0021** (hand-written, mirrors V29).
+`writeQuestionGroups()` runs inside `writeReferenceData()` **before** the question-page loop, so
+a question's `questionGroupId` always resolves locally in time. Question-owned media
+deliberately does **not** reuse `questionExams`/`questionTranslations`'s delete-and-reinsert
+pattern — `question_media` carries local-only `localUri`/`downloadedAt`, and a blind
+delete+reinsert would silently reset every downloaded asset's state on every sync. Uses
+`onConflictDoUpdate` instead, touching only server-owned columns.
+
+**Media pre-download hit a real API surprise, caught by `tsc`, not assumed away.**
+`expo-file-system@~57.0.6` replaced the legacy flat-function API entirely with a class-based
+`Paths`/`File`/`Directory` API — fixed by reading the installed package's own `.d.ts` files
+directly (per this mobile project's own `AGENTS.md` standing warning to check the exact
+versioned API before writing filesystem code), not by guessing from stale familiarity.
+`downloadPendingMedia()` now uses `File.downloadFileAsync(url, destination, {idempotent: true})`
+against `new Directory(Paths.document, "question-media")`. A transaction-handle-mixing bug was
+caught and fixed **before any test ran**, by review alone: the two call sites inside an
+already-open `tx` read `localUri` via that same `tx` handle and call a low-level,
+DB-handle-agnostic `deleteMediaFileAtUri` directly, rather than the higher-level
+`deleteLocalMediaFiles` (which uses the separate module-level `db` handle and is documented as
+unsafe to call from inside an open transaction).
+
+**Rendering:** new `questionRenderer/GroupContent.tsx` — looked up directly from local group
+tables by `questionGroupId`, independent of whichever question array assembled the current
+question, since Practice's sampler carries no atomic-group guarantee (unlike Mock Test's pack
+algorithm) — a grouped question can appear in Practice with none of its siblings present.
+Collapsible passage + plain `Image` for attached media (this codebase's existing convention;
+`expo-image` isn't used anywhere in it), rendered above the question text like `PyqBadge`
+already does. **A genuine `set-state-in-effect` violation was introduced and fixed the same
+pass** — fixed via the keyed-remount pattern (`key={question.id}`) rather than an effect-based
+reset, avoiding the exact violation class this codebase has repeatedly hit and fixed elsewhere.
+Wired into `practice/quiz.tsx` and `mock-test/test.tsx` only — review screens and the live
+pre-first-sync path are disclosed scope trims (see task doc for the full reasoning).
+
+**Admin:** new `pages/QuestionGroups.jsx` (list/create/edit/delete a group's type + per-language
+passage text, plus a media attach/detach sub-modal) registered as a new sidebar entry.
+`QuestionForm.jsx` gained a "Shared group" dropdown + "Order within group" field.
+
+**New docs:** `api/QUESTION-GROUPS.md`; `api/QUESTIONS.md` updated for the new fields/param/
+packing behavior.
+
+**Verified:** new `QuestionGroupsAndMediaTest` (11 tests, confirmed via the surefire report file
+directly — this session's PowerShell `mvn` output redirection proved unreliable mid-run more
+than once) — group CRUD, rejecting unknown group type, question-joins-group with order,
+rejecting unknown `questionGroupId`, moving a question out of a group, translation upsert +
+delete, media attach rejecting neither-or-both owners, the group `/sync` endpoint, capability
+negotiation on `/sync` and `/live`, and `mockSampleNeverSplitsAGroup` (15 iterations, a
+3-question group's match count is always 0 or 3, never 1 or 2). **Two real bugs found and fixed
+by running the new test, not by review**: a Spring Data derived-query name mismatch
+(`...IsDeletedFalse...` vs. the entity's actual `deleted` field — `PropertyReferenceException`
+at context startup); and a capability-negotiation test using `since=0` against the real
+~37,900-row dev DB (ordered ascending, so it never reached a question created moments earlier) —
+fixed with a real recent UTC timestamp. Mobile `npx tsc --noEmit` clean; `npx expo lint` back to
+the exact pre-existing 9-problem baseline after fixing the `set-state-in-effect` violation.
+Admin `npm run build` clean; `oxlint` shows only its one pre-existing, untouched-file warning.
+**Full backend regression suite: 200 tests, 1 failure, 0 errors** — every other class (29 of 30)
+passed, including `QuestionGroupsAndMediaTest` again (11/11).
+
+**The one failure was investigated to a confirmed diagnosis, not shrugged off.**
+`LiveQuestionsTest.counts_groupsBySubjectAndExcludesDeleted` (pre-existing, not touched by this
+phase) got `expected 1L but was 4L` — it counts non-deleted questions under
+`AbstractIntegrationTest`'s shared-by-name "Automated Test Subject" fixture, which every test
+class in the suite reuses; `/api/questions/counts` itself was never touched by this phase (only
+`sync`/`live`/`sampleForMock` were). **Confirmed, not just theorized**: a clean, fully-isolated
+`-Dtest=LiveQuestionsTest` re-run (after two earlier attempts died mid-boot from this session's
+own memory pressure — the machine was down to 0.5-1.2GB free RAM with an emulator, Metro, a dev
+backend, and an admin dev server all alive at once, the same "VM terminated without properly
+saying goodbye" pattern this file has documented before) reproduced the **exact same "was 4L"**
+in complete isolation. Since `cleanup()` hard-deletes every row a test creates immediately after
+that test method finishes (regardless of which method runs when), a single clean class-only run
+cannot itself accumulate 4 — the other 3 must already have existed in the shared dev database
+*before* this run even started. This is real leftover content under "Automated Test Subject"
+from some earlier interrupted run, matching this file's own "Deferred / known leftovers" section,
+which already flags this exact subject/topic pair as an accumulation point — not a regression
+from this phase's `supportedTypes`/`typeIn` change. **[RESOLVED, later the same day] Cleaned
+up.** Minted an admin token, found the shared "Automated Test Subject" fixture's id, listed its
+questions via `GET /api/questions?subjectId=...`, and confirmed exactly 3 non-deleted orphaned
+rows (all with `updatedAt` timestamps from earlier the same session — leftovers from one of this
+session's own interrupted runs, not ancient cruft). Soft-deleted all 3 via the existing
+`POST /api/questions/bulk-delete` endpoint (the same sanctioned mechanism the admin console
+itself uses — no raw SQL write needed) and confirmed `/api/questions/counts?groupBy=subject`
+now returns nothing for that subject, i.e. zero non-deleted questions. The fixture is clean for
+the next session's test run.
+
+**A real, genuine on-device pass done in a follow-up round the same day, per explicit user
+request — a real group with real passage content, authored via the live admin API, synced to
+the device, and watched rendering.** Cleaned up the `LiveQuestionsTest` flake's root cause first
+(see below), then restarted a fresh dev backend + Metro (both had gone stale/unresponsive under
+this session's own memory pressure — see the process note below) and minted a 45-minute admin
+token via the existing `AdminTokenMintRunner` fixture mechanism. Authored one real `PASSAGE`
+group (`[P3-VERIFY]`, English + Hindi passage text about the Lok Sabha/Rajya Sabha) and three
+real `SINGLE_CHOICE` questions attached to it (`groupOrder` 1-3), under SSC_CGL → General
+Awareness → General — the same topic prior WAVEB-VERIFY content already lives under. Synced to
+`emulator-5554` and confirmed via direct SQLite inspection of the device's own database that all
+three questions and the group (with both languages' passage text intact) landed correctly with
+the right `question_group_id`/`group_order` values.
+
+**Watched it render for real, in a genuine Practice quiz.** Deep-linked straight into the quiz
+screen for that topic (`sarkaritaiyaari:///practice/quiz?...`) — a real, non-cosmetic bug was
+hit and fixed along the way (see below), not a rendering defect. Once past it: question 1 (a
+group member) showed the **full English passage in a collapsible "PASSAGE" card** above the
+question text, exactly as designed; tapping "Hide passage" correctly collapsed it and flipped
+the label to "Show passage" with the chevron reversing; selecting the correct option (552)
+correctly revealed green with a checkmark and the real explanation text. **Question 2 — a
+different, pre-existing standalone `NUMERIC` question with no group — correctly showed no
+passage card at all**, confirming `GroupContent`'s "render nothing for an ungrouped question"
+path and that Practice's sampler genuinely interleaves a group's members with ordinary
+standalone questions rather than keeping them adjacent (exactly the "no atomic guarantee in
+Practice" behavior this phase's design docs already state, now watched actually happening, not
+just reasoned through).
+
+**A real, non-obvious testing-methodology bug found and fixed before the above could be
+observed — not a code defect, but worth recording.** Deep-linking with `adb shell am start -d
+"<uri-with-&-in-it>"` silently truncated the URI at the first unescaped `&` somewhere in the
+Windows→adb→device shell layering, so `topicId`/`levelKey` never reached the screen and it sat
+on "Preparing your questions..." forever (indistinguishable from a real hang — burned real time
+before the cause was found: checked the local sync'd data directly via SQLite first, confirmed
+it was all correct, which pointed the investigation away from the app/data layer and toward the
+deep-link command itself). Fixed by escaping every `&` in the URI as `\&` before handing it to
+`adb shell am start -d`. Worth remembering for any future session that deep-links with query
+parameters on this project.
+
+**Two more environmental incidents hit and resolved during this same verification pass,
+consistent with this session's whole memory-pressure theme (free RAM as low as 0.5-1.7GB
+throughout — an emulator, Metro, a dev backend, an admin dev server, and a 30-class test suite
+were all competing for it):** (1) the dev backend that had been left running from earlier in the
+session turned out to be stale pre-P3 code (confirmed by a 404 on the new group-sync endpoint)
+and had to be killed and restarted; (2) Metro itself went fully unresponsive (`http://localhost:8081/status`
+timing out with the app stuck on its splash screen) partway through, traced to two overlapping
+Metro instances from different points in the session both holding stale state — killed both and
+started one clean instance, which resolved it immediately.
+
+**Not exercised this pass, disclosed rather than assumed:** a Mock Test attempt with this real
+group (would need a full exam-paper/section authoring pass to make General Awareness mockable in
+a way that reliably samples it — the backend/mobile group-atomic pack algorithm itself is
+already covered by `mockSampleNeverSplitsAGroup`'s 15-iteration integration test, just not
+watched on-device); the media `Image` render/fallback path (this test group has no attached
+image); a downloaded media file surviving a sync (same reason). Standalone-question-only media
+(an IMAGE/MAP question with no group) has a working backend/admin path but deliberately no
+mobile renderer this phase.
+
+**Housekeeping done before ending the session, per explicit user instruction to stop everything
+once verification was complete:** the dev backend, Metro, and the temporary admin token were all
+stopped/revoked — unlike prior sessions' convention of leaving them running for reuse, nothing
+from this verification pass was left alive. The three `[P3-VERIFY]` test questions and their
+group are deliberately left in the real database (same precedent as every prior phase's tagged
+test content) for a future content-cleanup pass, not treated as urgent.
+
+**Next:** P4, per the original phase plan — not started, no fresh sign-off obtained this session.
+
+## Session of 2026-09-05 — Multi-Type Question Architecture: Phase P2 Wave B, shipped and fully verified
+
+**Continuation of TASK-2301** (assessment + P0 + P1 + Wave A, recorded immediately below this
+entry). User instruction this session was the brief "continue with work," read as authorization
+to proceed under the same standing "complete all phases... you dont need any permission unless
+blocker" directive from the prior session. Full detail:
+`tasks/TASK-2301-multi-type-question-architecture.md`'s own "P2 Wave B" status entry — this is
+the summary.
+
+**Shipped:** `NUMERIC`, `FILL_BLANK`, `MATCH`, `ORDERING` all fully playable end-to-end in real
+Practice and Mock Test, the same controlling scope bar the user chose for Wave A. Migration
+**V27** (enables authoring for the four new types — no other schema change needed, since Wave
+A's generic `answer_key`/`content_structure`/`question_translations.content` JSONB columns
+already existed and this phase is the first to actually populate `content_structure`) and
+**V28** (a real bug found by running the new test: `questions.correct_answer` was `VARCHAR(10)`
+since V1 — too narrow for FILL_BLANK's/MATCH's joined display strings; widened to `VARCHAR(500)`).
+
+**Backend:** new `NumericEvaluator`/`TextAnswerEvaluator`/`MappingEvaluator`/`SequenceEvaluator`
+(+ TypeScript mirrors) join the registry via `Map.ofEntries()` (switched from `Map.of()`, which
+caps at 10 pairs). `QuestionService.resolveAnswer()` gained per-type branches: NUMERIC
+(`answerKey.correctValue`/`tolerance`, default tolerance 0.0), FILL_BLANK
+(`answerKey.acceptedAnswers`, joined `" / "`), MATCH (`answerKey.correctMapping` covering every
+`contentStructure.leftKey`), ORDERING (`answerKey.correctOrder`, must permute
+`contentStructure.itemKeys`). New `validateContentStructure()`/`requireLabelsCoverKeys()`
+validate the two new content shapes. Both `questionType` and (new this phase)
+`contentStructure` are immutable after creation. Bulk-import stayed SINGLE_CHOICE-only, the
+same disclosed scope trim as Wave A. `api/QUESTIONS.md`/`api/USER-PROGRESS.md` updated in the
+same change.
+
+**Two stale test assertions fixed** (same shape as a P1-era one already fixed once before): real
+Wave A/B content now legitimately exists on the shared dev DB, so `QuestionTypeFoundationTest`'s
+"zero non-SINGLE_CHOICE rows" and `WaveAOptionSetTypesTest`'s "exactly 5 authoring-enabled
+types" assertions were weakened to bounded/subset checks with an explanatory comment.
+
+**Admin:** `QuestionForm.jsx` extended with NUMERIC/FILL_BLANK fields and two new conditional
+cards (Match items, Ordering items) plus per-translation label editors, using a
+`keyCounterRef`-based stable-key scheme so mid-list removal can't silently invalidate existing
+mappings. **Verified via a real browser (Playwright) this time, not just a clean build** —
+closing the exact gap Wave A's own report left open. A full real Save click-through for MATCH
+was confirmed correct via a follow-up API read.
+
+**Mobile — the harder half again.** New `questionRenderer/FreeTextAnswerInput.tsx` (shared
+NUMERIC/FILL_BLANK text input), `MatchPairing.tsx` (tap-to-pair, shuffled right column),
+`OrderingBuilder.tsx` (tap-from-pool-to-append), `shuffle.ts` (Fisher-Yates) — all tap-driven,
+no new gesture-library dependency. The local/live data layers
+(`db/practiceContent.ts`/`db/mockTest.ts`/`data/practiceData.ts`/`data/mockTestData.ts`) all
+gained a `contentStructure` field — Wave A's mobile data-layer work had only carried
+`answerKey`/`content` through, since nothing needed the language-independent skeleton until now.
+`quiz.tsx` gained four new answer maps plus a shared `confirmedFreeform` lock set (the same
+"Confirm Answer" gate MULTIPLE_CHOICE needed in Wave A, since none of these four can infer "done"
+from one tap either); `mock-test/test.tsx` got the same maps with no confirm gate, matching
+every other type's blind-mode behavior there. Review screens
+(`practice/summary.tsx`/`mock-test/result.tsx`/`revise.tsx`) render NUMERIC/FILL_BLANK through
+the disabled `FreeTextAnswerInput` and MATCH/ORDERING as plain "Your Answer: N pair(s)
+matched"/"N item(s) ordered" text, since a stored result carries no per-key labels to
+reconstruct the actual pairing/order from — the same honest limitation Wave A already
+established for MULTIPLE_CHOICE/TRUE_FALSE's correct-answer display.
+
+**Verified, genuinely, at every layer:**
+- **Backend: 28/28 targeted tests (`WaveBFreeInputTypesTest` 13/13, `WaveAOptionSetTypesTest`
+  10/10, `QuestionTypeFoundationTest` 4/4, `QuestionEvaluatorsTest` 1/1), BUILD SUCCESS** —
+  re-confirmed clean a second time after a transient Postgres/PgBouncer "cached plan" error
+  (diagnosed as an environmental artifact of the V28 column-type change, not a code defect).
+- **Mobile:** `npx tsc --noEmit` clean; `npx expo lint` at the exact pre-existing 9-problem
+  baseline throughout.
+- **A real device pass on `emulator-5554`, not just a clean build.** Four real questions (one
+  of each new type, tagged `[WAVEB-VERIFY]`) authored via direct authenticated API calls and
+  synced to the device under SSC_CGL → General Awareness → General. **All four answered and
+  scored correctly inside a real Practice quiz**: NUMERIC ("42") and FILL_BLANK ("New Delhi")
+  both correct with the green reveal; MATCH tap-paired fully correct; ORDERING deliberately
+  answered out of order to exercise the wrong-answer path, correctly showed positions 1-2
+  green/3-4 red. Session Summary showed 3/4, 75%, with each type's honest "Your Answer" fallback
+  text rendering correctly. **The same four types answered inside a real Mock Test attempt**
+  (via the question navigator) — MATCH/FILL_BLANK/ORDERING all registered and, on Submit, scored
+  exactly 2 correct/1 wrong for the General Awareness section, matching MATCH+FILL_BLANK correct
+  and the deliberately-wrong ORDERING exactly. Pre-existing Wave A and legacy SINGLE_CHOICE
+  content in the same attempt scored correctly alongside the new types — no regression. Every
+  `adb` call pinned to `emulator-5554`; no other device touched.
+
+**A minor testing-methodology lesson, not a code bug:** several early taps appeared to show a
+stuck/disabled "Confirm Answer" button via `uiautomator dump`; investigated at length before
+concluding the dump was reading a stale accessibility-tree snapshot one render behind reality
+(or, in a couple of cases, a screenshot-coordinate-to-device-pixel scale factor not applied) —
+not a real state bug. Every one of these interactions scored correctly once the tap actually
+landed on the right target.
+
+**Not verified:** the admin form's Save was click-tested for MATCH only, not individually for
+NUMERIC/FILL_BLANK/ORDERING (all four share the same save codepath, and MATCH exercises the most
+complex payload shape). Bulk-import and bookmarks remain scoped out for all non-index types,
+unchanged from Wave A. The four `WAVEB-VERIFY`-tagged test questions are left in place under
+SSC_CGL's real General Awareness → General topic (live in the real question bank, unlike some
+earlier phases' inert test content) — flagged here for a future content-cleanup pass, matching
+this project's existing precedent for tagged test content.
+
+**Next:** P3 (shared content — groups, media, group-atomic selection, passage/DI/image/map),
+needing the same explicit sign-off this task has used for every phase so far. The emulator,
+Metro, the dev backend, and the admin dev server were all left running at the end of this
+session for reuse.
+
+## Session of 2026-09-04 (2) — Multi-Type Question Architecture: Phase P2 Wave A, shipped and fully verified
+
+**Continuation of the same day's earlier session** (assessment + P0 + P1, recorded
+immediately below this entry). User instruction: "continue the work... complete all
+phases one by one... you dont need any permission unless blocker. use emulator if you
+want." Full detail lives in `tasks/TASK-2301-multi-type-question-architecture.md`'s own
+"P2 Wave A" status entry — this is the summary.
+
+**Shipped:** `MULTIPLE_CHOICE`, `TRUE_FALSE`, `ASSERTION_REASON`, `STATEMENT_COMBINATION`
+all fully playable end-to-end in real Practice and Mock Test, not just authorable —
+matching the user's own explicit scope choice from the assessment phase. Migration
+**V26** (backend) / **0020** (mobile): `question_translations.content` (JSONB), the four
+new types' `is_authoring_enabled=true`, and the response-model columns
+(`response`/`outcome`/`score_fraction`/`question_type`) on both result tables with
+`selected_index`/`correct_index` now nullable — landing the exact slice P1's own risk
+note deferred, including the `TopicEvidenceRepository.mockEvidence` COALESCE-style fix
+that note demanded (now reads `outcome`, not `selected_index = correct_index`).
+
+**Backend:** `QuestionService.resolveAnswer()` dispatches per type — MULTIPLE_CHOICE
+requires `answerKey.correctOptions` and computes a display `correctAnswer` ("A,C");
+TRUE_FALSE requires `answerKey.correctBoolean` and computes "TRUE"/"FALSE"; the three
+index-based types keep P1's letter/text resolution unchanged.
+`validateTranslationShape()` enforces empty options for TRUE_FALSE, exactly-4 for the
+rest, and per-type `content` shape for the other two. New
+`MultipleChoiceEvaluator`/`TrueFalseEvaluator` (+ TypeScript mirrors) join
+`SingleChoiceEvaluator` in the shared registry — ASSERTION_REASON/STATEMENT_COMBINATION
+reuse it unchanged, since both are still single-correct-index answers under the hood.
+Bulk-import stayed SINGLE_CHOICE-only, a disclosed scope trim (four divergent per-row
+import shapes is real, separate work). `api/QUESTIONS.md` and `api/USER-PROGRESS.md`
+updated in the same change.
+
+**Two real, previously-undetected bugs found and fixed along the way, neither part of
+this phase's original scope:**
+1. **Per-question `timeMs` (captured on-device since the Weakness Radar session) was
+   never wired into the sync DTOs at all** — `ProgressDtos.PracticeResult`/`MockResult`
+   had no `timeMs` field despite the entity/column existing since V24, so it was
+   silently dropped on every upload and never restored on a fresh install. Found while
+   reviewing `ProgressService`'s diff, fixed alongside the Wave A fields.
+2. **`mobile/src/intelligence/localEvidence.ts`'s mock-evidence query** derived
+   correctness the same wrong way the backend's pre-fix version did
+   (`selectedIndex = correctIndex`), which would silently mis-score a real
+   MULTIPLE_CHOICE/TRUE_FALSE mock answer as wrong in the offline Weakness Radar path.
+   Fixed to read `outcome`, mirroring the backend fix. **Caught before it could bite an
+   even sneakier way**: mobile migration `0020` (unlike backend V26) had no backfill for
+   pre-existing local rows, so `outcome` would have been `NULL` on every row that
+   predates it — added the missing backfill UPDATE statements to that migration before
+   it ever ran anywhere, exactly mirroring V26's own backfill logic in SQLite syntax.
+
+**Mobile — the harder half, since "fully playable" means real rendering and real
+scoring.** New `questionRenderer/MultiSelectOptionList.tsx` (a checkbox sibling to the
+existing, already-verified `OptionList` — kept separate rather than folded in, reusing
+the same per-screen style factories) and `questionRenderer/ContentPreamble.tsx` (renders
+the Assertion/Reason block or numbered Statement list above an ordinary index-based
+`OptionList`). TRUE_FALSE needed no new component — it renders through `OptionList` with
+`options: [True, False]` and a boolean↔index adapter at the call site. `quiz.tsx` gained
+a "Confirm Answer" step for MULTIPLE_CHOICE only (a checklist can't infer "done
+selecting" from one tap the way single-choice can); `mock-test/test.tsx` needed no
+lock/confirm step since nothing there reveals until Submit. Both screens' scoring calls
+the real evaluator for the two new types but **deliberately keeps the original direct
+`chosen === correctIndex` comparison for the three index-based types** — the evaluator's
+SINGLE_CHOICE branch reads `answerKey.correctOption`, a key legacy content never
+populated, where `correctIndex` is proven correct for every question in the bank.
+`practice/summary.tsx`, `mock-test/result.tsx`, `revise.tsx` all needed the same fix:
+status/`isCorrect` computed from `selectedIndex === correctIndex` reads as permanently
+"unattempted" once both are null for the new types — now driven by the stored `outcome`
+with a fallback to the old comparison only for a pre-Wave-A result. New shared
+`questionRenderer/answerSummary.ts` renders "Your Answer"/"Correct Answer" text;
+`describeCorrectAnswer` deliberately returns `null` for the two new types rather than a
+guess, since their stored results carry no answer-key snapshot to reconstruct it from.
+Bookmarks were disclosedly scoped out (`bookmarks.correct_index` is `NOT NULL`, predates
+the response model) — the star icon is hidden, not just guarded, for a question with no
+single index. `diagnostic-test.tsx`'s question source (`buildDiagnosticSet.ts`) was
+filtered to index-based types only, since that screen has no renderer for the new two and
+was outside this phase's stated scope (Practice/Mock Test).
+
+**Verified, genuinely, at every layer:**
+- **Backend: full regression suite, 174 tests, 0 failures, 0 errors, BUILD SUCCESS**
+  (including the new `WaveAOptionSetTypesTest`, 10/10, and `QuestionEvaluatorsTest`).
+  Took 4 failed attempts and ~52 minutes on the 5th before succeeding — see the
+  "concurrent-process resource contention" note below, an environmental issue, not a
+  code defect.
+- **Mobile:** `npx tsc --noEmit` clean; `npx expo lint` at the exact pre-existing
+  9-problem baseline.
+- **A real device pass, not just a clean build — the standard this project holds every
+  phase to.** Emulator `emulator-5554` (AVD `Pixel_7`), a real dev backend
+  (`mvn spring-boot:run`), and four real questions of each new type authored via a
+  minted admin token (`AdminTokenMintRunner`, the existing harmless fixture account) and
+  synced to the device. **All four types answered and scored correctly inside a real
+  Practice quiz** (STATEMENT_COMBINATION wrong, ASSERTION_REASON/MULTIPLE_CHOICE/
+  TRUE_FALSE correct → Summary showed 3/4, 75% accuracy, matching exactly) — screenshots
+  confirm the checklist's Confirm-and-reveal step, the True/False adapter, and the
+  Assertion/Statement preambles all render pixel-correct. **The same four types answered
+  inside a real Mock Test attempt** (via the question navigator, jumping straight to the
+  General Awareness section) — confirmed blind mode (no reveal), free re-selection,
+  "Clear answer", and a Submit confirmation/Result screen that correctly aggregated
+  heterogeneous-type scores without crashing. **Revise → Wrong Answers** showed the wrong
+  STATEMENT_COMBINATION answer with the correct row still highlighted green. **Admin
+  console click-tested in a real browser via Playwright** (token injected into
+  `localStorage`, bypassing the need for a real password) — all four types' conditional
+  form fields (checkbox grid, True/False dropdown, Assertion/Reason textareas, Statement
+  list editor) rendered correctly on type switch with zero console/page errors. Every
+  physical device attached to this machine was left untouched; every `adb` call pinned
+  to `emulator-5554`.
+
+**A real environmental finding worth remembering for future sessions on this machine:**
+the full backend suite failed 4 times in a row before succeeding, each time with
+Maven's forked surefire JVM dying before running a single test
+("VM terminated without properly saying goodbye", a dumpstream `EOFException`) —
+diagnosed as memory exhaustion (as low as ~1.4GB of 16GB free at the time), not a code
+regression: several unrelated processes were competing for it simultaneously — VS Code's
+Java language server, 2-3 Gradle/Kotlin daemons, and (the first two attempts specifically)
+a **separate, unrelated automation project's own Maven/TestNG run** under
+`Desktop/Automation/cwp_test_automation`, confirmed via `Get-CimInstance Win32_Process`
+command-line inspection and never touched. The 5th attempt succeeded once that unrelated
+run had finished on its own. Same class of risk this file has already documented once
+before, just from processes outside this project rather than two of its own `mvn`
+invocations colliding.
+
+**Not verified:** Wave B (`NUMERIC`, `FILL_BLANK`, `MATCH`, `ORDERING`) — not started, per
+the approved phase plan. A full admin-form **save-and-persist** round trip through the
+actual browser UI (as opposed to direct API calls) was exercised for P1/Wave A via curl
+only, not clicked through in the browser — the browser pass this session verified
+rendering and type-switching, not a real click on Save. `QuestionForm.jsx`'s logic
+itself (`resolveAnswerForSubmit`/`buildTranslationPayload`) was read and reasoned through
+line by line, not exercised via a real click. The four `WAVEA-VERIFY`-tagged test
+questions (2 batches, one under a General-Science topic outside SSC_CGL's syllabus and
+therefore inert, one under General Awareness → World History that's now live in the real
+question bank) are left in place, matching this project's existing precedent for
+tagged/harmless test content (`Automated Test Topic`, etc.) — flagged here for whenever
+someone next does a content cleanup pass, not treated as urgent.
+
+**Next:** Wave B (`NUMERIC`/`FILL_BLANK`/`MATCH`/`ORDERING`), needing the same explicit
+sign-off this task has used for every phase so far. The emulator, Metro, the dev backend,
+and the admin dev server were all left running at the end of this session for reuse.
+
+## Session of 2026-09-04 — Multi-Type Question Architecture: assessment + Phase P0 + Phase P1
+
+**Requested:** evolve the question system beyond MCQ-only to support the full range of
+Indian government-exam question formats (multiple-correct, true/false, numerical, match,
+ordering, assertion-reason, statement-based, passage/DI/image/map-grouped, and eventually
+descriptive), explicitly as a redesign of the assessment engine rather than "add more enum
+values" — without breaking any of the ~37,884 existing MCQs, Practice, Mock Test, sync, or
+progress history. Per the request's own §20, an architecture proposal was required before
+any code changed. Task doc: `tasks/TASK-2301-multi-type-question-architecture.md`.
+
+**The assessment found the real blocker is one column.** `questions.correct_answer` is
+`VARCHAR(10) NOT NULL` (`V1__init_schema.sql:13`) — it cannot hold a set, a mapping, a
+permutation, or a number with tolerance. No question-type discriminator exists anywhere
+(zero grep hits across backend/admin/mobile). No media field exists despite
+`ImageUploadController` already returning Cloudinary URLs. "Exactly 4 options" is
+hard-coded in four places across two systems. The server never evaluates anything —
+`mobile/src/db/answerResolution.ts`'s `resolveCorrectIndex()` falls back to **index 0 with
+a `console.warn`** for anything it can't parse, silently reporting a wrong "correct
+answer" rather than erroring.
+
+**The highest-risk finding, worth remembering for any future session touching Epic L or
+the Weakness Radar:** correctness for mock attempts is *derived* as `selected_index =
+correct_index` in exactly two places — `TopicEvidenceRepository.java:84` (JPQL) and
+`mobile/src/intelligence/localEvidence.ts:76` (Drizzle SQL), both feeding the Weakness
+Radar shipped 2026-09-03. The moment `selected_index` becomes nullable for a non-index
+answer type, both silently score it wrong with no test failing. Any future session adding
+a response-model column for a new answer type must bridge both with
+`COALESCE(score_fraction, CASE WHEN selected_index = correct_index THEN 1 ELSE 0 END)`
+before that column goes nullable.
+
+**Two premises in the request were corrected, both cutting scope.** Assertion-Reason and
+Statement-Based need no new evaluator — both are single-correct MCQs with structured
+content and a fixed option taxonomy. And the 19 requested types collapse to 6 evaluator
+families (OptionSet, Text, Numeric, Mapping, Sequence, Manual), not 19 separate
+implementations. Two contradictions in the request were also surfaced rather than
+silently resolved: §15 (withhold answers before submission) directly contradicts §12
+(offline-first) — Practice reveals the answer entirely on-device already, so an
+offline-first app must ship the answer key before the student answers; and image/map
+question types have the same conflict unless media is pre-downloaded during sync.
+
+**Media offline was escalated to the user and resolved**: pre-download during sync, not
+online-only. Mechanism (for Phase P3, not yet built): a new local `question_media` table
+written by `expo-file-system` — confirmed already a transitive dependency of the `expo`
+SDK meta-package (`package-lock.json`), so promoting it to direct via `npx expo install`
+is the same category of change as adding `expo-notifications` for reminders, not a new
+dependency decision. `expo-image`'s own `Image.prefetch()` was rejected as insufficient —
+it writes to an evictable managed cache with nothing recording the eviction, which doesn't
+meet an offline *guarantee*. Opens a new, disclosed risk: unbounded local storage with no
+cleanup path yet for a media row whose question is later soft-deleted.
+
+**Phase P0 shipped this session — a refactor only, no schema change, approved explicitly
+before starting** (the user was asked to disambiguate "Phase 1" between this refactor-only
+P0 and the schema-touching P1; chose P0). New `mobile/src/questionRenderer/OptionList.tsx`
+plus `optionListStyles.ts` (five module-level style factories, one per screen's existing
+visual treatment — kept separate rather than one parameterised function because
+`useThemedStyles`'s cache is keyed on factory identity, per `ui/ThemeContext.tsx`). Wired
+into all six screens that render MCQ options: `practice/quiz.tsx`, `mock-test/test.tsx`,
+`mock-test/result.tsx`, `practice/summary.tsx`, `revise.tsx`, `diagnostic-test.tsx`. ~360
+lines of duplicated option JSX/styles removed; two now-dead imports (`Ionicons`,
+`Pressable`) and one dead `useTheme()` call removed from `diagnostic-test.tsx`.
+
+**Two real bugs caught during the extraction itself, before anything ran.** A first draft
+of the shared component would have revealed `practice/quiz.tsx`'s correct answer the
+instant a question loads, before any tap — the original screen gates that reveal on
+`selectedOption !== null`, which the draft dropped. Fixed by re-deriving each screen's
+exact original condition rather than trusting a plausible-looking generalisation. A
+second, related bug: gating the fix on `selectedIndex !== null` broke the two read-only
+review cases where that is legitimately null on purpose — an unattempted mock question
+(`mock-test/result.tsx`) and a bookmark that was never answered (`revise.tsx`'s Bookmarks
+tab) — both of which must still reveal the correct answer in green. Fixed by keying the
+reveal gate on whether the list is interactive (`onSelect` present) rather than on
+`selectedIndex` alone. Neither bug would have been caught by `tsc` or lint; both were
+caught by manually tracing each of the six call sites' original logic against the new
+component before wiring it in.
+
+**Verified:** `npx tsc --noEmit` clean. `npx expo lint` — exactly the pre-existing
+9-problem baseline (8 errors, 1 warning), confirmed none of the flagged files are among
+the 6 touched screens or the new `questionRenderer/` module. Every diff reviewed by hand
+against the original block, not just compiled.
+
+**[RESOLVED, later the same day] On-device verification completed.** Emulator
+`emulator-5554` (AVD `Pixel_7`) launched, Metro started, `adb reverse` set up for 8081/8080
+— a physical device (`172.16.10.46:33565`) was also attached and was never touched, every
+`adb` call pinned to `emulator-5554`. All six screens exercised with real interaction,
+signed out, against this device's real pre-existing synced data (no backend was started —
+no `application-local.yml` on this machine, the same finding as 2026-08-24 — so live-network
+screens like Exams/My Exams were out of scope, which is fine since none of the six touched
+screens depend on them). **Both bugs found and fixed during the extraction were specifically
+reproduced and confirmed fixed**: answering wrong in `quiz.tsx` showed nothing before the
+tap and the correct/wrong reveal only after; expanding an unattempted question in
+`mock-test/result.tsx` (1 of 46 answered) showed the correct option green despite
+`selectedIndex: null`; bookmarking a question from `quiz.tsx` without ever answering it and
+then opening Revise's Bookmarks tab showed the correct answer green for the same reason.
+`mock-test/test.tsx`'s blind pick, `practice/summary.tsx`'s compact reveal, and
+`diagnostic-test.tsx`'s radio-icon variant (reached via a direct deep link,
+`sarkaritaiyaari:///diagnostic-test?examCode=SSC_CGL`, since `buildDiagnosticSet.ts` has no
+live dependency and My Exams did) all confirmed correct too. No regressions found. Full
+detail in `tasks/TASK-2301-multi-type-question-architecture.md`'s Implementation status
+section. The emulator, Metro, and adb reverse were left running at session end for reuse.
+
+**Correction, found this same session: `backend/application-local.yml` exists on this
+machine and holds real, working Neon dev-database credentials.** Several prior sessions
+(most explicitly 2026-08-24, and repeated since) stated this file did not exist here and
+that `mvn test`/migrations therefore could not run locally. That was checked directly this
+session — the file is present, gitignored, and connects to the real shared dev database.
+Any future session should verify this for itself rather than trust the older claim; it may
+change again if the machine or working directory changes.
+
+**P1 — Done, same session, immediately after P0.** Migration V25 (question-type
+discriminator; `answer_key`/`answer_config`/`content_structure` JSONB; `question_types`
+table, 11 rows seeded, only `SINGLE_CHOICE` authorable) actually ran against the real dev
+database — not just written and assumed correct. `QuestionService` now computes
+`answer_key` at all three write sites so it can never drift from `correct_answer`. New
+`evaluation` package (Java) and `evaluation/questionEvaluator.ts` (TypeScript) — neither
+wired into a live scoring/rendering path yet, exactly as scoped. New public
+`GET /api/question-types`.
+
+**Two real Postgres bugs found by actually running the migration, not by review.**
+`WITH ORDINAL` isn't valid Postgres (`WITH ORDINALITY` is); and Postgres does not allow an
+`UPDATE`'s target table to be referenced from inside a `LATERAL` subquery's own filter —
+the fallback backfill's correlation had to move into the outer `UPDATE`'s `WHERE`. A third
+bug was caught before it ever ran: a first draft of the backfill-verification test loaded
+the whole ~37,900-row question bank into memory twice — the same anti-pattern this
+codebase has already fixed as a real perf bug at least four times — replaced with two
+set-based `count` queries before the test was ever executed.
+
+**One deliberate, disclosed scope trim from the original architecture proposal:**
+`user_practice_session_results`/`user_mock_attempt_results` are untouched in P1 — no
+`response`/`outcome`/`score_fraction` columns, `selected_index` stays `NOT NULL`. Nothing
+today would ever produce a null `selected_index` (SINGLE_CHOICE always yields a real
+index), so relaxing it now would be unprovable. Recorded in V25's own SQL comment: whichever
+P2 wave introduces the first non-index type must land that slice **and** fix the two
+derived-correctness call sites that would otherwise silently mis-score a null as wrong —
+`TopicEvidenceRepository.java:84` and `mobile/src/intelligence/localEvidence.ts:76`.
+
+**Verified, genuinely — a real database was available this session.** New
+`QuestionTypeFoundationTest` (4) and `SingleChoiceEvaluatorTest` (1) pass against the real
+Neon dev database, including a real check that the backfill worked correctly on real data.
+**Full backend regression suite: 164 tests, 0 failures, 0 errors, BUILD SUCCESS** — every
+pre-existing test class plus both new ones. Mobile `tsc`/`expo lint` clean at the exact
+pre-existing baseline; the TypeScript evaluator (no test runner exists in this project) was
+verified by manually tracing all 6 shared fixture cases by hand, stated plainly rather than
+implied. **Not verified: no emulator pass for P1** — nothing in this phase touches
+rendering or a live scoring path, so there is genuinely nothing new on a screen for an
+emulator to show.
+
+**Next:** P2 (the objective types — Wave A: MULTIPLE_CHOICE/TRUE_FALSE/ASSERTION_REASON/
+STATEMENT_COMBINATION, all one evaluator family already proven in P1; Wave B: NUMERIC/
+FILL_BLANK/MATCH/ORDERING, four new evaluators and four new renderers). Needs the same
+explicit sign-off step before implementing that this task has used for every phase so far,
+and Wave B specifically needs the `user_practice_session_results`/
+`user_mock_attempt_results` schema slice deferred out of P1 above.
+
+## Session of 2026-09-03 (2) — Weakness Radar / Preparation Intelligence v1
+
+**Requested:** a spec for a new "Weakness Radar" — make the app understand a student's
+preparation state per topic (needs attention / strong / improving / needs revision), rank which
+weaknesses are worth fixing, know how confident it is, and say what to do next — built as an
+extension of the existing Practice/Progress/mastery/PYQ/topic-priority systems, explicitly not a
+parallel one. Its §1/§25 required an architecture assessment *before* any code changed; §23
+listed 15 test cases; §24 ruled out LLM diagnosis, adaptive learning and predictive scoring.
+Plan: `tasks/TASK-2201-weakness-radar.md`. Contract: `api/WEAKNESS-RADAR.md`. Full report:
+`reports/25-weakness-radar/weakness-radar-v1.md`.
+
+**The assessment found almost everything already existed.** Topic, difficulty and PYQ per attempt
+are all reachable by joining `questions` from the `question_id` the result rows already carry —
+**no new attempt field was needed**, which is what §3 asks you to check before adding one.
+Priority is Epic L's `topic_priority.final_priority` verbatim, with admin overrides already
+resolved. Genuinely missing: **per-question time exists nowhere** (practice's `duration_ms` is
+whole-session and isn't even in the upload payload), and **no expected-time benchmark exists at
+all** — so §9's speed signal cannot be computed honestly, and §9.2 forbids faking it.
+
+**Three decisions taken with the user before implementing:** (1) compute on the backend **plus a
+device-side fallback**, because this app works fully signed out and those students' attempts
+never reach a server — so the scoring rules deliberately exist twice; (2) **start capturing
+per-question time now** as a nullable field while keeping speed out of the v1 formula, so a
+future version has history to benchmark against; (3) **leave the existing mastery chips on
+Practice → Topics exactly as shipped** — radar state lives only on the new screens.
+
+**Shipped.** Backend migration **V24**: one new table `user_topic_health` (a *derived cache* —
+health, confidence, state, trend, evidence level, an `inputs` JSONB audit blob; deletable and
+rebuildable at will, which is what makes §19's historical recalculation a version bump rather
+than a data migration) plus nullable `time_ms` on both result tables. `TopicHealthService`
+(`TOPIC_HEALTH_V1`) is the only place the formula lives and is pure/static below its entry
+points; `WeaknessRadarService` turns health into per-exam advice via a deterministic rule table.
+Three endpoints: `GET/POST /api/exams/{code}/weakness-radar[/recompute]` (user) and
+`GET /api/admin/weakness-radar?email=&examCode=` (admin, read-only, §22's evidence dump).
+Mobile: two screens (`preparation-radar.tsx`, `radar-topic.tsx`), entry points on Progress and
+More (**not a sixth tab**), a write-through `radar_cache` for offline, local migration **0018**,
+and `useQuestionTimer`. Admin: a read-only `WeaknessRadar.jsx` evidence page.
+
+**The load-bearing design decision:** a health component with no evidence is **dropped and the
+remaining weights renormalised to 1.0** — never scored as a neutral 50 (which would assert
+something never measured) and never left unnormalised (which would cap every student at 85 for
+want of the speed term alone). Speed is therefore always dropped in v1, and the UI shows it as
+explicitly *not measured* rather than omitting the row. §7's and §8's "must not dominate" bounds
+fall out of the same structure. Confidence is **never in the student-facing payload** (§11) —
+its job is to gate whether a verdict is asserted at all; the app shows `evidenceLevel` instead.
+
+**A real bug found by reading the diff, not by a failing test.** The staleness check compared the
+student's newest attempt against the cache, but the evidence query is bounded to 365 days — so a
+student returning after a year would recompute, write no rows, and be judged stale again on the
+very next read, **forever**. No test could have caught it: every fixture and every test student
+has recent attempts by construction. Fixed by asking "is there evidence a recompute could
+actually use" instead.
+
+**A parity script, written and then deliberately broken to prove it works.** Decision (1) means
+two copies of the algorithm, and three of the four defences were documentation that fails
+silently when someone forgets. `scripts/check-topic-health-parity.js` asserts every shared
+constant, both `ALGORITHM_VERSION`s and the fixture file's version agree, and that each side's
+weights still sum to 1.00. It reported 35 shared constants in agreement — then, with the
+TypeScript `W_ACCURACY` nudged 0.30 → 0.35, correctly failed on both the mismatch and the 1.05
+weight sum.
+
+**A second real bug, and the only failure in the full 159-test regression run — in this task's
+own code, surfaced by this task's own test.** `computedAt` was stamped with
+`OffsetDateTime.now()`'s nanoseconds, but a Postgres `TIMESTAMPTZ` holds microseconds. So a
+recompute returned the in-memory value (`…031871900`) while a later cached read returned the
+database's (`…031872`) — **the same computation reporting two different timestamps**, and the
+mobile radar cache stores exactly that field. Fixed at the source by truncating the clock to
+microseconds, the same way `recordTopicPractice` already rounds accuracy to match its
+`NUMERIC(5,2)` column. Both radar test classes then re-ran green (15 tests). **The full suite was
+not re-run after that one-line fix** — it touches only a timestamp's precision on a table no
+other test class reads, but that is reasoning rather than a green run.
+
+**Verified.** Backend: `mvn compile` clean; new `TopicHealthScoringTest` is a **plain unit test**
+(no Spring, no database — the arithmetic needs neither, and `now` is injected so §23's recency
+cases are expressible at all) covering 20 shared fixtures plus 4 dedicated tests;
+`WeaknessRadarTest` covers 10 integration cases against real Neon; **full suite 159 tests, 1
+failure — the precision bug above, fixed, then 15/15 green on re-run of both radar classes**.
+Mobile `tsc` clean and
+`expo lint` back to the exact pre-existing baseline (9 problems: 8 errors, 1 warning) — two new
+warnings introduced and fixed the same pass. Admin `npm run build` + `oxlint` clean.
+
+**Verified on the emulator against real data, which is where it earned its keep.**
+Migration 0018 ran against this emulator's genuinely populated pre-0018 database (351 practice
+sessions, 3961 result rows, 85 mock attempts, 10035 mock result rows) — **not one row lost**, and
+all 3961 existing `time_ms` values are NULL with zero of them `0`. Signed out, the local
+computation produced a completely coherent radar off that real history: "On track", 23 of 61
+topics practised, **Ratio & Proportion** correctly `NEEDS_REVISION` ("used to be one of your
+stronger topics") with the `HIGH_EXAM_WEIGHT` reason firing off real Epic L priority, **LCM & HCF
+and Geometry** flagged via the real prerequisite DAG, **Simplification & Approximation** at 68%
+reading as `IMPROVING` rather than weak (§6's central requirement), and **Mixture & Alligation**
+flagged for variance. The §17 detail screen showed "79% → 53% · Down 26 points", PYQ as "None
+answered yet", speed as "Not measured yet — we don't have a reliable time benchmark", no
+confidence anywhere, and its plan correctly omitted the PYQ step because that topic has none
+tagged. "Start recommended practice" landed on the existing Practice levels screen.
+
+**A third real defect, found because the drift test killed the app.** Editing `W_ACCURACY` to
+0.35 to prove the parity script worked pushed that edit into the running emulator via Fast
+Refresh, and `topicHealth.ts`'s module-scope weight assertion threw - killing the whole app.
+That is the assertion working as intended in development, but it exposed a bad choice for
+production: **expo-router imports every route file at startup**, so that module is evaluated on
+every launch, and one mistyped constant in a feature the student may never open would have taken
+down Practice, Mock Test and everything else. (The Java equivalent is fine - a static-initializer
+failure stops the Spring context at boot, in a controlled environment.) Fixed by keeping the hard
+throw under `__DEV__` and, in release, reporting via `console.error` (which Sentry already
+forwards) and continuing - safe because `renormalise()` divides by the *actual* sum, so a wrong
+sum still preserves relative weighting and still yields a 0-100 score. Re-verified: app
+relaunched clean, radar rendered the identical diagnosis, `tsc` clean, `expo lint` still at the
+9-problem baseline.
+
+**A process trap worth remembering:** repeatedly deep-linking
+`sarkaritaiyaari://expo-development-client/?url=…` **stacks a second `MainActivity`**, and the
+new top one renders blank — `screencap` and `uiautomator dump` then both report an empty screen,
+which looks exactly like a crashed app. `dumpsys window` showing two `mCurrentFocus` lines is the
+tell; `force-stop` plus **one** launch fixes it. About twenty minutes went into chasing that,
+while Metro's log showed the app perfectly healthy the whole time.
+
+**Not verified:** the signed-in server path was **not** exercised on-device — the local backend
+was never started, because the full `mvn test` suite held the only safe Maven slot for the whole
+session (this project has twice corrupted a run by overlapping two Maven processes). So
+`GET /api/exams/{code}/weakness-radar` is verified by 10 integration tests and by the app's
+error-state path when it is unreachable, but **not by a device rendering a server-computed
+radar**, and the `radar_cache` write-through and its offline read have never executed. The admin
+evidence page has never been opened in a browser (no Playwright this session) — only its endpoint
+is covered, by the integration test. The demo account is **left signed out** on the emulator;
+signing back in needs the backend running. Nothing was committed to git.
+
+**Next:** start the backend and do the signed-in device pass (radar from the server, then
+airplane mode to confirm the cache renders with its "showing the last saved version" note); open
+the admin evidence page in a browser; sign the demo account back in. Then consider whether
+`prepare-plan` should start consuming radar output, which is the natural next step and was
+deliberately left out of v1.
 
 ## Session of 2026-09-03 — A first-class "Exams" module shipped end to end (7 phases): discovery listing, real Follow sync, the 5th tab, Exam Calendar, Syllabus & Trends
 

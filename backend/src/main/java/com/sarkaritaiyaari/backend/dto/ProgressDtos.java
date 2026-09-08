@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -74,20 +75,44 @@ public final class ProgressDtos {
     public static class PracticeResult {
         private int orderIndex;
         @NotNull private UUID questionId;
-        private int selectedIndex;
-        private int correctIndex;
+        /** Nullable since V26 — null for MULTIPLE_CHOICE/TRUE_FALSE, which have no single index. */
+        private Integer selectedIndex;
+        private Integer correctIndex;
         private boolean correct;
+        /**
+         * Optional per-question time in milliseconds (V24). Absent from older clients, and
+         * absent means unknown -- see UserPracticeSessionResult.timeMs.
+         */
+        private Integer timeMs;
+
+        /* -------------------------- Response model (V26, TASK-2301 Phase P2 Wave A) */
+
+        /** Absent from a client that predates V26 — the server defaults it to "SINGLE_CHOICE". */
+        private String questionType;
+        private Map<String, Object> response;
+        private String outcome;
+        private BigDecimal scoreFraction;
 
         public int getOrderIndex() { return orderIndex; }
         public void setOrderIndex(int orderIndex) { this.orderIndex = orderIndex; }
         public UUID getQuestionId() { return questionId; }
         public void setQuestionId(UUID questionId) { this.questionId = questionId; }
-        public int getSelectedIndex() { return selectedIndex; }
-        public void setSelectedIndex(int selectedIndex) { this.selectedIndex = selectedIndex; }
-        public int getCorrectIndex() { return correctIndex; }
-        public void setCorrectIndex(int correctIndex) { this.correctIndex = correctIndex; }
+        public Integer getSelectedIndex() { return selectedIndex; }
+        public void setSelectedIndex(Integer selectedIndex) { this.selectedIndex = selectedIndex; }
+        public Integer getCorrectIndex() { return correctIndex; }
+        public void setCorrectIndex(Integer correctIndex) { this.correctIndex = correctIndex; }
         public boolean isCorrect() { return correct; }
         public void setCorrect(boolean correct) { this.correct = correct; }
+        public Integer getTimeMs() { return timeMs; }
+        public void setTimeMs(Integer timeMs) { this.timeMs = timeMs; }
+        public String getQuestionType() { return questionType; }
+        public void setQuestionType(String questionType) { this.questionType = questionType; }
+        public Map<String, Object> getResponse() { return response; }
+        public void setResponse(Map<String, Object> response) { this.response = response; }
+        public String getOutcome() { return outcome; }
+        public void setOutcome(String outcome) { this.outcome = outcome; }
+        public BigDecimal getScoreFraction() { return scoreFraction; }
+        public void setScoreFraction(BigDecimal scoreFraction) { this.scoreFraction = scoreFraction; }
     }
 
     public static class MockAttempt {
@@ -143,10 +168,20 @@ public final class ProgressDtos {
         private int orderIndex;
         private String subjectName;
         @NotNull private UUID questionId;
-        /** null = left unattempted. */
+        /** null = left unattempted (or a MULTIPLE_CHOICE/TRUE_FALSE answer, which has no single index). */
         private Integer selectedIndex;
-        private int correctIndex;
+        /** Nullable since V26 — no meaning for MULTIPLE_CHOICE/TRUE_FALSE. */
+        private Integer correctIndex;
         private boolean markedForReview;
+        /** Optional per-question time in milliseconds (V24), same rules as PracticeResult. */
+        private Integer timeMs;
+
+        /* -------------------------- Response model (V26, TASK-2301 Phase P2 Wave A) */
+
+        private String questionType;
+        private Map<String, Object> response;
+        private String outcome;
+        private BigDecimal scoreFraction;
 
         public int getOrderIndex() { return orderIndex; }
         public void setOrderIndex(int orderIndex) { this.orderIndex = orderIndex; }
@@ -156,10 +191,20 @@ public final class ProgressDtos {
         public void setQuestionId(UUID questionId) { this.questionId = questionId; }
         public Integer getSelectedIndex() { return selectedIndex; }
         public void setSelectedIndex(Integer selectedIndex) { this.selectedIndex = selectedIndex; }
-        public int getCorrectIndex() { return correctIndex; }
-        public void setCorrectIndex(int correctIndex) { this.correctIndex = correctIndex; }
+        public Integer getCorrectIndex() { return correctIndex; }
+        public void setCorrectIndex(Integer correctIndex) { this.correctIndex = correctIndex; }
         public boolean isMarkedForReview() { return markedForReview; }
         public void setMarkedForReview(boolean markedForReview) { this.markedForReview = markedForReview; }
+        public Integer getTimeMs() { return timeMs; }
+        public void setTimeMs(Integer timeMs) { this.timeMs = timeMs; }
+        public String getQuestionType() { return questionType; }
+        public void setQuestionType(String questionType) { this.questionType = questionType; }
+        public Map<String, Object> getResponse() { return response; }
+        public void setResponse(Map<String, Object> response) { this.response = response; }
+        public String getOutcome() { return outcome; }
+        public void setOutcome(String outcome) { this.outcome = outcome; }
+        public BigDecimal getScoreFraction() { return scoreFraction; }
+        public void setScoreFraction(BigDecimal scoreFraction) { this.scoreFraction = scoreFraction; }
     }
 
     /* ----------------------------------------------------------------- responses */

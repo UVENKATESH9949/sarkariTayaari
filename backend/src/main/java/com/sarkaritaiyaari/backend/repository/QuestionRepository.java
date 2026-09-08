@@ -19,14 +19,29 @@ public interface QuestionRepository extends JpaRepository<Question, UUID>, JpaSp
     // row multiplication). exams/translations are *-to-many and stay lazy, handled
     // by hibernate.default_batch_fetch_size instead — a JOIN FETCH on those would
     // multiply rows per page and break LIMIT/OFFSET-based pagination.
+    /**
+     * {@code types} implements capability negotiation (V29, TASK-2301 Phase P3) — a
+     * soft-deleted question (a tombstone) is deliberately let through regardless of its own
+     * type, so an old client that never learns a new type still learns to delete a row it
+     * previously downloaded if that row is later removed; only a *new* or *still-live* row of
+     * an unsupported type is withheld. The same "tombstone always passes" reasoning extends to
+     * {@code contentStatus} (TASK-2501 Phase 2) — a DRAFT/REVIEW candidate must never sync to
+     * any device before an admin publishes it, but its later soft-delete (if ever rejected
+     * after acceptance) should still propagate.
+     */
     @Query(
             value = "SELECT q FROM Question q JOIN FETCH q.topic t JOIN FETCH t.subject WHERE q.updatedAt > :since "
-                    + "AND (:poolEnabled = false OR q.id IN (SELECT p.questionId FROM TemporaryQuestionPool p))",
+                    + "AND (:poolEnabled = false OR q.id IN (SELECT p.questionId FROM TemporaryQuestionPool p)) "
+                    + "AND (q.deleted = true OR q.questionType IN :types) "
+                    + "AND (q.deleted = true OR q.contentStatus = com.sarkaritaiyaari.backend.entity.ContentStatus.PUBLISHED)",
             countQuery = "SELECT count(q) FROM Question q WHERE q.updatedAt > :since "
-                    + "AND (:poolEnabled = false OR q.id IN (SELECT p.questionId FROM TemporaryQuestionPool p))"
+                    + "AND (:poolEnabled = false OR q.id IN (SELECT p.questionId FROM TemporaryQuestionPool p)) "
+                    + "AND (q.deleted = true OR q.questionType IN :types) "
+                    + "AND (q.deleted = true OR q.contentStatus = com.sarkaritaiyaari.backend.entity.ContentStatus.PUBLISHED)"
     )
     Page<Question> findByUpdatedAtAfter(@Param("since") OffsetDateTime since,
                                          @Param("poolEnabled") boolean poolEnabled,
+                                         @Param("types") List<String> types,
                                          Pageable pageable);
 
     /* --------------------------------------------- Duplicate detection (TICKET-2109) */
@@ -76,4 +91,11 @@ public interface QuestionRepository extends JpaRepository<Question, UUID>, JpaSp
     @Query("select q.topic.id, count(q) from Question q join q.exams e "
             + "where e.code = :examCode and q.deleted = false group by q.topic.id")
     List<Object[]> countByTopicForExam(@Param("examCode") String examCode);
+
+    /* ------------------------------------- Multi-type question foundation (V25, TASK-2301) */
+
+    /** Set-based, not a full scan into memory — see the backfillDetection precedent this codebase already fixed once. */
+    long countByQuestionTypeNot(String questionType);
+
+    long countByAnswerKeyIsNull();
 }

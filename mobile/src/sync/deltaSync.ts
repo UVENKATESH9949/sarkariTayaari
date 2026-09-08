@@ -2,6 +2,7 @@ import { db } from "../db/client";
 import { getLastSyncedAt, setLastSyncedAt } from "../db/syncMeta";
 import { syncQuestions } from "../api/questions";
 import { writeLanguages, writeReferenceData, upsertQuestionsBatch, deleteQuestionsLocally } from "./writeQuestions";
+import { downloadPendingMedia } from "./mediaDownload";
 
 const PAGE_SIZE = 500;
 
@@ -57,6 +58,9 @@ export async function runDeltaSync(): Promise<DeltaSyncResult> {
       }
       page += 1;
     }
+
+    // Question-owned media (TASK-2301 Phase P3) — same reasoning as initialSync.ts.
+    await downloadPendingMedia();
 
     await setLastSyncedAt(startedAt);
     if (__DEV__) console.log(`[sync] delta sync completed (${upserted} upserted, ${deleted} deleted)`);

@@ -13,6 +13,7 @@ import { Card, CardDivider, CardRow } from "../../ui/Card";
 import { SectionLabel } from "../../ui/SectionLabel";
 import { spacing } from "../../ui/theme";
 import { useTheme, useThemedStyles, type Theme } from "../../ui/ThemeContext";
+import { ThemeToggleButton } from "../../ui/ThemeToggleButton";
 import { useT } from "../../i18n/I18nContext";
 
 // Takes `t`: module-scope helper, no hooks available. The date/time formatting itself
@@ -70,7 +71,10 @@ export default function More() {
 
   return (
     <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + spacing.xl }]}>
-      <Text style={styles.title}>{t("more.title")}</Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.title}>{t("more.title")}</Text>
+        <ThemeToggleButton />
+      </View>
 
       <SectionLabel label={t("more.account")} />
       <Card variant="container" style={styles.card}>
@@ -99,6 +103,17 @@ export default function More() {
           label={t("nav.progress")}
           value={t("more.progressValue")}
           onPress={() => router.push("/progress")}
+        />
+        <CardDivider />
+        {/* Weakness Radar (TASK-2201). One of its two entry points, alongside the card on
+            Progress -- deliberately not a sixth tab, for the same reason Progress itself was
+            moved out of the tab bar. English label, matching every row added since the Exam
+            Guide work rather than adding Telugu copy nobody can vouch for. */}
+        <CardRow
+          icon="radio-outline"
+          label="Preparation Radar"
+          value="What to work on next, and why"
+          onPress={() => router.push("/preparation-radar")}
         />
       </Card>
 
@@ -226,9 +241,14 @@ const buildStyles = ({ colors, typography }: Theme) =>
       paddingTop: spacing.xl,
       paddingBottom: spacing["3xl"],
     },
+    headerRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: spacing.lg,
+    },
     title: {
       ...typography.pageTitle,
-      marginBottom: spacing.lg,
     },
     sectionSpacing: {
       marginTop: spacing.xl,

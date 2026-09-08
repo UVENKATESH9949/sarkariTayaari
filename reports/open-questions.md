@@ -55,12 +55,29 @@ it isn't rediscovered as a surprise gap:
 | Feature | Category |
 |---|---|
 | Diagnostic test | Future work — not started |
-| Reminders | Future work — not started; needs push-notification infrastructure that doesn't exist in the app yet (same gap as TICKET-705 above) |
 | Career information / exam comparison | Future work — not started |
 | "What's Changed" diffing between recruitment-cycle versions | Future work — not started |
-| Content-validation workflow | Future work — not started |
-| Offline caching for Exam Guide content | Future work — not started. **This one is a stated scope decision, not an oversight**: Exam Guide is live-fetch only on mobile, with no local SQLite cache or sync-pipeline entry (unlike every other reference type in the app) — see `mobile/src/api/examGuide.ts`'s own header comment. Revisit if Exam Guide content needs to work without a network. |
 | Search (across exams/guide content) | Future work — not started |
+
+**Corrected 2026-09-05 — three rows removed from this table, confirmed stale by direct
+code inspection (`tasks/TASK-2401-exam-guidance-data-platform.md`'s research), not just
+re-reading this file:**
+- ~~Reminders — not started~~. **Built.** `push_tokens`/`user_reminders` (migration V20),
+  `ReminderService`/`ReminderController`, dispatch via `POST
+  /api/admin/reminders/dispatch` (see `memory/STATUS.md`'s 2026-09-01/02 Phase D entry).
+- ~~Content-validation workflow — not started~~. **Built.** `recruitment_cycles
+  .content_status` (`DRAFT`/`REVIEW`/`PUBLISHED`, migration V18), a real `Role.REVIEWER`,
+  and submit-for-review/reject/publish/unpublish endpoints on
+  `ExamGuideAdminController`.
+- ~~Offline caching for Exam Guide content — not started, live-fetch only~~. **Built.**
+  Local tables `examGuideCycles`/`examGuideEligibility`/`examGuideDates`/
+  `examGuideDocuments`/`examGuideSteps`/`examGuideMistakes`/`examGuideFees`/
+  `examGuideCareerPosts`/`examGuideSources` (mobile migration `0014`), populated by
+  `writeExamGuides()` in `mobile/src/sync/writeQuestions.ts` as part of the ordinary
+  reference sync, read via `mobile/src/db/examGuideLocal.ts` and the hybrid facade
+  `mobile/src/data/examGuideData.ts`. `mobile/src/api/examGuide.ts`'s header comment
+  (previously the citation for this row) has been corrected in place — it no longer
+  claims live-fetch-only.
 
 ### Exam Guide (Doc 1) — known implementation gaps, not open questions
 
@@ -69,5 +86,9 @@ against the actual code — not undecided questions, and not yet fixed:
 
 | Gap | Category |
 |---|---|
-| `GET /api/exam-guides` (the sync-all endpoint) has no caller anywhere in `mobile/src/api/*.ts` or `admin/src/api.js` | Technical — dead code, built for a future device-sync path that hasn't been wired up yet. Either wire it in or remove it. |
 | `ExamGuideDemoSeeder.seed()` throws a plain `IllegalStateException` when `app.exam-guide.demo-seed-enabled` is off, which is unmapped and likely surfaces as an unmapped 500 — inconsistent with Epic L's `SyntheticCurationController`, which throws a properly-mapped `ForbiddenException` (403) for the equivalent disabled-flag case | Technical — a real inconsistency in error-handling convention between two otherwise-parallel seeders, not a design decision that was ever made deliberately |
+
+**Corrected 2026-09-05 — removed:** the "`GET /api/exam-guides` has no caller" row.
+**Stale**: `mobile/src/sync/writeQuestions.ts:32` calls `getAllExamGuides` from
+`../api/examGuide` as part of the ordinary reference sync (see the "offline caching"
+correction above) — this endpoint has a real caller and is not dead code.

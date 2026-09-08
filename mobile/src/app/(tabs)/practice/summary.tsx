@@ -9,6 +9,11 @@ import { EmptyState } from "../../../ui/EmptyState";
 import { radius, spacing } from "../../../ui/theme";
 import { useTheme, useThemedStyles, type Theme } from "../../../ui/ThemeContext";
 import { useT } from "../../../i18n/I18nContext";
+import { OptionList } from "../../../questionRenderer/OptionList";
+import { MultiSelectOptionList } from "../../../questionRenderer/MultiSelectOptionList";
+import { FreeTextAnswerInput } from "../../../questionRenderer/FreeTextAnswerInput";
+import { revealLetterCompactStyles } from "../../../questionRenderer/optionListStyles";
+import { describeYourAnswer, describeCorrectAnswer } from "../../../questionRenderer/answerSummary";
 
 // Takes the palette: these are semantic colours, which differ between themes.
 function scoreTone(accuracyPercent: number, colors: Theme["colors"]): { text: string; bg: string } {
@@ -46,6 +51,7 @@ function StatCell({ label, value, color }: { label: string; value: string; color
 function ResultCard({ result, index }: { result: QuestionResult; index: number }) {
   const { colors } = useTheme();
   const styles = useThemedStyles(buildStyles);
+  const optionListStyles = useThemedStyles(revealLetterCompactStyles);
   const t = useT();
   return (
     <Card style={styles.resultCard}>
@@ -70,53 +76,74 @@ function ResultCard({ result, index }: { result: QuestionResult; index: number }
 
       <Text style={styles.resultQuestionText}>{result.questionText}</Text>
 
-      <View style={styles.optionsList}>
-        {result.options.map((option, optionIndex) => {
-          const isCorrectOption = optionIndex === result.correctIndex;
-          const isUserWrongPick = optionIndex === result.selectedIndex && !result.isCorrect;
-          return (
-            <View
-              key={optionIndex}
-              style={[
-                styles.optionRow,
-                isCorrectOption && styles.optionRowCorrect,
-                isUserWrongPick && styles.optionRowWrong,
-              ]}
-            >
-              <View
-                style={[
-                  styles.optionBadge,
-                  isCorrectOption && styles.optionBadgeCorrect,
-                  isUserWrongPick && styles.optionBadgeWrong,
-                ]}
-              >
-                <Text style={[styles.optionBadgeText, (isCorrectOption || isUserWrongPick) && styles.optionBadgeTextLight]}>
-                  {String.fromCharCode(65 + optionIndex)}
-                </Text>
-              </View>
-              <Text style={styles.optionText}>{option}</Text>
-              {isCorrectOption && <Ionicons name="checkmark-circle" size={16} color={colors.semantic.success} />}
-              {isUserWrongPick && <Ionicons name="close-circle" size={16} color={colors.semantic.error} />}
-            </View>
-          );
-        })}
-      </View>
+      {result.questionType === "MULTIPLE_CHOICE" ? (
+        <MultiSelectOptionList
+          options={result.options}
+          styles={optionListStyles}
+          selectedIndices={
+            Array.isArray(result.response?.selectedOptions)
+              ? (result.response!.selectedOptions as unknown[]).filter((v): v is number => typeof v === "number")
+              : []
+          }
+          iconSize={16}
+        />
+      ) : result.questionType === "TRUE_FALSE" ? (
+        <OptionList
+          options={[t("quiz.trueOption"), t("quiz.falseOption")]}
+          styles={optionListStyles}
+          badge="letter"
+          selectedIndex={typeof result.response?.selectedBoolean === "boolean" ? (result.response.selectedBoolean ? 0 : 1) : null}
+          iconSize={16}
+        />
+      ) : result.questionType === "NUMERIC" ? (
+        <FreeTextAnswerInput
+          value={typeof result.response?.enteredValue === "number" ? String(result.response.enteredValue) : ""}
+          disabled
+          isCorrect={result.isCorrect}
+        />
+      ) : result.questionType === "FILL_BLANK" ? (
+        <FreeTextAnswerInput
+          value={typeof result.response?.enteredText === "string" ? result.response.enteredText : ""}
+          disabled
+          isCorrect={result.isCorrect}
+        />
+      ) : result.questionType === "MATCH" || result.questionType === "ORDERING" ? (
+        // No per-key labels survive in a stored result snapshot (same limitation the
+        // answerSummary.ts comment already documents for MULTIPLE_CHOICE/TRUE_FALSE) — the
+        // "Your Answer"/"Correct Answer" lines below are this type's only summary here.
+        null
+      ) : (
+        <OptionList
+          options={result.options}
+          styles={optionListStyles}
+          badge="letter"
+          selectedIndex={result.selectedIndex}
+          correctIndex={result.correctIndex}
+          iconSize={16}
+        />
+      )}
 
       <View style={styles.answerLines}>
         <Text style={styles.answerLine}>
           Your Answer:{" "}
           <Text style={[styles.answerLineValue, { color: result.isCorrect ? colors.semantic.success : colors.semantic.error }]}>
-            {String.fromCharCode(65 + result.selectedIndex)}. {result.options[result.selectedIndex]}
+            {describeYourAnswer(result, { trueOption: t("quiz.trueOption"), falseOption: t("quiz.falseOption"), unattempted: t("common.unattempted") })}
           </Text>
         </Text>
-        {!result.isCorrect && (
-          <Text style={styles.answerLine}>
-            Correct Answer:{" "}
-            <Text style={[styles.answerLineValue, { color: colors.semantic.success }]}>
-              {String.fromCharCode(65 + result.correctIndex)}. {result.options[result.correctIndex]}
-            </Text>
-          </Text>
-        )}
+        {!result.isCorrect &&
+          (() => {
+            const correctAnswer = describeCorrectAnswer(result, {
+              trueOption: t("quiz.trueOption"),
+              falseOption: t("quiz.falseOption"),
+              unattempted: t("common.unattempted"),
+            });
+            return correctAnswer ? (
+              <Text style={styles.answerLine}>
+                Correct Answer:{" "}
+                <Text style={[styles.answerLineValue, { color: colors.semantic.success }]}>{correctAnswer}</Text>
+              </Text>
+            ) : null;
+          })()}
       </View>
 
       <View style={styles.explanationBox}>
@@ -371,54 +398,6 @@ const buildStyles = ({ colors, typography }: Theme) =>
       fontWeight: "600",
       color: colors.text.primary,
       lineHeight: 22,
-    },
-    optionsList: {
-      gap: spacing.sm,
-    },
-    optionRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.sm + 2,
-      backgroundColor: colors.surfaceElevated2,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: radius.sm + 2,
-      padding: spacing.sm + 2,
-    },
-    optionRowCorrect: {
-      borderColor: colors.semantic.success,
-      backgroundColor: colors.semantic.successBg,
-    },
-    optionRowWrong: {
-      borderColor: colors.semantic.error,
-      backgroundColor: colors.semantic.errorBg,
-    },
-    optionBadge: {
-      width: 24,
-      height: 24,
-      borderRadius: 12,
-      backgroundColor: colors.surfaceElevated,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    optionBadgeCorrect: {
-      backgroundColor: colors.semantic.success,
-    },
-    optionBadgeWrong: {
-      backgroundColor: colors.semantic.error,
-    },
-    optionBadgeText: {
-      fontSize: 12,
-      fontWeight: "700",
-      color: colors.text.primary,
-    },
-    optionBadgeTextLight: {
-      color: colors.text.onAccent,
-    },
-    optionText: {
-      flex: 1,
-      fontSize: 13,
-      color: colors.text.primary,
     },
     answerLines: {
       gap: 4,

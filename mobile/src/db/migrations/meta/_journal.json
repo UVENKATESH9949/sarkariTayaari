@@ -127,6 +127,34 @@
       "when": 1788345606028,
       "tag": "0017_followed_exams_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1788345606029,
+      "tag": "0018_weakness_radar",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1788345606030,
+      "tag": "0019_multi_type_question_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1788345606031,
+      "tag": "0020_wave_a_option_set_types",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1788345606032,
+      "tag": "0021_question_groups_and_media",
+      "breakpoints": true
     }
   ]
 }

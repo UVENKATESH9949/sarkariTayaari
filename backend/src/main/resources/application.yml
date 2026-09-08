@@ -8,9 +8,12 @@ spring:
   servlet:
     multipart:
       # Spring's 1MB default rejects ordinary exam artwork, and the overflow surfaces
-      # as an unmapped 500 rather than a readable error.
-      max-file-size: 5MB
-      max-request-size: 10MB
+      # as an unmapped 500 rather than a readable error. Raised from 5MB/10MB (TASK-2501
+      # Phase 2) so a locally-uploaded PYQ paper PDF isn't rejected before it even reaches
+      # QuestionIngestionController's own size check — matches DocumentFetcher.MAX_BYTES'
+      # 20MB cap for the URL-fetch path, so both entry points allow the same document size.
+      max-file-size: 20MB
+      max-request-size: 20MB
 
   datasource:
     hikari:

@@ -26,7 +26,7 @@ import {
 } from "../api/reference";
 import { getLiveQuestions, getQuestionCounts } from "./liveQuestions";
 import { getSyllabusSubjectIdsLive } from "./mockTestStructureData";
-import { resolveCorrectIndex } from "../db/answerResolution";
+import { isIndexBasedType, resolveCorrectIndex } from "../db/answerResolution";
 import type { HybridMode } from "./hybridSource";
 
 export type { ExamOption, SubjectStat, TopicStat, DifficultyCounts, PracticeQuestion, DifficultyLevel, ExamBadge };
@@ -149,12 +149,24 @@ export async function getPracticeQuestions(
   const result = page.content.map((q) => {
     const translations: PracticeQuestion["translations"] = {};
     for (const t of q.translations) {
-      translations[t.languageCode] = { questionText: t.questionText, options: t.options, explanation: t.explanation ?? "" };
+      translations[t.languageCode] = {
+        questionText: t.questionText,
+        options: t.options,
+        explanation: t.explanation ?? "",
+        content: t.content ?? null,
+      };
     }
     const englishOptions = translations.en?.options ?? Object.values(translations)[0]?.options ?? [];
+    // TASK-2301 Phase P2 Wave A. `?? "SINGLE_CHOICE"` for the same reason as the PYQ fields
+    // below — a backend that predates V25/V26 omits questionType/answerKey entirely.
+    const questionType = q.questionType ?? "SINGLE_CHOICE";
     return {
       id: q.id,
-      correctIndex: resolveCorrectIndex(q.correctAnswer, englishOptions),
+      correctIndex: isIndexBasedType(questionType) ? resolveCorrectIndex(q.correctAnswer, englishOptions) : null,
+      questionType,
+      answerKey: q.answerKey ?? null,
+      contentStructure: q.contentStructure ?? null,
+      questionGroupId: q.questionGroupId ?? null,
       translations,
       // Epic L / TICKET-2104. `?? false` / `?? null` rather than passed straight through: this is
       // the live path, and the backend it is talking to may predate V13 and omit the fields

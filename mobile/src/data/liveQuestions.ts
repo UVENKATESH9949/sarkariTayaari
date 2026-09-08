@@ -1,5 +1,6 @@
 import { apiFetch } from "../api/client";
 import type { QuestionResponse, SyncPage } from "../api/questions";
+import { SUPPORTED_QUESTION_TYPES_PARAM } from "../evaluation/supportedQuestionTypes";
 
 /**
  * Thin wrappers over the backend's public /live, /counts, /mock-count, /mock-sample
@@ -22,6 +23,8 @@ export function getLiveQuestions(params: {
   if (params.difficulty) query.set("difficulty", params.difficulty);
   query.set("page", String(params.page ?? 0));
   query.set("size", String(params.size ?? 200));
+  // Capability negotiation (TASK-2301 Phase P3) — same reasoning as api/questions.ts's syncQuestions.
+  query.set("supportedTypes", SUPPORTED_QUESTION_TYPES_PARAM);
   return apiFetch<SyncPage>(`/questions/live?${query.toString()}`);
 }
 

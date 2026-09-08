@@ -1,6 +1,7 @@
 import { getPriorityTopics } from "../db/topicIntelligence";
 import { getPracticeQuestions, type PracticeQuestion } from "../data/practiceData";
 import type { HybridMode } from "../data/hybridSource";
+import { isIndexBasedType } from "../db/answerResolution";
 
 export type DiagnosticQuestion = PracticeQuestion & {
   topicId: string;
@@ -38,9 +39,14 @@ export async function buildDiagnosticSet(examCode: string, mode: HybridMode): Pr
   const perCandidate = await Promise.all(
     candidates.map(async (topic) => {
       const questions = await getPracticeQuestions(topic.topicId, "all", examCode, mode);
+      // Index-based types only (TASK-2301 Phase P2 Wave A) — this screen scores with a plain
+      // `answers[qIndex] === q.correctIndex` and has no MULTIPLE_CHOICE/TRUE_FALSE renderer;
+      // rewiring the diagnostic test was out of Wave A's scope (Practice/Mock Test only), so
+      // it's filtered here instead of silently mis-scoring a null correctIndex as wrong.
+      const scoreable = questions.filter((q) => isIndexBasedType(q.questionType));
       // Already RANDOM()-ordered by getPracticeQuestions itself — taking the first few is
       // a genuine random sample, not a biased "always the same questions" slice.
-      return questions.slice(0, QUESTIONS_PER_TOPIC).map((q) => ({
+      return scoreable.slice(0, QUESTIONS_PER_TOPIC).map((q) => ({
         ...q,
         topicId: topic.topicId,
         topicName: topic.topicName,

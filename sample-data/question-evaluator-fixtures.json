@@ -1,0 +1,311 @@
+{
+  "_comment": [
+    "Deterministic fixtures for the multi-type question evaluator (TASK-2301, Phase P1).",
+    "",
+    "WHY THIS FILE EXISTS. Evaluation has to run offline (Practice/Mock Test work fully",
+    "signed out) and also has to be correct for a signed-in student's server-computed",
+    "history, so the evaluator is implemented twice on purpose - in Java",
+    "(backend/.../evaluation/SingleChoiceEvaluator.java) and in TypeScript",
+    "(mobile/src/evaluation/questionEvaluator.ts) - the same duplication precedent already",
+    "used for the Weakness Radar's topic-health algorithm, and this file follows that one's",
+    "shape deliberately.",
+    "",
+    "The Java side asserts against it in SingleChoiceEvaluatorTest. The mobile side has no",
+    "test runner in this project (no jest/vitest configured, confirmed by grepping",
+    "package.json), so its copy is verified by reading and by tracing these same cases by",
+    "hand - stated plainly rather than implied, matching weakness-radar-fixtures.json's own",
+    "note.",
+    "",
+    "Phase P2 Wave A (V26) added MULTIPLE_CHOICE and TRUE_FALSE cases below - both genuinely",
+    "new evaluators (set equality, boolean equality). ASSERTION_REASON and",
+    "STATEMENT_COMBINATION need no cases of their own: both reuse SingleChoiceEvaluator",
+    "unchanged (see QuestionEvaluators.java), so the SINGLE_CHOICE cases above already cover",
+    "their evaluation logic - only their authored content differs, which the evaluator never",
+    "sees.",
+    "",
+    "Phase P2 Wave B (V27) added NUMERIC/FILL_BLANK/MATCH/ORDERING cases below - four more",
+    "genuinely new evaluators (tolerance comparison, case-insensitive text match, map",
+    "equality, list equality).",
+    "",
+    "A constants-parity script (the pattern check-topic-health-parity.js already proved) is",
+    "still deliberately NOT added: NUMERIC's tolerance is per-question authored data (stored",
+    "in answerKey), not a shared constant either side could drift on independently - there is",
+    "still nothing here for such a script to check.",
+    "",
+    "Phase P4 (schema-only, no student UI) added ManualEvaluator/manualEvaluator for the",
+    "MANUAL family (SHORT_ANSWER, LONG_ANSWER) - a descriptive answer can never be scored by",
+    "comparison, so every attempted response evaluates to PENDING_REVIEW rather than",
+    "CORRECT/INCORRECT, awaiting a human reviewer this phase does not build. Cases below are",
+    "tagged LONG_ANSWER only; SHORT_ANSWER shares the exact same evaluator instance and needs",
+    "no cases of its own, the same reasoning ASSERTION_REASON/STATEMENT_COMBINATION already",
+    "established for reusing SingleChoiceEvaluator above."
+  ],
+  "cases": [
+    {
+      "name": "correct-pick-scores-1",
+      "questionType": "SINGLE_CHOICE",
+      "answerKey": { "correctOption": 2 },
+      "response": { "selectedOption": 2 },
+      "expect": { "outcome": "CORRECT", "scoreFraction": 1.0 }
+    },
+    {
+      "name": "wrong-pick-scores-0",
+      "questionType": "SINGLE_CHOICE",
+      "answerKey": { "correctOption": 2 },
+      "response": { "selectedOption": 0 },
+      "expect": { "outcome": "INCORRECT", "scoreFraction": 0.0 }
+    },
+    {
+      "name": "first-option-can-be-correct",
+      "why": "The old client-side fallback (mobile/src/db/answerResolution.ts's resolveCorrectIndex) defaults an unparseable answer to index 0 with a warning, which has historically hidden bugs where 0 looked like a legitimate correct answer. This case pins that 0 is a perfectly ordinary correct index, not a special or suspicious one.",
+      "questionType": "SINGLE_CHOICE",
+      "answerKey": { "correctOption": 0 },
+      "response": { "selectedOption": 0 },
+      "expect": { "outcome": "CORRECT", "scoreFraction": 1.0 }
+    },
+    {
+      "name": "no-response-is-unattempted-not-incorrect",
+      "why": "A skipped question must never be scored the same as a wrong pick - see TopicEvidenceRepository's own comment on excluding unattempted mock rows from the Weakness Radar for the same reason.",
+      "questionType": "SINGLE_CHOICE",
+      "answerKey": { "correctOption": 1 },
+      "response": { "selectedOption": null },
+      "expect": { "outcome": "UNATTEMPTED", "scoreFraction": 0.0 }
+    },
+    {
+      "name": "missing-response-object-is-unattempted",
+      "why": "A response of null (never wrote anything) must behave identically to an explicit null selectedOption - both mean 'nothing recorded', not two different states.",
+      "questionType": "SINGLE_CHOICE",
+      "answerKey": { "correctOption": 1 },
+      "response": null,
+      "expect": { "outcome": "UNATTEMPTED", "scoreFraction": 0.0 }
+    },
+    {
+      "name": "last-option-index-3-is-ordinary",
+      "questionType": "SINGLE_CHOICE",
+      "answerKey": { "correctOption": 3 },
+      "response": { "selectedOption": 3 },
+      "expect": { "outcome": "CORRECT", "scoreFraction": 1.0 }
+    },
+    {
+      "name": "multiple-choice-exact-set-match-scores-1",
+      "questionType": "MULTIPLE_CHOICE",
+      "answerKey": { "correctOptions": [0, 1, 3] },
+      "response": { "selectedOptions": [1, 0, 3] },
+      "why": "Order must not matter - the student ticked the same set in a different scan order.",
+      "expect": { "outcome": "CORRECT", "scoreFraction": 1.0 }
+    },
+    {
+      "name": "multiple-choice-partial-overlap-scores-0",
+      "questionType": "MULTIPLE_CHOICE",
+      "answerKey": { "correctOptions": [0, 1, 3] },
+      "response": { "selectedOptions": [0, 1] },
+      "why": "All-or-nothing (architecture proposal open question 2) - two of three correct options ticked still scores 0, matching how these exams actually grade multi-select.",
+      "expect": { "outcome": "INCORRECT", "scoreFraction": 0.0 }
+    },
+    {
+      "name": "multiple-choice-extra-wrong-pick-scores-0",
+      "questionType": "MULTIPLE_CHOICE",
+      "answerKey": { "correctOptions": [0, 1] },
+      "response": { "selectedOptions": [0, 1, 2] },
+      "why": "Every correct option ticked, PLUS a wrong one - still all-or-nothing, not 'mostly right'.",
+      "expect": { "outcome": "INCORRECT", "scoreFraction": 0.0 }
+    },
+    {
+      "name": "multiple-choice-empty-selection-is-attempted-not-unattempted",
+      "questionType": "MULTIPLE_CHOICE",
+      "answerKey": { "correctOptions": [0] },
+      "response": { "selectedOptions": [] },
+      "why": "Ticking nothing and submitting is a real, scoreable wrong answer, distinct from never engaging with the question at all (selectedOptions: null below).",
+      "expect": { "outcome": "INCORRECT", "scoreFraction": 0.0 }
+    },
+    {
+      "name": "multiple-choice-null-selection-is-unattempted",
+      "questionType": "MULTIPLE_CHOICE",
+      "answerKey": { "correctOptions": [0] },
+      "response": { "selectedOptions": null },
+      "expect": { "outcome": "UNATTEMPTED", "scoreFraction": 0.0 }
+    },
+    {
+      "name": "true-false-correct-true",
+      "questionType": "TRUE_FALSE",
+      "answerKey": { "correctBoolean": true },
+      "response": { "selectedBoolean": true },
+      "expect": { "outcome": "CORRECT", "scoreFraction": 1.0 }
+    },
+    {
+      "name": "true-false-correct-false",
+      "why": "False must be an ordinary correct answer, not treated as a default/unset-like value the way a careless falsy check could.",
+      "questionType": "TRUE_FALSE",
+      "answerKey": { "correctBoolean": false },
+      "response": { "selectedBoolean": false },
+      "expect": { "outcome": "CORRECT", "scoreFraction": 1.0 }
+    },
+    {
+      "name": "true-false-wrong-pick",
+      "questionType": "TRUE_FALSE",
+      "answerKey": { "correctBoolean": true },
+      "response": { "selectedBoolean": false },
+      "expect": { "outcome": "INCORRECT", "scoreFraction": 0.0 }
+    },
+    {
+      "name": "true-false-null-selection-is-unattempted",
+      "questionType": "TRUE_FALSE",
+      "answerKey": { "correctBoolean": true },
+      "response": { "selectedBoolean": null },
+      "expect": { "outcome": "UNATTEMPTED", "scoreFraction": 0.0 }
+    },
+    {
+      "name": "numeric-exact-match-scores-1",
+      "questionType": "NUMERIC",
+      "answerKey": { "correctValue": 42.0, "tolerance": 0.0 },
+      "response": { "enteredValue": 42.0 },
+      "expect": { "outcome": "CORRECT", "scoreFraction": 1.0 }
+    },
+    {
+      "name": "numeric-within-tolerance-scores-1",
+      "why": "A tolerance of 0.5 must accept anything within it, not just an exact match.",
+      "questionType": "NUMERIC",
+      "answerKey": { "correctValue": 10.0, "tolerance": 0.5 },
+      "response": { "enteredValue": 10.4 },
+      "expect": { "outcome": "CORRECT", "scoreFraction": 1.0 }
+    },
+    {
+      "name": "numeric-just-outside-tolerance-scores-0",
+      "questionType": "NUMERIC",
+      "answerKey": { "correctValue": 10.0, "tolerance": 0.5 },
+      "response": { "enteredValue": 10.6 },
+      "expect": { "outcome": "INCORRECT", "scoreFraction": 0.0 }
+    },
+    {
+      "name": "numeric-null-entry-is-unattempted",
+      "questionType": "NUMERIC",
+      "answerKey": { "correctValue": 10.0, "tolerance": 0.0 },
+      "response": { "enteredValue": null },
+      "expect": { "outcome": "UNATTEMPTED", "scoreFraction": 0.0 }
+    },
+    {
+      "name": "fill-blank-case-and-whitespace-insensitive-match-scores-1",
+      "why": "A real short-answer field can't require byte-exact input - trimming and case-folding both sides is what makes 'new delhi' and 'New Delhi' the same answer.",
+      "questionType": "FILL_BLANK",
+      "answerKey": { "acceptedAnswers": ["New Delhi", "Delhi"] },
+      "response": { "enteredText": "  new delhi  " },
+      "expect": { "outcome": "CORRECT", "scoreFraction": 1.0 }
+    },
+    {
+      "name": "fill-blank-matches-any-accepted-alternative",
+      "questionType": "FILL_BLANK",
+      "answerKey": { "acceptedAnswers": ["New Delhi", "Delhi"] },
+      "response": { "enteredText": "Delhi" },
+      "expect": { "outcome": "CORRECT", "scoreFraction": 1.0 }
+    },
+    {
+      "name": "fill-blank-wrong-text-scores-0",
+      "questionType": "FILL_BLANK",
+      "answerKey": { "acceptedAnswers": ["New Delhi"] },
+      "response": { "enteredText": "Mumbai" },
+      "expect": { "outcome": "INCORRECT", "scoreFraction": 0.0 }
+    },
+    {
+      "name": "fill-blank-blank-entry-is-unattempted",
+      "why": "A student who typed only whitespace and submitted hasn't really answered - same rule as never touching the field.",
+      "questionType": "FILL_BLANK",
+      "answerKey": { "acceptedAnswers": ["New Delhi"] },
+      "response": { "enteredText": "   " },
+      "expect": { "outcome": "UNATTEMPTED", "scoreFraction": 0.0 }
+    },
+    {
+      "name": "fill-blank-null-entry-is-unattempted",
+      "questionType": "FILL_BLANK",
+      "answerKey": { "acceptedAnswers": ["New Delhi"] },
+      "response": { "enteredText": null },
+      "expect": { "outcome": "UNATTEMPTED", "scoreFraction": 0.0 }
+    },
+    {
+      "name": "match-full-correct-mapping-scores-1",
+      "questionType": "MATCH",
+      "answerKey": { "correctMapping": { "L1": "R2", "L2": "R1" } },
+      "response": { "mapping": { "L1": "R2", "L2": "R1" } },
+      "expect": { "outcome": "CORRECT", "scoreFraction": 1.0 }
+    },
+    {
+      "name": "match-one-pair-wrong-scores-0",
+      "why": "All-or-nothing, same rule as MULTIPLE_CHOICE - one wrong pair among several correct ones still scores 0.",
+      "questionType": "MATCH",
+      "answerKey": { "correctMapping": { "L1": "R2", "L2": "R1" } },
+      "response": { "mapping": { "L1": "R1", "L2": "R1" } },
+      "expect": { "outcome": "INCORRECT", "scoreFraction": 0.0 }
+    },
+    {
+      "name": "match-empty-mapping-is-unattempted",
+      "questionType": "MATCH",
+      "answerKey": { "correctMapping": { "L1": "R2", "L2": "R1" } },
+      "response": { "mapping": {} },
+      "expect": { "outcome": "UNATTEMPTED", "scoreFraction": 0.0 }
+    },
+    {
+      "name": "match-null-mapping-is-unattempted",
+      "questionType": "MATCH",
+      "answerKey": { "correctMapping": { "L1": "R2", "L2": "R1" } },
+      "response": { "mapping": null },
+      "expect": { "outcome": "UNATTEMPTED", "scoreFraction": 0.0 }
+    },
+    {
+      "name": "ordering-exact-sequence-scores-1",
+      "questionType": "ORDERING",
+      "answerKey": { "correctOrder": ["I3", "I1", "I2"] },
+      "response": { "order": ["I3", "I1", "I2"] },
+      "expect": { "outcome": "CORRECT", "scoreFraction": 1.0 }
+    },
+    {
+      "name": "ordering-adjacent-swap-scores-0",
+      "why": "Order genuinely matters - the same three items in a different sequence is a wrong answer, not a near-miss.",
+      "questionType": "ORDERING",
+      "answerKey": { "correctOrder": ["I3", "I1", "I2"] },
+      "response": { "order": ["I1", "I3", "I2"] },
+      "expect": { "outcome": "INCORRECT", "scoreFraction": 0.0 }
+    },
+    {
+      "name": "ordering-empty-list-is-unattempted",
+      "questionType": "ORDERING",
+      "answerKey": { "correctOrder": ["I3", "I1", "I2"] },
+      "response": { "order": [] },
+      "expect": { "outcome": "UNATTEMPTED", "scoreFraction": 0.0 }
+    },
+    {
+      "name": "ordering-null-order-is-unattempted",
+      "questionType": "ORDERING",
+      "answerKey": { "correctOrder": ["I3", "I1", "I2"] },
+      "response": { "order": null },
+      "expect": { "outcome": "UNATTEMPTED", "scoreFraction": 0.0 }
+    },
+    {
+      "name": "manual-entry-is-pending-review",
+      "why": "A descriptive answer can never be auto-scored - a real attempt evaluates to PENDING_REVIEW, not CORRECT/INCORRECT, since only a human reviewer (not built this phase) can say whether it's right.",
+      "questionType": "LONG_ANSWER",
+      "answerKey": null,
+      "response": { "enteredText": "The Quit India Movement began in August 1942." },
+      "expect": { "outcome": "PENDING_REVIEW", "scoreFraction": 0.0 }
+    },
+    {
+      "name": "manual-blank-entry-is-unattempted",
+      "questionType": "LONG_ANSWER",
+      "answerKey": null,
+      "response": { "enteredText": "   " },
+      "expect": { "outcome": "UNATTEMPTED", "scoreFraction": 0.0 }
+    },
+    {
+      "name": "manual-null-entry-is-unattempted",
+      "questionType": "LONG_ANSWER",
+      "answerKey": null,
+      "response": { "enteredText": null },
+      "expect": { "outcome": "UNATTEMPTED", "scoreFraction": 0.0 }
+    },
+    {
+      "name": "manual-missing-response-object-is-unattempted",
+      "questionType": "LONG_ANSWER",
+      "answerKey": null,
+      "response": null,
+      "expect": { "outcome": "UNATTEMPTED", "scoreFraction": 0.0 }
+    }
+  ]
+}

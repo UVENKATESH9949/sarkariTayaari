@@ -7,10 +7,26 @@ export type QuestionResult = {
   questionId: string;
   questionText: string;
   options: string[];
-  selectedIndex: number;
-  correctIndex: number;
+  /** Nullable since TASK-2301 Phase P2 Wave A — no meaning for MULTIPLE_CHOICE/TRUE_FALSE. */
+  selectedIndex: number | null;
+  correctIndex: number | null;
   explanation: string;
   isCorrect: boolean;
+  /**
+   * Milliseconds this question was on screen, or null when it was not measured (§9).
+   *
+   * Nothing reads it yet -- see practice/useQuestionTimer.ts for why capture starts before
+   * the signal is usable. Null, never 0: a zero would claim an instant answer.
+   */
+  timeMs?: number | null;
+
+  /* -------------------------- Response model (TASK-2301 Phase P2 Wave A) */
+
+  /** "SINGLE_CHOICE" when absent — every result recorded before this phase is one. */
+  questionType?: string | null;
+  response?: Record<string, unknown> | null;
+  outcome?: string | null;
+  scoreFraction?: number | null;
 };
 
 export type SessionRecord = {
@@ -90,6 +106,11 @@ export async function loadSessions(): Promise<SessionRecord[]> {
       correctIndex: r.correctIndex,
       explanation: r.explanation,
       isCorrect: r.isCorrect,
+      timeMs: r.timeMs,
+      questionType: r.questionType,
+      response: r.response,
+      outcome: r.outcome,
+      scoreFraction: r.scoreFraction,
     });
     resultsBySession.set(r.sessionId, bucket);
   }
@@ -143,6 +164,11 @@ export async function insertSession(session: SessionRecord): Promise<void> {
           correctIndex: result.correctIndex,
           explanation: result.explanation,
           isCorrect: result.isCorrect,
+          timeMs: result.timeMs ?? null,
+          questionType: result.questionType ?? "SINGLE_CHOICE",
+          response: result.response ?? null,
+          outcome: result.outcome ?? null,
+          scoreFraction: result.scoreFraction ?? null,
         })),
       );
     }

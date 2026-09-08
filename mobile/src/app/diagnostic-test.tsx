@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
+import { ScrollView, Text, View, StyleSheet } from "react-native";
 import { buildDiagnosticSet, type DiagnosticQuestion } from "../diagnostic/buildDiagnosticSet";
 import { insertDiagnosticAttempt, type DiagnosticTopicResult } from "../db/diagnosticAttempts";
 import { deriveState, recordTopicPractice } from "../db/topicProgressStore";
@@ -11,8 +10,10 @@ import { Card } from "../ui/Card";
 import { EmptyState } from "../ui/EmptyState";
 import { ContextualLoading } from "../ui/ContextualLoading";
 import { CardSkeleton } from "../ui/Skeleton";
-import { useTheme, useThemedStyles, type Theme } from "../ui/ThemeContext";
+import { useThemedStyles, type Theme } from "../ui/ThemeContext";
 import { trackEvent } from "../telemetry/analytics";
+import { OptionList } from "../questionRenderer/OptionList";
+import { blindRadioStyles } from "../questionRenderer/optionListStyles";
 
 /**
  * Exam Guide spec §21 "Diagnostic Test". Deliberately untimed and silent on
@@ -27,8 +28,8 @@ import { trackEvent } from "../telemetry/analytics";
  * synthetic paper shape onto it would be more adapter code than this dedicated screen.
  */
 export default function DiagnosticTestScreen() {
-  const { colors } = useTheme();
   const styles = useThemedStyles(buildStyles);
+  const optionListStyles = useThemedStyles(blindRadioStyles);
   const router = useRouter();
   const mode = useHybridMode();
   const { examCode, examName } = useLocalSearchParams<{ examCode: string; examName?: string }>();
@@ -137,26 +138,15 @@ export default function DiagnosticTestScreen() {
 
         <Card variant="container" style={styles.card}>
           <Text style={styles.questionText}>{translation?.questionText}</Text>
-          {translation?.options.map((option, i) => {
-            const selected = answers[index] === i;
-            return (
-              <Pressable
-                key={i}
-                style={[styles.optionRow, selected && styles.optionRowSelected]}
-                onPress={() => setAnswers((prev) => ({ ...prev, [index]: i }))}
-                accessibilityRole="radio"
-                accessibilityLabel={option}
-                accessibilityState={{ checked: selected }}
-              >
-                <Ionicons
-                  name={selected ? "radio-button-on" : "radio-button-off"}
-                  size={18}
-                  color={selected ? colors.brand.light : colors.text.muted}
-                />
-                <Text style={styles.optionText}>{option}</Text>
-              </Pressable>
-            );
-          })}
+          {translation && (
+            <OptionList
+              options={translation.options}
+              styles={optionListStyles}
+              badge="radio"
+              selectedIndex={answers[index] ?? null}
+              onSelect={(i) => setAnswers((prev) => ({ ...prev, [index]: i }))}
+            />
+          )}
         </Card>
 
         <View style={styles.navRow}>
@@ -178,7 +168,7 @@ export default function DiagnosticTestScreen() {
   );
 }
 
-const buildStyles = ({ colors, spacing: sp, radius: r }: Theme) =>
+const buildStyles = ({ colors, spacing: sp }: Theme) =>
   StyleSheet.create({
     screen: { flex: 1 },
     centered: { flex: 1, justifyContent: "center", alignItems: "center", padding: sp["2xl"] },
@@ -186,20 +176,5 @@ const buildStyles = ({ colors, spacing: sp, radius: r }: Theme) =>
     progressText: { fontSize: 12, color: colors.text.muted, marginBottom: sp.sm, fontWeight: "600" },
     card: { padding: sp.lg },
     questionText: { fontSize: 16, fontWeight: "600", color: colors.text.primary, lineHeight: 22, marginBottom: sp.lg },
-    optionRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: sp.sm + 2,
-      padding: sp.md,
-      borderRadius: r.md,
-      borderWidth: 1,
-      borderColor: colors.border,
-      marginBottom: sp.sm,
-    },
-    optionRowSelected: {
-      borderColor: colors.brand.light,
-      backgroundColor: colors.brand.glowSoft,
-    },
-    optionText: { flex: 1, fontSize: 14, color: colors.text.primary },
     navRow: { flexDirection: "row", justifyContent: "space-between", marginTop: sp.xl },
   });

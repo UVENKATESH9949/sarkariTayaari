@@ -1,4 +1,6 @@
+import { createElement } from "react";
 import { DURATION } from "./motion";
+import { ThemeToggleButton } from "./ThemeToggleButton";
 import type { Palette } from "./palettes";
 
 /**
@@ -35,4 +37,7 @@ export const stackScreenOptions = (colors: Palette) =>
     // and text can be perfectly themed and the page still reads as broken if this isn't
     // set, since nothing else paints the space around them.
     contentStyle: { backgroundColor: colors.bg },
+    // The light/dark toggle, present on every screen that reaches this shared options
+    // object. A screen can still override it per-Stack.Screen if a future one ever needs to.
+    headerRight: () => createElement(ThemeToggleButton),
   }) as const;

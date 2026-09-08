@@ -1,5 +1,6 @@
 package com.sarkaritaiyaari.backend.repository;
 
+import com.sarkaritaiyaari.backend.entity.ContentStatus;
 import com.sarkaritaiyaari.backend.entity.Question;
 import com.sarkaritaiyaari.backend.entity.TemporaryQuestionPool;
 import jakarta.persistence.criteria.Subquery;
@@ -38,6 +39,26 @@ public final class QuestionSpecifications {
     }
 
     /**
+     * Student-facing reads must never surface a question the TASK-2501 ingestion pipeline
+     * hasn't been published yet (DRAFT/REVIEW) — the admin CRUD list stays unfiltered,
+     * exactly like {@link #notDeleted()}, since an admin needs to see/manage those rows.
+     */
+    public static Specification<Question> published() {
+        return (root, query, cb) -> cb.equal(root.get("contentStatus"), ContentStatus.PUBLISHED);
+    }
+
+    /**
+     * Capability negotiation (TASK-2301 Phase P3) — restricts a public read to only the
+     * question types a given client has declared it can render/evaluate. A client that never
+     * declares anything is treated as predating this mechanism entirely and is passed
+     * {@code List.of("SINGLE_CHOICE")} by the service layer, matching byte-for-byte what it
+     * would have received before any type beyond SINGLE_CHOICE ever existed.
+     */
+    public static Specification<Question> typeIn(List<String> types) {
+        return (root, query, cb) -> root.get("questionType").in(types);
+    }
+
+    /**
      * Restricts to the temporary ~500-question pool (see V9__temporary_question_pool.sql
      * and app.question-pool.temporary-enabled) — applied only where the caller has
      * confirmed the flag is on, so this predicate itself doesn't need to know about config.
@@ -63,7 +84,10 @@ public final class QuestionSpecifications {
             return cb.and(
                     cb.equal(examJoin.get("code"), examCode),
                     root.get("topic").get("subject").get("id").in(subjectIds),
-                    cb.isFalse(root.get("deleted"))
+                    cb.isFalse(root.get("deleted")),
+                    // TASK-2501 Phase 2 — a fresh, unreviewed ingestion candidate must never
+                    // land in a live-sampled Mock Test attempt.
+                    cb.equal(root.get("contentStatus"), ContentStatus.PUBLISHED)
             );
         };
     }

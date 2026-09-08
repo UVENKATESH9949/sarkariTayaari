@@ -19,7 +19,7 @@ import { PreparingApp } from "../ui/PreparingApp";
 import { AppDialogHost } from "../ui/AppDialog";
 import { stackScreenOptions } from "../ui/navigation";
 import { ThemeProvider, useTheme } from "../ui/ThemeContext";
-import { darkPalette } from "../ui/palettes";
+import { lightPalette } from "../ui/palettes";
 import { useScreenViewTracking } from "../telemetry/analytics";
 
 // Module scope, before anything renders — including the migration-loading/error
@@ -36,21 +36,21 @@ function RootLayout() {
 
   // These two screens render BEFORE ThemeProvider exists, and they cannot be themed:
   // the theme preference lives in the same database whose migrations are the thing
-  // that has not finished (or has failed). They stay on the dark palette explicitly,
-  // which is also the app's default, so a light-mode user sees one dark frame at worst
+  // that has not finished (or has failed). They stay on the light palette explicitly,
+  // which is also the app's default, so a dark-mode user sees one light frame at worst
   // and — in the error case — a legible message rather than a blank screen.
   if (error) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 20, backgroundColor: darkPalette.bg }}>
-        <Text style={{ color: darkPalette.text.primary }}>Database migration failed: {error.message}</Text>
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 20, backgroundColor: lightPalette.bg }}>
+        <Text style={{ color: lightPalette.text.primary }}>Database migration failed: {error.message}</Text>
       </View>
     );
   }
 
   if (!success) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: darkPalette.bg }}>
-        <Text style={{ color: darkPalette.text.secondary }}>Setting up local database...</Text>
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: lightPalette.bg }}>
+        <Text style={{ color: lightPalette.text.secondary }}>Setting up local database...</Text>
       </View>
     );
   }
