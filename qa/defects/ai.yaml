@@ -1,0 +1,10 @@
+# AI module — defects
+#
+# Starts empty and stays empty until a real execution fails. A defect here must trace to an
+# execution record in qa/execution/, never to a bug found while writing code — those are
+# fixed in the same change and written up in the task doc or a reports/ entry.
+#
+# (Phase 1 did find one real inconsistency — QUESTION_CLASSIFICATION was declared cacheable while
+# having no CACHED tier — but the registry's own consistency check caught it during development,
+# before any test case existed to execute. TC-AI-001 and TC-AI-002 are its regression guards.)
+[]

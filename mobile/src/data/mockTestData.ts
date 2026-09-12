@@ -1,7 +1,7 @@
 import type { SyncedPaper } from "../db/examStructure";
 import type { MockTestQuestion, SectionAvailability } from "../db/mockTest";
-import { isIndexBasedType, resolveCorrectIndex } from "../db/answerResolution";
-import { getMockAvailabilityCount, getMockSample } from "./liveQuestions";
+import { isIndexBasedType, resolveCorrectIndex } from "@sarkaritaiyaari/core/evaluation";
+import { getMockAvailabilityCount, getMockSample } from "@sarkaritaiyaari/core/api";
 
 /**
  * Hybrid (live-API) equivalents of db/mockTest.ts's countAvailable()/

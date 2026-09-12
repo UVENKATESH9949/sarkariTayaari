@@ -1,0 +1,136 @@
+# AUTH module — test data catalog
+#
+# Logical test-data identifiers only. NEVER a real credential, token, or personal data —
+# every entry describes what the identifier MEANS and how to provision it per environment,
+# not a literal reusable value. used_by_test_cases is computed from the real test-case
+# files, not hand-maintained (regenerate via scripts/qa/generate-test-data.js).
+
+- id: TESTDATA-AUTH-ADMIN-01
+  type: Account
+  description: >-
+    A registered ADMIN account with a known password, reused across multiple AUTH test cases as
+    'the' ordinary admin fixture. Other test cases depend on this account remaining ADMIN — do not
+    use it for a case that changes its role (see TESTDATA-AUTH-ADMIN-02).
+  provisioning: >-
+    Use an existing admin fixture (e.g. the automated-test-admin pattern documented in
+    memory/STATUS.md) or create via POST /api/auth/admin/register from another admin.
+  used_by_test_cases:
+    - TC-AUTH-006
+    - TC-AUTH-016
+    - TC-AUTH-017
+    - TC-AUTH-018
+    - TC-AUTH-022
+    - TC-AUTH-023
+
+- id: TESTDATA-AUTH-ADMIN-02
+  type: Account
+  description: >-
+    A dedicated, throwaway ADMIN account used only for TC-AUTH-018 (role-demotion mid-session). Kept
+    separate from TESTDATA-AUTH-ADMIN-01 specifically so demoting it does not affect any other test
+    case's admin fixture.
+  provisioning: >-
+    Create a fresh admin account for this run; restore or discard it after execution per
+    TC-AUTH-018's own remarks.
+  used_by_test_cases:
+    - TC-AUTH-018
+
+- id: TESTDATA-AUTH-EXISTING-EMAIL-01
+  type: Account
+  description: >-
+    An email already registered to some account, used to test duplicate-registration rejection.
+    Register it as a setup step if the environment has no standing fixture for it.
+  provisioning: Register once per environment, or reuse TESTDATA-AUTH-STUDENT-01's own email if convenient.
+  used_by_test_cases:
+    - TC-AUTH-003
+
+- id: TESTDATA-AUTH-NEW-ADMIN-EMAIL-01
+  type: Value shape
+  description: A not-yet-registered email for the admin-invites-admin authorization-matrix case.
+  provisioning: >-
+    Generate a unique address per execution; clean up the created admin account afterward per
+    TC-AUTH-022's remarks.
+  used_by_test_cases:
+    - TC-AUTH-022
+
+- id: TESTDATA-AUTH-NEW-ADMIN-EMAIL-02
+  type: Value shape
+  description: >-
+    A not-yet-registered email for the admin-invites-admin no-token-leak case, kept separate from
+    -01 so the two cases' cleanup doesn't collide.
+  provisioning: Generate a unique address per execution; clean up afterward per TC-AUTH-023's remarks.
+  used_by_test_cases:
+    - TC-AUTH-023
+
+- id: TESTDATA-AUTH-NEW-EMAIL-01
+  type: Value shape
+  description: A syntactically valid, not-yet-registered email for a fresh registration test.
+  provisioning: >-
+    Generate a unique address per execution (e.g. a timestamp/uuid-suffixed local part) so
+    re-running the suite doesn't collide with a prior run's leftover account.
+  used_by_test_cases:
+    - TC-AUTH-001
+
+- id: TESTDATA-AUTH-NEW-EMAIL-02
+  type: Value shape
+  description: >-
+    Same shape as TESTDATA-AUTH-NEW-EMAIL-01, submitted in mixed case to test lower-casing
+    normalization.
+  provisioning: Generate a unique, mixed-case address per execution.
+  used_by_test_cases:
+    - TC-AUTH-002
+
+- id: TESTDATA-AUTH-NEW-EMAIL-03
+  type: Value shape
+  description: Same shape as TESTDATA-AUTH-NEW-EMAIL-01, used alongside a too-short password.
+  provisioning: Generate a unique address per execution.
+  used_by_test_cases:
+    - TC-AUTH-004
+
+- id: TESTDATA-AUTH-STUDENT-01
+  type: Account
+  description: >-
+    A registered STUDENT account with a known password, reused across multiple AUTH test cases as
+    'the' ordinary student fixture.
+  provisioning: >-
+    Register via POST /api/auth/register if no environment fixture already exists. Do not record the
+    actual password in this repository.
+  used_by_test_cases:
+    - TC-AUTH-005
+    - TC-AUTH-007
+    - TC-AUTH-008
+    - TC-AUTH-009
+    - TC-AUTH-010
+    - TC-AUTH-011
+    - TC-AUTH-014
+    - TC-AUTH-015
+    - TC-AUTH-016
+    - TC-AUTH-017
+    - TC-AUTH-022
+    - TC-AUTH-024
+    - TC-AUTH-025
+
+- id: TESTDATA-AUTH-UNKNOWN-EMAIL-01
+  type: Value shape
+  description: >-
+    An email guaranteed never to have been registered, for login-against-unknown-account negative
+    tests.
+  provisioning: Generate a unique, never-registered address per execution.
+  used_by_test_cases:
+    - TC-AUTH-007
+
+- id: TESTDATA-AUTH-UNKNOWN-EMAIL-02
+  type: Value shape
+  description: Same shape as TESTDATA-AUTH-UNKNOWN-EMAIL-01, used specifically in the timing-safety case.
+  provisioning: Generate a unique, never-registered address per execution.
+  used_by_test_cases:
+    - TC-AUTH-025
+
+- id: TESTDATA-AUTH-VALID-PASSWORD-01
+  type: Value shape
+  description: >-
+    Any password meeting the documented minimum (>=8 characters, no other complexity rule). Not a
+    literal value — generate a fresh one per execution.
+  provisioning: Generate at execution time; never reuse a real user's password.
+  used_by_test_cases:
+    - TC-AUTH-001
+    - TC-AUTH-002

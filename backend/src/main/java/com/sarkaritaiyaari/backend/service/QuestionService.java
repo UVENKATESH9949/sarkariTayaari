@@ -657,6 +657,34 @@ public class QuestionService {
         return result.map(q -> QuestionMapper.toResponse(q, media.getOrDefault(q.getId(), List.of())));
     }
 
+    private static final int MAX_BY_IDS_SIZE = 100;
+
+    /**
+     * Batch hydration for a client with no local question bank of its own — the web app (
+     * TASK-2601 Phase 3) uses this to turn a bare {@code questionId} from a session/attempt
+     * review or a bookmark into real content, the same join mobile does against its local
+     * SQLite copy. Same visibility rule as {@link #listPublic}: soft-deleted and non-PUBLISHED
+     * rows are silently withheld rather than erroring, since a caller passing a stale id (a
+     * question deleted after the student answered it) should get "nothing for this one," not a
+     * failure for the whole batch.
+     */
+    @Transactional(readOnly = true)
+    public List<QuestionResponse> getByIds(List<UUID> ids) {
+        if (ids == null || ids.isEmpty()) {
+            throw new IllegalArgumentException("ids must not be empty");
+        }
+        if (ids.size() > MAX_BY_IDS_SIZE) {
+            throw new IllegalArgumentException("ids must not exceed " + MAX_BY_IDS_SIZE + " per request");
+        }
+        List<Question> questions = questionRepository.findAllById(ids).stream()
+                .filter(q -> !q.isDeleted() && q.getContentStatus() == ContentStatus.PUBLISHED)
+                .toList();
+        Map<UUID, List<QuestionMedia>> media = mediaByQuestionId(questions.stream().map(Question::getId).toList());
+        return questions.stream()
+                .map(q -> QuestionMapper.toResponse(q, media.getOrDefault(q.getId(), List.of())))
+                .toList();
+    }
+
     /**
      * Grouped counts (per exam/subject/topic/difficulty) for the hybrid layer's "how many
      * questions does this subject/topic have" screens — the live equivalent of the local

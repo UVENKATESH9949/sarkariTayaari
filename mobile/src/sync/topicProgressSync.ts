@@ -7,7 +7,7 @@ import {
   restoreTopicProgressFromServer,
   uploadTopicProgress,
   type TopicProgressPayload,
-} from "../api/topicProgress";
+} from "@sarkaritaiyaari/core/api";
 
 /**
  * Uploads and restores per-topic mastery (Epic L / TICKET-2105).

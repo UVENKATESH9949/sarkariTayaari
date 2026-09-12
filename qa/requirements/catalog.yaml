@@ -1,0 +1,1203 @@
+# CATALOG module — requirement repository
+#
+# Scope: exams, subjects, topics, languages, difficulty levels, paper types, exam structure
+# (stage -> paper -> section), exam<->subject syllabus, exam badges.
+# Primary source: api/CONTENT-CATALOG.md. Secondary: reports/05-exam-structure-model/*,
+# reports/04-content-model-redesign/*, ADR-004/005/009.
+#
+# Scoping note (Phase 1B decision, not left as an open ambiguity): REQ-CATALOG-006/008/009
+# (exam topic weightage, topic hierarchy, topic prerequisites) originate from work internally
+# labeled "Epic L topic model" (TICKET-2101-2103), but are INCLUDED here because
+# api/CONTENT-CATALOG.md documents these endpoints directly as catalog contract, and they are
+# structural/curation data (admin-curated weightage, hierarchy, prerequisite DAG), not computed
+# intelligence (trend/priority/mastery/PYQ scoring, which lives in the separate
+# api/EXAM-INTELLIGENCE.md and is correctly excluded). See qa/requirements/_conflicts.md.
+#
+# A requirement here represents the INTENDED/documented behavior, not necessarily whatever the
+# code currently does if the two diverge — see the `ambiguity` field per requirement.
+
+- id: REQ-CATALOG-001
+  feature: Exam entity CRUD, code as immutable identity, active-only public read
+  module: CATALOG
+  system: [Backend, Admin, Mobile]
+  source_doc: api/CONTENT-CATALOG.md
+  source_section: "ExamController (POST/GET/GET-all/PUT/DELETE /api/exams)"
+  description: >
+    An exam is created/updated/deleted by an admin with `code` (e.g. SSC_CGL) as the
+    human-chosen, immutable primary key — not a generated id. GET /api/exams returns only
+    active==true exams ordered by displayOrder and is public; GET /api/exams/all returns
+    every exam (incl. inactive) and requires admin; GET /api/exams/{code} (single) requires
+    admin even though the full active list is public.
+  business_rule: >
+    `code` is chosen once and never changes identity. Public active-list exists specifically
+    so a signed-out mobile client can sync exam content (ADR-009).
+  actor: "Admin (writes, single-get, all-list); Anonymous/Student (active list)"
+  preconditions:
+    - Admin bearer token for writes/all-list/single-get
+  inputs:
+    - "{ code, name, imageUrl?, active, displayOrder, difficulty?, badge?, category? }"
+  expected_outputs:
+    - "201 with ExamResponse on create; 200 with list/single on reads; 200 ExamResponse on update; 204 on delete"
+  validations:
+    - "Blank code/name rejected (400)"
+    - "Duplicate code rejected (400 \"Exam code already exists: <code>\")"
+  permissions: "requireAdmin on create/update/delete/get-single/get-all; no auth on active list"
+  dependencies:
+    - REQ-AUTH-008
+  error_conditions:
+    - "400 blank fields"
+    - "400 duplicate code"
+    - "404 \"Exam not found: <code>\" on get/update/delete of unknown code"
+    - "401/403 on admin endpoints without proper auth"
+  edge_conditions:
+    - "Deleting an exam that still has stages/subjects linked has no application-level guard — relies on the DB's own FK behavior, which is untested/undocumented (see _conflicts.md)"
+  offline_behavior: >
+    Active exam list is synced to mobile local SQLite for full offline browsing (Home screen
+    cards). Single-exam get and all-exams list are admin-console-only, not synced.
+  acceptance_criteria:
+    - Given an admin token, creating an exam with a unique code succeeds and is retrievable
+    - Given a duplicate code, creation is rejected with 400
+    - The public list never includes an inactive exam
+    - A non-admin/no-token request to any write or the all-list/single-get endpoint is rejected 401/403
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    ExamCrudTest.createThenGet_returnsSameData, listActive_onlyIncludesActiveExams,
+    listAll_includesInactiveExams, update_changesFields, delete_removesExam
+
+- id: REQ-CATALOG-002
+  feature: Exam optional difficulty/badge FK validation and null normalization
+  module: CATALOG
+  system: [Backend, Admin, Mobile]
+  source_doc: api/CONTENT-CATALOG.md
+  source_section: "POST/PUT /api/exams"
+  description: >
+    `difficulty` and `badge` on an exam are optional foreign keys into difficulty_levels /
+    exam_badges. A blank string in either field is normalized to null (not a constraint
+    violation); a non-blank value that doesn't match an existing row is rejected.
+  business_rule: >
+    Keeps exam styling data-driven (colors/icons resolved via the referenced lookup row)
+    rather than hardcoded per exam.
+  actor: Admin
+  preconditions:
+    - "Referenced difficulty_levels/exam_badges rows must exist if non-blank"
+  inputs:
+    - "difficulty?: string"
+    - "badge?: string"
+  expected_outputs:
+    - "Round-trips the stored code; null when blank was sent"
+  validations:
+    - "Unknown code -> 400"
+  permissions: "requireAdmin (part of exam create/update)"
+  dependencies:
+    - REQ-CATALOG-011
+    - REQ-CATALOG-020
+  error_conditions:
+    - "400 \"Unknown difficulty: <value>\""
+    - "400 \"Unknown badge: <value>\""
+  edge_conditions:
+    - Empty string vs omitted field both normalize to null
+  offline_behavior: >
+    Resolved codes sync as part of the exam record; mobile resolves badge/difficulty styling
+    against its own synced badge/difficulty-level tables.
+  acceptance_criteria:
+    - "Creating/updating an exam with difficulty: \"\" stores null, not an error"
+    - With an unknown code, returns 400 with the exact message format
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    ExamCrudTest.difficultyAndBadge_defaultToNullAndRoundTrip,
+    blankDifficultyOrBadge_clearsRatherThanFailing
+
+- id: REQ-CATALOG-003
+  feature: "Exam category facet (free string, not DB-enforced)"
+  module: CATALOG
+  system: [Backend, Admin, Mobile]
+  source_doc: api/CONTENT-CATALOG.md
+  source_section: "POST /api/exams business rules"
+  description: >
+    `category` is a plain string field on an exam (SSC/Banking/Railways/UPSC/State
+    Government/Teaching/Defence/Police/Insurance/Other in the admin's fixed dropdown) used as
+    a filter facet in Exam Discovery, but it is not a lookup table and not DB-enforced — no
+    styling, no referential integrity.
+  business_rule: "Deliberately lighter-weight than difficulty/badge since it carries no per-value visual styling."
+  actor: Admin
+  preconditions: []
+  inputs:
+    - "category?: string"
+  expected_outputs:
+    - Stored/echoed verbatim
+  validations:
+    - "None server-side (the fixed dropdown is admin-UI-only convention, not a backend constraint)"
+  permissions: "requireAdmin (part of exam create/update)"
+  dependencies:
+    - REQ-CATALOG-004
+  error_conditions: []
+  edge_conditions:
+    - A value outside the admin's fixed dropdown list can still be saved via direct API call
+      (no server-side enum check) — could produce a category the discovery filter can't
+      sensibly group
+  offline_behavior: "Synced with the exam record."
+  acceptance_criteria:
+    - Any string value for category is accepted and persisted without validation
+  priority: Low
+  status: Active
+  ambiguity: >
+    REQUIRES CLARIFICATION: whether the backend should enforce the same fixed category list
+    the admin UI dropdown offers, given a bypass via direct API call is currently possible.
+  automation_status: CandidateForAutomation
+  automation_hint: "none found"
+
+- id: REQ-CATALOG-004
+  feature: "Exam Discovery listing: pagination, sort, status/category filter, computed fields"
+  module: CATALOG
+  system: [Backend, Mobile]
+  source_doc: api/CONTENT-CATALOG.md
+  source_section: "GET /api/exams/discover"
+  description: >
+    A separate, richer public listing endpoint for the Exams tab — returns active exams as
+    cards with pagination, six sort options, a status filter (including the synthetic
+    CLOSING_SOON bucket), and a case-insensitive category filter. Each card carries
+    recruitment-cycle-derived fields (status, closingSoon, deadline dates, vacancyCount,
+    primaryAction) which are null when the exam has no current published cycle.
+  business_rule: >
+    closingSoon is true only when status is APPLICATION_OPEN/APPLICATION_CLOSING_SOON AND the
+    deadline is within 14 days — a threshold deliberately duplicated (not shared) with
+    mobile's own priorityTier() urgency logic so both sides independently agree on "urgent."
+    Sort/filter/page currently happen in Java over the full active-exam set (not SQL) — a
+    stated, scale-appropriate implementation detail for ~11 exams, not a contract guarantee.
+  actor: Anonymous/Student
+  preconditions: []
+  inputs:
+    - "page (default 0)"
+    - "size (default 20)"
+    - "sort (DEADLINE|EXAM_DATE|NEWLY_ANNOUNCED|RECENTLY_UPDATED|POPULAR|ALPHABETICAL, default ALPHABETICAL)"
+    - "status (a RecruitmentCycleStatus name or CLOSING_SOON)"
+    - category
+  expected_outputs:
+    - "PagedExamCards { content: ExamCardResponse[], page, size, totalElements, hasMore }; each card includes primaryAction (APPLY_NOW|PREPARE_NOW|VIEW_EXAM|VIEW_RESULT_INFO), computed server-side"
+  validations:
+    - sort must match a known enum value
+  permissions: none (public)
+  dependencies:
+    - REQ-CATALOG-003
+  error_conditions:
+    - "400 IllegalArgumentException on an unrecognized sort value"
+  edge_conditions:
+    - An exam with no current published cycle still appears, with all cycle-derived fields null
+  offline_behavior: >
+    Not part of the offline-synced reference-data set — this is a live-fetch listing endpoint
+    (mobile's Exams tab issues a fresh request per sort/category change; segmented
+    tab/search filtering is client-side over one fetched page).
+  acceptance_criteria:
+    - Sorting by each of the six options produces the documented order
+    - "Filtering by status=CLOSING_SOON returns only open-status exams within 14 days of deadline"
+    - An unknown sort value returns 400
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: CandidateForAutomation
+  automation_hint: >
+    ExamDiscoveryTest exists per memory/STATUS.md (sort orders, category filter,
+    CLOSING_SOON bucket, pagination boundaries) — file not among the instructed test files
+    for this extraction, not directly inspected; treat as CandidateForAutomation until
+    verified, not Automated.
+
+- id: REQ-CATALOG-005
+  feature: "Exam syllabus (exam_subjects): get/replace, admin-only"
+  module: CATALOG
+  system: [Backend, Admin]
+  source_doc: api/CONTENT-CATALOG.md
+  source_section: "GET/PUT /api/exams/{code}/subjects"
+  description: >
+    Every exam has a syllabus — the set of subjects it covers — independent of whether a
+    paper pattern (stage/paper/section) exists. Read returns the current syllabus; write does
+    a full wholesale replace (an empty array clears it).
+  business_rule: >
+    ADR-004: the syllabus is a distinct concept from paper-layout subjects (section_subjects,
+    REQ-CATALOG-015) and can be non-empty with zero stages/papers/sections defined. This is
+    what allows a pattern-free exam to still have a syllabus for Practice browsing.
+  actor: Admin
+  preconditions:
+    - Exam must exist
+    - Supplied subjectIds must reference existing subjects
+  inputs:
+    - "GET: none. PUT: { subjectIds: uuid[] }"
+  expected_outputs:
+    - "SubjectResponse[] sorted by displayOrder then name, each including examCodes (reverse view)"
+  validations:
+    - "400 \"Unknown subjectId: <id>\" for any id that doesn't resolve"
+  permissions: "requireAdmin on both GET and PUT (despite being non-sensitive data — see _conflicts.md)"
+  dependencies:
+    - REQ-CATALOG-007
+  error_conditions:
+    - 404 unknown exam code
+    - 400 unknown subjectId
+  edge_conditions:
+    - An exam with a syllabus but zero paper structure is valid and expected
+  offline_behavior: >
+    Not directly synced via this endpoint — mobile instead receives the same data as
+    syllabusSubjects embedded in GET /api/exam-structures (REQ-CATALOG-019).
+  acceptance_criteria:
+    - Setting an exam's syllabus to a list of subject ids and reading it back returns exactly those subjects
+    - "Setting to [] clears it"
+    - An unknown subject id in the payload is rejected wholesale (no partial apply)
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: >
+    none found (not covered by any instructed test file; verified only via manual/curl
+    checks per exam-subject-syllabus.md)
+
+- id: REQ-CATALOG-006
+  feature: "Exam topic map / curated weightage (exam_topics): get/replace, admin-only"
+  module: CATALOG
+  system: [Backend, Admin]
+  source_doc: api/CONTENT-CATALOG.md
+  source_section: "GET/PUT /api/exams/{code}/topics"
+  description: >
+    Finer-grained than the syllabus (REQ-CATALOG-005) — which specific topics matter for an
+    exam, with an admin-curated weightagePercent per topic. Full wholesale replace on write.
+  business_rule: >
+    weightagePercent is explicitly the admin's curated figure, distinct from any
+    later-derived/computed weighting from PYQ data (which belongs to the separate Epic L /
+    EXAM-INTELLIGENCE module, out of scope here). Admin-only "for now" per the controller's
+    own comment — no mobile screen consumes it yet, so it's deliberately not exposed publicly.
+  actor: Admin
+  preconditions:
+    - Exam and every referenced topicId must exist
+  inputs:
+    - "PUT: { topics: [{ topicId: uuid, weightagePercent?: decimal }] }"
+  expected_outputs:
+    - "ExamTopicResponse[]: { topicId, topicName, subjectId, subjectName, parentId, parentName, weightagePercent }"
+  validations:
+    - "400 \"Duplicate topicId in request\""
+    - "400 \"Unknown topicId\""
+  permissions: requireAdmin
+  dependencies:
+    - REQ-CATALOG-008
+    - REQ-CATALOG-009
+  error_conditions:
+    - 404 unknown exam code (GET returns 404 rather than an empty list)
+    - 400 duplicate/unknown topicId
+  edge_conditions:
+    - "weightagePercent omitted per entry means \"relevant, not yet weighted\" (not zero)"
+  offline_behavior: "Not synced to mobile at all — admin-console-only surface today."
+  acceptance_criteria:
+    - Replacing the topic map with a duplicate topicId in the payload is rejected wholesale
+    - A null-weightage entry round-trips as null, not 0
+  priority: Medium
+  status: Active
+  ambiguity: >
+    Boundary call with the Epic L topic-model work — see the module-level scoping note at the
+    top of this file and qa/requirements/_conflicts.md item 1. Confirm this boundary if test-plan
+    scoping is later revisited.
+  automation_status: Automated
+  automation_hint: >
+    TopicModelTest.examTopics_replaceWholesaleAndCarryWeightage,
+    examTopics_rejectDuplicateAndUnknownTopic
+
+- id: REQ-CATALOG-007
+  feature: Subject CRUD (global, shared across exams)
+  module: CATALOG
+  system: [Backend, Admin, Mobile]
+  source_doc: api/CONTENT-CATALOG.md
+  source_section: "SubjectController"
+  description: >
+    Subjects are global entities (not owned by one exam) — e.g. "Quantitative Aptitude" is
+    shared by SSC CGL, IBPS PO, etc. Full CRUD, admin-gated writes, public read list.
+  business_rule: >
+    One subject can belong to many exams' syllabuses (REQ-CATALOG-005) simultaneously;
+    examCodes on the response is a reverse-derived view, not stored directly on the subject.
+  actor: "Admin (writes/single-get); Anonymous/Student (list)"
+  preconditions: []
+  inputs:
+    - "{ name, displayOrder, icon?, color?, colorBg? }"
+  expected_outputs:
+    - "SubjectResponse { id, name, displayOrder, icon, color, colorBg, examCodes[] }; list ordered by displayOrder then name"
+  validations:
+    - Blank name rejected
+    - Case-insensitive name uniqueness enforced
+  permissions: "requireAdmin on create/get-single/update/delete; public on list"
+  dependencies:
+    - REQ-CATALOG-008
+    - REQ-CATALOG-005
+    - REQ-CATALOG-015
+  error_conditions:
+    - "400 blank name"
+    - "400 \"Subject already exists: <name>\""
+    - "404 \"Subject not found: <id>\""
+  edge_conditions:
+    - "Deleting a subject that's still referenced by a topic/section relies on DB FK behavior (raw 500), same asymmetry as exam delete (REQ-CATALOG-001) — no application-level pre-check documented"
+  offline_behavior: "Fully synced for offline browsing — the mobile subject catalog source."
+  acceptance_criteria:
+    - Creating a subject with a name that differs only in case from an existing one is rejected 400
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    SubjectCrudTest.createThenGet_returnsSameData, list_includesCreatedSubject,
+    update_changesName
+
+- id: REQ-CATALOG-008
+  feature: Topic CRUD, per-subject scoping, and parent hierarchy with cycle prevention
+  module: CATALOG
+  system: [Backend, Admin, Mobile]
+  source_doc: api/CONTENT-CATALOG.md
+  source_section: "TopicController"
+  description: >
+    A topic belongs to exactly one subject and may optionally have a parent topic, forming a
+    hierarchy. Name uniqueness is scoped per subject (case-insensitive), not global. Parent
+    assignment is validated: a topic can't be its own parent, can't create a cycle, and must
+    belong to the same subject as its parent.
+  business_rule: >
+    Hierarchy depth/cycles can't be expressed by a DB FK/CHECK constraint, so it's enforced
+    server-side via DFS reachability.
+  actor: "Admin (writes/single-get); Anonymous/Student (list)"
+  preconditions:
+    - Referenced subjectId must exist
+    - "Referenced parentId (if any) must exist and belong to the same subject"
+  inputs:
+    - "{ subjectId, name, displayOrder, parentId?, prerequisiteTopicIds? }"
+  expected_outputs:
+    - "TopicResponse { id, subjectId, subjectName, name, displayOrder, parentId, parentName, prerequisiteTopicIds[] }; list ordered by displayOrder then name, optionally filtered by subjectId"
+  validations:
+    - Blank required fields
+    - Unknown subjectId/parentId
+    - Self-parent rejection
+    - Hierarchy-cycle rejection
+    - Cross-subject-parent rejection
+    - Duplicate name-under-same-subject rejection
+  permissions: "requireAdmin on create/get-single/update/delete; public on list"
+  dependencies:
+    - REQ-CATALOG-007
+  error_conditions:
+    - "400 \"Unknown subjectId\""
+    - "400 \"Topic already exists under this subject\""
+    - "400 \"Unknown parentId\""
+    - "400 \"A topic cannot be its own parent\""
+    - "400 \"That parent would create a cycle in the topic hierarchy\""
+    - "400 \"A topic's parent must belong to the same subject\""
+    - "404 \"Topic not found: <id>\""
+  edge_conditions:
+    - "Two topics with the same name under different subjects are both valid (uniqueness is per-subject)"
+  offline_behavior: "Fully synced (optionally subject-scoped) for offline browsing."
+  acceptance_criteria:
+    - Assigning a parent from a different subject is rejected
+    - Assigning a parent that would create even an indirect cycle is rejected
+  priority: Critical
+  status: Active
+  ambiguity: >
+    Boundary call with the Epic L topic-model work — see the module-level scoping note at the
+    top of this file and qa/requirements/_conflicts.md item 1.
+  automation_status: Automated
+  automation_hint: >
+    TopicCrudTest.createThenGet_returnsSameData, listBySubjectId_onlyReturnsThatSubjectsTopics,
+    update_changesNameAndSubject; TopicModelTest.topicParent_roundTripsAndDefaultsToNull,
+    topicCannotBeItsOwnParent, topicParentCycleIsRejected, parentFromAnotherSubjectIsRejected
+
+- id: REQ-CATALOG-009
+  feature: "Topic prerequisites (DAG) with \"null = unchanged, empty = clear\" semantics"
+  module: CATALOG
+  system: [Backend, Admin]
+  source_doc: api/CONTENT-CATALOG.md
+  source_section: "POST/PUT /api/topics business rules"
+  description: >
+    A topic can declare prerequisite topics (a DAG used for sequencing). prerequisiteTopicIds
+    is a full-replacement list, but with a deliberate escape hatch: sending null leaves
+    existing prerequisites untouched; sending [] clears them.
+  business_rule: >
+    The null-vs-empty distinction exists specifically so an older client that never sends the
+    field can't silently wipe curated prerequisite edges. Cycles (direct or indirect) in the
+    prerequisite graph are rejected via DFS reachability, same technique as REQ-CATALOG-008's
+    hierarchy check but a separate graph.
+  actor: Admin
+  preconditions:
+    - Every id in prerequisiteTopicIds must be an existing topic
+  inputs:
+    - "prerequisiteTopicIds?: uuid[]"
+  expected_outputs:
+    - "prerequisiteTopicIds[] on TopicResponse"
+  validations:
+    - Unknown prerequisite id
+    - Self-prerequisite
+    - Cycle (direct or indirect) in the prerequisite graph
+  permissions: requireAdmin
+  dependencies:
+    - REQ-CATALOG-008
+  error_conditions:
+    - "400 \"Unknown prerequisiteTopicId\""
+    - "400 \"A topic cannot be its own prerequisite\""
+    - "400 cycle-rejection message"
+  edge_conditions:
+    - >
+      Omitting the field entirely on an update must leave prerequisites unchanged — a client
+      naively round-tripping a partial payload could otherwise wipe curated data
+  offline_behavior: "Synced as part of the topic record (prerequisiteTopicIds)."
+  acceptance_criteria:
+    - Updating a topic without the prerequisiteTopicIds field preserves its existing prerequisites
+    - "Sending [] explicitly clears them"
+    - A request that would create even an indirect cycle across 3+ topics is rejected
+  priority: High
+  status: Active
+  ambiguity: >
+    Same Epic-L-boundary note as REQ-CATALOG-006/008 — see _conflicts.md item 1.
+  automation_status: Automated
+  automation_hint: >
+    TopicModelTest.prerequisites_roundTripAndNullLeavesThemUnchanged,
+    indirectPrerequisiteCycleIsRejected
+
+- id: REQ-CATALOG-010
+  feature: Language CRUD (active/all split)
+  module: CATALOG
+  system: [Backend, Admin, Mobile]
+  source_doc: api/CONTENT-CATALOG.md
+  source_section: "LanguageController"
+  description: >
+    Full CRUD for content languages (e.g. en/hi). GET /api/languages (active-only, public) is
+    the mobile-facing list; GET /api/languages/all (admin) includes inactive rows.
+  business_rule: >
+    Active/inactive split lets a language be prepared/retired without deleting historical
+    question-translation data tied to its code.
+  actor: "Admin (writes/all-list); Anonymous/Student (active list)"
+  preconditions: []
+  inputs:
+    - "{ code, name, active }"
+  expected_outputs:
+    - "LanguageResponse { code, name, active }"
+  validations:
+    - Blank fields
+    - Duplicate code
+  permissions: "requireAdmin on create/all-list/update/delete; public on active list"
+  dependencies: []
+  error_conditions:
+    - "400 \"Language code already exists\""
+    - "404 \"Language not found: <code>\""
+  edge_conditions:
+    - "No GET /api/languages/{code} single-item read exists — admin's edit form seeds from the row already present in the list response"
+  offline_behavior: "Active languages fully synced for offline use (determines which language toggles render)."
+  acceptance_criteria:
+    - Deactivating a language removes it from the public list but keeps it visible in /all
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    LanguageControllerTest.listActive_includesEnglishAndHindi,
+    createThenListAll_includesInactiveLanguage, update_changesActiveFlag
+
+- id: REQ-CATALOG-011
+  feature: Difficulty Level CRUD (active/all split; referenced by questions)
+  module: CATALOG
+  system: [Backend, Admin, Mobile]
+  source_doc: api/CONTENT-CATALOG.md
+  source_section: "DifficultyLevelController"
+  description: >
+    Admin-editable lookup of difficulty options (easy/medium/hard, extensible) with display
+    color/icon/order and an active flag. questions.difficulty is a genuine foreign key into
+    this table (promoted from a free-form string in the original schema), so an unknown value
+    is rejected at the question layer too.
+  business_rule: >
+    Nothing about difficulty is hardcoded anywhere in the app — a newly-added level is usable
+    by a question and renders correctly with no code change, by design.
+  actor: "Admin (writes/all-list); Anonymous/Student (active list)"
+  preconditions:
+    - "None for create; code must not already be referenced elsewhere to safely delete"
+  inputs:
+    - "{ code, label, displayOrder, color?, colorBg?, icon?, active }"
+  expected_outputs:
+    - "DifficultyLevelResponse; active list ordered by displayOrder"
+  validations:
+    - Blank fields
+    - Duplicate code
+  permissions: "requireAdmin on create/all-list/update/delete; public on active list"
+  dependencies: []
+  error_conditions:
+    - "400 \"Difficulty level already exists\""
+    - "404 \"Difficulty level not found: <code>\""
+  edge_conditions:
+    - >
+      An inactive level stays usable/visible in /all and on already-tagged content; deleting
+      a level still referenced by a question is expected to fail via DB FK (not explicitly
+      tested per the extraction's instructed files)
+  offline_behavior: "Active levels fully synced (drives the mobile Levels screen and question tagging UI)."
+  acceptance_criteria:
+    - A newly created level appears correctly styled without any app code change (proven
+      historically per exam-structure-phase-c-mobile.md's "decisive test")
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    DifficultyLevelTest.seededLevels_areAvailableAndOrdered,
+    newLevel_isUsableByAQuestionWithoutACodeChange,
+    inactiveLevel_isHiddenFromTheActiveListButPresentInAll, update_changesLabelAndOrder
+
+- id: REQ-CATALOG-012
+  feature: "Paper Type CRUD (no active/inactive split; mockable flag)"
+  module: CATALOG
+  system: [Backend, Admin, Mobile]
+  source_doc: api/CONTENT-CATALOG.md
+  source_section: "PaperTypeController"
+  description: >
+    Lookup of paper kinds (objective, descriptive, etc.) each with a mockable boolean
+    governing whether a mock test can be generated from a paper of that type. Unlike every
+    other lookup in this module, there is no active/inactive split — GET /api/paper-types is
+    unfiltered and is the only list.
+  business_rule: >
+    mockable is the mechanism by which non-objective paper types (descriptive, interview) are
+    excluded from Mock Test generation.
+  actor: "Admin (writes); Anonymous/Student (list)"
+  preconditions: []
+  inputs:
+    - "{ code, label, mockable, displayOrder }"
+  expected_outputs:
+    - "PaperTypeResponse { code, label, mockable, displayOrder }, ordered by displayOrder"
+  validations:
+    - Blank fields
+    - Duplicate code
+  permissions: "requireAdmin on create/update/delete; public on list"
+  dependencies:
+    - REQ-CATALOG-014
+  error_conditions:
+    - "400 \"Paper type already exists\""
+    - "404 \"Paper type not found: <code>\""
+  edge_conditions:
+    - "No way to \"retire\" a paper type without deleting it outright, since there's no active flag — an inconsistency relative to REQ-CATALOG-010/011/020"
+  offline_behavior: "Fully synced — mobile's sync source with no filtering, unlike the active-only lookups."
+  acceptance_criteria:
+    - "All paper types (including any \"should-be-retired\" ones, since no active flag exists) always appear in GET /api/paper-types"
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: CandidateForAutomation
+  automation_hint: "none found (no dedicated PaperTypeTest among the instructed test files)"
+
+- id: REQ-CATALOG-013
+  feature: Exam Stage CRUD with pattern versioning
+  module: CATALOG
+  system: [Backend, Admin]
+  source_doc: api/CONTENT-CATALOG.md
+  source_section: "POST/PUT/DELETE /api/exam-stages; TICKET-2108"
+  description: >
+    A stage (Prelims/Mains/Tier 1...) belongs to one exam. More than one stage row can share a
+    name if they carry different versionLabels or different effectivity windows
+    (effectiveFrom/effectiveTo) — this is how a pattern changes over time without losing
+    history.
+  business_rule: >
+    effectiveFrom: null means "always applied" (true of every pre-versioning row); effectiveTo:
+    null means "still current"; effectiveTo is inclusive. The response's active flag is
+    server-resolved (whether today falls in the effectivity window) — no client computes this
+    itself. Blank versionLabel normalizes to null (not ""), since the uniqueness constraint
+    keys off coalesce(version_label,'').
+  actor: Admin
+  preconditions:
+    - Referenced exam must exist
+  inputs:
+    - "{ examCode, name, displayOrder, effectiveFrom?, effectiveTo?, versionLabel? }"
+  expected_outputs:
+    - "ExamStageResponse { id, examCode, name, displayOrder, effectiveFrom, effectiveTo, versionLabel, active }"
+  validations:
+    - Unknown exam
+    - "effectiveFrom after effectiveTo rejected"
+    - Duplicate name+versionLabel combination on the same exam
+  permissions: "requireAdmin (create/list/update/delete)"
+  dependencies:
+    - REQ-CATALOG-001
+  error_conditions:
+    - 404 unknown exam
+    - "400 \"'Effective from' cannot be after 'effective to'.\""
+    - "400 duplicate name/version message (varies by whether a version label was given)"
+  edge_conditions:
+    - Two stages with the same name are valid only if they differ in versionLabel or
+      effectivity window
+    - Blank vs null versionLabel must be treated identically for uniqueness
+  offline_behavior: >
+    The admin-only tree read (GET /api/exams/{examCode}/structure) returns every version; only
+    the currently-effective stage syncs to mobile via GET /api/exam-structures
+    (REQ-CATALOG-019).
+  acceptance_criteria:
+    - Creating a second stage with the same name but a different versionLabel succeeds
+    - Creating one with an identical name+versionLabel (including both blank) fails 400
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: PartiallyAutomated
+  automation_hint: >
+    ExamStructureTest covers general tree shape and cascade, not versioning specifics — no
+    dedicated versioning test cited among the instructed test files.
+
+- id: REQ-CATALOG-014
+  feature: Exam Paper CRUD under a stage
+  module: CATALOG
+  system: [Backend, Admin]
+  source_doc: api/CONTENT-CATALOG.md
+  source_section: "POST/PUT/DELETE /api/exam-papers"
+  description: >
+    A paper (one sitting, e.g. "Tier 1 (CBE)") belongs to exactly one stage, with
+    duration/marks/qualifying-status attributes, and references a paper_types code.
+  business_rule: >
+    mockable in the response is not stored on the paper — it's echoed live from the referenced
+    paper_types row (REQ-CATALOG-012), so changing a paper type's mockability retroactively
+    affects every paper using it.
+  actor: Admin
+  preconditions:
+    - Referenced stage must exist
+    - paperType must match an existing paper_types row
+  inputs:
+    - "{ stageId, name, paperType, durationMinutes?, totalMarks?, marksCorrect?, marksWrong?, qualifying, qualifyingPercentage?, displayOrder }"
+  expected_outputs:
+    - "ExamPaperResponse { id, stageId, name, paperType, mockable, durationMinutes, totalMarks, marksCorrect, marksWrong, qualifying, qualifyingPercentage, displayOrder }"
+  validations:
+    - Unknown stageId
+    - Unknown paper type
+    - Duplicate paper name within the same stage (case-insensitive)
+  permissions: "requireAdmin (create/list/update/delete)"
+  dependencies:
+    - REQ-CATALOG-013
+    - REQ-CATALOG-012
+  error_conditions:
+    - "400 \"Unknown stageId\""
+    - "400 \"Unknown paper type\""
+    - "400 \"Paper already exists in this stage\""
+  edge_conditions:
+    - "A paper whose type has mockable: false (e.g. descriptive/interview) is excluded from mobile's Mock Test list even though the paper itself is fully modeled"
+  offline_behavior: >
+    Included in the synced structure tree (current version only, REQ-CATALOG-019); mobile's
+    Mock Test screen lists papers, filtering out non-mockable ones.
+  acceptance_criteria:
+    - Creating two papers with the same name under the same stage is rejected
+    - The same name under different stages is allowed
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: CandidateForAutomation
+  automation_hint: >
+    none found among the instructed test files specific to paper-level create/update/
+    duplicate-name rejection (ExamStructureTest.structure_returnsStagePaperSectionTreeInDisplayOrder
+    covers general tree shape only).
+
+- id: REQ-CATALOG-015
+  feature: Paper Section CRUD with marks/timing inheritance
+  module: CATALOG
+  system: [Backend, Admin, Mobile]
+  source_doc: api/CONTENT-CATALOG.md
+  source_section: "POST/PUT/DELETE /api/paper-sections"
+  description: >
+    A section (e.g. "Quantitative Aptitude", 25 questions) belongs to one paper and references
+    one or more subjects via subjectIds (non-empty required) — this is where
+    section_subjects is written. durationMinutes: null means the section shares the paper's
+    overall time; a non-null value means it's separately (sectionally) timed. Same inheritance
+    pattern for marksCorrect/marksWrong.
+  business_rule: >
+    Inheritance is resolved server-side — the response returns both the raw override and
+    computed effectiveMarksCorrect/effectiveMarksWrong/sectionallyTimed, so no client (admin
+    or mobile) reimplements the fallback rule or can disagree about it.
+  actor: Admin
+  preconditions:
+    - Referenced paper must exist
+    - Every id in subjectIds must exist
+  inputs:
+    - "{ paperId, name, questionCount, durationMinutes?, marksCorrect?, marksWrong?, displayOrder, subjectIds: uuid[] (non-empty) }"
+  expected_outputs:
+    - "PaperSectionResponse { id, paperId, name, questionCount, durationMinutes, marksCorrect, marksWrong, displayOrder, subjects[] }; admin tree read additionally exposes effectiveMarksCorrect/effectiveMarksWrong/sectionallyTimed"
+  validations:
+    - Unknown paperId
+    - Duplicate section name within paper (case-insensitive)
+    - subjectIds must be non-empty
+    - Every subjectId must resolve
+  permissions: "requireAdmin (create/list/update/delete)"
+  dependencies:
+    - REQ-CATALOG-014
+    - REQ-CATALOG-007
+    - REQ-CATALOG-016
+  error_conditions:
+    - "400 \"Unknown paperId\""
+    - "400 \"Section already exists in this paper\""
+    - "400 \"at least one subject is required\""
+    - "400 \"Unknown subjectId\""
+  edge_conditions:
+    - >
+      A paper whose section subjects span multiple sections with an overlapping subject means
+      Mock Test result breakdown (grouped by subject, not section) can diverge from the
+      section boundaries for such papers — disclosed limitation, not a validation error
+  offline_behavior: >
+    Fully synced (current version only) via GET /api/exam-structures; drives mobile Mock
+    Test's Start screen section availability and per-section limit display.
+  acceptance_criteria:
+    - "Creating a section with subjectIds: [] is rejected 400"
+    - "A section left with durationMinutes: null reports sectionallyTimed: false and inherits the paper's effective marks"
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    ExamStructureTest.section_inheritsPaperMarking_whenNotOverridden,
+    section_overridesPaperMarking_whenSet, sectionallyTimed_reflectsWhetherSectionHasItsOwnDuration
+
+- id: REQ-CATALOG-016
+  feature: Section save auto-adds subjects to the exam syllabus (one-way sync)
+  module: CATALOG
+  system: [Backend]
+  source_doc: api/CONTENT-CATALOG.md
+  source_section: "POST/PUT /api/paper-sections business rules; ADR-004"
+  description: >
+    Saving (create or update) a paper section automatically adds its subjectIds to the exam's
+    syllabus (exam_subjects, REQ-CATALOG-005) if not already present. This keeps the syllabus
+    a guaranteed superset of what any section currently references.
+  business_rule: >
+    ADR-004 — the sync is one-directional and additive-only: it never removes. Deleting a
+    section does not retract the earlier addition — the syllabus can end up broader than the
+    current sections reference, which is intentional.
+  actor: Admin (indirect trigger via section save)
+  preconditions:
+    - A valid section save (REQ-CATALOG-015)
+  inputs:
+    - "n/a — implicit side effect of REQ-CATALOG-015's create/update"
+  expected_outputs:
+    - >
+      The exam's syllabus (REQ-CATALOG-005) grows to include the section's subjects if they
+      weren't already present; no separate response field signals this happened
+  validations: []
+  permissions: "same as REQ-CATALOG-015 (requireAdmin)"
+  dependencies:
+    - REQ-CATALOG-015
+    - REQ-CATALOG-005
+  error_conditions: []
+  edge_conditions:
+    - >
+      An admin editing paper structure can silently change syllabus data (visible on the
+      Syllabus screen) without ever visiting that screen. Deleting the last section
+      referencing a subject does not shrink the syllabus back down.
+  offline_behavior: >
+    n/a (server-side data-consistency rule; downstream effect is observable via
+    REQ-CATALOG-005/019's synced data).
+  acceptance_criteria:
+    - Saving a section with a subject not currently in the exam's syllabus results in that
+      subject appearing in a subsequent GET /api/exams/{code}/subjects call
+    - Deleting that section afterward leaves the syllabus unchanged (subject still present)
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: >
+    none found among the instructed test files (verified historically via manual/curl checks
+    per exam-subject-syllabus.md).
+
+- id: REQ-CATALOG-017
+  feature: Exam structure cascade-delete semantics (asymmetric)
+  module: CATALOG
+  system: [Backend, Admin]
+  source_doc: api/CONTENT-CATALOG.md
+  source_section: "DELETE /api/exam-stages/{id}, /api/exam-papers/{id}, /api/exams/{code}"
+  description: >
+    Deleting a stage cascades to its papers and their sections (pure composition, meaningless
+    alone). Deleting a paper cascades to its sections. Deleting an exam does NOT cascade into
+    its stages/structure at all — the delete-exam endpoint has no explicit application-level
+    guard and relies purely on the database's own FK behavior.
+  business_rule: >
+    Deliberate asymmetry — structure levels (stage->paper->section) are pure composition and
+    safe to cascade; an exam with real structure/content underneath should not be silently
+    destroyable in one call.
+  actor: Admin
+  preconditions:
+    - Target row exists
+  inputs:
+    - "none (path id only)"
+  expected_outputs:
+    - "204 No Content on success; for stage/paper deletes, all descendant papers/sections are also gone"
+  validations:
+    - "Existence check (404 if not found)"
+  permissions: requireAdmin
+  dependencies:
+    - REQ-CATALOG-013
+    - REQ-CATALOG-014
+    - REQ-CATALOG-015
+    - REQ-CATALOG-001
+  error_conditions:
+    - "404 \"Stage not found\" / \"Paper not found\" / \"Exam not found\""
+    - >
+      Deleting an exam with existing stages: behavior is untested/undocumented (see
+      _conflicts.md) — likely a raw DB FK-violation 500 rather than a clean 400.
+  edge_conditions:
+    - >
+      Deleting a section does not retract its earlier auto-add to the syllabus
+      (REQ-CATALOG-016) — the one documented non-cascading direction that's intentional,
+      distinct from the exam-delete gap which is undocumented.
+  offline_behavior: "n/a (admin-only mutation; the effect is observable in the next mobile sync of REQ-CATALOG-019)."
+  acceptance_criteria:
+    - Deleting a stage removes its papers and sections with zero orphaned rows (confirmed
+      historically via direct API checks)
+  priority: High
+  status: Active
+  ambiguity: >
+    REQUIRES CLARIFICATION: what actually happens when DELETE /api/exams/{code} is called on
+    an exam that still has stages/subjects — no test or report confirms a clean error path
+    here; this is a real gap worth explicit QA coverage before being trusted in production.
+  automation_status: PartiallyAutomated
+  automation_hint: >
+    ExamStructureTest.deletingStage_cascadesToPapersAndSections (stage/paper/section cascade
+    only — exam-level delete-with-structure is not covered by any instructed test file).
+
+- id: REQ-CATALOG-018
+  feature: Admin structure read returns every pattern version (incl. superseded)
+  module: CATALOG
+  system: [Backend, Admin]
+  source_doc: api/CONTENT-CATALOG.md
+  source_section: "GET /api/exams/{examCode}/structure"
+  description: >
+    The admin-only structure tree read returns every stage version ever entered for an exam
+    (including superseded ones), each flagged active for whether that version is currently in
+    force — so an admin can see and edit pattern history.
+  business_rule: >
+    Necessary because REQ-CATALOG-013's versioning mechanism means multiple stage rows can
+    coexist for one exam/name; the admin needs visibility into all of them to manage history,
+    unlike the public sync read (REQ-CATALOG-019) which must only ever expose the current one.
+  actor: Admin
+  preconditions:
+    - Exam must exist
+  inputs:
+    - "none (path param examCode)"
+  expected_outputs:
+    - "ExamStructureResponse { examCode, examName, syllabusSubjects[], stages[] } — every stage, active computed per-row"
+  validations: []
+  permissions: requireAdmin
+  dependencies:
+    - REQ-CATALOG-013
+    - REQ-CATALOG-014
+    - REQ-CATALOG-015
+    - REQ-CATALOG-005
+  error_conditions:
+    - 404 unknown exam code
+  edge_conditions:
+    - >
+      An exam with multiple stage versions returns all of them in one response — the admin UI
+      must render/group superseded vs current correctly (per exam-structure-phase-b-admin.md,
+      surfaced as "inherited"/"shares paper" labels).
+  offline_behavior: "Admin-only; not synced to mobile."
+  acceptance_criteria:
+    - For an exam with 2+ versions of the same stage, both appear in the response with correct active flags
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: PartiallyAutomated
+  automation_hint: >
+    ExamStructureTest.structure_returnsStagePaperSectionTreeInDisplayOrder (general tree
+    shape; multi-version-specific assertion not confirmed present in this test).
+
+- id: REQ-CATALOG-019
+  feature: Public structure sync read returns only the current/effective version
+  module: CATALOG
+  system: [Backend, Mobile]
+  source_doc: api/CONTENT-CATALOG.md
+  source_section: "GET /api/exam-structures"
+  description: >
+    GET /api/exam-structures (public, no auth) returns every active exam's full structure in
+    one response — mobile's single-request sync source, avoiding one call per exam. It sends
+    only the effective version of each stage (every returned stage's active is hardcoded
+    true) — a superseded pattern can never reach a device. Exams with no structure at all are
+    still included with an empty stages array.
+  business_rule: >
+    A device must never be able to generate a mock test from a stale/superseded pattern —
+    enforced by never sending it in the first place, not by client-side filtering.
+  actor: Anonymous/Student (mobile sync)
+  preconditions: []
+  inputs: []
+  expected_outputs:
+    - "ExamStructureResponse[], one per active exam, each including syllabusSubjects"
+  validations: []
+  permissions: none (public)
+  dependencies:
+    - REQ-CATALOG-001
+    - REQ-CATALOG-013
+    - REQ-CATALOG-005
+  error_conditions:
+    - "none documented (empty structure is a valid, expected shape, not an error)"
+  edge_conditions:
+    - >
+      Structure is synced as a wholesale replace, not upserted, on the mobile side — a
+      server-side deletion of a stage/section must disappear locally too. Subjects/topics
+      themselves stay upserts (since questions reference them and a wipe mid-sync would
+      orphan those rows) — this asymmetry is a mobile-sync implementation detail worth QA
+      awareness, not a backend contract detail.
+  offline_behavior: >
+    Fully offline-available after sync — this is the entire mechanism by which Mock
+    Test/Practice work offline against real exam patterns; the old hardcoded pattern file has
+    been fully deleted in favor of this synced data.
+  acceptance_criteria:
+    - An exam with a superseded-then-replaced stage version never shows the old version in
+      this endpoint's response
+    - "An active exam with zero defined structure still appears with stages: [], not omitted"
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: >
+    none found among the instructed test files specifically asserting "superseded version
+    excluded from public read" (verified historically on-device per
+    exam-structure-phase-c-mobile.md).
+
+- id: REQ-CATALOG-020
+  feature: "Exam Badges: read-only vocabulary, active/all split, no CRUD"
+  module: CATALOG
+  system: [Backend, Admin, Mobile]
+  source_doc: api/CONTENT-CATALOG.md
+  source_section: "ExamBadgeController"
+  description: >
+    The badge vocabulary (editorial tags like "New"/"Popular" an admin picks when editing an
+    exam) is read-only via the API — there's no CRUD screen or endpoint; adding a badge
+    requires a migration. GET /api/exam-badges (public, active-only) is what mobile resolves
+    an exam's badge code against; GET /api/exam-badges/all (admin) feeds the exam-form
+    dropdown including inactive badges.
+  business_rule: >
+    Seeded content that changes rarely — deliberately not given the same admin-editable CRUD
+    treatment as difficulty levels/paper types.
+  actor: "Anonymous/Student (active list); Admin (all list)"
+  preconditions: []
+  inputs: []
+  expected_outputs:
+    - "ExamBadgeResponse { code, label, displayOrder, color, colorBg, active }, ordered by displayOrder"
+  validations: []
+  permissions: "none on active list; requireAdmin on all-list"
+  dependencies:
+    - REQ-CATALOG-002
+  error_conditions: []
+  edge_conditions:
+    - >
+      An exam's badge value that doesn't match any active badge row would presumably fail to
+      resolve visually on mobile — no documented fallback behavior found.
+  offline_behavior: >
+    Active badges fully synced — mobile resolves each exam's badge code against this local
+    list.
+  acceptance_criteria:
+    - An inactive badge appears in /all but not in the active list
+    - An exam form (admin) sources its badge dropdown from /all
+  priority: Low
+  status: Active
+  ambiguity: >
+    REQUIRES CLARIFICATION: no documented behavior for what mobile/admin render when an
+    exam's badge code doesn't resolve against any badge row (e.g. after a badge is later
+    deactivated/removed) — worth a dedicated edge-case test.
+  automation_status: CandidateForAutomation
+  automation_hint: "none found (no dedicated ExamBadgeTest among the instructed test files)"
+
+- id: REQ-CATALOG-021
+  feature: "Cross-cutting: public-vs-admin auth split across the whole catalog"
+  module: CATALOG
+  system: [Backend]
+  source_doc: api/README.md
+  source_section: "Conventions; api/CONTENT-CATALOG.md opening summary; ADR-009"
+  description: >
+    Every catalog endpoint mobile calls for offline content sync is deliberately
+    public/unauthenticated: GET /api/exams, /api/subjects, /api/topics,
+    /api/difficulty-levels, /api/paper-types, /api/exam-badges, /api/exam-structures, and GET
+    /api/exams/discover. Every write, every "including inactive" admin variant, and the
+    single-exam/exam-topics/structure-editor reads require an admin bearer token via
+    requireAdmin.
+  business_rule: >
+    ADR-009 — the public/admin split was decided endpoint-by-endpoint by checking what the
+    mobile client actually calls, not by locking down everything by default (ADR-003: no
+    global Spring Security filter chain, checks are opt-in per method).
+  actor: "Anonymous/Student/Admin, varies per endpoint"
+  preconditions: []
+  inputs:
+    - "Authorization: <opaque token> header where required"
+  expected_outputs: []
+  validations: []
+  permissions: "As enumerated per-requirement above; this is the aggregate rule"
+  dependencies:
+    - REQ-AUTH-007
+    - REQ-AUTH-008
+    - REQ-AUTH-009
+  error_conditions:
+    - 401 missing/invalid/expired token on a requireAdmin endpoint
+    - 403 valid token but non-admin role
+  edge_conditions:
+    - >
+      An endpoint with neither check is genuinely public by design, not an oversight — worth
+      distinguishing from a missing-check bug during any security-focused test pass.
+  offline_behavior: >
+    This split is precisely what makes offline-first mobile sync possible while signed out —
+    every read a signed-out student's app needs is on the public list above.
+  acceptance_criteria:
+    - Every endpoint in the public list above returns 200 with no Authorization header
+    - Every write endpoint and every explicitly admin-gated read returns 401 with no header
+      and 403 with a valid non-admin token
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: PartiallyAutomated
+  automation_hint: >
+    Covered implicitly across each entity's own CRUD test class (each exercises its
+    admin-gated write with a valid admin token); explicit 401/403-on-missing/non-admin-token
+    assertions were not directly confirmed present in every instructed test file's method
+    names — worth a dedicated cross-cutting auth-matrix scenario at Phase 2.
+
+- id: REQ-CATALOG-022
+  feature: Mobile — entire catalog syncs for full offline browsing and mock-test generation
+  module: CATALOG
+  system: [Mobile]
+  source_doc: reports/05-exam-structure-model/exam-structure-phase-c-mobile.md
+  source_section: "full report"
+  description: >
+    All public catalog data (active exams, subjects, topics, active languages, active
+    difficulty levels, all paper types, active badges, current-version exam structure incl.
+    syllabus) syncs to local SQLite as part of writeReferenceData(), making the entire catalog
+    available for offline Practice browsing, Levels screen, and Mock Test generation with zero
+    live network dependency once synced.
+  business_rule: >
+    Nothing exam-domain is hardcoded on the client — the app renders whatever reference data
+    was synced (e.g. a new difficulty level or paper type appears correctly styled with no app
+    update), which was explicitly proven rather than merely asserted.
+  actor: "Mobile app (any signed-out or signed-in student)"
+  preconditions:
+    - At least one successful reference-data sync has completed
+  inputs: []
+  expected_outputs:
+    - >
+      Local tables for exams/subjects/topics/languages/difficulty_levels/paper_types/
+      exam_stages/exam_papers/paper_sections/section_subjects/exam_subjects, populated/
+      replaced on each reference sync
+  validations: []
+  permissions: "n/a (public data)"
+  dependencies:
+    - REQ-CATALOG-001
+    - REQ-CATALOG-007
+    - REQ-CATALOG-008
+    - REQ-CATALOG-010
+    - REQ-CATALOG-011
+    - REQ-CATALOG-012
+    - REQ-CATALOG-019
+    - REQ-CATALOG-005
+  error_conditions:
+    - >
+      A sync that never completes leaves the device on stale/empty reference data
+      (out-of-scope sync-mechanics detail, noted only as a dependency risk)
+  edge_conditions:
+    - >
+      An active exam synced with an empty stages array (no structure yet) causes Practice to
+      fall back to showing all subjects rather than none, and Mock Test to be unable to build
+      a test for it — both intentional fallback behaviors, not bugs.
+  offline_behavior: >
+    This requirement IS the offline behavior statement for the whole module — everything
+    documented above as "synced"/"offline-available" is delivered through this mechanism.
+  acceptance_criteria:
+    - After a full sync and going fully offline, Practice's subject list, Levels screen, and
+      Mock Test's paper list all render correctly using only local data
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: >
+    none found — no mobile automated test runner exists in this project; verified historically
+    via on-device/emulator checks only.
+
+- id: REQ-CATALOG-023
+  feature: "Known limitation: per-section timers not enforced during a live mock test"
+  module: CATALOG
+  system: [Mobile]
+  source_doc: reports/05-exam-structure-model/exam-structure-phase-c-mobile.md
+  source_section: "\"Known limitation, stated plainly\""
+  description: >
+    A sectionally-timed paper's total duration is computed correctly (sum of its section
+    limits, REQ-CATALOG-015) and the Start screen displays each section's own limit, but the
+    actual test-taking screen runs one overall countdown, not per-section enforcement with
+    locking/auto-advance at each section boundary.
+  business_rule: >
+    This is a deliberate, disclosed partial — true sectional enforcement (section locking +
+    auto-advance) was explicitly scoped out as larger work.
+  actor: "Mobile app (student taking a sectionally-timed mock test)"
+  preconditions:
+    - "An active, mockable paper with sectionallyTimed: true on at least one section exists"
+  inputs: []
+  expected_outputs:
+    - "Correct total duration and correct per-section limit display; NO actual per-section lock/auto-advance behavior"
+  validations: []
+  permissions: n/a
+  dependencies:
+    - REQ-CATALOG-015
+  error_conditions: []
+  edge_conditions:
+    - >
+      A student could spend the entire test's time on one section of a sectionally-timed
+      paper, which a real exam would not permit — this is the concrete, testable consequence
+      of the gap.
+  offline_behavior: >
+    Same as REQ-CATALOG-022 — this behavior (or lack thereof) is present in both online and
+    offline mock-test-taking.
+  acceptance_criteria:
+    - >
+      Do NOT write a test asserting sections lock at their time boundary — that is
+      confirmed-not-implemented. A correct test instead asserts the Start screen shows
+      accurate per-section limits and the total countdown matches their sum.
+  priority: Medium
+  status: Active
+  ambiguity: >
+    REQUIRES CLARIFICATION: whether true sectional enforcement is still planned/prioritized
+    anywhere — not mentioned in memory/STATUS.md's "Next up" list as of the latest entries
+    reviewed, so treat as an indefinitely-deferred gap rather than an imminent fix.
+  automation_status: ManualOnly
+  automation_hint: >
+    none found — and none should exist asserting enforcement, since it's confirmed not built.
+
+- id: REQ-CATALOG-024
+  feature: Admin nested structure editor — inherited-value display and cascade-delete confirmation
+  module: CATALOG
+  system: [Admin]
+  source_doc: reports/05-exam-structure-model/exam-structure-phase-b-admin.md
+  source_section: "full report"
+  description: >
+    The Stage -> Paper -> Section editor (ExamStructure.jsx) surfaces two facts that are
+    otherwise invisible in raw data: a section's timing reads "shares paper" or its own
+    minutes (never a blank cell); and marking shows the resolved value with an "inherited"
+    note when the section doesn't override it. Delete actions cascade with a confirming
+    dialog, and each entity form uses the parent's values as placeholders (e.g. "inherits 2")
+    to make the fallback obvious while editing.
+  business_rule: >
+    Exam-domain data is fully admin-editable (nothing hardcoded); the editor's own
+    structure/sidebar/routing stays in code, per the phase's explicit scope line.
+  actor: Admin
+  preconditions:
+    - "Admin signed in, viewing /exams/:examCode/structure"
+  inputs:
+    - "UI form interactions (create/edit/delete at stage/paper/section level)"
+  expected_outputs:
+    - >
+      Correct inherited-vs-overridden display; a derived "N Q in sections" count per paper so
+      an author can see whether section question counts add up to the paper's intended total
+  validations:
+    - >
+      Client-side MAX_LENGTHS enforcement (mirrors DB column widths, since the backend
+      returns an unmapped 500, not a 400, when exceeded — a real gap, see _conflicts.md) plus
+      whatever server-side validation is echoed back from REQ-CATALOG-013 through 017
+  permissions: "Admin-console route, gated by the same admin auth as the underlying API (REQ-CATALOG-021)"
+  dependencies:
+    - REQ-CATALOG-013
+    - REQ-CATALOG-014
+    - REQ-CATALOG-015
+    - REQ-CATALOG-017
+    - REQ-CATALOG-018
+  error_conditions:
+    - >
+      A raw 500 (not a friendly message) if a submitted field exceeds a DB column width the
+      client-side MAX_LENGTHS list doesn't correctly mirror
+  edge_conditions:
+    - >
+      Deleting a stage/paper through the UI must reflect the true cascade (REQ-CATALOG-017) —
+      confirmed historically via a live create->delete->verify-zero-orphans pass
+  offline_behavior: "n/a — Admin console has no offline mode."
+  acceptance_criteria:
+    - "A section left without its own duration/marks shows \"shares paper\"/\"inherited,\" not a blank"
+    - Deleting a stage through the UI leaves zero orphaned papers/sections
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: >
+    none found (frontend-only; no admin automated test suite exists in this project).

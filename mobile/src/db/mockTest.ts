@@ -3,7 +3,7 @@ import { db } from "./client";
 import { mockTestAttemptResults, mockTestAttempts, questionExams, questions, questionTranslations } from "./schema";
 import type { SyncedPaper } from "./examStructure";
 import { trackEvent } from "../telemetry/analytics";
-import { isIndexBasedType, resolveCorrectIndex } from "./answerResolution";
+import { isIndexBasedType, resolveCorrectIndex } from "@sarkaritaiyaari/core/evaluation";
 import { packRandomSample } from "./questionGroupAssembly";
 
 /**

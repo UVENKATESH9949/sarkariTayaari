@@ -1,6 +1,6 @@
 import { db } from "../db/client";
 import { clearResumeState, getResumeState, setLastSyncedAt, setResumeState } from "../db/syncMeta";
-import { syncQuestions } from "../api/questions";
+import { syncQuestions } from "@sarkaritaiyaari/core/api";
 import { writeLanguages, writeReferenceData, upsertQuestionsBatch } from "./writeQuestions";
 import { downloadPendingMedia } from "./mediaDownload";
 import { captureError } from "../telemetry/analytics";

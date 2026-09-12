@@ -1,6 +1,8 @@
 import { inArray, sql } from "drizzle-orm";
 import { db } from "../db/client";
 import {
+  aiContent,
+  clientConfigAiTasks,
   difficultyLevels,
   examBadges,
   examGuideCareerPosts,
@@ -31,12 +33,13 @@ import {
   topicPrerequisites,
   topics,
 } from "../db/schema";
-import { ApiError } from "../api/client";
-import { getAllExamGuides } from "../api/examGuide";
-import { getLanguages, type QuestionResponse } from "../api/questions";
-import { syncQuestionGroups } from "../api/questionGroups";
-import { deleteLocalMediaFiles, deleteMediaFileAtUri, downloadPendingMedia } from "./mediaDownload";
 import {
+  ApiError,
+  getAiContentSync,
+  getAllExamGuides,
+  getClientConfig,
+  getLanguages,
+  syncQuestionGroups,
   getDifficultyLevels,
   getExamBadges,
   getExamStructures,
@@ -45,8 +48,10 @@ import {
   getPaperTypes,
   getSubjects,
   getTopics,
+  type QuestionResponse,
   type TopicResponse,
-} from "../api/reference";
+} from "@sarkaritaiyaari/core/api";
+import { deleteLocalMediaFiles, deleteMediaFileAtUri, downloadPendingMedia } from "./mediaDownload";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -217,6 +222,10 @@ export async function writeReferenceData() {
   await writeTopicIntelligence(examList.map((exam) => exam.code));
   // Depends on the exam rows above (examGuideCycles.examCode references exams.code).
   await writeExamGuides();
+  // No FK to questions/topics locally (same reasoning as questionGroupId elsewhere in this
+  // file) — safe to run any time relative to the question-page loop.
+  await writeAiContent();
+  await writeClientConfig();
   // Groups sync before question pages (both initial and delta sync call writeReferenceData
   // before their own question-page loop) so a question's question_group_id already resolves
   // locally by the time that question's own page arrives — TASK-2301 Phase P3.
@@ -479,6 +488,67 @@ async function writeExamGuides() {
             url: sql`excluded.url`,
           },
         });
+    }
+  });
+}
+
+/**
+ * TASK-2701 Phase 3 — the local cache `AI_ARCHITECTURE.md` §4 calls Tier 2. Full replace, same
+ * reasoning as writeExamGuides: content is admin-reviewed and currently small, with nothing
+ * locally referencing a row by id. A row's own `published` flag (not row presence) is what a
+ * reader checks — see AiContentSyncEntry's own doc comment for why a DRAFT/unpublished row
+ * still needs to sync (so an already-cached device can stop showing it).
+ */
+async function writeAiContent() {
+  let entries: Awaited<ReturnType<typeof getAiContentSync>>;
+  try {
+    entries = await getAiContentSync();
+  } catch {
+    return;
+  }
+
+  await db.transaction(async (tx) => {
+    await tx.delete(aiContent);
+    if (entries.length > 0) {
+      await tx.insert(aiContent).values(
+        entries.map((entry) => ({
+          id: entry.id,
+          taskId: entry.taskId,
+          subjectId: entry.questionId ?? entry.topicId ?? "",
+          languageCode: entry.languageCode,
+          published: entry.published,
+          payloadJson: entry.payload,
+          updatedAt: new Date(entry.updatedAt),
+        })),
+      );
+    }
+  });
+}
+
+/**
+ * TASK-2701 Phase 4 — the local cache of `GET /api/client-config`'s per-task AI enable/disable
+ * flags. Full replace, same reasoning as writeAiContent: small, admin-curated, "unknown means
+ * off" is preserved by the server always sending every known AiTaskId (see AiTaskFlagService),
+ * so a row's mere presence with `enabled: false` and an absent row both read the same way here.
+ */
+async function writeClientConfig() {
+  let config: Awaited<ReturnType<typeof getClientConfig>>;
+  try {
+    config = await getClientConfig();
+  } catch {
+    return;
+  }
+
+  const entries = Object.entries(config.aiTasks);
+  await db.transaction(async (tx) => {
+    await tx.delete(clientConfigAiTasks);
+    if (entries.length > 0) {
+      await tx.insert(clientConfigAiTasks).values(
+        entries.map(([taskId, enabled]) => ({
+          taskId,
+          enabled: enabled ?? false,
+        })),
+      );
     }
   });
 }

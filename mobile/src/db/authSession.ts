@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db } from "./client";
 import { authSession } from "./schema";
-import type { AuthResult, AuthUser } from "../api/auth";
+import type { AuthResult, AuthUser } from "@sarkaritaiyaari/core/api";
 
 const KEY = "current";
 

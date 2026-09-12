@@ -4,6 +4,8 @@ import { StatusBar } from "expo-status-bar";
 import { Text, View } from "react-native";
 import { useMigrations } from "drizzle-orm/expo-sqlite/migrator";
 import * as Sentry from "@sentry/react-native";
+import { configureApi } from "@sarkaritaiyaari/core/api";
+import { API_BASE_URL } from "../api/config";
 import { db } from "../db/client";
 import migrations from "../db/migrations/migrations";
 import { SyncProvider, useSyncStatus } from "../sync/SyncContext";
@@ -30,6 +32,13 @@ Sentry.init({
   dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
   environment: __DEV__ ? "development" : "production",
 });
+
+// Also module scope, and for the same reason: the shared API client in
+// @sarkaritaiyaari/core deliberately has no default base URL — mobile derives one from Expo's
+// hostUri, web reads a Vite env var — so it must be told before the first request. Doing it
+// here rather than as an import side effect keeps it visible; expo-router loads this file
+// before any screen, so nothing can call the API ahead of it.
+configureApi({ baseUrl: API_BASE_URL });
 
 function RootLayout() {
   const { success, error } = useMigrations(db, migrations);

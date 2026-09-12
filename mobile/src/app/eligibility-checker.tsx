@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { Platform, Pressable, ScrollView, Text, TextInput, View, StyleSheet } from "react-native";
-import type { ExamGuide } from "../api/examGuide";
+import type { ExamGuide } from "@sarkaritaiyaari/core/api";
 import { getExamGuideHybrid } from "../data/examGuideData";
 import { useHybridMode } from "../data/hybridSource";
 import { Card } from "../ui/Card";

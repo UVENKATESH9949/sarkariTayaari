@@ -1,0 +1,1333 @@
+# QUESTIONS module — requirement repository
+#
+# Scope: exactly what api/QUESTIONS.md documents — question CRUD (with bilingual
+# translations), the content-sync/live/counts/mock-sample endpoints, bulk import/delete,
+# image upload, duplicate detection, question-type reference data.
+# Explicitly NOT chased: api/QUESTION-GROUPS.md, api/QUESTION-INTELLIGENCE.md,
+# api/EXAM-INTELLIGENCE.md, api/WEAKNESS-RADAR.md, api/AI-ADMIN.md — see _conflicts.md and
+# the "Explicitly excluded" notes on individual requirements below for exactly where the
+# line was drawn (e.g. PYQ provenance FIELDS are in scope since QUESTIONS.md documents them
+# as core CRUD; what those fields feed into (Epic L trend/priority) is not).
+#
+# A requirement here represents the INTENDED/documented behavior, not necessarily whatever
+# the code currently does if the two diverge — see the `ambiguity` field per requirement.
+
+- id: REQ-QUESTIONS-001
+  feature: Create a question (admin authoring)
+  module: QUESTIONS
+  system: [Backend, Admin]
+  source_doc: api/QUESTIONS.md
+  source_section: "POST /api/questions"
+  description: >
+    An admin can create a new question with its language-independent metadata (topic,
+    difficulty, exam codes, premium flag, PYQ provenance) plus at least one language
+    translation.
+  business_rule: >
+    topicId must reference an existing topic; difficulty must reference an existing
+    difficulty_levels code; every entry in examCodes (at least one required) must already
+    exist; translations must include at least one entry and must include the root language
+    "en". A content fingerprint (MD5 of lowercased, alphanumeric-only English text) is
+    computed before save and duplicate detection runs immediately after save.
+  actor: Admin
+  preconditions:
+    - Caller holds a valid admin bearer token
+    - "Referenced topic/difficulty/exam codes/language codes/sourcePaperId (if set) already exist"
+  inputs:
+    - "questionType (opt, default SINGLE_CHOICE)"
+    - correctAnswer
+    - answerKey
+    - contentStructure
+    - "questionGroupId (opt), groupOrder (opt)"
+    - "topicId (req), difficulty (req), examCodes (req, >=1)"
+    - "premium, pyq, pyqYear, pyqShift, sourcePaperId, questionNumber, sourceUrl"
+    - "translations (req, >=1, must include \"en\")"
+  expected_outputs:
+    - >
+      201 Created with a full QuestionResponse. If the fingerprint collides with an existing
+      question, duplicateOfQuestionIds is populated with the colliding question's id, but the
+      write still succeeds.
+  validations:
+    - Missing root-language translation -> 400
+    - Unknown topicId/difficulty/exam code/language code/sourcePaperId -> 400
+  permissions: "admin (requireAdmin)"
+  dependencies:
+    - REQ-CATALOG-007
+    - REQ-CATALOG-008
+    - REQ-CATALOG-011
+    - REQ-CATALOG-001
+    - REQ-CATALOG-010
+  error_conditions:
+    - 401 not signed in
+    - 403 not admin
+    - 400 for any of the validation failures above
+  edge_conditions:
+    - A fingerprint collision does not block creation, only annotates the response
+  offline_behavior: "N/A — admin-only, requires network/admin session."
+  acceptance_criteria:
+    - >
+      Creating with a valid payload returns 201 with correctly populated
+      subjectId/subjectName/topicId/topicName/examCodes (sorted) fields
+    - A payload missing an "en" translation is rejected with 400
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    QuestionCrudTest.createThenGet_returnsSameData, QuestionCrudTest.create_missingRootLanguage_returns400,
+    QuestionCrudTest.create_unknownLanguageCode_returns400, QuestionCrudTest.create_unknownExamCode_returns400
+
+- id: REQ-QUESTIONS-002
+  feature: "Multi-type answerKey/contentStructure validation per questionType"
+  module: QUESTIONS
+  system: [Backend, Admin]
+  source_doc: api/QUESTIONS.md
+  source_section: >
+    POST /api/questions ("answerKey shape by type", "contentStructure shape by type",
+    "translations[].content shape by type")
+  description: >
+    A question's questionType (one of 9 authorable codes: SINGLE_CHOICE, MULTIPLE_CHOICE,
+    TRUE_FALSE, ASSERTION_REASON, STATEMENT_COMBINATION, NUMERIC, FILL_BLANK, MATCH,
+    ORDERING) determines the required shape of answerKey, contentStructure, and each
+    translation's options/content. questionType and contentStructure are immutable after
+    creation.
+  business_rule: >
+    SINGLE_CHOICE/ASSERTION_REASON/STATEMENT_COMBINATION derive answerKey server-side from
+    correctAnswer (a letter A-D or matching option text) — answerKey sent by the client is
+    ignored for these three. MULTIPLE_CHOICE requires {correctOptions: number[]} (non-empty,
+    0-based); TRUE_FALSE requires {correctBoolean}; NUMERIC requires {correctValue, tolerance}
+    (tolerance defaults 0.0); FILL_BLANK requires {acceptedAnswers: string[]} (>=1,
+    case-insensitive/trimmed match); MATCH requires contentStructure.{leftKeys,rightKeys}
+    (>=2 distinct each) + answerKey.correctMapping covering every leftKey; ORDERING requires
+    contentStructure.itemKeys (>=2 distinct) + answerKey.correctOrder (a permutation). Server
+    always derives a display correctAnswer string for the 6 non-index types. options must be
+    exactly 4 for the 4 option-set types and an empty array [] (not null/omitted) for the
+    other 5. translations[].content is required/shape-validated only for ASSERTION_REASON,
+    STATEMENT_COMBINATION, MATCH, ORDERING.
+  actor: Admin
+  preconditions:
+    - "questionType is one of the 9 seeded, is_authoring_enabled=true types"
+  inputs:
+    - "as above, varying by questionType"
+  expected_outputs:
+    - >
+      QuestionResponse with server-computed correctAnswer, answerKey, and contentStructure
+      matching the type's rules
+  validations:
+    - "Blank correctAnswer, wrong option count/shape, missing/invalid answerKey for the type"
+    - "Missing/invalid content for ASSERTION_REASON/STATEMENT_COMBINATION/MATCH/ORDERING"
+    - "questionType not is_authoring_enabled -> all 400"
+  permissions: admin
+  dependencies:
+    - REQ-QUESTIONS-001
+    - REQ-QUESTIONS-025
+  error_conditions:
+    - 400 for any type/shape mismatch described above
+  edge_conditions:
+    - "questionType/contentStructure cannot be changed via PUT — no field exists on UpdateQuestionRequest"
+  offline_behavior: "N/A (write path)."
+  acceptance_criteria:
+    - "Creating a MATCH question with correctMapping missing a leftKey is rejected 400"
+    - "Creating a NUMERIC question with omitted tolerance defaults to 0.0 server-side"
+  priority: High
+  status: Active
+  ambiguity: >
+    null — QUESTIONS.md documents this as current, normal CRUD behavior; deliberately not
+    chased further into the separate multi-type-architecture evaluator/rendering docs, per scope.
+  automation_status: CandidateForAutomation
+  automation_hint: >
+    none found in the Questions-module CRUD/Bulk/Sync test classes read; type-specific
+    evaluator tests live in WaveAOptionSetTypesTest/WaveBFreeInputTypesTest/
+    QuestionTypeFoundationTest, which are explicitly out of this module's extraction scope.
+
+- id: REQ-QUESTIONS-003
+  feature: Bilingual/multi-language translation management
+  module: QUESTIONS
+  system: [Backend, Admin]
+  source_doc: api/QUESTIONS.md
+  source_section: "PUT /api/questions/{id}/translations/{lang}"
+  description: >
+    A question's text/options/explanation/content are managed per language via a dedicated
+    endpoint, separate from metadata updates, so any number of languages (not just en/hi) can
+    be added without a schema change.
+  business_rule: >
+    Editing the root language ("en") recomputes the content fingerprint, invalidating any
+    prior duplicate-detection result based on old wording. Any translation write bumps
+    updatedAt on the parent question — this is what makes a translation-only edit visible on
+    the next delta /sync.
+  actor: Admin
+  preconditions:
+    - Question exists
+    - Language code exists in languages
+  inputs:
+    - "{questionText, options, explanation, content} for path params {id}, {lang}"
+  expected_outputs:
+    - "Full QuestionResponse (all languages) with updatedAt bumped"
+  validations:
+    - "Unknown language code -> 400"
+    - "Wrong option count/shape for the question's type -> 400"
+    - "Invalid/missing content for ASSERTION_REASON/STATEMENT_COMBINATION -> 400"
+  permissions: admin
+  dependencies:
+    - REQ-QUESTIONS-001
+    - REQ-QUESTIONS-002
+    - REQ-CATALOG-010
+  error_conditions:
+    - "401, 403, 404 unknown question id, 400 as above"
+  edge_conditions:
+    - "Adding a new language doesn't remove existing ones (upsert, not replace-all)"
+  offline_behavior: >
+    Translated content is exactly what syncs to devices via /sync//live — a signed-out
+    student's bilingual reading experience depends entirely on this data being correctly
+    populated per language.
+  acceptance_criteria:
+    - Adding a Hindi translation to an English-only question preserves the English
+      translation and appears in the next GET
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "QuestionCrudTest.upsertTranslation_addsNewLanguageWithoutRemovingExisting"
+
+- id: REQ-QUESTIONS-004
+  feature: PYQ provenance fields auto-clear when pyq=false
+  module: QUESTIONS
+  system: [Backend]
+  source_doc: api/QUESTIONS.md
+  source_section: "POST /api/questions and PUT /api/questions/{id} \"Business rules\""
+  description: >
+    On both create and update, if pyq=false, the server force-clears
+    pyqYear/pyqShift/sourcePaperId/questionNumber server-side regardless of what was sent —
+    only sourceUrl survives.
+  business_rule: "Prevents orphaned/inconsistent PYQ metadata on a question not actually flagged as a previous-year-question."
+  actor: "Admin (indirectly — system-enforced on every write)"
+  preconditions: []
+  inputs:
+    - "pyq: false plus any of the four provenance fields set"
+  expected_outputs:
+    - "Response reflects pyqYear/pyqShift/sourcePaperId/questionNumber all null even if non-null values were sent"
+  validations:
+    - "pyqYear range 1950-2100 when pyq=true"
+    - "pyqShift max 30 chars"
+    - "sourcePaperId must reference an existing exam paper if set"
+    - "questionNumber >= 1"
+  permissions: admin
+  dependencies:
+    - REQ-QUESTIONS-001
+    - REQ-QUESTIONS-005
+  error_conditions:
+    - "none beyond standard create/update errors; this is a silent server-side correction, not a validation failure"
+  edge_conditions:
+    - "Toggling pyq from true->false in an update wipes previously-set provenance on that same call"
+  offline_behavior: "N/A"
+  acceptance_criteria:
+    - "Sending pyq=false with pyqYear=2023 results in a stored/response pyqYear: null"
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: CandidateForAutomation
+  automation_hint: "none found"
+
+- id: REQ-QUESTIONS-005
+  feature: Update question metadata (PUT)
+  module: QUESTIONS
+  system: [Backend, Admin]
+  source_doc: api/QUESTIONS.md
+  source_section: "PUT /api/questions/{id}"
+  description: >
+    Admin updates a question's metadata (topic, difficulty, exam codes, premium, PYQ fields,
+    group membership) without touching translated text.
+  business_rule: >
+    questionType and contentStructure are immutable — no field for either exists on the
+    update request; correctAnswer/answerKey are re-resolved using the question's existing,
+    unchanging type. questionGroupId/groupOrder ARE mutable (surface-level note only — full
+    group semantics are out of scope). Bumps updatedAt, making the change visible on the next
+    delta /sync.
+  actor: Admin
+  preconditions:
+    - "Question with {id} exists"
+  inputs:
+    - "Same shape as create minus translations, questionType, contentStructure"
+  expected_outputs:
+    - Updated QuestionResponse
+  validations:
+    - "Unknown topicId/difficulty/exam code/sourcePaperId -> 400"
+    - "Invalid answerKey for the question's (unchanged) type -> 400"
+  permissions: admin
+  dependencies:
+    - REQ-QUESTIONS-001
+  error_conditions:
+    - "401, 403, 404 unknown question id, 400 as above"
+  edge_conditions:
+    - "Attempting to send questionType in the update payload has no field to bind to and is silently ignored (no error, no effect)"
+  offline_behavior: "N/A (write path); resulting updatedAt bump is what a device's delta sync detects."
+  acceptance_criteria:
+    - "Updating topicId to a new valid topic changes topicName/topicId in the response and bumps updatedAt"
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "QuestionCrudTest.update_changesCoreFields"
+
+- id: REQ-QUESTIONS-006
+  feature: Read a single question (admin)
+  module: QUESTIONS
+  system: [Backend, Admin]
+  source_doc: api/QUESTIONS.md
+  source_section: "GET /api/questions/{id}"
+  description: "Fetch one question by id, including all its translations, for admin CRUD."
+  business_rule: >
+    duplicateOfQuestionIds is always null on this endpoint (only create populates it). This
+    endpoint does not distinguish soft-deleted from active — a soft-deleted id is still
+    returned (fully populated), not 404.
+  actor: Admin
+  preconditions: []
+  inputs:
+    - "path {id}"
+  expected_outputs:
+    - QuestionResponse
+  validations:
+    - "none beyond id existence"
+  permissions: admin
+  dependencies:
+    - REQ-QUESTIONS-001
+  error_conditions:
+    - "401, 403, 404 if id doesn't exist at all (including never having existed)"
+  edge_conditions:
+    - "A soft-deleted question returns 200 with deleted: true, not 404"
+  offline_behavior: "N/A"
+  acceptance_criteria:
+    - "GET on a soft-deleted id returns 200 with deleted: true and full content"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    QuestionCrudTest.createThenGet_returnsSameData, QuestionCrudTest.delete_softDeletes_stillReadableAsDeleted
+
+- id: REQ-QUESTIONS-007
+  feature: Paginated/filterable question list (admin)
+  module: QUESTIONS
+  system: [Backend, Admin]
+  source_doc: api/QUESTIONS.md
+  source_section: "GET /api/questions"
+  description: >
+    Paginated, filterable list for the admin question-bank table, filterable by examCode,
+    subjectId, topicId, difficulty, with standard Spring Pageable params.
+  business_rule: >
+    Does NOT exclude soft-deleted rows — admins need to see and restore deleted questions.
+    This is the deliberate opposite of /live's exclusion rule.
+  actor: Admin
+  preconditions: []
+  inputs:
+    - "examCode, subjectId, topicId, difficulty (all optional), page/size/sort"
+  expected_outputs:
+    - "Page<QuestionResponse>"
+  validations:
+    - "none beyond standard pagination binding"
+  permissions: admin
+  dependencies:
+    - REQ-CATALOG-001
+    - REQ-CATALOG-007
+    - REQ-CATALOG-008
+    - REQ-QUESTIONS-001
+  error_conditions:
+    - "401, 403"
+  edge_conditions:
+    - "Filtering by an exam code with zero matching questions returns an empty page, not an error"
+  offline_behavior: "N/A"
+  acceptance_criteria:
+    - "Filtering by a known examCode returns only that exam's questions, soft-deleted ones included"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "QuestionCrudTest.list_filtersByExamCode"
+
+- id: REQ-QUESTIONS-008
+  feature: Soft-delete a single question (tombstone)
+  module: QUESTIONS
+  system: [Backend, Admin, Mobile]
+  source_doc: api/QUESTIONS.md
+  source_section: "DELETE /api/questions/{id}; system-design/03 \"What changed includes deletions\""
+  description: "Deleting a question sets deleted=true and bumps updatedAt; the row is never physically removed."
+  business_rule: >
+    This is the mechanism that makes the deletion visible as a tombstone on the next /sync —
+    a hard/physical delete would silently strand any device that already downloaded the
+    question.
+  actor: Admin
+  preconditions:
+    - Question exists
+  inputs:
+    - "path {id}"
+  expected_outputs:
+    - "204 No Content"
+  validations: []
+  permissions: admin
+  dependencies:
+    - REQ-QUESTIONS-012
+  error_conditions:
+    - "401, 403, 404 unknown question id"
+  edge_conditions:
+    - "Deleting an already-deleted question is not specifically documented as idempotent-safe vs. erroring — worth clarifying (see _conflicts.md)"
+  offline_behavior: >
+    A device that already has this question locally must remove it on its next delta sync
+    upon seeing deleted: true.
+  acceptance_criteria:
+    - "DELETE returns 204; a subsequent GET on the same id shows deleted: true"
+  priority: Critical
+  status: Active
+  ambiguity: >
+    REQUIRES CLARIFICATION: behavior of deleting an already-soft-deleted question is not
+    explicitly stated (idempotent 204 vs error) — not testable from the doc alone.
+  automation_status: PartiallyAutomated
+  automation_hint: "QuestionCrudTest.delete_softDeletes_stillReadableAsDeleted"
+
+- id: REQ-QUESTIONS-009
+  feature: Bulk soft-delete many questions
+  module: QUESTIONS
+  system: [Backend, Admin]
+  source_doc: api/QUESTIONS.md
+  source_section: "POST /api/questions/bulk-delete"
+  description: "Soft-delete many questions in one request by id list."
+  business_rule: "Same soft-delete/tombstone mechanism as single DELETE. Unknown ids are silently ignored — not counted, no error."
+  actor: Admin
+  preconditions:
+    - "ids non-empty array"
+  inputs:
+    - "{ids: uuid[]}"
+  expected_outputs:
+    - "{deletedCount: number} reflecting only ids that actually existed"
+  validations:
+    - "Empty ids array presumably rejected (non-empty required per doc, exact error not specified — see _conflicts.md)"
+  permissions: admin
+  dependencies:
+    - REQ-QUESTIONS-008
+  error_conditions:
+    - "401, 403"
+  edge_conditions:
+    - >
+      Passing a mix of valid and invalid/nonexistent ids returns a count reflecting only the
+      valid ones, with no per-id error detail (unlike bulk-import's failures array)
+  offline_behavior: "Each deleted question becomes a tombstone, same offline implication as REQ-QUESTIONS-008, at scale."
+  acceptance_criteria:
+    - "Deleting 3 valid + 2 nonexistent ids returns {deletedCount: 3}"
+  priority: High
+  status: Active
+  ambiguity: >
+    REQUIRES CLARIFICATION: the exact error/behavior for an empty ids array isn't specified
+    beyond "(non-empty)" in the doc — likely a 400 validation error but not explicitly stated.
+  automation_status: Automated
+  automation_hint: "BulkOperationsTest.bulkDelete_marksAllAsDeleted"
+
+- id: REQ-QUESTIONS-010
+  feature: Bulk import questions
+  module: QUESTIONS
+  system: [Backend, Admin]
+  source_doc: api/QUESTIONS.md
+  source_section: "POST /api/questions/bulk-import; TICKET-106, TICKET-109"
+  description: "Import many questions from a prepared batch in one request, for the admin content pipeline."
+  business_rule: >
+    SINGLE_CHOICE only — no questionType/answerKey/contentStructure/content field exists on
+    BulkImportQuestionRequest; every imported row is created as SINGLE_CHOICE. Unlike single
+    create, Subject and Topic are resolved by name and auto-created if new; exam codes still
+    must pre-exist. Rows are flushed in batches of 50; if a batch's flush fails at the DB
+    level, every row in that batch (not just the offending one) is reported as failed.
+    Per-row failures are reported inside the 201 response body (failures: [{index, error}]),
+    not as an HTTP error — one bad row does not fail the whole batch (this per-item isolation
+    is the specific fix from TICKET-109, replacing an earlier all-or-nothing behavior).
+  actor: Admin
+  preconditions:
+    - "Difficulty and exam codes referenced by each row must already exist; subject/topic need not"
+  inputs:
+    - >
+      {questions: [{correctAnswer, subjectName, topicName, difficulty, examCodes, premium,
+      pyq, pyqYear, pyqShift, sourcePaperId, questionNumber, sourceUrl, translations}]}
+  expected_outputs:
+    - "201 Created: {createdCount, ids, failures: [{index, error}], duplicatesDetected: {[importedId]: originalId}}"
+  validations:
+    - >
+      Same per-row validation as single create (root-language translation required,
+      exactly-4 options for SINGLE_CHOICE, etc.), reported per-index in failures rather than
+      failing the whole request — except a batch-level DB flush failure, which fails every
+      row in that 50-row batch
+  permissions: admin
+  dependencies:
+    - REQ-QUESTIONS-001
+    - REQ-CATALOG-001
+    - REQ-CATALOG-007
+    - REQ-CATALOG-008
+  error_conditions:
+    - "401, 403. Individual row errors are 201-body content, not HTTP errors"
+  edge_conditions:
+    - >
+      A batch (of 50) that fails at the DB flush level reports all 50 rows in that batch as
+      failed, even if only one row was actually bad, since the batch failure can't be
+      attributed to a single row
+  offline_behavior: "N/A (admin write path); imported questions become sync-visible once created."
+  acceptance_criteria:
+    - >
+      A 2-item batch with 1 valid + 1 invalid item returns createdCount: 1, failures:
+      [{index: 1, error: "..."}], and the valid item is NOT rolled back by the invalid one's
+      failure
+  priority: Critical
+  status: Active
+  ambiguity: >
+    null — note: the pre-import client-side "review and remove before sending" UX (TICKET-109)
+    is an Admin-frontend behavior layered on top of this API, not part of the API contract itself.
+  automation_status: Automated
+  automation_hint: >
+    BulkOperationsTest.bulkImport_allValid_createsEveryQuestion,
+    BulkOperationsTest.bulkImport_reusesExistingSubjectAndTopicByName_doesNotDuplicate,
+    BulkOperationsTest.bulkImport_oneBadItem_doesNotBlockTheOthers,
+    BulkOperationsTest.bulkImport_unknownExamCode_failsThatItemOnly
+
+- id: REQ-QUESTIONS-011
+  feature: Bulk import duplicate detection (within-batch and against bank)
+  module: QUESTIONS
+  system: [Backend]
+  source_doc: api/QUESTIONS.md
+  source_section: "POST /api/questions/bulk-import \"Business rules\""
+  description: >
+    Duplicate detection runs once across the whole successfully-imported batch, catching
+    collisions both against the existing bank and within the batch itself (e.g. the same
+    question pasted twice in one file).
+  business_rule: >
+    Detected pairs are recorded for review and reported in duplicatesDetected — never
+    auto-rejected; import still succeeds for those rows.
+  actor: "Admin (system-triggered as part of import)"
+  preconditions:
+    - At least one row imported successfully in the batch
+  inputs:
+    - "the successfully-created rows' fingerprints"
+  expected_outputs:
+    - "duplicatesDetected: {[importedQuestionId]: originalQuestionId} in the bulk-import response"
+  validations:
+    - "N/A — detection only, never blocks"
+  permissions: admin
+  dependencies:
+    - REQ-QUESTIONS-010
+    - REQ-QUESTIONS-021
+  error_conditions:
+    - "none — detection never produces an error"
+  edge_conditions:
+    - "Two identical questions in the same import batch are both created, with the second flagged as a duplicate of the first"
+  offline_behavior: "N/A"
+  acceptance_criteria:
+    - >
+      Importing the same question text twice in one batch results in both rows created and
+      duplicatesDetected containing the second->first mapping
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: CandidateForAutomation
+  automation_hint: >
+    none found (no bulk-import-specific duplicate test located in BulkOperationsTest;
+    duplicate-detection tests found are in EpicLIntelligenceTest, which exercises
+    create-based detection, not bulk-import batch detection specifically).
+
+- id: REQ-QUESTIONS-012
+  feature: Content-sync endpoint — delta/full sync with pagination
+  module: QUESTIONS
+  system: [Backend, Mobile]
+  source_doc: api/QUESTIONS.md
+  source_section: "GET /api/questions/sync; TICKET-102/103/104"
+  description: >
+    The public delta-sync endpoint every mobile device polls to catch up on content changes.
+    Supports full sync (since omitted/blank/"0") and delta sync (since=<ISO-8601 timestamp>).
+  business_rule: >
+    Always returns the entire question bank across every exam — no examCode filter exists on
+    this endpoint (a deliberate change from an earlier exam-scoped version, see
+    _conflicts.md). Results ordered by updatedAt ascending so a client resuming after a
+    network drop can safely continue from the last page it processed. page default 0; size
+    default 500, clamped server-side to a max of 1000.
+  actor: "Mobile app (signed-out or signed-in student)"
+  preconditions:
+    - "none — deliberately public"
+  inputs:
+    - "since (opt), page (opt, default 0), size (opt, default 500, max 1000), supportedTypes (opt — see REQ-QUESTIONS-015)"
+  expected_outputs:
+    - "Page<QuestionResponse> (content, totalPages, totalElements, number, size, last)"
+  validations:
+    - "since that fails to parse as ISO-8601 (and isn't blank/\"0\") -> 400"
+  permissions: none (public)
+  dependencies:
+    - REQ-QUESTIONS-013
+    - REQ-QUESTIONS-014
+    - REQ-QUESTIONS-015
+  error_conditions:
+    - "400 invalid since timestamp"
+  edge_conditions:
+    - "Requesting size above 1000 is silently clamped, not rejected"
+    - "since=0 (literal string) means \"everything, from epoch\""
+  offline_behavior: >
+    This is THE offline sync mechanism — a device downloads the full bank once (first sync)
+    and only changes thereafter (delta sync), enabling fully offline practice/mock-test
+    taking once synced.
+  acceptance_criteria:
+    - >
+      A delta sync with a cutoff after question A's updatedAt but before question B's returns
+      B but not A
+    - "Requesting size=2 returns exactly 2 results"
+  priority: Critical
+  status: Active
+  ambiguity: "null (see _conflicts.md for the historical exam-scoping change)"
+  automation_status: Automated
+  automation_hint: >
+    SyncEndpointTest.sinceZero_returns200AndRespectsPageSize,
+    SyncEndpointTest.deltaSync_onlyReturnsChangesAfterCutoff,
+    SyncEndpointTest.invalidSinceFormat_returns400, SyncEndpointTest.pageSize_isRespected
+
+- id: REQ-QUESTIONS-013
+  feature: Soft-deleted questions sync as full-content tombstones
+  module: QUESTIONS
+  system: [Backend, Mobile]
+  source_doc: api/QUESTIONS.md
+  source_section: "GET /api/questions/sync \"Business rules\""
+  description: >
+    Soft-deleted questions are included (not filtered) in sync results, carrying their full
+    content (all translations, options, etc.) exactly as a non-deleted row would — only
+    deleted: true distinguishes them.
+  business_rule: >
+    The server does not strip the payload down to just an id+deleted marker; the client is
+    expected to notice the flag and remove its local copy.
+  actor: "Mobile app (sync consumer)"
+  preconditions:
+    - A question was soft-deleted after the client's last sync watermark
+  inputs:
+    - "N/A (same /sync call as REQ-QUESTIONS-012)"
+  expected_outputs:
+    - "The deleted question's row in the sync page, deleted: true, full content present"
+  validations: []
+  permissions: none (public)
+  dependencies:
+    - REQ-QUESTIONS-008
+    - REQ-QUESTIONS-012
+  error_conditions: []
+  edge_conditions:
+    - >
+      A tombstone row is included regardless of supportedTypes (REQ-QUESTIONS-015) and
+      regardless of contentStatus (REQ-QUESTIONS-014) — a client must always learn about a
+      deletion
+  offline_behavior: >
+    This is the mechanism by which a device removes locally-cached content that was deleted
+    server-side, keeping offline data consistent with the source of truth.
+  acceptance_criteria:
+    - >
+      Deleting a question, then syncing with a cutoff before the delete, returns that
+      question with deleted: true and non-empty translations
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "SyncEndpointTest.deletedQuestions_areIncludedInSyncResults"
+
+- id: REQ-QUESTIONS-014
+  feature: "Content-status gating on public reads (PUBLISHED-only for live rows)"
+  module: QUESTIONS
+  system: [Backend, Mobile]
+  source_doc: api/QUESTIONS.md
+  source_section: "GET /api/questions/sync, /live, /counts, /mock-count, /mock-sample \"Business rules\"; QuestionResponse.contentStatus"
+  description: >
+    A non-PUBLISHED question (DRAFT or REVIEW — e.g. a fresh, unreviewed ingestion candidate)
+    is withheld from every public read on this controller, the same way a soft-deleted row is
+    otherwise exposed regardless.
+  business_rule: >
+    A tombstone (deleted: true) still syncs even if it happens to be non-PUBLISHED, but a
+    live (non-deleted) non-PUBLISHED row is never returned from /sync, /live, /counts,
+    /mock-count, or /mock-sample. Every question that predates the content_status column,
+    plus everything hand-authored/bulk-imported since, defaults PUBLISHED (unchanged
+    historical behavior) — only an ingestion-pipeline Accept ever produces DRAFT.
+  actor: "Mobile app (sync/live consumer)"
+  preconditions:
+    - "A question with contentStatus != PUBLISHED exists and is not soft-deleted"
+  inputs: []
+  expected_outputs:
+    - "The non-PUBLISHED, non-deleted question is absent from all public read results"
+  validations: []
+  permissions: >
+    none (public reads); the status itself is only settable by admin/reviewer (see
+    REQ-QUESTIONS-019)
+  dependencies:
+    - REQ-QUESTIONS-019
+    - REQ-QUESTIONS-012
+    - REQ-QUESTIONS-016
+    - REQ-QUESTIONS-017
+    - REQ-QUESTIONS-018
+  error_conditions:
+    - "none — silent filtering, not an error"
+  edge_conditions:
+    - "A DRAFT question that is later soft-deleted still tombstones out to clients even though it was never live-visible"
+  offline_behavior: "Ensures unreviewed/unpublished content never reaches a student's offline cache."
+  acceptance_criteria:
+    - >
+      A question created with contentStatus: DRAFT (via REQ-QUESTIONS-019) does not appear in
+      /sync, /live, /counts, /mock-sample results, but a legacy/hand-authored question
+      (implicitly PUBLISHED) does
+  priority: High
+  status: Active
+  ambiguity: >
+    null — the mechanics of HOW a question becomes DRAFT (the ingestion pipeline) are out of
+    scope; only the gating rule itself, as stated in QUESTIONS.md, is captured here.
+  automation_status: CandidateForAutomation
+  automation_hint: >
+    none found (no test exercising content-status filtering located among the read files;
+    ExamGuideContentStatusTest covers an analogous but different entity).
+
+- id: REQ-QUESTIONS-015
+  feature: "Sync/live capability negotiation (supportedTypes)"
+  module: QUESTIONS
+  system: [Backend, Mobile]
+  source_doc: api/QUESTIONS.md
+  source_section: "GET /api/questions/sync, GET /api/questions/live \"Request\" params"
+  description: >
+    A client declares which questionType codes it can render via a comma-separated
+    supportedTypes query param on /sync and /live, so an old client isn't sent question types
+    it cannot display.
+  business_rule: >
+    Omitted or blank supportedTypes defaults to SINGLE_CHOICE only — protecting an old,
+    already-installed pre-multi-type client that doesn't send this param at all. A
+    soft-deleted (tombstone) row is returned regardless of type either way.
+  actor: Mobile app
+  preconditions: []
+  inputs:
+    - "supportedTypes (comma-separated question-type codes)"
+  expected_outputs:
+    - "Live (non-deleted) rows of unsupported types are excluded from the result; tombstones of any type are always included"
+  validations:
+    - "none stated (unrecognized codes presumably just match nothing, not an error — see _conflicts.md)"
+  permissions: none (public)
+  dependencies:
+    - REQ-QUESTIONS-002
+    - REQ-QUESTIONS-012
+    - REQ-QUESTIONS-016
+  error_conditions:
+    - "none documented"
+  edge_conditions:
+    - >
+      An old client omitting this param entirely only ever receives SINGLE_CHOICE live rows,
+      even though the bank has 9 authorable types
+  offline_behavior: >
+    Directly controls what a device caches offline — an old app version won't
+    download/store a question type it can't render.
+  acceptance_criteria:
+    - >
+      A sync call with supportedTypes=SINGLE_CHOICE,MULTIPLE_CHOICE excludes live NUMERIC
+      questions but still includes a soft-deleted NUMERIC question as a tombstone
+  priority: Medium
+  status: Active
+  ambiguity: >
+    REQUIRES CLARIFICATION: behavior for an unrecognized/malformed code in supportedTypes
+    (e.g. a typo) is not explicitly documented — presumably ignored/no-match rather than a
+    400, but not stated.
+  automation_status: CandidateForAutomation
+  automation_hint: "none found"
+
+- id: REQ-QUESTIONS-016
+  feature: "Live filterable browsing endpoint (/live)"
+  module: QUESTIONS
+  system: [Backend, Mobile, Web]
+  source_doc: api/QUESTIONS.md
+  source_section: "GET /api/questions/live; reports/13-hybrid-online-sync; TASK-2601 Phase 1"
+  description: >
+    Public, filterable, non-cursor read letting a screen browse content directly over the
+    network while a device's first sync hasn't finished (or has never run), instead of
+    waiting on local SQLite. The web app (TASK-2601, online-only by design) uses this as its
+    ONLY read path for Practice questions — not a fallback for an unsynced state, but the
+    permanent one, since web has no local database to sync into.
+  business_rule: >
+    Excludes soft-deleted questions (unlike /sync and the admin list) and excludes
+    non-PUBLISHED questions (REQ-QUESTIONS-014). size default 200, clamped to a max of 500.
+  actor: "Mobile app (hybrid data layer, temporary use) or the web app (permanent use)"
+  preconditions: []
+  inputs:
+    - "examCode, subjectId, topicId, difficulty, supportedTypes (all optional), page (default 0), size (default 200, max 500)"
+  expected_outputs:
+    - "Page<QuestionResponse> (same shape as /sync)"
+  validations:
+    - "none beyond generic parameter validation"
+  permissions: none (public)
+  dependencies:
+    - REQ-QUESTIONS-014
+    - REQ-QUESTIONS-015
+  error_conditions:
+    - "none beyond generic validation"
+  edge_conditions:
+    - "A filter combination matching nothing returns an empty page"
+  offline_behavior: >
+    This is the "live" half of the hybrid online/local data model — used specifically WHEN a
+    device is not yet fully synced, so the app remains usable immediately rather than
+    blocking on sync completion.
+  acceptance_criteria:
+    - "Filtering by topicId returns only that topic's non-deleted, PUBLISHED questions of a supported type"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    LiveQuestionsTest.live_returnsOnlyNonDeletedQuestionsMatchingFilters,
+    LiveQuestionsTest.live_filtersByDifficulty, LiveQuestionsTest.live_unmatchedFilter_returnsEmptyNotError
+
+- id: REQ-QUESTIONS-017
+  feature: "Grouped question counts endpoint (/counts)"
+  module: QUESTIONS
+  system: [Backend, Mobile, Web]
+  source_doc: api/QUESTIONS.md
+  source_section: "GET /api/questions/counts"
+  description: >
+    Returns grouped question counts (e.g. "how many questions does this topic have") for the
+    hybrid data layer's availability screens, and (TASK-2601 Phase 1) for the web Practice
+    screens' subject/topic/difficulty question-count displays — the same endpoint, called
+    with groupBy=subject/topic/difficulty/exam depending on the screen.
+  business_rule: >
+    Excludes non-PUBLISHED questions (REQ-QUESTIONS-014) — a count shown to students
+    shouldn't be inflated by an unreviewed ingestion candidate. Soft-deleted exclusion is
+    implied by "live" semantics.
+  actor: Mobile app or the web app
+  preconditions: []
+  inputs:
+    - "groupBy (required: exam/subject/topic/difficulty), examCode/subjectId/topicId/difficulty (optional filters)"
+  expected_outputs:
+    - "{[groupKey]: number} flat map"
+  validations:
+    - "groupBy missing -> 400"
+  permissions: none (public)
+  dependencies:
+    - REQ-QUESTIONS-014
+  error_conditions:
+    - "400 if groupBy missing"
+  edge_conditions:
+    - "An unknown groupBy value -> 400 (per test, even though the doc's Errors line only explicitly states the missing case)"
+  offline_behavior: "Used by the hybrid data layer's \"availability\" screens while local SQLite isn't yet populated."
+  acceptance_criteria:
+    - "groupBy=subject returns a count per subject id excluding deleted/non-published questions"
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    LiveQuestionsTest.counts_groupsBySubjectAndExcludesDeleted, LiveQuestionsTest.counts_unknownGroupBy_returns400
+
+- id: REQ-QUESTIONS-018
+  feature: "Live Mock Test assembly (/mock-count, /mock-sample)"
+  module: QUESTIONS
+  system: [Backend, Mobile, Web]
+  source_doc: api/QUESTIONS.md
+  source_section: "GET /api/questions/mock-count, GET /api/questions/mock-sample"
+  description: >
+    /mock-count reports how many non-deleted, published questions exist across a set of
+    subjects for an exam; /mock-sample returns a genuinely random sample across those
+    subjects — the live-network equivalents of the local SQLite mock-test builder, used
+    before local sync has populated enough content. For the web app (TASK-2601 Phase 2)
+    this is not a fallback but the ONLY path — decision 2 (online-only) means every web
+    Mock Test attempt is assembled this way, every time.
+  business_rule: >
+    Sampling is genuinely random, not "first N matches." limit defaults 50, clamped
+    server-side to max 200. Same content-status/soft-delete exclusion as
+    REQ-QUESTIONS-014/016. /mock-sample returns a flat array, not a Page (unlike every other
+    read endpoint on this controller).
+  actor: "Mobile app (Mock Test module)"
+  preconditions:
+    - "examCode and subjectIds provided for both endpoints"
+  inputs:
+    - "/mock-count: examCode (req), subjectIds (req, list). /mock-sample: same plus limit (opt, default 50, max 200)"
+  expected_outputs:
+    - "/mock-count: {count: number}. /mock-sample: QuestionResponse[]"
+  validations:
+    - "examCode or subjectIds missing -> 400 (both endpoints)"
+  permissions: none (public)
+  dependencies:
+    - REQ-QUESTIONS-014
+  error_conditions:
+    - "400 if examCode or subjectIds missing"
+  edge_conditions:
+    - "A deleted question is excluded from /mock-sample's candidate pool even if it would otherwise match"
+  offline_behavior: >
+    Enables a full timed Mock Test attempt to be taken live over the network before a
+    device's first sync finishes — explicitly given "full parity" with the offline/local path.
+  acceptance_criteria:
+    - >
+      /mock-sample with limit=10 across 2 subjects returns <=10 questions, none soft-deleted,
+      spanning both subjects when both have content
+  priority: High
+  status: Active
+  ambiguity: >
+    null — this requirement intentionally excludes the deeper "question-group-aware packing"
+    algorithm described in QUESTIONS.md's own "Phase P3 — group-aware" note (QUESTION-GROUPS.md
+    territory, out of scope).
+  automation_status: Automated
+  automation_hint: >
+    LiveQuestionsTest.mockCount_and_mockSample_spanMultipleSubjects,
+    LiveQuestionsTest.mockSample_excludesDeletedQuestions
+
+- id: REQ-QUESTIONS-019
+  feature: One-click content-status change
+  module: QUESTIONS
+  system: [Backend, Admin]
+  source_doc: api/QUESTIONS.md
+  source_section: "PUT /api/questions/{id}/content-status"
+  description: >
+    Sets a question's contentStatus to one of DRAFT/REVIEW/PUBLISHED in one call — this is
+    what makes an ingestion-created (or otherwise unpublished) question actually visible to
+    students, and equally usable to unpublish/republish any question.
+  business_rule: >
+    No separate "submit for review" step — any of the three values can be set directly in one
+    call. Bumps updatedAt.
+  actor: Admin or Reviewer
+  preconditions:
+    - Question exists
+  inputs:
+    - '{status: "DRAFT" | "REVIEW" | "PUBLISHED"}'
+  expected_outputs:
+    - Updated QuestionResponse
+  validations:
+    - "status missing or not one of the three literal values -> 400"
+  permissions: >
+    admin OR reviewer (requireReviewer) — the only endpoint on this controller not
+    restricted to admin-only
+  dependencies:
+    - REQ-QUESTIONS-014
+  error_conditions:
+    - "401, 403 (a plain STUDENT token), 404 unknown question id, 400 invalid/missing status"
+  edge_conditions:
+    - "Setting status directly from DRAFT to PUBLISHED (skipping REVIEW) is explicitly allowed"
+  offline_behavior: >
+    N/A directly, but the resulting status change governs REQ-QUESTIONS-014's sync/live
+    gating on the next fetch.
+  acceptance_criteria:
+    - "Setting status: PUBLISHED on a DRAFT question makes it subsequently appear in /live/sync/counts/mock-sample"
+  priority: High
+  status: Active
+  ambiguity: >
+    null — note: api/README.md's shared-conventions table only documents requireUser/
+    requireAdmin as the two auth checks; requireReviewer is a third check introduced
+    specifically for this endpoint and not reflected in the shared conventions doc (see
+    _conflicts.md — independently corroborated by the AUTH-module extraction agent too).
+  automation_status: CandidateForAutomation
+  automation_hint: >
+    none found (no Questions-module test for this endpoint located; ExamGuideContentStatusTest
+    tests an analogous but separate content-status mechanism on a different entity).
+
+- id: REQ-QUESTIONS-020
+  feature: Image upload for question content
+  module: QUESTIONS
+  system: [Backend, Admin]
+  source_doc: api/QUESTIONS.md
+  source_section: "ImageUploadController -> POST /api/images"
+  description: >
+    Upload an image (question diagrams, exam card art, etc.) to Cloudinary and get back a URL
+    to store on whichever entity needs it. Generic, not question-specific.
+  business_rule: "none beyond standard multipart handling."
+  actor: Admin
+  preconditions:
+    - Cloudinary credentials configured server-side
+  inputs:
+    - "multipart/form-data, field name file"
+  expected_outputs:
+    - "{url: string} (Cloudinary's secure_url)"
+  validations:
+    - >
+      none documented beyond multipart binding (server-side max file size is a separate
+      deploy-config concern, not stated in QUESTIONS.md itself)
+  permissions: admin
+  dependencies: []
+  error_conditions:
+    - "401, 403, 500 if the Cloudinary upload itself fails (unmapped IllegalStateException — falls through to Spring's default 500, not the documented {error} envelope)"
+  edge_conditions:
+    - "A Cloudinary-side failure surfaces as a generic 500, not a structured {error} body — a deviation from the rest of this module's error contract"
+  offline_behavior: "N/A (admin-only write path)."
+  acceptance_criteria:
+    - "Uploading a valid image file returns 200 with a working url"
+    - "An admin-less request returns 401/403"
+  priority: Medium
+  status: Active
+  ambiguity: >
+    REQUIRES CLARIFICATION / flagged as a real deviation: the documented 500-on-failure
+    doesn't fit api/README.md's stated error taxonomy (400/401/403/404 only) — worth flagging
+    to QA as a known deviation rather than a bug to report fresh each time.
+  automation_status: CandidateForAutomation
+  automation_hint: "none found (no test for ImageUploadController located anywhere in the test tree)"
+
+- id: REQ-QUESTIONS-021
+  feature: Automatic duplicate detection at write time
+  module: QUESTIONS
+  system: [Backend]
+  source_doc: api/QUESTIONS.md
+  source_section: "POST /api/questions \"Business rules\"; QuestionResponse.duplicateOfQuestionIds"
+  description: >
+    On every question create, a content fingerprint (MD5 of lowercased, alphanumeric-only
+    English text) is computed and checked against the bank; a collision populates
+    duplicateOfQuestionIds in that create's response, but never blocks the write.
+  business_rule: >
+    duplicateOfQuestionIds is populated ONLY on the POST /api/questions response that
+    triggered the collision — get/list/update/sync/live/mock-sample never set it (always
+    null there). This corrects a previous inaccuracy in this same doc, which had claimed
+    get/list/update also populate it.
+  actor: "Admin (create), System (detection)"
+  preconditions:
+    - An existing question with a matching fingerprint exists
+  inputs:
+    - "the new question's English translation text"
+  expected_outputs:
+    - "duplicateOfQuestionIds: [existingQuestionId] on the create response only"
+  validations:
+    - "N/A — detection, not validation; write always succeeds"
+  permissions: "admin (create)"
+  dependencies:
+    - REQ-QUESTIONS-001
+    - REQ-QUESTIONS-022
+  error_conditions:
+    - "none — never produces an error"
+  edge_conditions:
+    - "Two questions with identical text but different casing/punctuation/whitespace still fingerprint-match (lowercased, alphanumeric-only)"
+  offline_behavior: "N/A"
+  acceptance_criteria:
+    - >
+      Creating a question with text identical (modulo case/punctuation) to an existing one
+      returns duplicateOfQuestionIds containing the existing question's id
+    - "A subsequent GET on the new question returns duplicateOfQuestionIds: null"
+  priority: Medium
+  status: Active
+  ambiguity: "null (documentation self-correction noted, not an open ambiguity)"
+  automation_status: Automated
+  automation_hint: >
+    EpicLIntelligenceTest.duplicateIsRecordedNotRejected (also covers
+    DuplicateDetectionService.fingerprint unit-level behavior directly)
+
+- id: REQ-QUESTIONS-022
+  feature: Duplicate review queue (list, count, resolve)
+  module: QUESTIONS
+  system: [Backend, Admin]
+  source_doc: api/QUESTIONS.md
+  source_section: >
+    QuestionDuplicateController: GET /api/question-duplicates, GET /api/question-duplicates/count,
+    PUT /api/question-duplicates/{questionId}/{duplicateOfQuestionId}
+  description: >
+    Admin-only content-management queue for reviewing detected duplicate pairs. Listing is
+    ordered oldest-detection-first; a pair can be marked DUPLICATE or NOT_DUPLICATE; a count
+    endpoint gives unresolved-pair count plus a preview of how many more a full backfill scan
+    would find.
+  business_rule: >
+    Detection never deletes or merges a question — marking only records a human decision.
+    Resolving is idempotent — resolving an already-resolved pair again just restamps
+    resolvedAt.
+  actor: Admin
+  preconditions:
+    - "At least one duplicate pair exists (from REQ-QUESTIONS-021 or REQ-QUESTIONS-024) for GET/PUT to act on meaningfully"
+  inputs:
+    - "List: page (default 0), size (default 20, max 100)"
+    - >
+      Resolve: path {questionId}/{duplicateOfQuestionId}, body {resolution: "DUPLICATE"|"NOT_DUPLICATE"}
+      (case-insensitive, trimmed)
+  expected_outputs:
+    - >
+      List: Page<DuplicatePair> (questionId, questionText, duplicateOfQuestionId,
+      duplicateOfQuestionText, similarityPercent, detectionMethod, detectedAt, resolvedAt,
+      resolution). Count: {unresolved, potentialGroups}. Resolve: 204 No Content
+  validations:
+    - "Resolve: resolution not one of the two literals -> 400"
+    - "No matching pair for that exact ordered id pair -> 404"
+  permissions: "admin (all three endpoints)"
+  dependencies:
+    - REQ-QUESTIONS-021
+    - REQ-QUESTIONS-024
+  error_conditions:
+    - "401, 403 on all; 400/404 on resolve as above"
+  edge_conditions:
+    - >
+      questionText/duplicateOfQuestionText are null if no "en" translation exists for that
+      question
+  offline_behavior: "N/A (admin content-management only, never reaches students)."
+  acceptance_criteria:
+    - >
+      Resolving a pair as NOT_DUPLICATE and re-fetching the list shows resolution:
+      "NOT_DUPLICATE" and a non-null resolvedAt
+    - "Resolving it again updates resolvedAt without erroring"
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: CandidateForAutomation
+  automation_hint: >
+    none found (list/count/resolve endpoints have no dedicated test located; only the
+    underlying detection-on-create and the dry-run check are covered by EpicLIntelligenceTest).
+
+- id: REQ-QUESTIONS-023
+  feature: Duplicate dry-run check (pre-import)
+  module: QUESTIONS
+  system: [Backend, Admin]
+  source_doc: api/QUESTIONS.md
+  source_section: "POST /api/question-duplicates/check"
+  description: >
+    "Does this text already exist in the bank?" dry-run check for the Bulk Import screen,
+    before an admin commits an import.
+  business_rule: >
+    Read-only — writes nothing, records no edge. Uses the same fingerprint (lowercased,
+    alphanumeric-only MD5) as the stored-write path (REQ-QUESTIONS-021), so results are
+    consistent with what an actual create would detect. POST is used deliberately rather than
+    GET, since full question text doesn't belong in a URL.
+  actor: Admin
+  preconditions: []
+  inputs:
+    - "{questionText: string}"
+  expected_outputs:
+    - "{matchCount: number, matches: uuid[]}"
+  validations:
+    - "questionText missing or blank -> 400"
+  permissions: admin
+  dependencies:
+    - REQ-QUESTIONS-021
+  error_conditions:
+    - >
+      400 as above; presumably 401/403 like every other admin endpoint (not explicitly
+      restated in this endpoint's own Errors line, but the controller-level admin-only note
+      applies)
+  edge_conditions:
+    - "Checking text with no fingerprint matches returns {matchCount: 0, matches: []}"
+  offline_behavior: "N/A"
+  acceptance_criteria:
+    - >
+      Checking text identical to an existing question returns matchCount >= 1 with that
+      question's id in matches, and creates no database row
+  priority: Low
+  status: Active
+  ambiguity: null
+  automation_status: PartiallyAutomated
+  automation_hint: >
+    Present in EpicLIntelligenceTest (exercises /api/question-duplicates/check); exact test
+    method name not confirmed by name-only grep.
+
+- id: REQ-QUESTIONS-024
+  feature: Duplicate backfill rescan
+  module: QUESTIONS
+  system: [Backend, Admin]
+  source_doc: api/QUESTIONS.md
+  source_section: "POST /api/question-duplicates/backfill"
+  description: >
+    Re-runs duplicate detection across the whole question bank in one set-based SQL
+    statement, needed because the fingerprint column was backfilled onto ~37,900 pre-existing
+    rows that had never been compared against each other.
+  business_rule: >
+    Never runs automatically (not on startup, not scheduled) — explicitly admin-triggered
+    only, and bounded per call so one run cannot produce an unbounded write burst. limit
+    defaults 1000, clamped to a hard max of 5000; re-run to continue processing the backlog.
+    Uses INSERT ... ON CONFLICT DO NOTHING, so re-running is safe and won't duplicate
+    existing edges.
+  actor: Admin
+  preconditions: []
+  inputs:
+    - "query param limit (default 1000, max 5000)"
+  expected_outputs:
+    - "{edgesRecorded: number}"
+  validations:
+    - "none beyond the server-side clamp"
+  permissions: admin
+  dependencies:
+    - REQ-QUESTIONS-021
+    - REQ-QUESTIONS-022
+  error_conditions:
+    - "401, 403"
+  edge_conditions:
+    - >
+      Re-running the exact same backfill call is safe (idempotent via ON CONFLICT DO NOTHING)
+      and won't duplicate already-recorded pairs
+  offline_behavior: "N/A"
+  acceptance_criteria:
+    - "Running backfill twice in a row against unchanged data returns edgesRecorded: 0 on the second run"
+  priority: Low
+  status: Active
+  ambiguity: >
+    null — this reflects a real historical performance bug (an earlier backfillDetection
+    loaded the whole ~37,900-row bank via findAll() into memory) that was fixed to one
+    set-based SQL statement; the fix itself is now the documented, current behavior.
+  automation_status: CandidateForAutomation
+  automation_hint: "none found"
+
+- id: REQ-QUESTIONS-025
+  feature: Question-type reference data
+  module: QUESTIONS
+  system: [Backend, Mobile, Admin]
+  source_doc: api/QUESTIONS.md
+  source_section: "QuestionTypeController -> GET /api/question-types"
+  description: >
+    Every question type the system knows about, authorable or not, so a client can know which
+    types it can render before deciding what to declare via supportedTypes
+    (REQ-QUESTIONS-015).
+  business_rule: >
+    Read-only — question types are seeded by migration, never admin-authored. As of the
+    current documented state, 9 of 11 seeded types have authoringEnabled: true; the
+    remaining 2 (MANUAL/descriptive family) exist as rows but are not yet authorable or
+    renderable.
+  actor: "Mobile app, Admin console"
+  preconditions: []
+  inputs: []
+  expected_outputs:
+    - "[{code, label, evaluatorFamily, authoringEnabled, defaultNegativeMarking, displayOrder}]"
+  validations: []
+  permissions: "none (public, like /api/difficulty-levels)"
+  dependencies:
+    - REQ-QUESTIONS-002
+    - REQ-QUESTIONS-015
+  error_conditions:
+    - "none beyond generic validation"
+  edge_conditions:
+    - >
+      A type with authoringEnabled: false still appears in the list (for future-proofing/UI
+      awareness) but cannot be used to create a question (REQ-QUESTIONS-002)
+  offline_behavior: >
+    Informs what a mobile client should declare in supportedTypes — indirectly
+    offline-relevant but this endpoint itself is a small reference fetch, not part of the
+    bulk content sync.
+  acceptance_criteria:
+    - "The response includes an entry for every one of the 9 authorable types with authoringEnabled: true"
+  priority: Low
+  status: Active
+  ambiguity: null
+  automation_status: CandidateForAutomation
+  automation_hint: "none found"
+
+- id: REQ-QUESTIONS-026
+  feature: Bounded/paginated reads across the Questions module (performance & crash-prevention)
+  module: QUESTIONS
+  system: [Backend, Mobile]
+  source_doc: api/QUESTIONS.md
+  source_section: >
+    page-size caps stated per-endpoint (/sync max 1000, /live max 500, /mock-sample max 200,
+    /question-duplicates list max 100, /backfill max 5000);
+    reports/19-startup-gate-and-query-limits/, reports/12-load-test-data-seeding/
+  description: >
+    Every question-serving read in this module must be bounded (paginated with a
+    server-enforced cap, or an explicit LIMIT) — an unbounded query against a ~37,900+ row
+    question bank is a documented, real failure mode, not a theoretical concern.
+  business_rule: >
+    Server-side, every public/admin read endpoint documented in QUESTIONS.md clamps its
+    page/result size rather than trusting the client. Reinforced by a real, previously-shipped
+    client-side bug: the mobile app's local practice-question query had no LIMIT and used
+    ORDER BY RANDOM() with one bind parameter per matched row — a latent SQLite crash once a
+    topic's question count exceeded SQLite's bound-parameter ceiling, masked only by a
+    since-lifted temporary ~500-question pool restriction. Fixed with an explicit
+    PRACTICE_QUESTION_LIMIT = 200 on the mobile side.
+  actor: "System (backend + mobile query layers)"
+  preconditions:
+    - >
+      A sufficiently large question bank (masked entirely at small scale — only surfaced once
+      the load-test data (~14k-37.9k questions) and the full, un-pooled bank existed)
+  inputs: []
+  expected_outputs:
+    - >
+      Every read caps its result size server-side regardless of what a client requests, and
+      no client-side query against synced question data omits a LIMIT
+  validations: []
+  permissions: N/A
+  dependencies:
+    - REQ-QUESTIONS-012
+    - REQ-QUESTIONS-016
+    - REQ-QUESTIONS-018
+  error_conditions:
+    - "An unbounded query is the failure mode being prevented (a crash/timeout), not a normal error response"
+  edge_conditions:
+    - >
+      A topic/filter combination matching thousands of rows must still return promptly and
+      without exceeding a client-side parameter-binding limit
+  offline_behavior: >
+    Directly enables offline use at real scale — a full sync of the ~37,884-question bank (76
+    pages @ up to 1000/page) must complete without crashing the client, and a local practice
+    query against a heavily-populated topic must not crash SQLite.
+  acceptance_criteria:
+    - >
+      Requesting /sync or /live with size above the documented max is silently clamped, not
+      rejected or allowed to balloon
+    - >
+      A local practice-question fetch against a topic with hundreds of matching rows returns
+      at most PRACTICE_QUESTION_LIMIT results without error
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: PartiallyAutomated
+  automation_hint: >
+    SyncEndpointTest.pageSize_isRespected (server-side cap only; the mobile-side LIMIT fix has
+    no cited automated test — no mobile test runner exists in this project, verified only via
+    on-device testing per reports/19).
+
+- id: REQ-QUESTIONS-027
+  feature: "Web Practice engine scores and reveals every question type"
+  module: QUESTIONS
+  system: [Web]
+  source_doc: tasks/TASK-2601-student-web-application.md
+  source_section: "Phase 1 — Practice"
+  description: >
+    The web Practice quiz renders and correctly scores all nine question types the backend
+    supports — SINGLE_CHOICE, MULTIPLE_CHOICE, TRUE_FALSE, NUMERIC, FILL_BLANK, MATCH,
+    ORDERING, ASSERTION_REASON, STATEMENT_COMBINATION — using the SAME shared evaluator
+    (@sarkaritaiyaari/core/evaluation) the phone app and the backend use, and reveals
+    correct/incorrect styling immediately once an answer is confirmed (Practice is
+    immediate-feedback, unlike Mock Test).
+  business_rule: >
+    A type that cannot infer "done" from a single click (MULTIPLE_CHOICE, NUMERIC,
+    FILL_BLANK, MATCH, ORDERING) requires an explicit "Check answer" step before revealing;
+    SINGLE_CHOICE/TRUE_FALSE/ASSERTION_REASON/STATEMENT_COMBINATION reveal on the single
+    click that answers them, since that click is the only action there is.
+  actor: Student (signed in or signed out — accounts are optional)
+  preconditions:
+    - "A topic/difficulty selection with at least one available question"
+  inputs:
+    - "One answer per question, in whichever shape that question type needs"
+  expected_outputs:
+    - "Immediate CORRECT/INCORRECT/UNATTEMPTED styling and the question's explanation text"
+  validations:
+    - "Reveal styling on MATCH/ORDERING items must reflect per-item correctness, not just an overall banner"
+  permissions: none (client-side; reads already-public question data)
+  dependencies:
+    - REQ-QUESTIONS-016
+    - REQ-WEB-001
+    - REQ-WEB-002
+  error_conditions: []
+  edge_conditions:
+    - "A question with no confirmed answer is excluded from the session's final score, not counted as wrong"
+  offline_behavior: "None — the web app is online-only by design (TASK-2601 decision 2)"
+  acceptance_criteria:
+    - "Every one of the nine types renders its answer area and, once confirmed, shows correct/incorrect styling matching the shared evaluator's outcome"
+    - "MATCH and ORDERING colour BOTH sides/positions on reveal, not only one"
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: >
+    packages/core's questionEvaluator.test.ts proves the scoring logic itself; the web
+    rendering/reveal layer has no browser-test runner in this project.
+
+- id: REQ-QUESTIONS-028
+  feature: "Question-group (passage/media) content renders in web Practice"
+  module: QUESTIONS
+  system: [Web]
+  source_doc: tasks/TASK-2601-student-web-application.md
+  source_section: "Phase 1 — Practice; api/QUESTION-GROUPS.md"
+  description: >
+    A question belonging to a shared group (a reading passage, or attached media) shows that
+    group's content above the question text, collapsible for a passage. Practice has no
+    atomic-group guarantee (unlike Mock Test's group-aware sampler), so a grouped question can
+    appear with none of its siblings present in the same session — this renders whichever
+    group the CURRENT question belongs to, independent of the rest of the fetched set.
+  business_rule: >
+    Media is fetched live from its third-party (Cloudinary) URL — there is no mobile-style
+    pre-download to fall back to on the web.
+  actor: Student
+  preconditions:
+    - "At least one fetched question has a non-null questionGroupId"
+  inputs: []
+  expected_outputs:
+    - "The group's passage text (in the current question-content language) and/or media, above the question"
+  validations:
+    - "A question with no group renders no group content at all"
+  permissions: none (public read)
+  dependencies:
+    - REQ-QUESTIONS-016
+  error_conditions: []
+  edge_conditions:
+    - "The passage toggle's collapsed/expanded state does not affect answering or reveal"
+  offline_behavior: "None — online-only"
+  acceptance_criteria:
+    - "A real grouped question's passage renders with correct text and collapses/expands on click"
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "No browser-test runner exists in this project for web."

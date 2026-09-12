@@ -18,6 +18,7 @@ import QuestionGroups from "./pages/QuestionGroups.jsx";
 import Languages from "./pages/Languages.jsx";
 import DifficultyLevels from "./pages/DifficultyLevels.jsx";
 import PaperTypes from "./pages/PaperTypes.jsx";
+import AiControlCenter from "./pages/AiControlCenter.jsx";
 import Login from "./pages/Login.jsx";
 import { useAuth } from "./auth/AuthContext.jsx";
 import {
@@ -34,6 +35,7 @@ import {
   PaperTypeIcon,
   SourceIcon,
   GuideIcon,
+  AiIcon,
 } from "./components/icons.jsx";
 import "./App.css";
 
@@ -106,6 +108,9 @@ export default function App() {
           <NavLink to="/languages"><LanguageIcon /> Languages</NavLink>
           <NavLink to="/difficulty-levels"><LevelIcon /> Difficulty Levels</NavLink>
           <NavLink to="/paper-types"><PaperTypeIcon /> Paper Types</NavLink>
+
+          <span className="nav-group-label">Settings</span>
+          <NavLink to="/ai-control-center"><AiIcon /> AI Control Center</NavLink>
         </nav>
 
         <div className="sidebar-account">
@@ -136,6 +141,7 @@ export default function App() {
           <Route path="/languages" element={<Languages />} />
           <Route path="/difficulty-levels" element={<DifficultyLevels />} />
           <Route path="/paper-types" element={<PaperTypes />} />
+          <Route path="/ai-control-center" element={<AiControlCenter />} />
         </Routes>
       </div>
     </div>

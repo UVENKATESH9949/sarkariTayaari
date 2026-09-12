@@ -23,10 +23,11 @@ import {
   getTopics,
   getDifficultyLevels as getDifficultyLevelsApi,
   getExamBadges as getExamBadgesApi,
-} from "../api/reference";
-import { getLiveQuestions, getQuestionCounts } from "./liveQuestions";
+  getLiveQuestions,
+  getQuestionCounts,
+} from "@sarkaritaiyaari/core/api";
 import { getSyllabusSubjectIdsLive } from "./mockTestStructureData";
-import { isIndexBasedType, resolveCorrectIndex } from "../db/answerResolution";
+import { isIndexBasedType, resolveCorrectIndex } from "@sarkaritaiyaari/core/evaluation";
 import type { HybridMode } from "./hybridSource";
 
 export type { ExamOption, SubjectStat, TopicStat, DifficultyCounts, PracticeQuestion, DifficultyLevel, ExamBadge };

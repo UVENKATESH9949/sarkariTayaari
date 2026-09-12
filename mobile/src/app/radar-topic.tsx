@@ -3,7 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { ScrollView, Text, View, StyleSheet } from "react-native";
 import { REASON_COPY, RadarStatePill, stateVisual } from "../intelligence/radarPresentation";
-import type { RadarTopic } from "../intelligence/types";
+import type { RadarTopic } from "@sarkaritaiyaari/core/intelligence";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { EmptyState } from "../ui/EmptyState";

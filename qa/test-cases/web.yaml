@@ -1,0 +1,690 @@
+# WEB module — manual test cases
+#
+# Every case links to one scenario id and one or more requirement ids. A test case is a
+# reusable DEFINITION — it is never overwritten by an execution (qa/execution/*.yaml). Expected
+# results derive from the linked requirement, never from observed implementation behaviour.
+#
+# Every case below is UNEXECUTED: actual_result empty, status Not Executed, defect_id empty.
+# Some of these behaviours WERE checked by hand while Phase 0 was built, and that account lives
+# in tasks/TASK-2601-student-web-application.md — but an execution record needs a real tester,
+# date and build, and none of those is invented here.
+#
+# automation_status is evidence-based. `Automated` appears only where the named test genuinely
+# asserts the case. web/ has no browser-test runner configured, so its UI cases are ManualOnly,
+# the same standing as mobile/ and admin/.
+
+- id: TC-WEB-001
+  requirement_ids: [REQ-WEB-001]
+  scenario_id: SCN-WEB-001
+  system: Mobile
+  module: WEB
+  feature: Shared logic has exactly one implementation
+  title: Mobile typechecks, lints at baseline and bundles after the shared extraction
+  objective: >
+    Confirm moving shared logic into packages/core leaves the shipped phone app building
+    exactly as before.
+  preconditions:
+    - "packages/core installed; mobile/ has its @sarkaritaiyaari/core dependency"
+  test_data: "n/a"
+  test_environment: "Developer machine with mobile/ dependencies installed"
+  priority: Critical
+  severity: Critical
+  test_type: Regression
+  steps:
+    - step: 1
+      action: "Run `npx tsc --noEmit` in mobile/"
+      expected: "Exit code 0, no errors"
+    - step: 2
+      action: "Run `npx expo lint` in mobile/"
+      expected: "The documented baseline of 9 problems (8 errors, 1 warning), with no new entries"
+    - step: 3
+      action: "Run `npx expo export --platform android`"
+      expected: "A bundle is produced with no resolution errors"
+    - step: 4
+      action: "Search the produced .hbc for markers of each shared module (e.g. PENDING_REVIEW, TOPIC_HEALTH_V1, a palette hex, an English catalogue string)"
+      expected: >
+        All markers present. Non-ASCII strings (the Telugu catalogue) are stored UTF-16LE in
+        Hermes bytecode — a plain UTF-8 search reports them missing when they are present.
+  expected_result: >
+    Mobile is functionally unchanged by the extraction, and the shared modules are genuinely
+    bundled rather than silently dropped. (REQ-WEB-001 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Step 4's encoding trap cost real time once; it is written into the step deliberately."
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-WEB-002
+  requirement_ids: [REQ-WEB-001]
+  scenario_id: SCN-WEB-002
+  system: Web
+  module: WEB
+  feature: Shared logic has exactly one implementation
+  title: A platform-specific global in shared source fails the purity test
+  objective: >
+    Confirm the guard that keeps packages/core consumable by both Metro and Vite actually
+    fails, rather than merely being configured.
+  preconditions:
+    - "packages/core tests pass before the change"
+  test_data: "n/a"
+  test_environment: "Developer machine, packages/core installed"
+  priority: High
+  severity: Major
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "Add a reference to a browser-only global (for example `localStorage.getItem`) to any non-test file under packages/core/src"
+      expected: "`npm run test --workspace @sarkaritaiyaari/core` fails, naming that file"
+    - step: 2
+      action: "Revert the change and re-run"
+      expected: "All tests pass again"
+    - step: 3
+      action: "Add a reference to a Node-only global (for example `process.env`) and run `npm run typecheck --workspace @sarkaritaiyaari/core`"
+      expected: "The library typecheck fails — no `types` are declared, so Node globals are unavailable"
+  expected_result: >
+    Both classes of platform leak are caught before they can reach a runtime on the platform
+    that lacks them. (REQ-WEB-001 error_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "packages/core/src/platformPurity.test.ts (describe 'platform purity')"
+
+- id: TC-WEB-003
+  requirement_ids: [REQ-WEB-002]
+  scenario_id: SCN-WEB-003
+  system: Backend
+  module: WEB
+  feature: Evaluator agreement between Java and TypeScript
+  title: All shared fixture cases score identically on both sides
+  objective: >
+    Confirm the two deliberate evaluator implementations agree on every shared case.
+  preconditions:
+    - "sample-data/question-evaluator-fixtures.json is unmodified"
+  test_data: "sample-data/question-evaluator-fixtures.json"
+  test_environment: "Developer machine; backend test suite and packages/core both runnable"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Run the Java fixture test (QuestionEvaluatorsTest)"
+      expected: "All cases pass"
+    - step: 2
+      action: "Run `npm run test --workspace @sarkaritaiyaari/core`"
+      expected: "All fixture cases pass, including the null-answerKey and null-response cases"
+    - step: 3
+      action: "Invert one comparison in the TypeScript evaluator and re-run the TypeScript test"
+      expected: >
+        Only the cases that reach that comparison fail; unattempted cases still pass, showing
+        the test is wired to the logic rather than passing vacuously
+    - step: 4
+      action: "Revert and re-run"
+      expected: "All cases pass again"
+  expected_result: >
+    A student's answer scores the same wherever it is graded. (REQ-WEB-002 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "QuestionEvaluatorsTest.everyFixtureCaseHolds; packages/core/src/evaluation/questionEvaluator.test.ts"
+
+- id: TC-WEB-004
+  requirement_ids: [REQ-WEB-001]
+  scenario_id: SCN-WEB-001
+  system: Backend
+  module: WEB
+  feature: Shared logic has exactly one implementation
+  title: The topic-health parity script passes against the relocated file
+  objective: >
+    Confirm the Java/TypeScript constant-parity guard still resolves both sides after the
+    algorithm moved into packages/core.
+  preconditions: []
+  test_data: "n/a"
+  test_environment: "Repository root"
+  priority: High
+  severity: Major
+  test_type: Regression
+  steps:
+    - step: 1
+      action: "Run `node scripts/check-topic-health-parity.js`"
+      expected: "Exit 0, reporting the shared constants agree and both sides' weights sum to 1.00"
+    - step: 2
+      action: "Change one shared constant on the TypeScript side only and re-run"
+      expected: "Non-zero exit naming the mismatched constant"
+    - step: 3
+      action: "Revert and re-run"
+      expected: "Exit 0"
+  expected_result: >
+    The parity guard survived the move and still detects drift. (REQ-WEB-001 validations)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "The script resolves its targets by hardcoded path, so a future move breaks it silently unless re-run."
+  automation_status: Automated
+  automation_reference: "scripts/check-topic-health-parity.js"
+
+- id: TC-WEB-005
+  requirement_ids: [REQ-WEB-003]
+  scenario_id: SCN-WEB-004
+  system: Web
+  module: WEB
+  feature: Responsive layout
+  title: Navigation switches treatment at the breakpoint with no horizontal overflow
+  objective: >
+    Confirm the app is usable from phone-browser width to desktop and never scrolls sideways.
+  preconditions:
+    - "The app is served (dev server or a deployed build)"
+  test_data: "n/a"
+  test_environment: "Desktop browser with device emulation"
+  priority: High
+  severity: Major
+  test_type: Compatibility
+  steps:
+    - step: 1
+      action: "Load the app at 390px wide"
+      expected: "A bottom navigation bar and a compact top bar are visible; no sidebar"
+    - step: 2
+      action: "Check whether the page scrolls horizontally at 390px"
+      expected: "It does not"
+    - step: 3
+      action: "Resize to 1280px wide"
+      expected: "A sidebar is visible; the bottom bar and top bar are gone"
+    - step: 4
+      action: "Check horizontal scrolling at 1280px, and at exactly 1024px"
+      expected: "No horizontal scrolling at either; exactly one navigation treatment at 1024px"
+  expected_result: >
+    Both layouts are usable and neither overflows. (REQ-WEB-003 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-WEB-006
+  requirement_ids: [REQ-WEB-004]
+  scenario_id: SCN-WEB-005
+  system: Web
+  module: WEB
+  feature: Account and Settings reachable at every width
+  title: Account and Settings are reachable and operable on a phone-width screen
+  objective: >
+    Confirm the two destinations excluded from the bottom bar remain reachable on a narrow
+    screen — the defect this case exists to prevent recurring.
+  preconditions:
+    - "The app is served"
+  test_data: "n/a"
+  test_environment: "Browser at 390px wide"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Load the app at 390px and look for a control leading to Account"
+      expected: "A visible, labelled control exists (top bar)"
+    - step: 2
+      action: "Activate it"
+      expected: "The Account screen renders at /account"
+    - step: 3
+      action: "Return home and activate the Settings control"
+      expected: "The Settings screen renders at /settings"
+    - step: 4
+      action: "Inspect both controls' rendered size and accessible name"
+      expected: "At least 44x44px, each with an accessible name"
+  expected_result: >
+    Neither destination is stranded at narrow widths. (REQ-WEB-004 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Regression guard. Both were unreachable below 1024px when first built, and nothing else on
+    the screen looked wrong — the kind of defect only a width-specific check finds.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-WEB-007
+  requirement_ids: [REQ-WEB-005]
+  scenario_id: SCN-WEB-006
+  system: Web
+  module: WEB
+  feature: Theme and text size
+  title: Dark theme applies immediately, persists, and does not flash on reload
+  objective: >
+    Confirm the theme switch repaints from the shared palette, survives a reload, and is
+    applied before first paint.
+  preconditions:
+    - "The app is served; no prior stored preference"
+  test_data: "n/a"
+  test_environment: "Desktop browser"
+  priority: Medium
+  severity: Minor
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Open Settings and select Dark"
+      expected: "The page repaints to the dark palette immediately"
+    - step: 2
+      action: "Reload the page and watch the first paint closely"
+      expected: "The page renders dark with no visible flash of the light theme"
+    - step: 3
+      action: "Select a larger text size"
+      expected: "Type grows; layout boxes and spacing do not shift"
+    - step: 4
+      action: "Reload again"
+      expected: "Both the theme and the text size are still in effect"
+  expected_result: >
+    Appearance choices apply, persist per device, and never flash. (REQ-WEB-005 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-WEB-008
+  requirement_ids: [REQ-WEB-005]
+  scenario_id: SCN-WEB-007
+  system: Web
+  module: WEB
+  feature: Theme and text size
+  title: Corrupt or unavailable preference storage falls back to defaults
+  objective: >
+    Confirm the app starts normally when stored preferences cannot be read or make no sense.
+  preconditions:
+    - "The app has been loaded at least once"
+  test_data: "A deliberately invalid stored appearance value"
+  test_environment: "Desktop browser with developer tools"
+  priority: Medium
+  severity: Major
+  test_type: Recovery
+  steps:
+    - step: 1
+      action: "Set the stored appearance key to a non-JSON string and reload"
+      expected: "The app renders with default appearance; no error screen"
+    - step: 2
+      action: "Set it to valid JSON with an unknown theme value and reload"
+      expected: "The app renders with default appearance"
+    - step: 3
+      action: "Open the app in a browser mode where site data is blocked, and reload"
+      expected: "The app renders with defaults; changing a preference does not throw"
+  expected_result: >
+    A cosmetic preference can never prevent the app from starting. (REQ-WEB-005 error_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Some privacy modes make storage access throw rather than return null."
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-WEB-009
+  requirement_ids: [REQ-WEB-006]
+  scenario_id: SCN-WEB-008
+  system: Web
+  module: WEB
+  feature: Interface language
+  title: Switching to Telugu changes strings and persists
+  objective: >
+    Confirm the interface language switch uses the shared catalogues and survives a reload.
+  preconditions:
+    - "The app is served"
+  test_data: "n/a"
+  test_environment: "Desktop browser"
+  priority: Medium
+  severity: Minor
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Open Settings and note which languages are offered"
+      expected: "Only languages with a catalogue appear (English and Telugu). Hindi is NOT offered — there is no Hindi UI catalogue"
+    - step: 2
+      action: "Select Telugu"
+      expected: "Translated strings render without a reload"
+    - step: 3
+      action: "Reload"
+      expected: "Telugu is still in effect"
+  expected_result: >
+    The interface language switches and persists per device. (REQ-WEB-006 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Telugu wording has never been reviewed by a native speaker (noted in the catalogue itself);
+    this case checks the mechanism, not the translation quality.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-WEB-010
+  requirement_ids: [REQ-WEB-007]
+  scenario_id: SCN-WEB-009
+  system: Web
+  module: WEB
+  feature: Browser session
+  title: Register, reload, and sign out from the browser
+  objective: >
+    Confirm the full session lifecycle works against the same accounts the phone app uses.
+  preconditions:
+    - "The backend is reachable and this origin is in its CORS allowlist"
+    - "TESTDATA-AUTH-NEW-EMAIL-01 is not registered on the target environment"
+  # Reuses the AUTH module's logical test data rather than defining web-only equivalents:
+  # this exercises the same /api/auth contract, just from a browser.
+  test_data: "TESTDATA-AUTH-NEW-EMAIL-01, TESTDATA-AUTH-VALID-PASSWORD-01 (>=8 chars)"
+  test_environment: "Browser against a running backend"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Open Account, switch to create-account, and register with the test data"
+      expected: "The signed-in view renders showing the account's email"
+    - step: 2
+      action: "Reload the page"
+      expected: "Still signed in; no re-entry of credentials required"
+    - step: 3
+      action: "Sign out"
+      expected: "The signed-out sign-in form renders"
+    - step: 4
+      action: "Reload again"
+      expected: "Still signed out"
+    - step: 5
+      action: "Sign in with the same credentials"
+      expected: "Signed in again"
+  expected_result: >
+    A browser session is created, survives reload, and can be ended. (REQ-WEB-007 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Creates a real account on the target environment — use a disposable address and clean up."
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-WEB-011
+  requirement_ids: [REQ-WEB-007]
+  scenario_id: SCN-WEB-010
+  system: Web
+  module: WEB
+  feature: Browser session
+  title: A revoked token signs the student out; an unreachable backend does not
+  objective: >
+    Confirm startup validation distinguishes server rejection from server unavailability.
+  preconditions:
+    - "A signed-in session exists in the browser"
+  test_data: "n/a"
+  test_environment: "Browser against a controllable backend"
+  priority: High
+  severity: Critical
+  test_type: ErrorHandling
+  steps:
+    - step: 1
+      action: "Sign out on another device/session so the stored token is revoked server-side, then reload this browser"
+      expected: "The app treats the session as ended and shows the signed-out state"
+    - step: 2
+      action: "Sign in again, then stop the backend entirely and reload"
+      expected: >
+        The student is NOT signed out — an unreachable backend is not evidence the token is
+        invalid. The app may show an error for data it cannot load.
+    - step: 3
+      action: "Start the backend and reload"
+      expected: "The session is intact and data loads"
+  expected_result: >
+    Only an explicit rejection discards the session. (REQ-WEB-007 error_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Getting this backwards would sign every student out whenever the backend hiccuped, which
+    would read as a login bug rather than an availability one.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-WEB-012
+  requirement_ids: [REQ-WEB-008]
+  scenario_id: SCN-WEB-011
+  system: Backend
+  module: WEB
+  feature: Cross-origin access
+  title: The CORS allowlist admits listed origins and refuses near-misses
+  objective: >
+    Confirm origin matching is exact, including the two near-miss pairs that have caused or
+    would cause a total client outage.
+  preconditions:
+    - "A backend is running with a known allowed-origins value"
+  test_data: "The configured allowlist for the target environment"
+  test_environment: "Any HTTP client (no browser required)"
+  priority: Critical
+  severity: Critical
+  test_type: Security
+  steps:
+    - step: 1
+      action: "Send an OPTIONS preflight to /api/exams with Origin set to an allowlisted origin and Access-Control-Request-Method: GET"
+      expected: "200 with Access-Control-Allow-Origin echoing that exact origin, and Authorization among the allowed headers"
+    - step: 2
+      action: "Repeat with Origin set to the same host and port but the other loopback spelling (127.0.0.1 vs localhost)"
+      expected: "403 'Invalid CORS request' — these are different origins"
+    - step: 3
+      action: "Repeat with http:// where the allowlist has https:// (or vice versa)"
+      expected: "403 — scheme is part of the origin"
+    - step: 4
+      action: "On a Firebase-hosted deployment, repeat for both the .web.app and .firebaseapp.com origins"
+      expected: "Both succeed only if both are listed; Firebase serves both by default"
+  expected_result: >
+    Exactly the configured origins are admitted. (REQ-WEB-008 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Changing the allowlist needs a backend restart locally, or a new Cloud Run revision in
+    production. APP_CORS_ALLOWED_ORIGINS replaces rather than appends.
+  automation_status: CandidateForAutomation
+  automation_reference: ""
+
+- id: TC-WEB-013
+  requirement_ids: [REQ-WEB-008]
+  scenario_id: SCN-WEB-012
+  system: Web
+  module: WEB
+  feature: Cross-origin access
+  title: A refused origin shows an explanatory message rather than a blank screen
+  objective: >
+    Confirm the app degrades readably when the backend refuses its origin.
+  preconditions:
+    - "The app is served from an origin NOT in the backend's allowlist"
+  test_data: "n/a"
+  test_environment: "Browser with developer tools open"
+  priority: High
+  severity: Major
+  test_type: ErrorHandling
+  steps:
+    - step: 1
+      action: "Load the app"
+      expected: "The shell, navigation and theme render normally"
+    - step: 2
+      action: "Look at the main content area"
+      expected: "A readable error banner is shown; no card renders as an empty heading"
+    - step: 3
+      action: "Check the browser console"
+      expected: "A CORS-policy error is logged — the browser gives no more detail than that to the page"
+  expected_result: >
+    A blocked origin is visibly an error rather than an apparently broken app.
+    (REQ-WEB-008 error_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    The page cannot distinguish this from the backend being down — the browser withholds the
+    detail — so the message deliberately mentions both possibilities.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-WEB-014
+  requirement_ids: [REQ-WEB-009]
+  scenario_id: SCN-WEB-013
+  system: Web
+  module: WEB
+  feature: Client-side routing
+  title: A non-root route loads directly and survives a reload
+  objective: >
+    Confirm the host hands unmatched paths to the app rather than returning its own 404.
+  preconditions:
+    - "A built app served by the target host (this is trivially true on the dev server; the real risk is the deployed host)"
+  test_data: "n/a"
+  test_environment: "Deployed build, not the dev server"
+  priority: High
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Enter a non-root in-app URL (for example /settings) directly into the address bar"
+      expected: "That screen renders"
+    - step: 2
+      action: "Reload while on it"
+      expected: "The same screen re-renders; no host 404"
+    - step: 3
+      action: "Request a path that matches nothing in the app"
+      expected: "The app's own not-found screen renders, inside the app shell"
+  expected_result: >
+    Deep links, bookmarks and reloads all work. (REQ-WEB-009 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Must be run against a deployed build — the dev server passes regardless of host configuration."
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-WEB-015
+  requirement_ids: [REQ-WEB-010]
+  scenario_id: SCN-WEB-014
+  system: Web
+  module: WEB
+  feature: Mock Test engine
+  title: A full timed attempt runs blind and scores correctly against real marking
+  objective: >
+    Confirm a real Mock Test attempt shows no reveal styling before submit, and that the
+    scorecard's marks and per-question review are correct once submitted.
+  preconditions:
+    - "At least one exam has a mockable paper with sections that have available live questions"
+  test_data: "A real mockable paper (e.g. SSC CGL Tier 1)"
+  test_environment: "Chromium, desktop viewport, against the real backend"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Open Mock Test, pick an exam, pick its paper, read the pre-test briefing, and start"
+      expected: "The briefing shows honest per-section availability and the correct marking scheme; Start begins the countdown"
+    - step: 2
+      action: "Answer several questions of different types without submitting"
+      expected: "No option/answer anywhere shows correct/incorrect styling — the engine stays blind throughout"
+    - step: 3
+      action: "Mark one question for review, then open Submit test"
+      expected: "The confirmation dialog names the number of questions actually answered"
+    - step: 4
+      action: "Confirm Submit"
+      expected: >
+        The Result screen shows a scorecard whose total matches
+        correctCount*marksCorrect - wrongCount*marksWrong, a per-subject breakdown, and a
+        per-question review showing the student's answer, the correct answer, and the
+        stored explanation for each wrong or unattempted question"
+  expected_result: >
+    The full attempt lifecycle — briefing, blind answering, submit, scorecard — behaves
+    correctly against real production data. (REQ-WEB-010 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Manually verified this phase via a one-off Playwright script against the real dev
+    backend (SSC CGL Tier 1, 100 questions): scorecard read -2.5 for 0 correct/5 wrong under
+    a +2/-0.5 scheme, matching the answers actually clicked. Writing the case is the
+    deliverable per AI_RULES.md §3.21; this remark is evidence, not an executed result.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-WEB-016
+  requirement_ids: [REQ-WEB-010]
+  scenario_id: SCN-WEB-015
+  system: Web
+  module: WEB
+  feature: Mock Test engine — question navigator
+  title: The navigator stays usable on a real 100+ question paper, at both viewport widths
+  objective: >
+    Confirm the question-navigator dialog's Close button and every cell remain reachable and
+    clickable when a real paper has far more questions than fit in the dialog at once, and
+    that answered/marked cell states match reality.
+  preconditions:
+    - "A mockable paper with at least ~100 questions (e.g. SSC CGL Tier 1)"
+  test_data: "Same paper as TC-WEB-015"
+  test_environment: "Chromium, both a desktop (1280px) and a phone (390px) viewport"
+  priority: High
+  severity: Major
+  test_type: Regression
+  steps:
+    - step: 1
+      action: "Start the attempt, answer a few questions, mark one for review, then open Questions"
+      expected: "The navigator dialog opens showing every question as a numbered cell, scrollable within a capped-height panel"
+    - step: 2
+      action: "Scroll the grid to the bottom cell"
+      expected: "The dialog's own Close button is visible and clickable without it, or any cell, being cut off by the viewport"
+    - step: 3
+      action: "Compare the grid's answered/marked cell colours against the actions just taken"
+      expected: "Exactly the answered questions show the answered colour, the marked one shows the marked colour (marked takes precedence over answered), and unvisited questions are visually distinct from both"
+    - step: 4
+      action: "Repeat at a 390px-wide viewport"
+      expected: "Identical behaviour; no horizontal overflow"
+  expected_result: >
+    The navigator is fully usable regardless of paper size or viewport width.
+    (REQ-WEB-010 validations)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    This is a regression guard: a real bug was found and fixed this phase — the grid's
+    scroll wrapper (`.navigator-scroll`, already defined in index.css with a comment
+    describing exactly this failure) was never actually applied in MockTestEngine.tsx's
+    JSX, so the Close button was unreachable on a real 100-question paper. Confirmed fixed
+    via a one-off Playwright script at both 1280px and 390px before this case was written.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-WEB-017
+  requirement_ids: [REQ-WEB-010]
+  scenario_id: SCN-WEB-016
+  system: Web
+  module: WEB
+  feature: Mock Test engine — unload guard
+  title: Leaving an active attempt is guarded; a finished one is not
+  objective: >
+    Confirm in-app navigation away from an active attempt is intercepted with a styled
+    confirmation, a tab close/refresh during an active attempt arms the native beforeunload
+    prompt, and neither fires once the attempt is submitted.
+  preconditions:
+    - "An attempt is in progress (started, not yet submitted)"
+  test_data: "Any mockable paper"
+  test_environment: "A real browser, not headless automation (beforeunload cannot be exercised under automation)"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "While an attempt is in progress, click a sidebar/nav link (e.g. Home)"
+      expected: "This app's own styled confirmation dialog appears; navigation does not happen until confirmed"
+    - step: 2
+      action: "While an attempt is in progress, attempt to close the tab or reload"
+      expected: "The browser's own native 'leave site?' prompt appears"
+    - step: 3
+      action: "Submit the attempt, then repeat steps 1 and 2"
+      expected: "Neither guard fires — navigation and reload both proceed immediately"
+  expected_result: >
+    An in-progress attempt cannot be lost to an accidental click or reload without a warning,
+    and a finished attempt never nags. (REQ-WEB-010 edge_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    The in-app half is straightforward to automate; the beforeunload half is not — browsers
+    deliberately suppress the native prompt under automated control, so this case is
+    manual-only by nature, not by omission.
+  automation_status: ManualOnly
+  automation_reference: ""

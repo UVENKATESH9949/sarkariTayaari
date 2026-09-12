@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useRouter } from "expo-router";
 import { Pressable, ScrollView, Text, TextInput, View, StyleSheet } from "react-native";
-import { getExams, type ExamResponse } from "../api/reference";
+import { getExams, type ExamResponse } from "@sarkaritaiyaari/core/api";
 import { followExam, getFollowedExams, unfollowExam, type FollowedExam } from "../db/followedExams";
 import { getExamGuideHybrid } from "../data/examGuideData";
 import { useHybridMode } from "../data/hybridSource";

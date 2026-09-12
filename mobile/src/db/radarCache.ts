@@ -1,7 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { db } from "./client";
 import { radarCache } from "./schema";
-import type { WeaknessRadar } from "../intelligence/types";
+import type { WeaknessRadar } from "@sarkaritaiyaari/core/intelligence";
 
 /**
  * Local reads and writes for the last Weakness Radar the server produced (migration 0018).

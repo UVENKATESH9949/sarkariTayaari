@@ -1,0 +1,9 @@
+{
+  "//": "Tests only. Adds Node's types because the fixture test reads sample-data/ off disk, exactly as the Java suite does. Kept separate from tsconfig.json so this allowance cannot leak into library source.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": []
+}

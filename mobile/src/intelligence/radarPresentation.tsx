@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Text, View, StyleSheet } from "react-native";
 import { radius, spacing } from "../ui/theme";
 import { useTheme, useThemedStyles, type Theme } from "../ui/ThemeContext";
-import type { RadarReasonCode, TopicHealthStateName } from "./types";
+import type { RadarReasonCode, TopicHealthStateName } from "@sarkaritaiyaari/core/intelligence";
 
 /**
  * How a radar state is worded and coloured (Weakness Radar v1, §16-§18).

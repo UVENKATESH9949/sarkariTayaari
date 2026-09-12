@@ -37,8 +37,8 @@ import {
   textAnswerEvaluator,
   mappingEvaluator,
   sequenceEvaluator,
-} from "../../../evaluation/questionEvaluator";
-import type { EvaluationOutcome } from "../../../evaluation/questionEvaluator";
+} from "@sarkaritaiyaari/core/evaluation";
+import type { EvaluationOutcome } from "@sarkaritaiyaari/core/evaluation";
 
 /** `null` for an empty/non-numeric entry — mirrors quiz.tsx's identical helper. */
 function parseNumericInput(raw: string | undefined): number | null {

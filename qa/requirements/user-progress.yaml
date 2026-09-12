@@ -1,0 +1,60 @@
+# USER-PROGRESS module — requirement repository
+#
+# Scope: the endpoints in api/USER-PROGRESS.md — ProgressController (practice sessions, mock
+# attempts), BookmarkController, TopicProgressController, FollowedExamController. This module
+# did not exist before TASK-2601 Phase 1: qa/'s original build (2026-09-10) scoped only AUTH,
+# CATALOG, QUESTIONS, and this endpoint family was never covered by any of them — a real,
+# pre-existing gap, not something Phase 1 caused. Phase 1 is the first client change to
+# actually exercise ProgressController's write-once /progress/sync contract from a NEW
+# consumer (the web app), so per AI_RULES.md §3.21 ("if the change touches a module qa/
+# doesn't cover yet, add that module") this file starts here — scoped precisely to what
+# Phase 1 touches (practice-session upload), not a retroactive full pass over bookmarks/
+# topic-progress/followed-exams, which remain genuinely uncovered until something touches them.
+#
+# automation_status is evidence-based, per qa/README.md's standing rule.
+
+- id: REQ-USERPROGRESS-001
+  feature: Web practice sessions upload via the existing write-once contract
+  module: USER-PROGRESS
+  system: [Backend, Web]
+  source_doc: api/USER-PROGRESS.md
+  source_section: "POST /api/progress/sync"
+  description: >
+    A signed-in student's completed web Practice session is uploaded to the server via the
+    same POST /api/progress/sync endpoint and the same PracticeSessionPayload/
+    PracticeResultPayload shape mobile already uses — becoming a real row in the same
+    user_practice_session_results history the phone app restores, not a web-only record.
+  business_rule: >
+    Write-once / upload-and-forget (api/USER-PROGRESS.md's documented rule for this
+    endpoint): the client generates the session id once and reuses it on any retry: a failed
+    upload is silently swallowed rather than surfaced to the student, since a lost upload
+    does not lose the student's own visible results (session.ts's own comment: "a failed
+    upload must never block the student from seeing their own results").
+  actor: Signed-in student
+  preconditions:
+    - "The student is signed in (has a valid bearer token) when the session finishes"
+  inputs:
+    - "A completed CompletedPracticeSession — id, completedAt, examLabel/subjectName/topicName/levelLabel, correctCount, totalCount, results[]"
+  expected_outputs:
+    - "201/200 from POST /api/progress/sync; the session appears in a later GET /api/progress restore"
+  validations:
+    - "selectedIndex/correctIndex are only populated for index-based types (SINGLE_CHOICE/ASSERTION_REASON/STATEMENT_COMBINATION); every type carries response/outcome/scoreFraction"
+  permissions:
+    - "Requires a valid user bearer token — a signed-out session is held only in this browser tab's sessionStorage and never uploaded"
+  dependencies:
+    - REQ-WEB-007
+  error_conditions:
+    - "A failed upload (network error, expired token) does not surface an error to the student and does not block navigation to the Summary screen"
+  edge_conditions:
+    - "totalCount reflects only CONFIRMED questions, matching mobile's own 'answered, not offered' convention — never every question the student merely saw"
+  offline_behavior: "None — the upload requires a network; the session's own results still render from sessionStorage regardless"
+  acceptance_criteria:
+    - "A web practice session uploaded while signed in is visible via GET /api/progress on the SAME account, including from a different client"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: >
+    ProgressSyncTest (backend) covers the endpoint's contract generically; there is no test
+    exercising it from the web client specifically, and no browser-test runner exists in this
+    project.

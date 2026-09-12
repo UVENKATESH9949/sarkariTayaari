@@ -1,0 +1,4 @@
+# USER-PROGRESS module — defects
+#
+# Empty by design. A defect record is created ONLY when a real test execution fails.
+[]

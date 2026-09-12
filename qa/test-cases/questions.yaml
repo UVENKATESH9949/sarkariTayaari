@@ -1,0 +1,2113 @@
+# QUESTIONS module — manual test cases (Phase 3)
+#
+# Every test case links to one scenario id and one or more requirement ids. A test case is a
+# reusable DEFINITION — never overwritten by an execution (qa/execution/*.yaml, not yet
+# created). Expected results are derived strictly from the linked requirement's
+# acceptance_criteria/error_conditions/edge_conditions — never from current controller/
+# mobile/admin/database implementation. Every case below is freshly generated and
+# UNEXECUTED: actual_result is empty, status is Not Executed, defect_id is empty. No tester
+# name, date, build, credential, or result has been invented.
+#
+# REVIEWER-related cases (REQ-QUESTIONS-019 / SCN-QUESTIONS-043): the documented
+# ADMIN/STUDENT/anonymous authorization matrix is tested normally (TC-QUESTIONS-042). The
+# REVIEWER-role path itself (TC-QUESTIONS-043) is preserved as execution-blocked — no
+# provisioning path is invented, and the case must never be marked passed on the strength of
+# the endpoint merely existing.
+#
+# Documented-deviation cases (Cloudinary-failure 500, sectional... n/a to this module) assert
+# the actual documented behavior. Genuinely-ambiguous cases (soft-delete idempotency, empty
+# bulk-delete array, malformed supportedTypes) do not pre-assert an outcome.
+
+- id: TC-QUESTIONS-001
+  requirement_ids: [REQ-QUESTIONS-001]
+  scenario_id: SCN-QUESTIONS-001
+  system: Backend
+  module: QUESTIONS
+  feature: Question creation
+  title: Valid question create returns correctly resolved metadata
+  objective: >
+    Confirm a valid create payload returns 201 with correctly populated subjectId/
+    subjectName/topicId/topicName/examCodes fields.
+  preconditions:
+    - "An existing topic, difficulty level, and at least one exam code are available"
+  test_data: "TESTDATA-QUESTIONS-TOPIC-01, TESTDATA-QUESTIONS-DIFFICULTY-01, TESTDATA-QUESTIONS-EXAMCODE-01"
+  test_environment: "Backend (dev), admin token"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST /api/questions with a valid SINGLE_CHOICE payload (topicId, difficulty, examCodes, translations incl. \"en\")"
+      expected: >
+        201 Created; response's subjectId/subjectName/topicId/topicName are correctly
+        resolved, examCodes is sorted
+  expected_result: >
+    Creating with a valid payload returns 201 with correctly populated metadata fields.
+    (REQ-QUESTIONS-001 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "QuestionCrudTest.createThenGet_returnsSameData"
+
+- id: TC-QUESTIONS-002
+  requirement_ids: [REQ-QUESTIONS-001]
+  scenario_id: SCN-QUESTIONS-002
+  system: Backend
+  module: QUESTIONS
+  feature: Question creation
+  title: "Missing root-language (\"en\") translation rejected"
+  objective: Confirm a create payload with no "en" entry in translations is rejected.
+  preconditions: []
+  test_data: "A valid payload with only a \"hi\" translation, no \"en\""
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: Medium
+  test_type: Validation
+  steps:
+    - step: 1
+      action: "POST /api/questions with translations containing only \"hi\", no \"en\""
+      expected: "400"
+  expected_result: >
+    A payload missing an "en" translation is rejected with 400. (REQ-QUESTIONS-001
+    acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "QuestionCrudTest.create_missingRootLanguage_returns400"
+
+- id: TC-QUESTIONS-003
+  requirement_ids: [REQ-QUESTIONS-001]
+  scenario_id: SCN-QUESTIONS-003
+  system: Backend
+  module: QUESTIONS
+  feature: Question creation
+  title: Unknown topicId, difficulty, or exam code each rejected
+  objective: >
+    Confirm create is rejected 400 when topicId, difficulty, or any examCodes entry doesn't
+    resolve — three related field-level checks on the same endpoint, kept as one test case
+    since each is a simple existence check following an identical pattern.
+  preconditions: []
+  test_data: "A valid base payload, substituting one field at a time with a nonexistent reference"
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: Medium
+  test_type: Validation
+  steps:
+    - step: 1
+      action: "POST /api/questions with a nonexistent topicId, all else valid"
+      expected: "400"
+    - step: 2
+      action: "POST /api/questions with a nonexistent difficulty code, all else valid"
+      expected: "400"
+    - step: 3
+      action: "POST /api/questions with an examCodes entry that doesn't resolve, all else valid"
+      expected: "400"
+  expected_result: >
+    Create is rejected 400 when topicId, difficulty, or any exam code doesn't resolve.
+    (REQ-QUESTIONS-001 error_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: >
+    QuestionCrudTest.create_unknownLanguageCode_returns400, create_unknownExamCode_returns400
+
+- id: TC-QUESTIONS-004
+  requirement_ids: [REQ-QUESTIONS-002]
+  scenario_id: SCN-QUESTIONS-004
+  system: Backend
+  module: QUESTIONS
+  feature: Multi-type answer validation
+  title: Index-based types derive answerKey server-side from correctAnswer
+  objective: >
+    Confirm SINGLE_CHOICE, ASSERTION_REASON, and STATEMENT_COMBINATION each resolve
+    answerKey from correctAnswer server-side, ignoring any client-sent answerKey.
+  preconditions:
+    - "A valid topic/difficulty/exam code combination is available"
+  test_data: "One question of each of the three types, each with a client-sent (deliberately wrong) answerKey"
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST a SINGLE_CHOICE question with correctAnswer=\"B\" and a client-sent answerKey pointing at a different option"
+      expected: "201; response's answerKey reflects option B (derived from correctAnswer), not the client-sent value"
+    - step: 2
+      action: "Repeat for ASSERTION_REASON"
+      expected: "Same derivation behavior"
+    - step: 3
+      action: "Repeat for STATEMENT_COMBINATION"
+      expected: "Same derivation behavior"
+  expected_result: >
+    answerKey is resolved from correctAnswer server-side for these three types; any
+    client-sent answerKey is ignored. (REQ-QUESTIONS-002 business_rule)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: >
+    None cited for this exact scenario among the Questions-module CRUD tests read;
+    type-specific evaluator tests exist in a separate, out-of-scope test class.
+
+- id: TC-QUESTIONS-005
+  requirement_ids: [REQ-QUESTIONS-002]
+  scenario_id: SCN-QUESTIONS-005
+  system: Backend
+  module: QUESTIONS
+  feature: Multi-type answer validation
+  title: "Option-set types (MULTIPLE_CHOICE/TRUE_FALSE) accept and validate their documented answerKey shapes"
+  objective: >
+    Confirm MULTIPLE_CHOICE requires a non-empty correctOptions array and TRUE_FALSE requires
+    a correctBoolean — split from the free-input family (TC-QUESTIONS-006) since these two
+    share the "option-set" family per REQ-QUESTIONS-002's own categorization, while
+    NUMERIC/FILL_BLANK are a materially different ("free-input") shape.
+  preconditions:
+    - "A valid topic/difficulty/exam code combination is available"
+  test_data: "One MULTIPLE_CHOICE question, one TRUE_FALSE question"
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST a MULTIPLE_CHOICE question with answerKey.correctOptions=[0,2] (non-empty, 0-based)"
+      expected: "201; answerKey round-trips correctly, options array is exactly 4"
+    - step: 2
+      action: "POST a TRUE_FALSE question with answerKey.correctBoolean=true"
+      expected: "201; answerKey round-trips correctly, options array is empty []"
+  expected_result: >
+    MULTIPLE_CHOICE and TRUE_FALSE each accept and validate their documented answerKey
+    shapes. (REQ-QUESTIONS-002 business_rule)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "None cited among the Questions-module CRUD tests read."
+
+- id: TC-QUESTIONS-006
+  requirement_ids: [REQ-QUESTIONS-002]
+  scenario_id: SCN-QUESTIONS-005
+  system: Backend
+  module: QUESTIONS
+  feature: Multi-type answer validation
+  title: "Free-input types (NUMERIC/FILL_BLANK) accept their shapes; NUMERIC's tolerance defaults to 0.0"
+  objective: >
+    Confirm NUMERIC accepts correctValue with an optional tolerance (defaulting 0.0), and
+    FILL_BLANK accepts a non-empty acceptedAnswers array.
+  preconditions:
+    - "A valid topic/difficulty/exam code combination is available"
+  test_data: "One NUMERIC question (tolerance omitted), one FILL_BLANK question"
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST a NUMERIC question with answerKey.correctValue set, tolerance omitted"
+      expected: "201; response's answerKey.tolerance is 0.0, not null or an error"
+    - step: 2
+      action: "POST a FILL_BLANK question with answerKey.acceptedAnswers=[\"Delhi\",\"New Delhi\"]"
+      expected: "201; answerKey round-trips correctly"
+  expected_result: >
+    NUMERIC and FILL_BLANK each accept their documented shapes; omitted tolerance defaults
+    to 0.0. (REQ-QUESTIONS-002 business_rule, acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "None cited among the Questions-module CRUD tests read."
+
+- id: TC-QUESTIONS-007
+  requirement_ids: [REQ-QUESTIONS-002]
+  scenario_id: SCN-QUESTIONS-006
+  system: Backend
+  module: QUESTIONS
+  feature: Multi-type answer validation
+  title: MATCH and ORDERING accept their contentStructure + answerKey shapes
+  objective: >
+    Confirm MATCH accepts correctMapping covering every leftKey, and ORDERING accepts a
+    correctOrder permutation of itemKeys.
+  preconditions:
+    - "A valid topic/difficulty/exam code combination is available"
+  test_data: "One MATCH question (2+ leftKeys/rightKeys), one ORDERING question (2+ itemKeys)"
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST a MATCH question with contentStructure.{leftKeys,rightKeys} and a complete answerKey.correctMapping"
+      expected: "201; contentStructure/answerKey round-trip correctly"
+    - step: 2
+      action: "POST an ORDERING question with contentStructure.itemKeys and a valid answerKey.correctOrder permutation"
+      expected: "201; contentStructure/answerKey round-trip correctly"
+  expected_result: >
+    MATCH and ORDERING each accept their documented contentStructure + answerKey shapes.
+    (REQ-QUESTIONS-002 business_rule)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "None cited among the Questions-module CRUD tests read."
+
+- id: TC-QUESTIONS-008
+  requirement_ids: [REQ-QUESTIONS-002]
+  scenario_id: SCN-QUESTIONS-007
+  system: Backend
+  module: QUESTIONS
+  feature: Multi-type answer validation
+  title: Malformed answerKey for a MATCH question rejected
+  objective: >
+    Confirm a MATCH question whose correctMapping is missing an entry for one of its
+    leftKeys is rejected.
+  preconditions:
+    - "A valid topic/difficulty/exam code combination is available"
+  test_data: "A MATCH question with contentStructure.leftKeys=[\"a\",\"b\"] but correctMapping only covering \"a\""
+  test_environment: "Backend (dev), admin token"
+  priority: Medium
+  severity: Medium
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "POST a MATCH question whose correctMapping omits an entry for leftKey \"b\""
+      expected: "400"
+  expected_result: >
+    A MATCH question with an incomplete correctMapping is rejected. (REQ-QUESTIONS-002
+    acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "None cited among the Questions-module CRUD tests read."
+
+- id: TC-QUESTIONS-009
+  requirement_ids: [REQ-QUESTIONS-002]
+  scenario_id: SCN-QUESTIONS-008
+  system: Backend
+  module: QUESTIONS
+  feature: Multi-type answer validation
+  title: Creating a question of a non-authorable questionType rejected
+  objective: >
+    Confirm attempting to create a question with a questionType that has
+    is_authoring_enabled: false is rejected.
+  preconditions:
+    - "At least one questionType with authoringEnabled: false exists (per REQ-QUESTIONS-025's documented 2-of-11 non-authorable types)"
+  test_data: "One of the two known non-authorable questionType codes"
+  test_environment: "Backend (dev), admin token"
+  priority: Medium
+  severity: Medium
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "POST /api/questions with questionType set to a non-authorable code"
+      expected: "400"
+  expected_result: >
+    Creating a question of a non-authorable type is rejected. (REQ-QUESTIONS-002
+    business_rule, error_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "None cited."
+
+- id: TC-QUESTIONS-010
+  requirement_ids: [REQ-QUESTIONS-002]
+  scenario_id: SCN-QUESTIONS-009
+  system: Backend
+  module: QUESTIONS
+  feature: Multi-type answer validation
+  title: questionType and contentStructure are immutable after creation
+  objective: >
+    Confirm the update payload has no field for questionType/contentStructure, and attempting
+    to include either has no effect.
+  preconditions:
+    - "An existing SINGLE_CHOICE question"
+  test_data: "The existing question's id"
+  test_environment: "Backend (dev), admin token"
+  priority: Medium
+  severity: Low
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "PUT /api/questions/{id} including an extra questionType field set to a different type"
+      expected: "200 OK; the extra field is ignored (no binding target) and questionType on GET remains unchanged"
+  expected_result: >
+    questionType/contentStructure cannot be changed via PUT — no field exists to bind to.
+    (REQ-QUESTIONS-002 edge_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "None cited."
+
+- id: TC-QUESTIONS-011
+  requirement_ids: [REQ-QUESTIONS-003]
+  scenario_id: SCN-QUESTIONS-010
+  system: Backend
+  module: QUESTIONS
+  feature: Translation management
+  title: Adding a new-language translation preserves existing ones
+  objective: Confirm adding a Hindi translation to an English-only question keeps English intact.
+  preconditions:
+    - "An existing question with only an \"en\" translation"
+  test_data: "The existing question's id, a valid \"hi\" translation payload"
+  test_environment: "Backend (dev), admin token"
+  priority: Critical
+  severity: High
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "PUT /api/questions/{id}/translations/hi with a valid Hindi translation"
+      expected: "200 OK"
+    - step: 2
+      action: "GET /api/questions/{id}"
+      expected: "Both \"en\" and \"hi\" translations are present, English content unchanged"
+  expected_result: >
+    Adding a new language preserves existing ones (upsert, not replace-all).
+    (REQ-QUESTIONS-003 acceptance_criteria, edge_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "QuestionCrudTest.upsertTranslation_addsNewLanguageWithoutRemovingExisting"
+
+- id: TC-QUESTIONS-012
+  requirement_ids: [REQ-QUESTIONS-003]
+  scenario_id: SCN-QUESTIONS-011
+  system: Backend
+  module: QUESTIONS
+  feature: Translation management
+  title: Unknown language code rejected
+  objective: >
+    Confirm PUT /api/questions/{id}/translations/{lang} with an unrecognized language code
+    is rejected — split from TC-QUESTIONS-013 since "unknown reference" and "wrong content
+    shape" are different validation categories.
+  preconditions:
+    - "An existing question"
+  test_data: "The existing question's id, lang=\"xx\" (not a registered language)"
+  test_environment: "Backend (dev), admin token"
+  priority: Medium
+  severity: Medium
+  test_type: Validation
+  steps:
+    - step: 1
+      action: "PUT /api/questions/{id}/translations/xx with an otherwise valid translation body"
+      expected: "400"
+  expected_result: "An unknown language code is rejected 400. (REQ-QUESTIONS-003 validations)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "None cited beyond the positive-path test."
+
+- id: TC-QUESTIONS-013
+  requirement_ids: [REQ-QUESTIONS-003]
+  scenario_id: SCN-QUESTIONS-011
+  system: Backend
+  module: QUESTIONS
+  feature: Translation management
+  title: Options not matching the question's type shape rejected
+  objective: >
+    Confirm submitting an options array with the wrong count/shape for the question's actual
+    type (e.g. 3 options for a SINGLE_CHOICE question, which requires exactly 4) is rejected.
+  preconditions:
+    - "An existing SINGLE_CHOICE question"
+  test_data: "The existing question's id, a translation payload with only 3 options"
+  test_environment: "Backend (dev), admin token"
+  priority: Medium
+  severity: Medium
+  test_type: Validation
+  steps:
+    - step: 1
+      action: "PUT /api/questions/{id}/translations/en with options.length == 3"
+      expected: "400"
+  expected_result: >
+    Wrong option count/shape for the question's type is rejected. (REQ-QUESTIONS-003
+    validations)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "None cited."
+
+- id: TC-QUESTIONS-014
+  requirement_ids: [REQ-QUESTIONS-004]
+  scenario_id: SCN-QUESTIONS-012
+  system: Backend
+  module: QUESTIONS
+  feature: PYQ provenance
+  title: "pyq=false force-clears provenance fields regardless of what was sent"
+  objective: >
+    Confirm sending pyq=false with non-null pyqYear/pyqShift/sourcePaperId/questionNumber
+    results in all four stored as null.
+  preconditions:
+    - "An existing exam paper (for sourcePaperId)"
+  test_data: "pyq=false, pyqYear=2023, pyqShift=\"Shift 2\", a valid sourcePaperId, questionNumber=5"
+  test_environment: "Backend (dev), admin token"
+  priority: Medium
+  severity: Medium
+  test_type: DataIntegrity
+  steps:
+    - step: 1
+      action: "POST /api/questions with pyq=false and all four provenance fields set to non-null values"
+      expected: "201; response shows pyqYear/pyqShift/sourcePaperId/questionNumber all null"
+  expected_result: >
+    Sending pyq=false results in all four provenance fields stored as null.
+    (REQ-QUESTIONS-004 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "None found."
+
+- id: TC-QUESTIONS-015
+  requirement_ids: [REQ-QUESTIONS-005]
+  scenario_id: SCN-QUESTIONS-013
+  system: Backend
+  module: QUESTIONS
+  feature: Question metadata update
+  title: Updating topicId changes the response and bumps updatedAt
+  objective: Confirm a metadata-only update (topicId) is reflected and bumps updatedAt.
+  preconditions:
+    - "An existing question; a second, different valid topicId is available"
+  test_data: "The existing question's id, a new topicId"
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Record the question's current updatedAt, then PUT /api/questions/{id} with a new topicId"
+      expected: "200 OK; response topicId/topicName reflect the new topic, updatedAt is later than before"
+  expected_result: >
+    Updating topicId changes the response and bumps updatedAt. (REQ-QUESTIONS-005
+    acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "QuestionCrudTest.update_changesCoreFields"
+
+- id: TC-QUESTIONS-016
+  requirement_ids: [REQ-QUESTIONS-006]
+  scenario_id: SCN-QUESTIONS-014
+  system: Backend
+  module: QUESTIONS
+  feature: Question read
+  title: Reading a soft-deleted question returns full content, not 404
+  objective: Confirm GET on a soft-deleted question id returns 200 with deleted:true and full content.
+  preconditions:
+    - "An existing question, soft-deleted (via DELETE /api/questions/{id})"
+  test_data: "The soft-deleted question's id"
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: Medium
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "GET /api/questions/{id} for a soft-deleted question"
+      expected: "200 OK; deleted: true; all translations/options still present"
+  expected_result: >
+    A soft-deleted question returns 200 with deleted:true and full content, not 404.
+    (REQ-QUESTIONS-006 acceptance_criteria, edge_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "QuestionCrudTest.delete_softDeletes_stillReadableAsDeleted"
+
+- id: TC-QUESTIONS-017
+  requirement_ids: [REQ-QUESTIONS-007]
+  scenario_id: SCN-QUESTIONS-015
+  system: Backend
+  module: QUESTIONS
+  feature: Admin question list
+  title: Admin list filters by exam code, including soft-deleted rows
+  objective: >
+    Confirm filtering the admin question list by examCode returns only that exam's
+    questions, with soft-deleted ones included.
+  preconditions:
+    - "At least one active and one soft-deleted question exist for the same exam code"
+  test_data: "TESTDATA-QUESTIONS-EXAMCODE-01"
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "GET /api/questions?examCode=TESTDATA-QUESTIONS-EXAMCODE-01"
+      expected: >
+        Both the active and the soft-deleted question for that exam appear; questions from
+        other exams do not
+  expected_result: >
+    Filtering by a known examCode returns only that exam's questions, soft-deleted ones
+    included. (REQ-QUESTIONS-007 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "QuestionCrudTest.list_filtersByExamCode"
+
+- id: TC-QUESTIONS-018
+  requirement_ids: [REQ-QUESTIONS-008]
+  scenario_id: SCN-QUESTIONS-016
+  system: Backend
+  module: QUESTIONS
+  feature: Soft delete
+  title: Soft-deleting a question tombstones it without physical removal
+  objective: Confirm DELETE returns 204 and the question is retrievable afterward as a tombstone.
+  preconditions:
+    - "An existing, active question"
+  test_data: "The existing question's id"
+  test_environment: "Backend (dev), admin token"
+  priority: Critical
+  severity: High
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "DELETE /api/questions/{id}"
+      expected: "204 No Content"
+    - step: 2
+      action: "GET /api/questions/{id}"
+      expected: "200 OK; deleted: true, content still present"
+  expected_result: >
+    DELETE returns 204; a subsequent GET shows deleted:true. (REQ-QUESTIONS-008
+    acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "QuestionCrudTest.delete_softDeletes_stillReadableAsDeleted"
+
+- id: TC-QUESTIONS-019
+  requirement_ids: [REQ-QUESTIONS-008]
+  scenario_id: SCN-QUESTIONS-017
+  system: Backend
+  module: QUESTIONS
+  feature: Soft delete
+  title: Deleting an already-soft-deleted question — idempotency undetermined
+  objective: >
+    Determine whether a second DELETE call on an already-soft-deleted question returns 204
+    (idempotent) or an error. No source specifies this.
+  preconditions:
+    - "An existing question, already soft-deleted"
+  test_data: "The already-soft-deleted question's id"
+  test_environment: "Backend (dev), admin token"
+  priority: Low
+  severity: Low
+  test_type: Ambiguous
+  steps:
+    - step: 1
+      action: "DELETE /api/questions/{id} for a question that is already deleted:true"
+      expected: "Record the actual response status and body"
+  expected_result: >
+    UNDETERMINED BY DESIGN — REQ-QUESTIONS-008's ambiguity field asks whether this is
+    idempotent 204 or an error. Do not pre-assert an outcome; record what execution actually
+    observes.
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Per REQ-QUESTIONS-008's ambiguity field and qa/requirements/_conflicts.md §5."
+  automation_status: CandidateForAutomation
+  automation_reference: "None found."
+
+- id: TC-QUESTIONS-020
+  requirement_ids: [REQ-QUESTIONS-009]
+  scenario_id: SCN-QUESTIONS-018
+  system: Backend
+  module: QUESTIONS
+  feature: Bulk delete
+  title: Bulk delete counts only ids that actually existed
+  objective: Confirm a mixed valid/nonexistent id list returns deletedCount matching only the valid ones.
+  preconditions:
+    - "Three existing, active questions"
+  test_data: "3 real question ids + 2 nonexistent uuids in one request"
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST /api/questions/bulk-delete with {ids: [3 real ids, 2 nonexistent uuids]}"
+      expected: "200/201; {deletedCount: 3}; the 3 real questions are now deleted:true; the 2 unknown ids caused no error"
+  expected_result: >
+    Deleting 3 valid + 2 nonexistent ids returns {deletedCount: 3}. (REQ-QUESTIONS-009
+    acceptance_criteria, edge_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "BulkOperationsTest.bulkDelete_marksAllAsDeleted"
+
+- id: TC-QUESTIONS-021
+  requirement_ids: [REQ-QUESTIONS-009]
+  scenario_id: SCN-QUESTIONS-019
+  system: Backend
+  module: QUESTIONS
+  feature: Bulk delete
+  title: Empty ids array on bulk-delete — behavior undetermined
+  objective: >
+    Determine the exact response for a bulk-delete request with an empty ids array — the
+    doc states "(non-empty)" but not the failure shape.
+  preconditions: []
+  test_data: "{ids: []}"
+  test_environment: "Backend (dev), admin token"
+  priority: Low
+  severity: Low
+  test_type: Ambiguous
+  steps:
+    - step: 1
+      action: "POST /api/questions/bulk-delete with {ids: []}"
+      expected: "Record the actual response — status code and body"
+  expected_result: >
+    UNDETERMINED BY DESIGN — record actual behavior for a product/engineering decision
+    rather than asserting a guessed status code. (REQ-QUESTIONS-009 ambiguity field)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Per REQ-QUESTIONS-009's ambiguity field."
+  automation_status: CandidateForAutomation
+  automation_reference: "None found."
+
+- id: TC-QUESTIONS-022
+  requirement_ids: [REQ-QUESTIONS-010]
+  scenario_id: SCN-QUESTIONS-020
+  system: Backend
+  module: QUESTIONS
+  feature: Bulk import
+  title: All-valid bulk import creates every question, auto-creating subject/topic by name
+  objective: >
+    Confirm a fully valid batch creates every row, and a subject/topic name not yet existing
+    is auto-created (not rejected).
+  preconditions:
+    - "TESTDATA-QUESTIONS-NEW-SUBJECT-NAME-01/TESTDATA-QUESTIONS-NEW-TOPIC-NAME-01 do not yet exist"
+    - "A valid exam code and difficulty level exist"
+  test_data: "A batch of 3 valid rows, one referencing a new subject/topic name pair"
+  test_environment: "Backend (dev), admin token"
+  priority: Critical
+  severity: High
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST /api/questions/bulk-import with 3 valid rows"
+      expected: "201; createdCount: 3, failures: []"
+    - step: 2
+      action: "GET /api/subjects and /api/topics"
+      expected: "The new subject/topic names now exist, auto-created rather than rejected"
+  expected_result: >
+    An all-valid batch creates every row; a not-yet-existing subject/topic name is
+    auto-created. (REQ-QUESTIONS-010 acceptance_criteria, business_rule)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: >
+    BulkOperationsTest.bulkImport_allValid_createsEveryQuestion,
+    bulkImport_reusesExistingSubjectAndTopicByName_doesNotDuplicate
+
+- id: TC-QUESTIONS-023
+  requirement_ids: [REQ-QUESTIONS-010]
+  scenario_id: SCN-QUESTIONS-021
+  system: Backend
+  module: QUESTIONS
+  feature: Bulk import
+  title: One bad item in a bulk-import batch does not block the others
+  objective: >
+    Confirm a batch with one invalid row still creates the valid rows, reporting the bad one
+    in failures by index.
+  preconditions:
+    - "A valid exam code and difficulty level exist"
+  test_data: "A batch of 2 rows: item[0] valid, item[1] missing its root-language translation"
+  test_environment: "Backend (dev), admin token"
+  priority: Critical
+  severity: High
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "POST /api/questions/bulk-import with 1 valid + 1 invalid row"
+      expected: >
+        201; createdCount: 1; failures: [{index: 1, error: "..."}]; the valid item is NOT
+        rolled back
+  expected_result: >
+    A 2-item batch with 1 valid + 1 invalid item returns createdCount: 1 and a failures
+    entry for the bad one, without rolling back the valid one. (REQ-QUESTIONS-010
+    acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "BulkOperationsTest.bulkImport_oneBadItem_doesNotBlockTheOthers"
+
+- id: TC-QUESTIONS-024
+  requirement_ids: [REQ-QUESTIONS-010]
+  scenario_id: SCN-QUESTIONS-022
+  system: Backend
+  module: QUESTIONS
+  feature: Bulk import
+  title: Unknown exam code in a bulk-import row fails only that item
+  objective: Confirm a row referencing a nonexistent exam code fails only that row, not the whole batch.
+  preconditions: []
+  test_data: "A batch of 2 rows: item[0] valid, item[1] with an examCodes entry that doesn't exist"
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: Medium
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "POST /api/questions/bulk-import with item[1] referencing a nonexistent exam code"
+      expected: "201; createdCount: 1; failures contains index 1 only"
+  expected_result: >
+    A row referencing a nonexistent exam code fails only that row. (REQ-QUESTIONS-010
+    acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "BulkOperationsTest.bulkImport_unknownExamCode_failsThatItemOnly"
+
+- id: TC-QUESTIONS-025
+  requirement_ids: [REQ-QUESTIONS-010]
+  scenario_id: SCN-QUESTIONS-023
+  system: Backend
+  module: QUESTIONS
+  feature: Bulk import
+  title: A batch-level DB flush failure fails every row in that 50-row batch
+  objective: >
+    Confirm (if reproducible) that a flush-level failure for one 50-row batch reports every
+    row in that batch as failed, not just the one actual cause.
+  preconditions:
+    - ">=50 rows queued in one bulk-import request, with a condition able to force a batch-level DB flush failure"
+  test_data: "50+ rows engineered to trigger a shared batch-flush failure (e.g. a constraint violation that only manifests at flush time)"
+  test_environment: "Backend (dev), admin token"
+  priority: Low
+  severity: Low
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "POST a bulk-import batch of 50+ rows engineered to fail at the DB flush level partway through the first 50-row batch"
+      expected: "All 50 rows in the affected batch are reported as failed in the response's failures array"
+  expected_result: >
+    A batch-level DB flush failure fails every row in that batch. (REQ-QUESTIONS-010
+    edge_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    May be genuinely hard to force deliberately without a contrived DB-level failure
+    condition. Mark N/A with a note if the trigger cannot be reproduced in the target
+    environment, per this project's own manual-QA convention (reports/manual-test-cases.md)
+    for exactly this class of case, rather than skip silently.
+  automation_status: CandidateForAutomation
+  automation_reference: "None found."
+
+- id: TC-QUESTIONS-026
+  requirement_ids: [REQ-QUESTIONS-011]
+  scenario_id: SCN-QUESTIONS-024
+  system: Backend
+  module: QUESTIONS
+  feature: Bulk import duplicate detection
+  title: Same question text imported twice in one batch — both created, second flagged duplicate
+  objective: >
+    Confirm importing identical question text twice within one batch creates both rows, with
+    the second flagged as a duplicate of the first.
+  preconditions: []
+  test_data: "A batch of 2 rows with byte-identical English question text"
+  test_environment: "Backend (dev), admin token"
+  priority: Medium
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST /api/questions/bulk-import with 2 rows carrying identical English text"
+      expected: >
+        201; createdCount: 2; duplicatesDetected maps the second question's id to the
+        first's
+  expected_result: >
+    Both rows are created, and duplicatesDetected maps the second to the first.
+    (REQ-QUESTIONS-011 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "None found — EpicLIntelligenceTest covers create-based detection, not this batch-specific case."
+
+- id: TC-QUESTIONS-027
+  requirement_ids: [REQ-QUESTIONS-012]
+  scenario_id: SCN-QUESTIONS-025
+  system: Backend
+  module: QUESTIONS
+  feature: Content sync
+  title: "Full sync (since omitted/blank/\"0\") returns the entire bank"
+  objective: Confirm a sync call with no `since` param returns results from the full bank.
+  preconditions: []
+  test_data: none
+  test_environment: "Backend (dev)"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "GET /api/questions/sync with no since param"
+      expected: "200; totalElements matches the full non-deleted-plus-tombstone bank size"
+    - step: 2
+      action: "GET /api/questions/sync?since=0"
+      expected: "Identical result to step 1"
+  expected_result: >
+    Full sync (since omitted/blank/"0") returns the entire bank. (REQ-QUESTIONS-012
+    business_rule)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "SyncEndpointTest.sinceZero_returns200AndRespectsPageSize"
+
+- id: TC-QUESTIONS-028
+  requirement_ids: [REQ-QUESTIONS-012]
+  scenario_id: SCN-QUESTIONS-026
+  system: Backend
+  module: QUESTIONS
+  feature: Content sync
+  title: Delta sync returns only changes after the cutoff, ordered ascending
+  objective: >
+    Confirm a sync call with `since` set between two questions' updatedAt values returns
+    only the later one, and results are ordered ascending.
+  preconditions:
+    - "Two questions with known, distinct updatedAt timestamps (A earlier, B later)"
+  test_data: "Question A, Question B, a since value between their updatedAt values"
+  test_environment: "Backend (dev)"
+  priority: Critical
+  severity: High
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "GET /api/questions/sync?since=<timestamp between A and B's updatedAt>"
+      expected: "Response includes B, not A; results ordered ascending by updatedAt"
+  expected_result: >
+    Delta sync with a cutoff after A but before B returns B but not A, ascending order.
+    (REQ-QUESTIONS-012 acceptance_criteria, business_rule)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "SyncEndpointTest.deltaSync_onlyReturnsChangesAfterCutoff"
+
+- id: TC-QUESTIONS-029
+  requirement_ids: [REQ-QUESTIONS-012]
+  scenario_id: SCN-QUESTIONS-027
+  system: Backend
+  module: QUESTIONS
+  feature: Content sync
+  title: Invalid since timestamp rejected
+  objective: Confirm a `since` value that fails ISO-8601 parsing (and isn't blank/"0") returns 400.
+  preconditions: []
+  test_data: "since=not-a-real-timestamp"
+  test_environment: "Backend (dev)"
+  priority: Medium
+  severity: Medium
+  test_type: Validation
+  steps:
+    - step: 1
+      action: "GET /api/questions/sync?since=not-a-real-timestamp"
+      expected: "400"
+  expected_result: "An invalid since value returns 400. (REQ-QUESTIONS-012 error_conditions)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "SyncEndpointTest.invalidSinceFormat_returns400"
+
+- id: TC-QUESTIONS-030
+  requirement_ids: [REQ-QUESTIONS-012, REQ-QUESTIONS-026]
+  scenario_id: SCN-QUESTIONS-028
+  system: Backend
+  module: QUESTIONS
+  feature: Content sync
+  title: Requested page size above the documented max is silently clamped
+  objective: Confirm requesting size above 1000 on /sync is clamped to 1000, not rejected.
+  preconditions: []
+  test_data: "size=5000"
+  test_environment: "Backend (dev)"
+  priority: High
+  severity: Medium
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "GET /api/questions/sync?size=5000"
+      expected: "200; the response's page size is 1000, not 5000 or an error"
+  expected_result: >
+    A requested size above the max is silently clamped, not rejected. (REQ-QUESTIONS-012
+    edge_conditions, REQ-QUESTIONS-026 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "SyncEndpointTest.pageSize_isRespected"
+
+- id: TC-QUESTIONS-031
+  requirement_ids: [REQ-QUESTIONS-013]
+  scenario_id: SCN-QUESTIONS-029
+  system: Backend
+  module: QUESTIONS
+  feature: Sync tombstones
+  title: A deleted question syncs as a full-content tombstone
+  objective: >
+    Confirm deleting a question, then syncing with a cutoff before the delete, returns that
+    question with deleted:true and its full translated content.
+  preconditions:
+    - "An existing question, not yet deleted"
+  test_data: "The existing question, its updatedAt before deletion"
+  test_environment: "Backend (dev)"
+  priority: Critical
+  severity: High
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Record the question's updatedAt, then DELETE /api/questions/{id}"
+      expected: "204 No Content"
+    - step: 2
+      action: "GET /api/questions/sync?since=<the recorded pre-delete updatedAt>"
+      expected: "The question appears with deleted:true and full, non-empty translations"
+  expected_result: >
+    A deleted question syncs as a full-content tombstone, not a stripped id-only row.
+    (REQ-QUESTIONS-013 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "SyncEndpointTest.deletedQuestions_areIncludedInSyncResults"
+
+- id: TC-QUESTIONS-032
+  requirement_ids: [REQ-QUESTIONS-014]
+  scenario_id: SCN-QUESTIONS-030
+  system: Backend
+  module: QUESTIONS
+  feature: Content-status gating
+  title: A DRAFT question is absent from every public read; a legacy PUBLISHED question is present
+  objective: >
+    Confirm a DRAFT question is withheld from /sync, /live, /counts, and /mock-sample, while
+    an implicitly-PUBLISHED legacy question appears in all four.
+  preconditions:
+    - "One DRAFT question and one PUBLISHED question, both matching the same filter set"
+  test_data: "A DRAFT question and a PUBLISHED question under the same topic/exam"
+  test_environment: "Backend (dev)"
+  priority: High
+  severity: High
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "GET /api/questions/sync (or a sufficiently recent since) and check for both questions"
+      expected: "PUBLISHED question present; DRAFT question absent"
+    - step: 2
+      action: "GET /api/questions/live filtered to the same topic"
+      expected: "Same result: PUBLISHED present, DRAFT absent"
+    - step: 3
+      action: "GET /api/questions/counts for the same topic"
+      expected: "Count reflects only the PUBLISHED question"
+    - step: 4
+      action: "GET /api/questions/mock-sample for the same exam/subject"
+      expected: "DRAFT question never appears in the sample"
+  expected_result: >
+    A non-PUBLISHED question is withheld from every public read on this controller.
+    (REQ-QUESTIONS-014 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "None found exercising content-status filtering across these endpoints."
+
+- id: TC-QUESTIONS-033
+  requirement_ids: [REQ-QUESTIONS-014, REQ-QUESTIONS-013]
+  scenario_id: SCN-QUESTIONS-031
+  system: Backend
+  module: QUESTIONS
+  feature: Content-status gating
+  title: A soft-deleted DRAFT question still tombstones out despite never being live-visible
+  objective: >
+    Confirm a question that was DRAFT and is then soft-deleted still appears as a tombstone
+    in sync results.
+  preconditions:
+    - "A DRAFT question, not yet deleted"
+  test_data: "The DRAFT question's id"
+  test_environment: "Backend (dev)"
+  priority: Medium
+  severity: Medium
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "DELETE the DRAFT question"
+      expected: "204 No Content"
+    - step: 2
+      action: "GET /api/questions/sync with a cutoff before the delete"
+      expected: "The question appears with deleted:true, despite having never been live-visible"
+  expected_result: >
+    A soft-deleted DRAFT question still tombstones out to clients. (REQ-QUESTIONS-014
+    edge_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "None found."
+
+- id: TC-QUESTIONS-034
+  requirement_ids: [REQ-QUESTIONS-015]
+  scenario_id: SCN-QUESTIONS-032
+  system: Backend
+  module: QUESTIONS
+  feature: Capability negotiation
+  title: supportedTypes excludes unsupported live types but still includes their tombstones
+  objective: >
+    Confirm a sync call declaring only SINGLE_CHOICE/MULTIPLE_CHOICE excludes a live NUMERIC
+    question but still includes a soft-deleted NUMERIC question.
+  preconditions:
+    - "One live NUMERIC question and one soft-deleted NUMERIC question exist"
+  test_data: "A live NUMERIC question, a soft-deleted NUMERIC question"
+  test_environment: "Backend (dev)"
+  priority: Medium
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "GET /api/questions/sync?supportedTypes=SINGLE_CHOICE,MULTIPLE_CHOICE"
+      expected: "The live NUMERIC question is absent; the soft-deleted NUMERIC question is present as a tombstone"
+  expected_result: >
+    Live rows of unsupported types are excluded; tombstones of any type are always included.
+    (REQ-QUESTIONS-015 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "None found."
+
+- id: TC-QUESTIONS-035
+  requirement_ids: [REQ-QUESTIONS-015]
+  scenario_id: SCN-QUESTIONS-033
+  system: Backend
+  module: QUESTIONS
+  feature: Capability negotiation
+  title: Omitted supportedTypes defaults to SINGLE_CHOICE only
+  objective: >
+    Confirm a sync/live call with no supportedTypes param behaves as if only SINGLE_CHOICE
+    were declared.
+  preconditions:
+    - "At least one live SINGLE_CHOICE question and one live NUMERIC question exist"
+  test_data: "A live SINGLE_CHOICE question, a live NUMERIC question"
+  test_environment: "Backend (dev)"
+  priority: Medium
+  severity: Medium
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "GET /api/questions/sync with no supportedTypes param at all"
+      expected: "The SINGLE_CHOICE question is present; the live NUMERIC question is absent"
+  expected_result: >
+    Omitted supportedTypes defaults to SINGLE_CHOICE only. (REQ-QUESTIONS-015 business_rule)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "None found."
+
+- id: TC-QUESTIONS-036
+  requirement_ids: [REQ-QUESTIONS-015]
+  scenario_id: SCN-QUESTIONS-034
+  system: Backend
+  module: QUESTIONS
+  feature: Capability negotiation
+  title: Malformed/unrecognized supportedTypes code — behavior undetermined
+  objective: >
+    Determine what happens when supportedTypes contains a code that doesn't match any known
+    questionType. No source documents this.
+  preconditions: []
+  test_data: "supportedTypes=SINGLE_CHOICE,NOT_A_REAL_TYPE"
+  test_environment: "Backend (dev)"
+  priority: Low
+  severity: Low
+  test_type: Ambiguous
+  steps:
+    - step: 1
+      action: "GET /api/questions/sync?supportedTypes=SINGLE_CHOICE,NOT_A_REAL_TYPE"
+      expected: "Record the actual response — success with the bad code silently ignored, a 400, or something else"
+  expected_result: >
+    UNDETERMINED BY DESIGN — record actual behavior rather than asserting a guessed outcome.
+    (REQ-QUESTIONS-015 ambiguity field)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Per REQ-QUESTIONS-015's ambiguity field."
+  automation_status: CandidateForAutomation
+  automation_reference: "None found."
+
+- id: TC-QUESTIONS-037
+  requirement_ids: [REQ-QUESTIONS-016]
+  scenario_id: SCN-QUESTIONS-035
+  system: Backend
+  module: QUESTIONS
+  feature: Live browsing
+  title: "/live filters correctly by topicId, excluding non-PUBLISHED and deleted questions"
+  objective: >
+    Confirm GET /api/questions/live filtered by topicId returns only non-deleted,
+    PUBLISHED, supported-type questions for that topic.
+  preconditions:
+    - "A topic with at least one PUBLISHED question and one soft-deleted question"
+  test_data: "TESTDATA-QUESTIONS-TOPIC-01"
+  test_environment: "Backend (dev)"
+  priority: High
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "GET /api/questions/live?topicId=TESTDATA-QUESTIONS-TOPIC-01"
+      expected: "Only the PUBLISHED, non-deleted question for that topic is returned"
+  expected_result: >
+    /live filtered by topicId returns only non-deleted, PUBLISHED questions of a supported
+    type. (REQ-QUESTIONS-016 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: >
+    LiveQuestionsTest.live_returnsOnlyNonDeletedQuestionsMatchingFilters,
+    live_filtersByDifficulty
+
+- id: TC-QUESTIONS-038
+  requirement_ids: [REQ-QUESTIONS-016]
+  scenario_id: SCN-QUESTIONS-036
+  system: Backend
+  module: QUESTIONS
+  feature: Live browsing
+  title: An unmatched filter combination on /live returns an empty page, not an error
+  objective: Confirm a filter combination matching zero questions returns 200 with an empty page.
+  preconditions: []
+  test_data: "A filter combination guaranteed to match nothing (e.g. an existing topicId crossed with a difficulty no question of that topic uses)"
+  test_environment: "Backend (dev)"
+  priority: Medium
+  severity: Low
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "GET /api/questions/live with a filter combination matching zero questions"
+      expected: "200; content: [], totalElements: 0"
+  expected_result: >
+    An unmatched filter returns an empty page, not an error. (REQ-QUESTIONS-016
+    acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "LiveQuestionsTest.live_unmatchedFilter_returnsEmptyNotError"
+
+- id: TC-QUESTIONS-039
+  requirement_ids: [REQ-QUESTIONS-017]
+  scenario_id: SCN-QUESTIONS-037
+  system: Backend
+  module: QUESTIONS
+  feature: Question counts
+  title: "/counts groups correctly and excludes deleted/non-published questions"
+  objective: Confirm groupBy=subject returns a correct per-subject count excluding deleted/non-PUBLISHED rows.
+  preconditions:
+    - "A subject with a known number of PUBLISHED, non-deleted questions, plus at least one DRAFT and one soft-deleted question under it"
+  test_data: "TESTDATA-QUESTIONS-SUBJECT-01"
+  test_environment: "Backend (dev)"
+  priority: Medium
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "GET /api/questions/counts?groupBy=subject"
+      expected: "The subject's count matches only its PUBLISHED, non-deleted questions"
+  expected_result: >
+    groupBy=subject excludes deleted/non-published questions. (REQ-QUESTIONS-017
+    acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "LiveQuestionsTest.counts_groupsBySubjectAndExcludesDeleted"
+
+- id: TC-QUESTIONS-040
+  requirement_ids: [REQ-QUESTIONS-017]
+  scenario_id: SCN-QUESTIONS-038
+  system: Backend
+  module: QUESTIONS
+  feature: Question counts
+  title: Missing groupBy rejected
+  objective: >
+    Confirm /counts with no groupBy param returns 400 — split from the unknown-value case
+    (TC-QUESTIONS-041) since "missing" and "unrecognized" are separately failable input
+    conditions on the same param.
+  preconditions: []
+  test_data: none
+  test_environment: "Backend (dev)"
+  priority: Medium
+  severity: Low
+  test_type: Validation
+  steps:
+    - step: 1
+      action: "GET /api/questions/counts (no groupBy)"
+      expected: "400"
+  expected_result: "Missing groupBy returns 400. (REQ-QUESTIONS-017 error_conditions)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "LiveQuestionsTest.counts_unknownGroupBy_returns400"
+
+- id: TC-QUESTIONS-041
+  requirement_ids: [REQ-QUESTIONS-017]
+  scenario_id: SCN-QUESTIONS-038
+  system: Backend
+  module: QUESTIONS
+  feature: Question counts
+  title: Unrecognized groupBy value rejected
+  objective: Confirm an unrecognized groupBy value (not exam/subject/topic/difficulty) returns 400.
+  preconditions: []
+  test_data: "groupBy=not_a_real_dimension"
+  test_environment: "Backend (dev)"
+  priority: Medium
+  severity: Low
+  test_type: Validation
+  steps:
+    - step: 1
+      action: "GET /api/questions/counts?groupBy=not_a_real_dimension"
+      expected: "400"
+  expected_result: "An unknown groupBy value returns 400. (REQ-QUESTIONS-017 edge_conditions)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "LiveQuestionsTest.counts_unknownGroupBy_returns400"
+
+- id: TC-QUESTIONS-042
+  requirement_ids: [REQ-QUESTIONS-018]
+  scenario_id: SCN-QUESTIONS-039
+  system: Backend
+  module: QUESTIONS
+  feature: Live mock assembly
+  title: /mock-sample returns a genuinely random sample spanning multiple subjects
+  objective: >
+    Confirm /mock-sample across two subjects with a set limit returns at most that many
+    questions, drawing from both subjects when both have content.
+  preconditions:
+    - "Two subjects under the same exam, each with several PUBLISHED, non-deleted questions"
+  test_data: "TESTDATA-QUESTIONS-EXAMCODE-01, two subjectIds, limit=10"
+  test_environment: "Backend (dev)"
+  priority: High
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "GET /api/questions/mock-sample?examCode=...&subjectIds=A,B&limit=10"
+      expected: >
+        <=10 questions returned; questions from both subject A and subject B are present
+        (not all from one subject)
+  expected_result: >
+    /mock-sample returns a sample spanning multiple subjects, respecting limit.
+    (REQ-QUESTIONS-018 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "LiveQuestionsTest.mockCount_and_mockSample_spanMultipleSubjects"
+
+- id: TC-QUESTIONS-043
+  requirement_ids: [REQ-QUESTIONS-018]
+  scenario_id: SCN-QUESTIONS-040
+  system: Backend
+  module: QUESTIONS
+  feature: Live mock assembly
+  title: /mock-sample excludes soft-deleted questions from its candidate pool
+  objective: Confirm a soft-deleted question is never returned even if it otherwise matches.
+  preconditions:
+    - "A soft-deleted question that would otherwise match the sample's exam/subject filter"
+  test_data: "The soft-deleted question, its exam/subject"
+  test_environment: "Backend (dev)"
+  priority: Medium
+  severity: Medium
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "GET /api/questions/mock-sample for the exam/subject containing the soft-deleted question, with a limit large enough to include it if it were eligible"
+      expected: "The soft-deleted question never appears in the sample"
+  expected_result: >
+    /mock-sample excludes soft-deleted questions from its candidate pool.
+    (REQ-QUESTIONS-018 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "LiveQuestionsTest.mockSample_excludesDeletedQuestions"
+
+- id: TC-QUESTIONS-044
+  requirement_ids: [REQ-QUESTIONS-018]
+  scenario_id: SCN-QUESTIONS-041
+  system: Backend
+  module: QUESTIONS
+  feature: Live mock assembly
+  title: Missing examCode or subjectIds rejected on both mock-assembly endpoints
+  objective: Confirm /mock-count and /mock-sample both return 400 when a required param is missing.
+  preconditions: []
+  test_data: none
+  test_environment: "Backend (dev)"
+  priority: Medium
+  severity: Low
+  test_type: Validation
+  steps:
+    - step: 1
+      action: "GET /api/questions/mock-count with subjectIds provided but examCode omitted"
+      expected: "400"
+    - step: 2
+      action: "GET /api/questions/mock-sample with examCode provided but subjectIds omitted"
+      expected: "400"
+  expected_result: >
+    Both endpoints return 400 when examCode or subjectIds is missing. (REQ-QUESTIONS-018
+    error_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "Not independently confirmed by a cited test method name."
+
+- id: TC-QUESTIONS-045
+  requirement_ids: [REQ-QUESTIONS-019]
+  scenario_id: SCN-QUESTIONS-042
+  system: Backend
+  module: QUESTIONS
+  feature: Content-status change
+  title: Content-status change — admin succeeds, student rejected, anonymous rejected
+  objective: >
+    Confirm PUT /api/questions/{id}/content-status succeeds for a valid ADMIN token, returns
+    403 for STUDENT, and 401 for no token — this is the fully documented part of
+    REQ-QUESTIONS-019's authorization contract.
+  preconditions:
+    - "An existing question; STUDENT and ADMIN tokens are both available"
+  test_data: "The existing question's id"
+  test_environment: "Backend (dev)"
+  priority: High
+  severity: High
+  test_type: Authorization
+  steps:
+    - step: 1
+      action: "PUT /api/questions/{id}/content-status with no Authorization header"
+      expected: "401"
+    - step: 2
+      action: "PUT with a valid STUDENT token"
+      expected: "403"
+    - step: 3
+      action: "PUT with a valid ADMIN token and {status: \"PUBLISHED\"}"
+      expected: "200 OK"
+  expected_result: >
+    Anonymous -> 401, STUDENT -> 403, ADMIN -> success. (REQ-QUESTIONS-019 permissions,
+    error_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "None found — ExamGuideContentStatusTest covers an analogous mechanism on a different entity."
+
+- id: TC-QUESTIONS-046
+  requirement_ids: [REQ-QUESTIONS-019]
+  scenario_id: SCN-QUESTIONS-043
+  system: Backend
+  module: QUESTIONS
+  feature: Content-status change
+  title: A REVIEWER-role token also succeeds on content-status change
+  objective: >
+    Confirm a valid REVIEWER-role token succeeds on PUT /api/questions/{id}/content-status,
+    per requireReviewer's documented ADMIN-or-REVIEWER contract (REQ-QUESTIONS-019's
+    `permissions` field states this explicitly).
+  preconditions:
+    - "A valid REVIEWER-role account and token — NOT AVAILABLE: no AUTH endpoint can create a REVIEWER account (see qa/requirements/_conflicts.md §1)"
+  test_data: "A REVIEWER-role token — none can currently be provisioned"
+  test_environment: "Backend (dev)"
+  priority: Medium
+  severity: Medium
+  test_type: Ambiguous
+  steps:
+    - step: 1
+      action: "PUT /api/questions/{id}/content-status with a valid REVIEWER-role token"
+      expected: "200 OK, per the documented ADMIN-or-REVIEWER contract"
+  expected_result: >
+    A REVIEWER token should succeed per requireReviewer's documented contract — but this
+    cannot currently be exercised. (REQ-QUESTIONS-019 permissions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    EXECUTION BLOCKED — no AUTH endpoint (register, login, admin/register) can produce a
+    REVIEWER-role account; how one is actually provisioned is undocumented
+    (qa/requirements/_conflicts.md §1). Do NOT invent a provisioning path (e.g. a direct
+    database write, an assumed-but-unverified endpoint) to force this case to execute, and
+    do NOT mark this test Passed on the strength of the endpoint's documented contract alone
+    — the endpoint existing and being documented is not the same as this specific
+    authorization path having been observed to actually work. This case stays on the books,
+    explicitly Blocked, until account provisioning is resolved (a separate decision — see
+    the standing note in qa/requirements/_conflicts.md §1 — not something this QA effort
+    should resolve unilaterally).
+  automation_status: NotSuitable
+  automation_reference: >
+    None, and none should be written until REVIEWER provisioning exists — there is nothing
+    to automate against yet.
+
+- id: TC-QUESTIONS-047
+  requirement_ids: [REQ-QUESTIONS-019, REQ-QUESTIONS-014]
+  scenario_id: SCN-QUESTIONS-044
+  system: Backend
+  module: QUESTIONS
+  feature: Content-status change
+  title: Publishing a DRAFT question makes it appear in every public read
+  objective: >
+    Confirm setting status:PUBLISHED on a previously-DRAFT question makes it subsequently
+    appear in /live, /sync, /counts, and /mock-sample.
+  preconditions:
+    - "An existing DRAFT question"
+  test_data: "The DRAFT question's id"
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: High
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "PUT /api/questions/{id}/content-status with {status: \"PUBLISHED\"}"
+      expected: "200 OK"
+    - step: 2
+      action: "GET /api/questions/live filtered to include this question"
+      expected: "The question now appears"
+    - step: 3
+      action: "GET /api/questions/sync with a recent since cutoff"
+      expected: "The question appears as a live (non-deleted) row"
+  expected_result: >
+    Publishing a DRAFT question makes it appear in every public read. (REQ-QUESTIONS-019
+    acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "None found."
+
+- id: TC-QUESTIONS-048
+  requirement_ids: [REQ-QUESTIONS-019]
+  scenario_id: SCN-QUESTIONS-045
+  system: Backend
+  module: QUESTIONS
+  feature: Content-status change
+  title: Missing or invalid content-status value rejected
+  objective: >
+    Confirm a content-status request with a missing status field, or one not among
+    DRAFT/REVIEW/PUBLISHED, is rejected.
+  preconditions:
+    - "An existing question"
+  test_data: "The existing question's id"
+  test_environment: "Backend (dev), admin token"
+  priority: Medium
+  severity: Medium
+  test_type: Validation
+  steps:
+    - step: 1
+      action: "PUT /api/questions/{id}/content-status with an empty body"
+      expected: "400"
+    - step: 2
+      action: "PUT with {status: \"NOT_A_REAL_STATUS\"}"
+      expected: "400"
+  expected_result: >
+    Missing or invalid status is rejected. (REQ-QUESTIONS-019 validations)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "None found."
+
+- id: TC-QUESTIONS-049
+  requirement_ids: [REQ-QUESTIONS-020]
+  scenario_id: SCN-QUESTIONS-046
+  system: Backend
+  module: QUESTIONS
+  feature: Image upload
+  title: Valid image upload returns a working URL
+  objective: Confirm POST /api/images with a valid image file returns 200 with a usable url.
+  preconditions:
+    - "Cloudinary credentials are configured in the target environment"
+  test_data: "A small, valid image file (e.g. PNG)"
+  test_environment: "Backend (dev), admin token, real Cloudinary connectivity"
+  priority: Medium
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST /api/images (multipart, field \"file\") with a valid image"
+      expected: "200; {url: \"...\"} — a working, fetchable URL"
+  expected_result: "Valid upload returns a working URL. (REQ-QUESTIONS-020 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    If the target environment has no real Cloudinary credentials configured, mark Blocked
+    rather than fabricate a result — per historical precedent in this project (several
+    reports document exactly this environmental gap).
+  automation_status: CandidateForAutomation
+  automation_reference: "None — no test for ImageUploadController exists anywhere in the test tree."
+
+- id: TC-QUESTIONS-050
+  requirement_ids: [REQ-QUESTIONS-020]
+  scenario_id: SCN-QUESTIONS-047
+  system: Backend
+  module: QUESTIONS
+  feature: Image upload
+  title: Image upload rejects a non-admin request
+  objective: Confirm an anonymous or student request to POST /api/images is rejected.
+  preconditions:
+    - "A STUDENT token is available"
+  test_data: none
+  test_environment: "Backend (dev)"
+  priority: Medium
+  severity: Medium
+  test_type: Authorization
+  steps:
+    - step: 1
+      action: "POST /api/images with no Authorization header"
+      expected: "401"
+    - step: 2
+      action: "POST /api/images with a valid STUDENT token"
+      expected: "403"
+  expected_result: >
+    Anonymous and student requests are both rejected. (REQ-QUESTIONS-020 permissions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "None found."
+
+- id: TC-QUESTIONS-051
+  requirement_ids: [REQ-QUESTIONS-020]
+  scenario_id: SCN-QUESTIONS-048
+  system: Backend
+  module: QUESTIONS
+  feature: Image upload
+  title: Cloudinary-side upload failure surfaces as the documented unmapped 500
+  objective: >
+    Confirm (if reproducible) that a storage failure returns a generic 500, not the module's
+    usual {error} envelope — a documented deviation, asserted as-is.
+  preconditions:
+    - "A way to force the Cloudinary call to fail (e.g. deliberately invalid/unreachable Cloudinary config in a throwaway test environment)"
+  test_data: "A valid image file, an environment with broken Cloudinary connectivity"
+  test_environment: "Backend, a controlled instance with intentionally broken Cloudinary config"
+  priority: Low
+  severity: Low
+  test_type: ErrorHandling
+  steps:
+    - step: 1
+      action: "POST /api/images with valid image data against an environment where the Cloudinary call will fail"
+      expected: >
+        500 response; body is NOT the module's usual {"error": "<message>"} shape — this is
+        the documented, expected deviation, not something to report as a fresh bug
+  expected_result: >
+    A Cloudinary-side failure surfaces as an unmapped 500, not the {error} envelope — this is
+    documented current behavior, asserted as-is. (REQ-QUESTIONS-020 error_conditions,
+    edge_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Do not run this against the shared dev environment's real Cloudinary config — needs a
+    dedicated, intentionally-broken configuration. Mark Blocked if no such controlled
+    environment is available rather than skip silently.
+  automation_status: CandidateForAutomation
+  automation_reference: "None found."
+
+- id: TC-QUESTIONS-052
+  requirement_ids: [REQ-QUESTIONS-021]
+  scenario_id: SCN-QUESTIONS-049
+  system: Backend
+  module: QUESTIONS
+  feature: Duplicate detection
+  title: Creating near-identical text populates duplicateOfQuestionIds without blocking the write
+  objective: >
+    Confirm creating a question whose English text matches an existing one modulo case/
+    punctuation/whitespace returns 201 with duplicateOfQuestionIds populated, and the write
+    still succeeds.
+  preconditions:
+    - "An existing question with known English text"
+  test_data: >
+    A new question whose English text is identical to the existing one except for
+    capitalization and punctuation
+  test_environment: "Backend (dev), admin token"
+  priority: Medium
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST /api/questions with English text matching an existing question modulo case/punctuation"
+      expected: >
+        201 Created; duplicateOfQuestionIds contains the existing question's id; the new
+        question is genuinely created (not rejected)
+  expected_result: >
+    Near-identical text populates duplicateOfQuestionIds without blocking the write.
+    (REQ-QUESTIONS-021 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "EpicLIntelligenceTest.duplicateIsRecordedNotRejected"
+
+- id: TC-QUESTIONS-053
+  requirement_ids: [REQ-QUESTIONS-021]
+  scenario_id: SCN-QUESTIONS-050
+  system: Backend
+  module: QUESTIONS
+  feature: Duplicate detection
+  title: duplicateOfQuestionIds is null on every read other than the triggering create
+  objective: >
+    Confirm a subsequent GET/list/update/sync/live/mock-sample of the newly-created
+    duplicate question always shows duplicateOfQuestionIds:null.
+  preconditions:
+    - "A question just created as a duplicate (per TC-QUESTIONS-052), with duplicateOfQuestionIds populated on its create response"
+  test_data: "The newly-created duplicate question's id"
+  test_environment: "Backend (dev)"
+  priority: Medium
+  severity: Medium
+  test_type: DataIntegrity
+  steps:
+    - step: 1
+      action: "GET /api/questions/{id} for the newly-created duplicate"
+      expected: "duplicateOfQuestionIds: null"
+    - step: 2
+      action: "PUT /api/questions/{id} with a trivial metadata change"
+      expected: "duplicateOfQuestionIds: null on this response too"
+    - step: 3
+      action: "Locate the same question in a /sync or /live result"
+      expected: "duplicateOfQuestionIds: null there as well"
+  expected_result: >
+    duplicateOfQuestionIds is populated ONLY on the create response that triggered the
+    collision. (REQ-QUESTIONS-021 business_rule)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "Not independently confirmed across all read paths by a cited test."
+
+- id: TC-QUESTIONS-054
+  requirement_ids: [REQ-QUESTIONS-022]
+  scenario_id: SCN-QUESTIONS-051
+  system: Backend
+  module: QUESTIONS
+  feature: Duplicate review queue
+  title: Resolving a duplicate pair persists and re-resolving is idempotent
+  objective: >
+    Confirm marking a pair NOT_DUPLICATE persists on re-fetch, and resolving the same pair
+    again updates resolvedAt without error.
+  preconditions:
+    - "A detected, unresolved duplicate pair exists"
+  test_data: "An existing duplicate pair (questionId, duplicateOfQuestionId)"
+  test_environment: "Backend (dev), admin token"
+  priority: Medium
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "PUT /api/question-duplicates/{questionId}/{duplicateOfQuestionId} with {resolution: \"NOT_DUPLICATE\"}"
+      expected: "204 No Content"
+    - step: 2
+      action: "GET /api/question-duplicates and locate this pair"
+      expected: "resolution: \"NOT_DUPLICATE\", resolvedAt is non-null"
+    - step: 3
+      action: "Repeat the PUT from step 1 a second time"
+      expected: "204 again; resolvedAt is updated (a later timestamp), no error"
+  expected_result: >
+    Resolving persists correctly, and resolving again is idempotent (restamps resolvedAt
+    without erroring). (REQ-QUESTIONS-022 acceptance_criteria, business_rule)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "None found — only the underlying detection is covered by EpicLIntelligenceTest, not the list/resolve endpoints."
+
+- id: TC-QUESTIONS-055
+  requirement_ids: [REQ-QUESTIONS-022]
+  scenario_id: SCN-QUESTIONS-052
+  system: Backend
+  module: QUESTIONS
+  feature: Duplicate review queue
+  title: Invalid resolution value rejected
+  objective: >
+    Confirm resolving with a value other than DUPLICATE/NOT_DUPLICATE is rejected — split
+    from TC-QUESTIONS-056 (unknown pair) since these are different error paths (400 vs 404).
+  preconditions:
+    - "An existing duplicate pair"
+  test_data: "An existing pair, resolution=\"MAYBE\""
+  test_environment: "Backend (dev), admin token"
+  priority: Medium
+  severity: Low
+  test_type: Validation
+  steps:
+    - step: 1
+      action: "PUT /api/question-duplicates/{questionId}/{duplicateOfQuestionId} with {resolution: \"MAYBE\"}"
+      expected: "400"
+  expected_result: "An invalid resolution value is rejected. (REQ-QUESTIONS-022 validations)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "None found."
+
+- id: TC-QUESTIONS-056
+  requirement_ids: [REQ-QUESTIONS-022]
+  scenario_id: SCN-QUESTIONS-052
+  system: Backend
+  module: QUESTIONS
+  feature: Duplicate review queue
+  title: Resolving a nonexistent pair returns 404
+  objective: Confirm resolving a questionId/duplicateOfQuestionId pair with no matching record returns 404.
+  preconditions:
+    - "Two real question ids that are NOT recorded as a duplicate pair of each other"
+  test_data: "Two unrelated, real question ids"
+  test_environment: "Backend (dev), admin token"
+  priority: Medium
+  severity: Low
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "PUT /api/question-duplicates/{questionId}/{duplicateOfQuestionId} for two ids with no recorded pair between them"
+      expected: "404"
+  expected_result: "An unknown pair returns 404. (REQ-QUESTIONS-022 error_conditions)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "None found."
+
+- id: TC-QUESTIONS-057
+  requirement_ids: [REQ-QUESTIONS-023]
+  scenario_id: SCN-QUESTIONS-053
+  system: Backend
+  module: QUESTIONS
+  feature: Duplicate dry-run check
+  title: Dry-run duplicate check finds a match without writing anything
+  objective: >
+    Confirm POST /api/question-duplicates/check with text identical to an existing question
+    returns matchCount>=1 and creates no database row.
+  preconditions:
+    - "An existing question with known English text"
+  test_data: "Text identical to the existing question"
+  test_environment: "Backend (dev), admin token"
+  priority: Low
+  severity: Low
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST /api/question-duplicates/check with {questionText: <text identical to an existing question>}"
+      expected: >
+        matchCount >= 1, matches contains the existing question's id; no new question or
+        duplicate-pair row is created as a side effect
+  expected_result: >
+    The dry-run check finds a match and writes nothing. (REQ-QUESTIONS-023
+    acceptance_criteria, business_rule)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: PartiallyAutomated
+  automation_reference: "Present in EpicLIntelligenceTest per Phase 1 extraction; exact method name not confirmed by name-only grep."
+
+- id: TC-QUESTIONS-058
+  requirement_ids: [REQ-QUESTIONS-024]
+  scenario_id: SCN-QUESTIONS-054
+  system: Backend
+  module: QUESTIONS
+  feature: Duplicate backfill
+  title: Backfill rescan is idempotent on repeated runs
+  objective: Confirm running duplicate backfill twice in a row against unchanged data returns edgesRecorded:0 on the second run.
+  preconditions: []
+  test_data: none
+  test_environment: "Backend (dev), admin token"
+  priority: Low
+  severity: Low
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST /api/question-duplicates/backfill"
+      expected: "200; some edgesRecorded count (could be 0 if already fully backfilled)"
+    - step: 2
+      action: "Immediately repeat the same call"
+      expected: "200; edgesRecorded: 0 — no duplicate edges recorded the second time"
+  expected_result: >
+    Running backfill twice in a row against unchanged data returns edgesRecorded:0 on the
+    second run. (REQ-QUESTIONS-024 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "None found."
+
+- id: TC-QUESTIONS-059
+  requirement_ids: [REQ-QUESTIONS-025]
+  scenario_id: SCN-QUESTIONS-055
+  system: Backend
+  module: QUESTIONS
+  feature: Question-type reference data
+  title: Question-type reference data includes all 9 authorable types
+  objective: Confirm GET /api/question-types includes an entry for each of the 9 authorable types.
+  preconditions: []
+  test_data: none
+  test_environment: "Backend (dev)"
+  priority: Low
+  severity: Low
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "GET /api/question-types"
+      expected: >
+        The response includes SINGLE_CHOICE, MULTIPLE_CHOICE, TRUE_FALSE, ASSERTION_REASON,
+        STATEMENT_COMBINATION, NUMERIC, FILL_BLANK, MATCH, and ORDERING, each with
+        authoringEnabled: true
+  expected_result: >
+    The response includes all 9 authorable types with authoringEnabled:true.
+    (REQ-QUESTIONS-025 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "None found."
+
+- id: TC-QUESTIONS-060
+  requirement_ids: [REQ-QUESTIONS-026]
+  scenario_id: SCN-QUESTIONS-056
+  system: Backend
+  module: QUESTIONS
+  feature: Query boundedness
+  title: Every documented read endpoint clamps its result size server-side
+  objective: >
+    Confirm /sync, /live, /mock-sample, /question-duplicates list, and /backfill each clamp
+    an oversized request to their documented cap.
+  preconditions: []
+  test_data: "Oversized size/limit values per endpoint"
+  test_environment: "Backend (dev)"
+  priority: High
+  severity: Medium
+  test_type: Performance
+  steps:
+    - step: 1
+      action: "GET /api/questions/sync?size=5000"
+      expected: "Clamped to 1000"
+    - step: 2
+      action: "GET /api/questions/live?size=5000"
+      expected: "Clamped to 500"
+    - step: 3
+      action: "GET /api/questions/mock-sample?...&limit=5000"
+      expected: "Clamped to 200"
+    - step: 4
+      action: "GET /api/question-duplicates?size=5000"
+      expected: "Clamped to 100"
+    - step: 5
+      action: "POST /api/question-duplicates/backfill?limit=50000"
+      expected: "Clamped to 5000"
+  expected_result: >
+    Every documented read endpoint clamps its result size server-side regardless of client
+    request. (REQ-QUESTIONS-026 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: PartiallyAutomated
+  automation_reference: "SyncEndpointTest.pageSize_isRespected covers /sync only; the other four endpoints' clamps are not independently cited as automated."
+
+- id: TC-QUESTIONS-061
+  requirement_ids: [REQ-QUESTIONS-026]
+  scenario_id: SCN-QUESTIONS-057
+  system: Mobile
+  module: QUESTIONS
+  feature: Local query boundedness
+  title: A local practice-question fetch against a heavily-populated topic does not crash
+  objective: >
+    Confirm a device with a heavily-populated topic (hundreds of matching local questions)
+    returns at most PRACTICE_QUESTION_LIMIT results without a SQLite bound-parameter crash —
+    the mobile-side counterpart of the real historical bug this requirement documents.
+  preconditions:
+    - "A device with a completed full sync, including a topic with hundreds of local questions"
+  test_data: "A heavily-populated topic (post-full-sync)"
+  test_environment: "Mobile (Android emulator or device)"
+  priority: High
+  severity: High
+  test_type: Performance
+  steps:
+    - step: 1
+      action: "Start a Practice session for the heavily-populated topic, \"All Levels\""
+      expected: >
+        The question set loads without a crash, returning at most PRACTICE_QUESTION_LIMIT
+        (200) questions
+  expected_result: >
+    A local practice-question fetch against a heavily-populated topic returns at most
+    PRACTICE_QUESTION_LIMIT results without crashing. (REQ-QUESTIONS-026 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: "None — no mobile test runner exists in this project; verified historically via on-device testing only."
+
+- id: TC-QUESTIONS-062
+  requirement_ids: [REQ-QUESTIONS-027]
+  scenario_id: SCN-QUESTIONS-058
+  system: Web
+  module: QUESTIONS
+  feature: "Web Practice engine scores and reveals every question type"
+  title: Each question type answers, confirms and reveals correctly, including per-item MATCH/ORDERING colouring
+  objective: >
+    Confirm SINGLE_CHOICE, NUMERIC, FILL_BLANK, MATCH and ORDERING all render, accept an
+    answer, and reveal correct/incorrect styling matching the shared evaluator's outcome —
+    with MATCH/ORDERING colouring every item, not just showing a banner.
+  preconditions:
+    - "A topic with real questions of each of these types is reachable (e.g. SSC CGL > General Awareness > General, which carries the WAVEB-VERIFY tagged content)"
+  test_data: "Real seeded content tagged [WAVEB-VERIFY] / [P3-VERIFY]"
+  test_environment: "web/ dev build against a running backend"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Answer a SINGLE_CHOICE question (click one option)"
+      expected: "Reveals immediately — correct option green, a wrong pick (if any) red"
+    - step: 2
+      action: "Answer a NUMERIC question with a value, then Check answer"
+      expected: "Field shows a correct/incorrect tint matching the evaluator's tolerance check"
+    - step: 3
+      action: "Answer a FILL_BLANK question with text, then Check answer"
+      expected: "Field shows correct/incorrect tint, case-insensitive per the shared evaluator"
+    - step: 4
+      action: "Pair every item in a MATCH question (some correct, some deliberately wrong), then Check answer"
+      expected: "EVERY left item AND every right item shows green (correct pair) or red (wrong pair) — not just the left column, and not left uncoloured"
+    - step: 5
+      action: "Build an order for an ORDERING question that is deliberately wrong in places, then Check answer"
+      expected: "Each position shows green (correctly placed) or red (incorrectly placed), with the correct order given in the explanation"
+  expected_result: >
+    Every type scores via the shared evaluator and reveals accurately, item-by-item where the
+    type has multiple parts. (REQ-QUESTIONS-027 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Steps 4-5 are the regression guard for a real defect found and fixed the same session: a
+    CSS cascade-order bug meant MATCH/ORDERING showed the correct "Incorrect" banner with
+    every individual item left neutral grey.
+  automation_status: PartiallyAutomated
+  automation_reference: "packages/core questionEvaluator.test.ts covers the scoring; the rendering/reveal steps have no automated runner."
+
+- id: TC-QUESTIONS-063
+  requirement_ids: [REQ-QUESTIONS-027]
+  scenario_id: SCN-QUESTIONS-059
+  system: Web
+  module: QUESTIONS
+  feature: "Web Practice engine scores and reveals every question type"
+  title: Skipping a question excludes it from the final score
+  objective: >
+    Confirm a question the student never confirms an answer for is left out of the session's
+    correct/total tally rather than being counted as a wrong answer.
+  preconditions:
+    - "A practice session with at least 3 questions available"
+  test_data: "n/a"
+  test_environment: "web/ dev build against a running backend"
+  priority: High
+  severity: Major
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "Answer question 1, skip question 2 (Next without answering), answer question 3, then Finish"
+      expected: "The summary's total count is 2, not 3 — question 2 does not appear as a wrong answer"
+  expected_result: >
+    Only confirmed questions count toward the session's score. (REQ-QUESTIONS-027 edge_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-QUESTIONS-064
+  requirement_ids: [REQ-QUESTIONS-028]
+  scenario_id: SCN-QUESTIONS-060
+  system: Web
+  module: QUESTIONS
+  feature: "Question-group (passage/media) content renders in web Practice"
+  title: A real passage-grouped question renders and collapses correctly
+  objective: >
+    Confirm a real grouped question (the P3-VERIFY passage content under SSC CGL > General
+    Awareness > General) shows its passage, collapses/expands, and can still be answered and
+    revealed normally.
+  preconditions:
+    - "The P3-VERIFY (or equivalent) passage-grouped content exists in the target environment"
+  test_data: "Real seeded content tagged [P3-VERIFY]"
+  test_environment: "web/ dev build against a running backend"
+  priority: Medium
+  severity: Minor
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Reach the grouped question in a Practice session"
+      expected: "A Passage card renders above the question, expanded by default, with the real passage text"
+    - step: 2
+      action: "Click the passage toggle"
+      expected: "The passage collapses and the toggle label flips to \"Show\""
+    - step: 3
+      action: "Answer the question and check it"
+      expected: "Reveals correctly; the passage's collapsed/expanded state is unaffected by answering"
+  expected_result: >
+    Passage content renders correctly and independently of the answer/reveal flow.
+    (REQ-QUESTIONS-028 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""

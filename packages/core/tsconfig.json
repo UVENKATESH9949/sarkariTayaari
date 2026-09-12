@@ -1,0 +1,17 @@
+{
+  "//": "Library source. `lib` includes DOM because the shared API client genuinely needs the standard fetch/Response/RequestInit types, which React Native also implements. It deliberately sets no `types`, so Node's globals (process, fs, Buffer) stay unavailable. DOM types unavoidably bring `window`/`document` into scope as well, which the compiler cannot separate from `fetch` — so the actual rule (no platform globals in shared code) is enforced by platformPurity.test.ts instead. Tests get Node's types via tsconfig.test.json so that allowance cannot leak here.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts"]
+}

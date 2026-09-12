@@ -1,5 +1,5 @@
 import { getExamGuideLocal } from "../db/examGuideLocal";
-import { getExamGuide, type ExamGuide } from "../api/examGuide";
+import { getExamGuide, type ExamGuide } from "@sarkaritaiyaari/core/api";
 import type { HybridMode } from "./hybridSource";
 
 export type { ExamGuide };

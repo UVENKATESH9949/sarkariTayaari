@@ -218,4 +218,60 @@ public final class ProgressDtos {
             List<MockAttempt> mockAttempts
     ) {
     }
+
+    /* --------------------------------------------- Phase 3 (TASK-2601, web history/review) */
+
+    /**
+     * Same scalar fields as {@link PracticeSession}, deliberately without {@code results} —
+     * a history LIST page has no use for every answer of every session on it, and that array
+     * is exactly what would make a page of 20 sessions heavy. Full detail (with results) comes
+     * from the single-session fetch instead.
+     */
+    public record PracticeSessionSummary(
+            String id,
+            OffsetDateTime completedAt,
+            String examLabel,
+            String subjectName,
+            String topicName,
+            String levelLabel,
+            int correctCount,
+            int totalCount
+    ) {
+    }
+
+    /** Same reasoning as {@link PracticeSessionSummary}, for mock attempts. */
+    public record MockAttemptSummary(
+            String id,
+            String examCode,
+            String examLabel,
+            OffsetDateTime startedAt,
+            OffsetDateTime completedAt,
+            int durationSeconds,
+            int timeTakenSeconds,
+            BigDecimal marksCorrect,
+            BigDecimal marksWrong,
+            BigDecimal totalMarksScored,
+            int correctCount,
+            int wrongCount,
+            int unattemptedCount,
+            int totalQuestions
+    ) {
+    }
+
+    /**
+     * One wrong practice answer, for Revise's "Wrong Answers" tab. No embedded question
+     * content — the web client hydrates via {@code GET /api/questions/by-ids}, the same
+     * general-purpose batch read used for session/attempt review and bookmarks.
+     */
+    public record WrongAnswerRow(
+            UUID questionId,
+            String subjectName,
+            String topicName,
+            OffsetDateTime completedAt,
+            String questionType,
+            Map<String, Object> response,
+            Integer selectedIndex,
+            Integer correctIndex
+    ) {
+    }
 }

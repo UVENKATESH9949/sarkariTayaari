@@ -1,0 +1,59 @@
+# QUESTIONS module — test data catalog
+#
+# Logical test-data identifiers only. NEVER a real credential, token, or personal data —
+# every entry describes what the identifier MEANS and how to provision it per environment,
+# not a literal reusable value. used_by_test_cases is computed from the real test-case
+# files, not hand-maintained (regenerate via scripts/qa/generate-test-data.js).
+
+- id: TESTDATA-QUESTIONS-DIFFICULTY-01
+  type: Fixture
+  description: >-
+    An existing difficulty-level code, used across several QUESTIONS cases needing a valid
+    difficulty.
+  provisioning: Use an existing seeded difficulty level (e.g. 'easy').
+  used_by_test_cases:
+    - TC-QUESTIONS-001
+
+- id: TESTDATA-QUESTIONS-EXAMCODE-01
+  type: Fixture
+  description: >-
+    An existing, active exam code, used across several QUESTIONS cases needing a valid examCodes
+    entry.
+  provisioning: Use an existing seeded exam (e.g. SSC_CGL).
+  used_by_test_cases:
+    - TC-QUESTIONS-001
+    - TC-QUESTIONS-017
+    - TC-QUESTIONS-042
+
+- id: TESTDATA-QUESTIONS-NEW-SUBJECT-NAME-01
+  type: Value shape
+  description: A subject name not currently in use, for the bulk-import auto-create case.
+  provisioning: Generate a unique name per execution.
+  used_by_test_cases:
+    - TC-QUESTIONS-022
+
+- id: TESTDATA-QUESTIONS-NEW-TOPIC-NAME-01
+  type: Value shape
+  description: A topic name not currently in use, for the bulk-import auto-create case.
+  provisioning: Generate a unique name per execution.
+  used_by_test_cases:
+    - TC-QUESTIONS-022
+
+- id: TESTDATA-QUESTIONS-SUBJECT-01
+  type: Fixture
+  description: >-
+    An existing subject with a known mix of PUBLISHED, DRAFT, and soft-deleted questions under it,
+    for the /counts grouping case.
+  provisioning: >-
+    Use an existing subject, or seed the DRAFT/soft-deleted rows needed for TC-QUESTIONS-039 as a
+    setup step.
+  used_by_test_cases:
+    - TC-QUESTIONS-039
+
+- id: TESTDATA-QUESTIONS-TOPIC-01
+  type: Fixture
+  description: An existing topic, used across several QUESTIONS cases needing a valid topicId.
+  provisioning: Use an existing seeded topic in the target environment.
+  used_by_test_cases:
+    - TC-QUESTIONS-001
+    - TC-QUESTIONS-037

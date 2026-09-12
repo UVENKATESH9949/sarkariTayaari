@@ -15,6 +15,8 @@ import { MultiSelectOptionList } from "../questionRenderer/MultiSelectOptionList
 import { FreeTextAnswerInput } from "../questionRenderer/FreeTextAnswerInput";
 import { describeYourAnswer } from "../questionRenderer/answerSummary";
 import { revealPlainStyles } from "../questionRenderer/optionListStyles";
+import { AiExplanationCard } from "../questionRenderer/AiExplanationCard";
+import { useAppLanguage } from "../practice/appLanguage";
 
 type ReviseTab = "bookmarks" | "wrong";
 type ReviseItem = WrongAnswerItem;
@@ -24,6 +26,7 @@ export default function Revise() {
   const styles = useThemedStyles(buildStyles);
   const optionListStyles = useThemedStyles(revealPlainStyles);
   const t = useT();
+  const { defaultLanguageCode } = useAppLanguage();
   const { initialTab } = useLocalSearchParams<{ initialTab?: string }>();
   const { bookmarks, toggleBookmark } = useBookmarks();
   const { sessions } = useSessionHistory();
@@ -167,6 +170,7 @@ export default function Revise() {
                       <Text style={styles.explanationLabel}>{t("common.explanation")}</Text>
                       <Text style={styles.explanationText}>{item.explanation}</Text>
                     </View>
+                    <AiExplanationCard key={item.id} questionId={item.id} languageCode={defaultLanguageCode} />
                     {activeTab === "bookmarks" && (
                       <Pressable
                         style={styles.removeButton}

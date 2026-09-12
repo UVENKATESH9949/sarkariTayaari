@@ -7,7 +7,7 @@ import {
   pruneSyncedTombstones,
   type PendingBookmark,
 } from "../db/bookmarks";
-import { restoreBookmarks, uploadBookmarks, type BookmarkPayload } from "../api/bookmarks";
+import { restoreBookmarks, uploadBookmarks, type BookmarkPayload } from "@sarkaritaiyaari/core/api";
 
 const MISSING_QUESTION_TEXT = "This question is no longer available.";
 

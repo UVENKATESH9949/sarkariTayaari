@@ -1,0 +1,24 @@
+# WEB module — test data catalog
+#
+# Logical test-data identifiers only. NEVER a real credential, token, or personal data —
+# every entry describes what the identifier MEANS and how to provision it per environment,
+# not a literal reusable value. used_by_test_cases is computed from the real test-case
+# files, not hand-maintained (regenerate via scripts/qa/generate-test-data.js).
+
+- id: TESTDATA-AUTH-NEW-EMAIL-01
+  type: Value shape
+  description: A syntactically valid, not-yet-registered email for a fresh registration test.
+  provisioning: >-
+    Generate a unique address per execution (e.g. a timestamp/uuid-suffixed local part) so
+    re-running the suite doesn't collide with a prior run's leftover account.
+  used_by_test_cases:
+    - TC-WEB-010
+
+- id: TESTDATA-AUTH-VALID-PASSWORD-01
+  type: Value shape
+  description: >-
+    Any password meeting the documented minimum (>=8 characters, no other complexity rule). Not a
+    literal value — generate a fresh one per execution.
+  provisioning: Generate at execution time; never reuse a real user's password.
+  used_by_test_cases:
+    - TC-WEB-010

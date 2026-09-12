@@ -1,0 +1,908 @@
+# AUTH module — manual test cases (Phase 3, validation slice)
+#
+# Every test case links to one scenario id and one or more requirement ids. A test case is a
+# reusable DEFINITION — it is never overwritten by an execution (qa/execution/*.yaml, not yet
+# created). Expected results are derived from the linked requirement's acceptance_criteria/
+# error_conditions/edge_conditions — never from current implementation behavior. Every case
+# below is freshly generated and UNEXECUTED: actual_result is empty, status is Not Executed,
+# defect_id is empty. No tester name, date, build, credential, or result has been invented.
+#
+# Test data referenced here uses only logical identifiers (see qa/test-data/auth.yaml,
+# not yet created) — never a real email/password. Placeholders like
+# TESTDATA-AUTH-NEW-EMAIL-01 stand for "a syntactically valid, not-yet-registered email
+# generated per execution," not a literal value to reuse across runs.
+
+- id: TC-AUTH-001
+  requirement_ids: [REQ-AUTH-001]
+  scenario_id: SCN-AUTH-001
+  system: Backend
+  module: AUTH
+  feature: Student self-registration
+  title: Valid registration returns 201 with a working token and STUDENT role
+  objective: >
+    Confirm a fresh registration with a valid, unregistered email and an 8+ character
+    password creates a STUDENT account and returns a usable token in the same response.
+  preconditions:
+    - "TESTDATA-AUTH-NEW-EMAIL-01 is not registered on the target environment"
+  test_data: "TESTDATA-AUTH-NEW-EMAIL-01, TESTDATA-AUTH-VALID-PASSWORD-01 (>=8 chars)"
+  test_environment: "Backend (dev), no prior session"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST /api/auth/register with email=TESTDATA-AUTH-NEW-EMAIL-01, password=TESTDATA-AUTH-VALID-PASSWORD-01"
+      expected: >
+        201 Created; response contains a non-blank token, a future expiresAt, and
+        user.role == "STUDENT"
+    - step: 2
+      action: "GET /api/auth/me using the token returned in step 1"
+      expected: "200 OK; returned email matches TESTDATA-AUTH-NEW-EMAIL-01 (case-insensitive)"
+  expected_result: >
+    Registration succeeds in one call and the issued token is immediately usable to fetch the
+    new account's own profile. (REQ-AUTH-001 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "AuthTest.register_returnsATokenAndNormalisesTheEmail"
+
+- id: TC-AUTH-002
+  requirement_ids: [REQ-AUTH-001]
+  scenario_id: SCN-AUTH-001
+  system: Backend
+  module: AUTH
+  feature: Student self-registration
+  title: Registered email is stored/returned lower-cased regardless of input case
+  objective: >
+    Confirm the case-normalization rule from REQ-AUTH-001 holds independently of the
+    happy-path token check in TC-AUTH-001 — a distinct assertion worth its own case since it
+    is a separate, independently-failable behavior.
+  preconditions:
+    - "TESTDATA-AUTH-NEW-EMAIL-02 (mixed case, e.g. \"Test.User+02@Example.com\") is not registered"
+  test_data: "TESTDATA-AUTH-NEW-EMAIL-02 (mixed case), TESTDATA-AUTH-VALID-PASSWORD-01"
+  test_environment: "Backend (dev), no prior session"
+  priority: Medium
+  severity: Low
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST /api/auth/register with the mixed-case email exactly as typed"
+      expected: >
+        201 Created; response's user.email is the fully lower-cased form of the submitted
+        address, not the original mixed-case string
+  expected_result: "Stored/returned email is always lower-cased, regardless of input case. (REQ-AUTH-001 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "AuthTest.register_returnsATokenAndNormalisesTheEmail"
+
+- id: TC-AUTH-003
+  requirement_ids: [REQ-AUTH-001]
+  scenario_id: SCN-AUTH-002
+  system: Backend
+  module: AUTH
+  feature: Student self-registration
+  title: Duplicate email registration rejected, case-insensitively
+  objective: >
+    Confirm registering with an email that already exists — including one differing only in
+    case from the existing registration — is rejected and creates no second account.
+  preconditions:
+    - "TESTDATA-AUTH-EXISTING-EMAIL-01 is already registered (register it as a setup step if the environment has no fixture for it)"
+  test_data: "TESTDATA-AUTH-EXISTING-EMAIL-01"
+  test_environment: "Backend (dev)"
+  priority: Critical
+  severity: High
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "POST /api/auth/register with the exact same email as an already-registered account"
+      expected: >
+        400; error message is "An account already exists for <email>" (per REQ-AUTH-001's
+        documented error_conditions); no new account row is created
+    - step: 2
+      action: "Repeat step 1, but with the same email in a different letter case"
+      expected: "400, identical outcome — the duplicate check is case-insensitive"
+  expected_result: >
+    Duplicate email (any case) returns 400 and does not create a second row. (REQ-AUTH-001
+    acceptance_criteria, edge_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "AuthTest.register_rejectsADuplicateEmailRegardlessOfCase"
+
+- id: TC-AUTH-004
+  requirement_ids: [REQ-AUTH-001]
+  scenario_id: SCN-AUTH-003
+  system: Backend
+  module: AUTH
+  feature: Student self-registration
+  title: Password under 8 characters rejected
+  objective: Confirm a password shorter than the documented 8-character minimum is rejected.
+  preconditions:
+    - "TESTDATA-AUTH-NEW-EMAIL-03 is not registered"
+  test_data: "TESTDATA-AUTH-NEW-EMAIL-03, a 7-character password (e.g. \"Short1!\")"
+  test_environment: "Backend (dev)"
+  priority: High
+  severity: Medium
+  test_type: Validation
+  steps:
+    - step: 1
+      action: "POST /api/auth/register with a password of exactly 7 characters"
+      expected: "400; no account created for TESTDATA-AUTH-NEW-EMAIL-03"
+  expected_result: "Password under 8 characters returns 400. (REQ-AUTH-001 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Boundary note for a future dedicated boundary pass: this case exercises 7 chars (one
+    below the minimum); an 8-char password is already covered as the positive case in
+    TC-AUTH-001. Not duplicating an exact-boundary (8-char) negative case here since 8 is
+    documented as valid, not a rejection boundary.
+  automation_status: Automated
+  automation_reference: "AuthTest.register_rejectsAShortPassword"
+
+- id: TC-AUTH-005
+  requirement_ids: [REQ-AUTH-002]
+  scenario_id: SCN-AUTH-004
+  system: Backend
+  module: AUTH
+  feature: Login
+  title: Existing STUDENT account logs in and receives role STUDENT
+  objective: Confirm a valid STUDENT account can sign in and its role is correctly reported.
+  preconditions:
+    - "TESTDATA-AUTH-STUDENT-01 is a registered STUDENT account with a known password"
+  test_data: "TESTDATA-AUTH-STUDENT-01"
+  test_environment: "Backend (dev)"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST /api/auth/login with TESTDATA-AUTH-STUDENT-01's correct email/password"
+      expected: "200 OK; response contains a non-blank token, a future expiresAt, and user.role == \"STUDENT\""
+  expected_result: "Correct credentials return 200 with a token and the account's real role. (REQ-AUTH-002 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: PartiallyAutomated
+  automation_reference: "No dedicated automated test cited for the plain STUDENT-login-succeeds case (see REQ-AUTH-002's automation_hint) — covered incidentally by many other AuthTest setup steps, not asserted directly."
+
+- id: TC-AUTH-006
+  requirement_ids: [REQ-AUTH-002]
+  scenario_id: SCN-AUTH-004
+  system: Backend
+  module: AUTH
+  feature: Login
+  title: Existing ADMIN account logs in and receives role ADMIN
+  objective: >
+    Confirm a valid ADMIN account can sign in through the same endpoint STUDENT uses, and its
+    role is correctly reported — split from TC-AUTH-005 because the two use different accounts/
+    roles and a failure in one must not mask a failure in the other.
+  preconditions:
+    - "TESTDATA-AUTH-ADMIN-01 is a registered ADMIN account with a known password"
+  test_data: "TESTDATA-AUTH-ADMIN-01"
+  test_environment: "Backend (dev)"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST /api/auth/login with TESTDATA-AUTH-ADMIN-01's correct email/password"
+      expected: "200 OK; response contains a non-blank token, a future expiresAt, and user.role == \"ADMIN\""
+  expected_result: >
+    One endpoint serves both student and admin sign-in; the response's role field correctly
+    distinguishes an admin session. (REQ-AUTH-002 description, acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: PartiallyAutomated
+  automation_reference: "No single cited test isolates admin-login-succeeds directly — admin sessions are minted via AdminAuthTest fixtures rather than exercised through this exact positive-path assertion."
+
+- id: TC-AUTH-007
+  requirement_ids: [REQ-AUTH-002]
+  scenario_id: SCN-AUTH-005
+  system: Backend
+  module: AUTH
+  feature: Login
+  title: Wrong password and unknown email both rejected with the identical documented message
+  objective: >
+    Confirm both a wrong-password attempt and an attempt against a never-registered email
+    return the same 401 status and byte-identical message text (enumeration resistance).
+  preconditions:
+    - "TESTDATA-AUTH-STUDENT-01 is a registered account; TESTDATA-AUTH-UNKNOWN-EMAIL-01 is never registered"
+  test_data: "TESTDATA-AUTH-STUDENT-01, TESTDATA-AUTH-UNKNOWN-EMAIL-01"
+  test_environment: "Backend (dev)"
+  priority: Critical
+  severity: High
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "POST /api/auth/login with TESTDATA-AUTH-STUDENT-01's correct email and an incorrect password"
+      expected: "401; error message is exactly \"Email or password is incorrect\""
+    - step: 2
+      action: "POST /api/auth/login with TESTDATA-AUTH-UNKNOWN-EMAIL-01 and any password"
+      expected: "401; error message is byte-identical to step 1's message"
+  expected_result: >
+    Wrong password and unknown email both return 401 with byte-identical error message.
+    (REQ-AUTH-002 acceptance_criteria, edge_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "AuthTest.login_failsIdenticallyForAWrongPasswordAndAnUnknownEmail"
+
+- id: TC-AUTH-008
+  requirement_ids: [REQ-AUTH-002]
+  scenario_id: SCN-AUTH-006
+  system: Backend
+  module: AUTH
+  feature: Login
+  title: Login succeeds when the email is submitted in a different case than registered
+  objective: Confirm login is case-insensitive on the email field.
+  preconditions:
+    - "TESTDATA-AUTH-STUDENT-01 is registered with a lower-case email"
+  test_data: "TESTDATA-AUTH-STUDENT-01, submitted with letters upper-cased"
+  test_environment: "Backend (dev)"
+  priority: Medium
+  severity: Low
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "POST /api/auth/login with TESTDATA-AUTH-STUDENT-01's email fully upper-cased, correct password"
+      expected: "200 OK, same as a case-matched login"
+  expected_result: "Login works regardless of the case used for the email. (REQ-AUTH-002 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "AuthTest.login_worksWithADifferentlyCasedEmail"
+
+- id: TC-AUTH-009
+  requirement_ids: [REQ-AUTH-003]
+  scenario_id: SCN-AUTH-007
+  system: Backend
+  module: AUTH
+  feature: Logout
+  title: Logout revokes the calling token; the token is unusable afterward
+  objective: >
+    Confirm a valid logout call succeeds and the revoked token is rejected on any later
+    authenticated call.
+  preconditions:
+    - "TESTDATA-AUTH-STUDENT-01 is signed in with a fresh, valid token"
+  test_data: "TESTDATA-AUTH-STUDENT-01's current session token"
+  test_environment: "Backend (dev)"
+  priority: High
+  severity: High
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST /api/auth/logout with the current valid token"
+      expected: "204 No Content"
+    - step: 2
+      action: "GET /api/auth/me using the same (now-revoked) token"
+      expected: "401 — the token is rejected, confirming it was actually revoked, not just client-side discarded"
+  expected_result: >
+    Logout with a valid token returns 204; the same token then fails subsequent
+    authenticated requests with 401. (REQ-AUTH-003 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "AuthTest.logout_revokesOnlyTheDeviceThatCalledIt"
+
+- id: TC-AUTH-010
+  requirement_ids: [REQ-AUTH-003, REQ-AUTH-006]
+  scenario_id: SCN-AUTH-008
+  system: Backend
+  module: AUTH
+  feature: Multi-device sessions
+  title: Logging in on a second device does not revoke the first; revoking one leaves the other valid
+  objective: >
+    Confirm two concurrent logins for the same account produce two independently valid
+    tokens, and that logging out one device's token has no effect on the other's — a single
+    combined case because both requirements describe one underlying multi-session mechanism
+    (per SCN-AUTH-008's merge note; splitting would duplicate the same setup/assertions
+    across two cases with no added coverage).
+  preconditions:
+    - "TESTDATA-AUTH-STUDENT-01 is a registered account with no active session"
+  test_data: "TESTDATA-AUTH-STUDENT-01"
+  test_environment: "Backend (dev), two independent HTTP clients simulating two devices"
+  priority: High
+  severity: Medium
+  test_type: StateTransition
+  steps:
+    - step: 1
+      action: "POST /api/auth/login for TESTDATA-AUTH-STUDENT-01 (\"device A\")"
+      expected: "200 OK; token A issued"
+    - step: 2
+      action: "POST /api/auth/login again for the same account (\"device B\")"
+      expected: "200 OK; token B issued, distinct from token A"
+    - step: 3
+      action: "GET /api/auth/me using token A"
+      expected: "200 OK — token A is still valid after device B's login"
+    - step: 4
+      action: "POST /api/auth/logout using token A"
+      expected: "204 No Content"
+    - step: 5
+      action: "GET /api/auth/me using token B"
+      expected: "200 OK — token B remains valid; revoking token A did not affect it"
+  expected_result: >
+    A user can be signed in on multiple devices simultaneously, and revoking one session does
+    not affect another. (REQ-AUTH-003 edge_conditions, REQ-AUTH-006 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: PartiallyAutomated
+  automation_reference: "AuthTest.logout_revokesOnlyTheDeviceThatCalledIt covers this only as an incidental side effect, not a dedicated multi-session assertion."
+
+- id: TC-AUTH-011
+  requirement_ids: [REQ-AUTH-004]
+  scenario_id: SCN-AUTH-009
+  system: Backend
+  module: AUTH
+  feature: Session validation
+  title: /me returns the correct profile for a valid token
+  objective: Confirm GET /api/auth/me returns the signed-in user's real profile fields.
+  preconditions:
+    - "TESTDATA-AUTH-STUDENT-01 is signed in with a valid token"
+  test_data: "TESTDATA-AUTH-STUDENT-01"
+  test_environment: "Backend (dev)"
+  priority: Critical
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "GET /api/auth/me with a valid token"
+      expected: "200 OK; response id/email/displayName/role match the signed-in account exactly"
+  expected_result: "Valid token returns 200 with correct profile data including role. (REQ-AUTH-004 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "AuthTest.me_returnsTheSignedInUser"
+
+- id: TC-AUTH-012
+  requirement_ids: [REQ-AUTH-004]
+  scenario_id: SCN-AUTH-010
+  system: Backend
+  module: AUTH
+  feature: Session validation
+  title: "/me rejects a missing Authorization header"
+  objective: "Confirm GET /api/auth/me with no Authorization header at all returns 401 \"Not signed in\"."
+  preconditions: []
+  test_data: none
+  test_environment: "Backend (dev)"
+  priority: High
+  severity: Medium
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "GET /api/auth/me with no Authorization header"
+      expected: "401; error message is \"Not signed in\""
+  expected_result: "Missing header returns 401. (REQ-AUTH-004 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "AuthTest.me_rejectsAMissingOrInvalidToken"
+
+- id: TC-AUTH-013
+  requirement_ids: [REQ-AUTH-004]
+  scenario_id: SCN-AUTH-010
+  system: Backend
+  module: AUTH
+  feature: Session validation
+  title: "/me rejects a garbage/unknown token"
+  objective: >
+    Confirm GET /api/auth/me with a syntactically well-formed but unknown token value returns
+    401, separately from the no-header case (TC-AUTH-012) since these are two independently
+    failable input conditions on the same endpoint.
+  preconditions: []
+  test_data: "A random, never-issued token string (e.g. 32 random base64url characters)"
+  test_environment: "Backend (dev)"
+  priority: High
+  severity: Medium
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "GET /api/auth/me with Authorization: Bearer <a random, never-issued token>"
+      expected: "401; error message is \"Not signed in\""
+  expected_result: "Garbage/unknown token returns 401. (REQ-AUTH-004 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "AuthTest.me_rejectsAMissingOrInvalidToken"
+
+- id: TC-AUTH-014
+  requirement_ids: [REQ-AUTH-004, REQ-AUTH-005]
+  scenario_id: SCN-AUTH-011
+  system: Backend
+  module: AUTH
+  feature: Session validation
+  title: "/me rejects a genuinely expired token with the distinct \"Session expired\" message"
+  objective: >
+    Confirm a token past its expiresAt is rejected with a message distinct from the
+    missing/unknown-token case, closing a real coverage gap — no automated test was found
+    exercising this exact message path (see REQ-AUTH-004's automation_hint).
+  preconditions:
+    - "A token exists whose expiresAt is in the past (either wait out a short-TTL test token, or use an environment/fixture capable of minting an already-expired one — see remarks)"
+  test_data: "An expired session token for TESTDATA-AUTH-STUDENT-01"
+  test_environment: "Backend (dev) — requires a way to produce an already-expired token; see remarks"
+  priority: High
+  severity: Medium
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "GET /api/auth/me with a token whose expiresAt has already passed"
+      expected: "401; error message is exactly \"Session expired — please sign in again\", not \"Not signed in\""
+  expected_result: >
+    A token that is known but past its expiry fails with a distinct message from an
+    unknown/missing token. (REQ-AUTH-004 acceptance_criteria, edge_conditions; REQ-AUTH-005
+    error_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Producing a genuinely expired token in a live test environment may require either
+    configuring a very short app.auth.token-ttl-days for this run, directly adjusting the
+    token's expires_at in the database for a throwaway test account, or waiting out the
+    default 365-day TTL (impractical) — flag as Blocked with a note if no such mechanism is
+    available in the target environment, rather than skipping silently.
+  automation_status: CandidateForAutomation
+  automation_reference: "None — this exact case has no automated coverage today; a strong first candidate for automation once a test-only TTL override exists."
+
+- id: TC-AUTH-015
+  requirement_ids: [REQ-AUTH-005]
+  scenario_id: SCN-AUTH-012
+  system: Backend
+  module: AUTH
+  feature: Token mechanism
+  title: "Authorization header without the \"Bearer \" prefix is rejected"
+  objective: >
+    Confirm a malformed Authorization header (a raw token value with no "Bearer " prefix, or
+    a different auth scheme name) is rejected the same as a missing header.
+  preconditions:
+    - "A valid, currently-active token exists (its value is reused, just sent without the prefix)"
+  test_data: "TESTDATA-AUTH-STUDENT-01's current session token value, sent as a raw header"
+  test_environment: "Backend (dev)"
+  priority: Medium
+  severity: Low
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "GET /api/auth/me with Authorization set to the raw token value (no \"Bearer \" prefix)"
+      expected: "401, same outcome as no header at all"
+  expected_result: >
+    A syntactically invalid Authorization header is rejected with 401. (REQ-AUTH-005
+    acceptance_criteria, edge_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "None cited — REQ-AUTH-005's automation_hint notes only indirect coverage of the primitive as a whole, not this specific malformed-header shape."
+
+- id: TC-AUTH-016
+  requirement_ids: [REQ-AUTH-007]
+  scenario_id: SCN-AUTH-013
+  system: Backend
+  module: AUTH
+  feature: Authorization primitives
+  title: requireUser accepts both STUDENT and ADMIN tokens
+  objective: >
+    Confirm a requireUser-gated endpoint (any endpoint using this check — e.g.
+    POST /api/auth/logout, itself requireUser-gated per REQ-AUTH-003) succeeds for both a
+    STUDENT and an ADMIN token, since the check is role-agnostic.
+  preconditions:
+    - "TESTDATA-AUTH-STUDENT-01 and TESTDATA-AUTH-ADMIN-01 both hold valid, currently-active tokens"
+  test_data: "TESTDATA-AUTH-STUDENT-01, TESTDATA-AUTH-ADMIN-01"
+  test_environment: "Backend (dev)"
+  priority: High
+  severity: Medium
+  test_type: Authorization
+  steps:
+    - step: 1
+      action: "Call a requireUser-gated endpoint with TESTDATA-AUTH-STUDENT-01's token"
+      expected: "Request succeeds (not rejected for role reasons)"
+    - step: 2
+      action: "Call the same endpoint with TESTDATA-AUTH-ADMIN-01's token"
+      expected: "Request succeeds (not rejected for role reasons)"
+  expected_result: >
+    A STUDENT token passes a requireUser-gated call; an ADMIN token passes a
+    requireUser-gated call. (REQ-AUTH-007 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: PartiallyAutomated
+  automation_reference: "Exercised incidentally by many AuthTest calls; no single dedicated cross-role test cited."
+
+- id: TC-AUTH-017
+  requirement_ids: [REQ-AUTH-008]
+  scenario_id: SCN-AUTH-014
+  system: Backend
+  module: AUTH
+  feature: Authorization primitives
+  title: requireAdmin three-state matrix — anonymous 401, student 403, admin succeeds
+  objective: >
+    Confirm a requireAdmin-gated endpoint (e.g. exam create) distinguishes "not signed in"
+    (401) from "signed in but not permitted" (403), and allows a genuine admin through.
+  preconditions:
+    - "TESTDATA-AUTH-STUDENT-01 and TESTDATA-AUTH-ADMIN-01 both hold valid tokens"
+  test_data: "TESTDATA-AUTH-STUDENT-01, TESTDATA-AUTH-ADMIN-01"
+  test_environment: "Backend (dev)"
+  priority: Critical
+  severity: Critical
+  test_type: Authorization
+  steps:
+    - step: 1
+      action: "Call a requireAdmin-gated endpoint with no Authorization header"
+      expected: "401"
+    - step: 2
+      action: "Call the same endpoint with TESTDATA-AUTH-STUDENT-01's valid token"
+      expected: "403; error message is \"Admin access required\""
+    - step: 3
+      action: "Call the same endpoint with TESTDATA-AUTH-ADMIN-01's valid token"
+      expected: "2xx — the call succeeds"
+  expected_result: >
+    Anonymous -> 401, valid STUDENT token -> 403, valid ADMIN token -> success.
+    (REQ-AUTH-008 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: >
+    AdminAuthTest.createExam_rejectsAnonymousRequests, AdminAuthTest.createExam_rejectsAStudentToken,
+    AdminAuthTest.createExam_succeedsWithAnAdminToken
+
+- id: TC-AUTH-018
+  requirement_ids: [REQ-AUTH-008]
+  scenario_id: SCN-AUTH-015
+  system: Backend
+  module: AUTH
+  feature: Authorization primitives
+  title: A demoted admin's existing token is rejected on the very next admin-gated call
+  objective: >
+    Confirm role is read fresh on every request, not cached on the token — an account
+    demoted from ADMIN to STUDENT must lose admin access immediately, without needing to
+    sign out and back in.
+  preconditions:
+    - "TESTDATA-AUTH-ADMIN-02 is a dedicated throwaway admin account (do not use TESTDATA-AUTH-ADMIN-01, which other cases may depend on staying an admin), currently signed in with a valid token"
+  test_data: "TESTDATA-AUTH-ADMIN-02"
+  test_environment: "Backend (dev), plus a way to change the account's role server-side (admin console or a direct, scoped data change) between steps 1 and 2"
+  priority: High
+  severity: High
+  test_type: Security
+  steps:
+    - step: 1
+      action: "Call a requireAdmin-gated endpoint with TESTDATA-AUTH-ADMIN-02's token"
+      expected: "2xx — succeeds, confirming the token is currently valid for admin access"
+    - step: 2
+      action: "Demote TESTDATA-AUTH-ADMIN-02's role from ADMIN to STUDENT (without revoking its token)"
+      expected: "Role change succeeds"
+    - step: 3
+      action: "Call the same requireAdmin-gated endpoint again, with the same (still unexpired) token"
+      expected: "403 — rejected as a non-admin, not still treated as an admin"
+  expected_result: >
+    A demoted account is rejected the moment its role changes — no caching of the old role
+    on the token. (REQ-AUTH-008 edge_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Restore or discard TESTDATA-AUTH-ADMIN-02 after this run so it doesn't leave a
+    permanently-demoted throwaway fixture behind unexplained.
+  automation_status: CandidateForAutomation
+  automation_reference: "None cited — no automated test found isolating this exact role-change-mid-session case."
+
+- id: TC-AUTH-019
+  requirement_ids: [REQ-AUTH-009]
+  scenario_id: SCN-AUTH-016
+  system: Backend
+  module: AUTH
+  feature: Public endpoint access
+  title: Documented public catalog/sync endpoints are reachable with zero Authorization header
+  objective: >
+    Confirm every endpoint on the documented public list remains reachable with no
+    Authorization header at all — a regression guard against an accidentally-added auth
+    check.
+  preconditions: []
+  test_data: none
+  test_environment: "Backend (dev)"
+  priority: Critical
+  severity: Critical
+  test_type: Regression
+  steps:
+    - step: 1
+      action: "GET /api/exams, /api/subjects, /api/topics, /api/languages, /api/difficulty-levels, /api/paper-types, /api/exam-structures, and /api/questions/sync — each with no Authorization header"
+      expected: "Every call returns 200"
+  expected_result: >
+    Each of the listed endpoints returns 200 with zero Authorization header. (REQ-AUTH-009
+    acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "AdminAuthTest.publicSyncEndpoints_remainAccessibleWithNoToken"
+
+- id: TC-AUTH-020
+  requirement_ids: [REQ-AUTH-010]
+  scenario_id: SCN-AUTH-017
+  system: Backend
+  module: AUTH
+  feature: Admin bootstrap
+  title: First admin is created from bootstrap config when zero admins exist
+  objective: >
+    Confirm a fresh environment with zero ADMIN-role users and valid bootstrap config
+    produces exactly one working admin account at startup.
+  preconditions:
+    - "Zero ADMIN-role users exist in the target database"
+    - "admin.bootstrap-email / admin.bootstrap-password are set in the environment's config"
+  test_data: "The environment's own configured admin.bootstrap-email/admin.bootstrap-password (do not record the actual value here — see remarks)"
+  test_environment: "Backend, a controlled instance/database where the admin count can be verified before and after startup"
+  priority: Critical
+  severity: Critical
+  test_type: StateTransition
+  steps:
+    - step: 1
+      action: "Confirm zero ADMIN-role users exist, then start the backend"
+      expected: "Startup logs show exactly one admin account created"
+    - step: 2
+      action: "POST /api/auth/login with the bootstrap email/password"
+      expected: "200 OK; response user.role == \"ADMIN\""
+  expected_result: >
+    With zero admins and bootstrap config set, startup creates exactly one admin; login with
+    the bootstrap credentials returns a token with role ADMIN. (REQ-AUTH-010
+    acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    This is inherently a controlled-environment case, not something to run against a shared
+    dev database that already has admins (it would simply be a no-op there — see
+    TC-AUTH-021). Do not paste the real bootstrap password into this file or any execution
+    record; treat it as environment configuration, not test data to be logged.
+  automation_status: ManualOnly
+  automation_reference: "None — manually verified once per reports/10-admin-authentication/admin-auth.md; no AdminBootstrapRunner test exists."
+
+- id: TC-AUTH-021
+  requirement_ids: [REQ-AUTH-010]
+  scenario_id: SCN-AUTH-018
+  system: Backend
+  module: AUTH
+  feature: Admin bootstrap
+  title: Restarting with an admin already present creates no duplicate
+  objective: Confirm a second startup, with at least one ADMIN already present, does not create another.
+  preconditions:
+    - "At least one ADMIN-role user already exists"
+  test_data: none
+  test_environment: "Backend, a controlled instance where the admin count can be checked before/after a restart"
+  priority: Medium
+  severity: Medium
+  test_type: Recovery
+  steps:
+    - step: 1
+      action: "Record the current count of ADMIN-role users, then restart the backend"
+      expected: "Startup logs show no bootstrap admin creation (or an explicit skip/no-op log line)"
+    - step: 2
+      action: "Recheck the count of ADMIN-role users"
+      expected: "Unchanged from before the restart"
+  expected_result: >
+    A second startup with an admin already present creates no duplicate and logs nothing
+    (or explicitly logs a no-op). (REQ-AUTH-010 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: "None — same manual-verification basis as TC-AUTH-020."
+
+- id: TC-AUTH-022
+  requirement_ids: [REQ-AUTH-011]
+  scenario_id: SCN-AUTH-019
+  system: Backend
+  module: AUTH
+  feature: Admin-invites-admin
+  title: Admin-register three-state matrix — anonymous 401, student 403, admin 201
+  objective: >
+    Confirm POST /api/auth/admin/register is gated identically to any other requireAdmin
+    endpoint.
+  preconditions:
+    - "TESTDATA-AUTH-STUDENT-01 and TESTDATA-AUTH-ADMIN-01 hold valid tokens"
+    - "TESTDATA-AUTH-NEW-ADMIN-EMAIL-01 is not registered"
+  test_data: "TESTDATA-AUTH-STUDENT-01, TESTDATA-AUTH-ADMIN-01, TESTDATA-AUTH-NEW-ADMIN-EMAIL-01"
+  test_environment: "Backend (dev)"
+  priority: High
+  severity: High
+  test_type: Authorization
+  steps:
+    - step: 1
+      action: "POST /api/auth/admin/register with no Authorization header"
+      expected: "401; no account created for TESTDATA-AUTH-NEW-ADMIN-EMAIL-01"
+    - step: 2
+      action: "POST /api/auth/admin/register with TESTDATA-AUTH-STUDENT-01's token"
+      expected: "403 \"Admin access required\"; no account created"
+    - step: 3
+      action: "POST /api/auth/admin/register with TESTDATA-AUTH-ADMIN-01's token and a valid new-admin payload"
+      expected: "201 Created; new account exists with role ADMIN"
+  expected_result: >
+    Anonymous -> 401, no account created; STUDENT -> 403, no account created; ADMIN -> 201,
+    new account has role ADMIN. (REQ-AUTH-011 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Clean up the newly-created admin account (TESTDATA-AUTH-NEW-ADMIN-EMAIL-01) after
+    execution unless it's meant to persist as a reusable fixture.
+  automation_status: Automated
+  automation_reference: "AdminAuthTest.registerAdmin_rejectsAnonymousAndStudentCallers"
+
+- id: TC-AUTH-023
+  requirement_ids: [REQ-AUTH-011]
+  scenario_id: SCN-AUTH-020
+  system: Backend
+  module: AUTH
+  feature: Admin-invites-admin
+  title: Admin-register response leaks no token, password, or password hash
+  objective: >
+    Confirm the successful admin-invite response body contains only id/email/displayName/
+    role — no token, expiresAt, password, or hash under any key.
+  preconditions:
+    - "TESTDATA-AUTH-ADMIN-01 holds a valid token"
+    - "TESTDATA-AUTH-NEW-ADMIN-EMAIL-02 is not registered"
+  test_data: "TESTDATA-AUTH-ADMIN-01, TESTDATA-AUTH-NEW-ADMIN-EMAIL-02"
+  test_environment: "Backend (dev)"
+  priority: High
+  severity: High
+  test_type: Security
+  steps:
+    - step: 1
+      action: "POST /api/auth/admin/register with TESTDATA-AUTH-ADMIN-01's token and a valid payload for TESTDATA-AUTH-NEW-ADMIN-EMAIL-02"
+      expected: >
+        201 Created; response body is exactly {id, email, displayName, role} — inspect the
+        raw response for any additional key (token, expiresAt, password, passwordHash, hash,
+        etc.) and confirm none are present
+  expected_result: >
+    The response must not leak token, passwordHash, or password under any key.
+    (REQ-AUTH-011 edge_conditions, acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Clean up TESTDATA-AUTH-NEW-ADMIN-EMAIL-02 after execution.
+  automation_status: Automated
+  automation_reference: "AdminAuthTest.registerAdmin_createsAnAdminAccountWithNoTokenOrPasswordHashLeaked"
+
+- id: TC-AUTH-024
+  requirement_ids: [REQ-AUTH-012]
+  scenario_id: SCN-AUTH-021
+  system: Backend
+  module: AUTH
+  feature: Error contract
+  title: AUTH error responses follow the documented {error} shape and status codes
+  objective: >
+    Confirm a representative sample of AUTH's own error paths (one per distinct documented
+    status code) return exactly {"error": "<message>"} with no additional fields, and no
+    status code outside 400/401/403.
+  preconditions:
+    - "TESTDATA-AUTH-STUDENT-01 holds a valid token"
+  test_data: "TESTDATA-AUTH-STUDENT-01"
+  test_environment: "Backend (dev)"
+  priority: High
+  severity: Medium
+  test_type: ErrorHandling
+  steps:
+    - step: 1
+      action: "Trigger a 400 (e.g. register with a blank email)"
+      expected: "Response body is exactly {\"error\": \"<message>\"}, no other top-level keys"
+    - step: 2
+      action: "Trigger a 401 (e.g. GET /api/auth/me with no token)"
+      expected: "Response body is exactly {\"error\": \"<message>\"}, no other top-level keys"
+    - step: 3
+      action: "Trigger a 403 (e.g. an admin-gated call with TESTDATA-AUTH-STUDENT-01's token)"
+      expected: "Response body is exactly {\"error\": \"<message>\"}, no other top-level keys"
+  expected_result: >
+    Every documented AUTH error response body is exactly {"error": "<message>"} with no
+    additional leaked fields; status codes match the documented meaning. (REQ-AUTH-012
+    acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: PartiallyAutomated
+  automation_reference: "Status codes verified indirectly by many AuthTest/AdminAuthTest assertions; exact body-shape (no extra keys) is not independently cited as automated anywhere."
+
+- id: TC-AUTH-025
+  requirement_ids: [REQ-AUTH-013]
+  scenario_id: SCN-AUTH-022
+  system: Backend
+  module: AUTH
+  feature: Timing safety
+  title: Login timing does not distinguishably differ between unknown-email and wrong-password failures
+  objective: >
+    Confirm both 401 failure paths on login (unknown email vs. correct email/wrong password)
+    take approximately the same time to respond, so response timing cannot be used to
+    enumerate registered accounts.
+  preconditions:
+    - "TESTDATA-AUTH-STUDENT-01 is a registered account; TESTDATA-AUTH-UNKNOWN-EMAIL-02 is never registered"
+  test_data: "TESTDATA-AUTH-STUDENT-01, TESTDATA-AUTH-UNKNOWN-EMAIL-02"
+  test_environment: "Backend (dev), a timing measurement tool capable of comparing response latency across repeated calls (not a plain manual stopwatch check)"
+  priority: Medium
+  severity: Medium
+  test_type: Security
+  steps:
+    - step: 1
+      action: "Measure response time across N repeated login attempts with TESTDATA-AUTH-STUDENT-01's correct email and a wrong password"
+      expected: "A stable latency distribution is recorded"
+    - step: 2
+      action: "Measure response time across N repeated login attempts with TESTDATA-AUTH-UNKNOWN-EMAIL-02 and any password"
+      expected: "A stable latency distribution is recorded"
+    - step: 3
+      action: "Compare the two distributions"
+      expected: "No statistically meaningful, consistently reproducible difference between them"
+  expected_result: >
+    Both failure paths run a real hash comparison, not a short-circuit, so response time is
+    not distinguishably different. (REQ-AUTH-013 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    This needs a real timing-measurement approach (repeated sampling, not a single manual
+    stopwatch read) to produce a meaningful result — record the actual methodology used at
+    execution time rather than a single subjective "felt the same" note. Mark Blocked if no
+    suitable timing tool is available in the target environment, rather than guessing at a
+    result.
+  automation_status: ManualOnly
+  automation_reference: "None — only message-equality is automated (AuthTest.login_failsIdenticallyForAWrongPasswordAndAnUnknownEmail); no timing assertion exists anywhere."
+
+- id: TC-AUTH-026
+  requirement_ids: [REQ-AUTH-014]
+  scenario_id: SCN-AUTH-023
+  system: Mobile
+  module: AUTH
+  feature: Optional authentication
+  title: Mobile app remains fully usable with no signed-in session
+  objective: >
+    Confirm a signed-out user can use the app's core functionality (content browsing,
+    practice) with no auth-related blocking, gate, or forced sign-in prompt at any point.
+  preconditions:
+    - "A device/emulator with the app installed and a completed content sync, currently signed out"
+  test_data: none
+  test_environment: "Mobile (Android emulator or device)"
+  priority: High
+  severity: High
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Launch the app while signed out and navigate through Home, Practice, and a full practice session"
+      expected: "Every screen is reachable and usable; no sign-in prompt blocks access to core functionality"
+    - step: 2
+      action: "Attempt any action that is documented as account-gated (e.g. cross-device progress restore, out of this module's scope)"
+      expected: "That specific action is unavailable or prompts to sign in, but nothing else on the core flow is blocked by it"
+  expected_result: >
+    No core mobile screen requires a signed-in session to function. (REQ-AUTH-014
+    acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: "None — no mobile test runner exists in this project; this is a real on-device/emulator check."

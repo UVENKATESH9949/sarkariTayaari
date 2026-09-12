@@ -4,7 +4,7 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { RefreshControl, ScrollView, Text, View, StyleSheet } from "react-native";
 import { getRadar } from "../data/weaknessRadarData";
 import { getFollowedExam } from "../db/followedExams";
-import type { RadarResult, RadarTopic } from "../intelligence/types";
+import type { RadarResult, RadarTopic } from "@sarkaritaiyaari/core/intelligence";
 import { useAuth } from "../practice/authContext";
 import { useSyncStatus } from "../sync/SyncContext";
 import { Card } from "../ui/Card";

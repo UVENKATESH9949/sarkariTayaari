@@ -1,0 +1,675 @@
+# QUESTIONS module — test scenarios (Phase 2)
+#
+# Every scenario references one or more qa/requirements/questions.yaml requirement_ids.
+# Scenarios flagged `status: Ambiguous` correspond to a requirement whose own `ambiguity`
+# field is REQUIRES CLARIFICATION, or a gap recorded in qa/requirements/_conflicts.md — their
+# expected result is deliberately NOT pre-asserted; execution establishes actual behavior.
+#
+# REQ-QUESTIONS-019 (content-status change, requireReviewer): per explicit instruction, the
+# documented ADMIN/STUDENT/anonymous authorization matrix is scenario'd normally (it's fully
+# specified), while the REVIEWER-role path is captured as its own Ambiguous scenario —
+# execution-blocked pending account provisioning (qa/requirements/_conflicts.md §1), not
+# invented or silently skipped.
+
+- id: SCN-QUESTIONS-001
+  requirement_ids: [REQ-QUESTIONS-001]
+  category: Positive
+  title: Valid question create returns correctly resolved metadata
+  objective: >
+    Verify POST /api/questions with a valid payload returns 201 with correctly populated
+    subjectId/subjectName/topicId/topicName/examCodes (sorted) fields.
+  systems: [Backend, Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-002
+  requirement_ids: [REQ-QUESTIONS-001]
+  category: Negative
+  title: "Missing root-language (\"en\") translation rejected"
+  objective: Verify a create payload with no "en" entry in translations is rejected 400.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-003
+  requirement_ids: [REQ-QUESTIONS-001]
+  category: Negative
+  title: Unknown topicId, difficulty, or exam code rejected
+  objective: >
+    Verify create is rejected 400 when topicId, difficulty, or any entry in examCodes doesn't
+    resolve to an existing row.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-004
+  requirement_ids: [REQ-QUESTIONS-002]
+  category: Positive
+  title: "Index-based types (SINGLE_CHOICE/ASSERTION_REASON/STATEMENT_COMBINATION) derive answerKey server-side"
+  objective: >
+    Verify creating a question of these three types resolves answerKey from `correctAnswer`
+    server-side, and any answerKey sent by the client for these types is ignored.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-005
+  requirement_ids: [REQ-QUESTIONS-002]
+  category: Positive
+  title: "Option-set/free-input types (MULTIPLE_CHOICE/TRUE_FALSE/NUMERIC/FILL_BLANK) accept and validate their documented answerKey shapes"
+  objective: >
+    Verify creating one question of each of these four types with a correctly-shaped
+    answerKey succeeds, and NUMERIC's `tolerance` defaults to 0.0 when omitted.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-006
+  requirement_ids: [REQ-QUESTIONS-002]
+  category: Positive
+  title: "Mapping/sequence types (MATCH/ORDERING) accept and validate contentStructure + answerKey"
+  objective: >
+    Verify creating a MATCH question with correctMapping covering every leftKey, and an
+    ORDERING question with a correctOrder permutation of itemKeys, both succeed.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-007
+  requirement_ids: [REQ-QUESTIONS-002]
+  category: Negative
+  title: Malformed or incomplete answerKey per type rejected
+  objective: >
+    Verify a MATCH question whose correctMapping is missing a leftKey, and other analogous
+    per-type shape violations (e.g. wrong option count for an option-set type), are rejected
+    400.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-008
+  requirement_ids: [REQ-QUESTIONS-002]
+  category: Negative
+  title: Creating a question of a non-authorable questionType rejected
+  objective: >
+    Verify attempting to create a question with a questionType that has
+    is_authoring_enabled: false is rejected 400.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-009
+  requirement_ids: [REQ-QUESTIONS-002]
+  category: Boundary
+  title: questionType and contentStructure are immutable after creation
+  objective: >
+    Verify a PUT update payload has no field for questionType/contentStructure, and attempting
+    to include one has no effect (silently ignored, no error).
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-010
+  requirement_ids: [REQ-QUESTIONS-003]
+  category: Positive
+  title: Adding a new-language translation preserves existing ones
+  objective: >
+    Verify adding a Hindi translation to an English-only question keeps the English
+    translation intact and visible on the next GET.
+  systems: [Backend, Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-011
+  requirement_ids: [REQ-QUESTIONS-003]
+  category: Negative
+  title: Unknown language code, or wrong option shape for the type, rejected
+  objective: >
+    Verify PUT /api/questions/{id}/translations/{lang} is rejected 400 for an unknown
+    language code, and separately for options not matching the question's type shape.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-012
+  requirement_ids: [REQ-QUESTIONS-004]
+  category: DataIntegrity
+  title: "pyq=false force-clears provenance fields regardless of what was sent"
+  objective: >
+    Verify sending pyq=false along with non-null pyqYear/pyqShift/sourcePaperId/questionNumber
+    results in all four stored as null in the response.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-013
+  requirement_ids: [REQ-QUESTIONS-005]
+  category: Positive
+  title: Updating question metadata changes the response and bumps updatedAt
+  objective: Verify PUT-ing a new topicId updates topicId/topicName in the response and bumps updatedAt.
+  systems: [Backend, Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-014
+  requirement_ids: [REQ-QUESTIONS-006]
+  category: Boundary
+  title: Reading a soft-deleted question returns full content, not 404
+  objective: >
+    Verify GET /api/questions/{id} on a soft-deleted question returns 200 with deleted:
+    true and complete translated content, not a 404.
+  systems: [Backend, Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-015
+  requirement_ids: [REQ-QUESTIONS-007]
+  category: Positive
+  title: Admin list filters by exam code, including soft-deleted rows
+  objective: >
+    Verify filtering the admin question list by examCode returns only that exam's questions,
+    with soft-deleted ones included (unlike /live).
+  systems: [Backend, Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-016
+  requirement_ids: [REQ-QUESTIONS-008]
+  category: Positive
+  title: Soft-deleting a question tombstones it without physical removal
+  objective: >
+    Verify DELETE /api/questions/{id} returns 204, and a subsequent GET shows deleted: true
+    with content still present.
+  systems: [Backend, Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-017
+  requirement_ids: [REQ-QUESTIONS-008]
+  category: Ambiguous
+  title: Deleting an already-soft-deleted question — idempotency undetermined
+  objective: >
+    Determine whether calling DELETE a second time on an already-soft-deleted question
+    returns 204 (idempotent) or an error — not specified by any source.
+  systems: [Backend]
+  status: Ambiguous
+  notes: >
+    Per REQ-QUESTIONS-008's ambiguity field and _conflicts.md §5 — record the actual observed
+    behavior rather than asserting a guessed expectation.
+
+- id: SCN-QUESTIONS-018
+  requirement_ids: [REQ-QUESTIONS-009]
+  category: Positive
+  title: Bulk delete counts only ids that actually existed
+  objective: >
+    Verify bulk-delete with a mix of valid and nonexistent ids returns deletedCount matching
+    only the valid ones, with unknown ids silently ignored.
+  systems: [Backend, Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-019
+  requirement_ids: [REQ-QUESTIONS-009]
+  category: Ambiguous
+  title: Empty ids array on bulk-delete — behavior undetermined
+  objective: >
+    Determine the exact response (400? which message? silent no-op?) for a bulk-delete
+    request with an empty ids array — the doc states "(non-empty)" but not the failure shape.
+  systems: [Backend]
+  status: Ambiguous
+  notes: "Per REQ-QUESTIONS-009's ambiguity field — record actual behavior, do not pre-assert."
+
+- id: SCN-QUESTIONS-020
+  requirement_ids: [REQ-QUESTIONS-010]
+  category: Positive
+  title: All-valid bulk import creates every question, auto-creating subject/topic by name
+  objective: >
+    Verify a fully valid bulk-import batch creates every row, and a subject/topic name not
+    yet existing is auto-created rather than rejected.
+  systems: [Backend, Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-021
+  requirement_ids: [REQ-QUESTIONS-010]
+  category: Negative
+  title: One bad item in a bulk-import batch does not block the others
+  objective: >
+    Verify a batch with one invalid row (per-row validation failure) still creates the valid
+    rows, reporting the bad one in `failures` by index rather than failing the whole request.
+  systems: [Backend, Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-022
+  requirement_ids: [REQ-QUESTIONS-010]
+  category: Negative
+  title: Unknown exam code in a bulk-import row fails only that item
+  objective: Verify a row referencing a nonexistent exam code fails only that row, not the batch.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-023
+  requirement_ids: [REQ-QUESTIONS-010]
+  category: Boundary
+  title: A batch-level DB flush failure fails every row in that 50-row batch
+  objective: >
+    Verify (if reproducible) that when a flush of one 50-row batch fails at the DB level, all
+    50 rows in that batch are reported as failed, even though only one may have been the
+    actual cause.
+  systems: [Backend]
+  status: Ready
+  notes: >
+    Likely hard to trigger deliberately without a contrived DB-level failure condition — mark
+    N/A with a note if the trigger can't be reproduced in the test environment, per this
+    project's own manual-QA convention for hard-to-force conditions.
+
+- id: SCN-QUESTIONS-024
+  requirement_ids: [REQ-QUESTIONS-011]
+  category: Positive
+  title: Same question text imported twice in one batch — both created, second flagged duplicate
+  objective: >
+    Verify importing identical question text twice within one batch creates both rows, with
+    duplicatesDetected mapping the second's id to the first's.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-025
+  requirement_ids: [REQ-QUESTIONS-012]
+  category: Positive
+  title: "Full sync (since omitted/blank/\"0\") returns the entire bank"
+  objective: Verify a sync call with no `since` (or `since=0`) returns results starting from the full bank, paginated.
+  systems: [Backend, Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-026
+  requirement_ids: [REQ-QUESTIONS-012]
+  category: Positive
+  title: Delta sync returns only changes after the cutoff, ordered ascending
+  objective: >
+    Verify a sync call with `since` set to a timestamp after question A's updatedAt but
+    before question B's returns B but not A, and results are ordered ascending by updatedAt.
+  systems: [Backend, Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-027
+  requirement_ids: [REQ-QUESTIONS-012]
+  category: Validation
+  title: Invalid since timestamp rejected
+  objective: Verify a `since` value that fails ISO-8601 parsing (and isn't blank/"0") returns 400.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-028
+  requirement_ids: [REQ-QUESTIONS-012, REQ-QUESTIONS-026]
+  category: Boundary
+  title: Requested page size above the documented max is silently clamped
+  objective: >
+    Verify requesting size above 1000 on /sync is clamped to 1000 server-side, not rejected
+    or allowed to balloon.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-029
+  requirement_ids: [REQ-QUESTIONS-013]
+  category: Positive
+  title: A deleted question syncs as a full-content tombstone
+  objective: >
+    Verify deleting a question, then syncing with a cutoff before the delete, returns that
+    question with deleted: true and its full translated content (not stripped to just an id).
+  systems: [Backend, Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-030
+  requirement_ids: [REQ-QUESTIONS-014]
+  category: Positive
+  title: A DRAFT question is absent from every public read; a legacy PUBLISHED question is present
+  objective: >
+    Verify a question with contentStatus: DRAFT does not appear in /sync, /live, /counts, or
+    /mock-sample results, while an implicitly-PUBLISHED legacy question does.
+  systems: [Backend, Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-031
+  requirement_ids: [REQ-QUESTIONS-014, REQ-QUESTIONS-013]
+  category: Boundary
+  title: A soft-deleted DRAFT question still tombstones out despite never being live-visible
+  objective: >
+    Verify a question that was DRAFT and is then soft-deleted still appears as a tombstone in
+    /sync results, even though it was never returned live.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-032
+  requirement_ids: [REQ-QUESTIONS-015]
+  category: Positive
+  title: supportedTypes excludes unsupported live types but still includes their tombstones
+  objective: >
+    Verify a sync call with supportedTypes=SINGLE_CHOICE,MULTIPLE_CHOICE excludes a live
+    NUMERIC question but still includes a soft-deleted NUMERIC question as a tombstone.
+  systems: [Backend, Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-033
+  requirement_ids: [REQ-QUESTIONS-015]
+  category: Boundary
+  title: Omitted supportedTypes defaults to SINGLE_CHOICE only
+  objective: >
+    Verify a sync/live call with no supportedTypes param behaves as if only SINGLE_CHOICE
+    were declared — protecting an old client that predates multi-type questions.
+  systems: [Backend, Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-034
+  requirement_ids: [REQ-QUESTIONS-015]
+  category: Ambiguous
+  title: Malformed/unrecognized supportedTypes code — behavior undetermined
+  objective: >
+    Determine what happens when supportedTypes contains a code that doesn't match any known
+    questionType (e.g. a typo) — presumably a silent no-match, but not documented.
+  systems: [Backend]
+  status: Ambiguous
+  notes: "Per REQ-QUESTIONS-015's ambiguity field — record actual behavior, do not pre-assert."
+
+- id: SCN-QUESTIONS-035
+  requirement_ids: [REQ-QUESTIONS-016]
+  category: Positive
+  title: "/live filters correctly by topicId, excluding non-PUBLISHED and deleted questions"
+  objective: >
+    Verify GET /api/questions/live filtered by topicId returns only non-deleted, PUBLISHED
+    questions of a supported type for that topic.
+  systems: [Backend, Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-036
+  requirement_ids: [REQ-QUESTIONS-016]
+  category: Boundary
+  title: An unmatched filter combination on /live returns an empty page, not an error
+  objective: Verify a filter combination matching zero questions returns 200 with an empty page.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-037
+  requirement_ids: [REQ-QUESTIONS-017]
+  category: Positive
+  title: "/counts groups correctly and excludes deleted/non-published questions"
+  objective: >
+    Verify GET /api/questions/counts?groupBy=subject returns a correct per-subject count that
+    excludes soft-deleted and non-PUBLISHED questions.
+  systems: [Backend, Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-038
+  requirement_ids: [REQ-QUESTIONS-017]
+  category: Validation
+  title: Missing or unknown groupBy rejected
+  objective: Verify /counts with a missing groupBy, and separately an unrecognized groupBy value, both return 400.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-039
+  requirement_ids: [REQ-QUESTIONS-018]
+  category: Positive
+  title: /mock-sample returns a genuinely random sample spanning multiple subjects
+  objective: >
+    Verify /mock-sample across two subjects with a set `limit` returns at most that many
+    questions, drawing from both subjects when both have content — not a fixed "first N"
+    order.
+  systems: [Backend, Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-040
+  requirement_ids: [REQ-QUESTIONS-018]
+  category: Negative
+  title: /mock-sample excludes soft-deleted questions from its candidate pool
+  objective: Verify a soft-deleted question is never returned by /mock-sample even if it otherwise matches.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-041
+  requirement_ids: [REQ-QUESTIONS-018]
+  category: Validation
+  title: Missing examCode or subjectIds rejected on both mock-assembly endpoints
+  objective: Verify /mock-count and /mock-sample both return 400 when examCode or subjectIds is missing.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-042
+  requirement_ids: [REQ-QUESTIONS-019]
+  category: Authorization
+  title: Content-status change — admin succeeds, student rejected, anonymous rejected
+  objective: >
+    Verify PUT /api/questions/{id}/content-status succeeds for a valid ADMIN token, returns
+    403 for a STUDENT token, and 401 for no token — the fully documented part of this
+    requirement's authorization contract.
+  systems: [Backend, Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-043
+  requirement_ids: [REQ-QUESTIONS-019]
+  category: Ambiguous
+  title: A REVIEWER-role token also succeeds on content-status change
+  objective: >
+    Verify a valid REVIEWER-role token succeeds on PUT /api/questions/{id}/content-status,
+    per requireReviewer's documented ADMIN-or-REVIEWER contract.
+  systems: [Backend]
+  status: Ambiguous
+  notes: >
+    Execution BLOCKED pending resolution of how a REVIEWER account is actually provisioned —
+    no AUTH endpoint can create one (qa/requirements/_conflicts.md §1). Do not invent a
+    provisioning path or assume an existing endpoint covers it. This scenario stays on the
+    books as a documented gap, not silently dropped, per explicit instruction.
+
+- id: SCN-QUESTIONS-044
+  requirement_ids: [REQ-QUESTIONS-019, REQ-QUESTIONS-014]
+  category: Positive
+  title: Publishing a DRAFT question makes it appear in every public read
+  objective: >
+    Verify setting status: PUBLISHED on a previously-DRAFT question makes it subsequently
+    appear in /live, /sync, /counts, and /mock-sample.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-045
+  requirement_ids: [REQ-QUESTIONS-019]
+  category: Validation
+  title: Missing or invalid content-status value rejected
+  objective: >
+    Verify a content-status request with a missing `status` field, or one not among
+    DRAFT/REVIEW/PUBLISHED, is rejected 400.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-046
+  requirement_ids: [REQ-QUESTIONS-020]
+  category: Positive
+  title: Valid image upload returns a working URL
+  objective: Verify POST /api/images with a valid image file returns 200 with a usable url.
+  systems: [Backend, Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-047
+  requirement_ids: [REQ-QUESTIONS-020]
+  category: Authorization
+  title: Image upload rejects a non-admin request
+  objective: Verify an anonymous or student request to POST /api/images is rejected 401/403.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-048
+  requirement_ids: [REQ-QUESTIONS-020]
+  category: ErrorHandling
+  title: Cloudinary-side upload failure surfaces as the documented unmapped 500
+  objective: >
+    Verify (if reproducible, e.g. via invalid/unreachable Cloudinary config) that a storage
+    failure returns a generic 500, not the module's usual {error} envelope — a real,
+    documented deviation, asserted as-is rather than treated as a fresh bug each time.
+  systems: [Backend]
+  status: Ready
+  notes: >
+    This is a documented current behavior (not ambiguous) — the expected result is
+    specifically the deviation itself, per REQ-QUESTIONS-020.
+
+- id: SCN-QUESTIONS-049
+  requirement_ids: [REQ-QUESTIONS-021]
+  category: Positive
+  title: Creating near-identical text populates duplicateOfQuestionIds without blocking the write
+  objective: >
+    Verify creating a question whose English text matches an existing one modulo case/
+    punctuation/whitespace returns 201 with duplicateOfQuestionIds populated, and the write
+    still succeeds.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-050
+  requirement_ids: [REQ-QUESTIONS-021]
+  category: DataIntegrity
+  title: duplicateOfQuestionIds is null on every read other than the triggering create
+  objective: >
+    Verify a subsequent GET/list/update/sync/live/mock-sample of the newly-created duplicate
+    question always shows duplicateOfQuestionIds: null — confirming the documented
+    self-correction (this field is create-response-only).
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-051
+  requirement_ids: [REQ-QUESTIONS-022]
+  category: Positive
+  title: Resolving a duplicate pair persists and re-resolving is idempotent
+  objective: >
+    Verify marking a pair NOT_DUPLICATE persists correctly on re-fetch (resolution +
+    resolvedAt set), and resolving the same pair again updates resolvedAt without error.
+  systems: [Backend, Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-052
+  requirement_ids: [REQ-QUESTIONS-022]
+  category: Validation
+  title: Invalid resolution value or unknown pair rejected
+  objective: >
+    Verify resolving with a value other than DUPLICATE/NOT_DUPLICATE is rejected 400, and
+    resolving a questionId/duplicateOfQuestionId pair with no matching record is rejected 404.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-053
+  requirement_ids: [REQ-QUESTIONS-023]
+  category: Positive
+  title: Dry-run duplicate check finds a match without writing anything
+  objective: >
+    Verify POST /api/question-duplicates/check with text identical to an existing question
+    returns matchCount >= 1 with that question's id, and creates no database row.
+  systems: [Backend, Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-054
+  requirement_ids: [REQ-QUESTIONS-024]
+  category: Positive
+  title: Backfill rescan is idempotent on repeated runs
+  objective: >
+    Verify running duplicate backfill twice in a row against unchanged data returns
+    edgesRecorded: 0 on the second run (no duplicate edges recorded).
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-055
+  requirement_ids: [REQ-QUESTIONS-025]
+  category: Positive
+  title: Question-type reference data includes all 9 authorable types
+  objective: >
+    Verify GET /api/question-types includes an entry for each of the 9 authorable types with
+    authoringEnabled: true.
+  systems: [Backend, Mobile, Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-056
+  requirement_ids: [REQ-QUESTIONS-026]
+  category: Performance
+  title: Every documented read endpoint clamps its result size server-side
+  objective: >
+    Verify requesting an oversized page/limit on each of /sync (max 1000), /live (max 500),
+    /mock-sample (max 200), /question-duplicates list (max 100), and /backfill (max 5000) is
+    silently clamped to its documented cap, never allowed to balloon or crash.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-057
+  requirement_ids: [REQ-QUESTIONS-026]
+  category: Performance
+  title: A local practice-question fetch against a heavily-populated topic does not crash
+  objective: >
+    Verify a device with a heavily-populated topic (hundreds of matching local questions)
+    returns at most PRACTICE_QUESTION_LIMIT results from a practice-question fetch, without a
+    SQLite bound-parameter crash — the mobile-side counterpart of the real historical bug
+    this requirement documents.
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-058
+  requirement_ids: [REQ-QUESTIONS-027]
+  category: Positive
+  title: Every question type renders, scores and reveals correctly in web Practice
+  objective: >
+    Verify each of the nine question types can be answered in the web Practice engine and
+    that the reveal styling/outcome matches the shared evaluator, including per-item colouring
+    on MATCH and ORDERING (both sides/positions, not just an overall banner).
+  systems: [Web]
+  status: Ready
+  notes: >
+    Regression guard for a real Phase 1 defect: MATCH/ORDERING items initially showed no
+    colour on reveal at all, despite a correct overall "Incorrect" banner, due to a CSS
+    cascade-order bug (two equal-specificity classes, the wrong one declared later winning).
+
+- id: SCN-QUESTIONS-059
+  requirement_ids: [REQ-QUESTIONS-027]
+  category: Boundary
+  title: An unattempted question does not count toward the session score
+  objective: >
+    Verify a question never confirmed during a session is excluded from the final
+    correct/total count rather than counted as wrong.
+  systems: [Web]
+  status: Ready
+  notes: null
+
+- id: SCN-QUESTIONS-060
+  requirement_ids: [REQ-QUESTIONS-028]
+  category: Positive
+  title: A grouped question's passage renders and collapses in web Practice
+  objective: >
+    Verify a real passage-grouped question shows its passage text above the question,
+    collapses/expands on click, and that answering/reveal work normally alongside it.
+  systems: [Web]
+  status: Ready
+  notes: null

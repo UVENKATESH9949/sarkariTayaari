@@ -9,7 +9,7 @@ import {
   questionExams,
   questions,
 } from "../db/schema";
-import { buildDifficultyScale, EVIDENCE_WINDOW_DAYS, type DifficultyScale, type EvidenceEvent } from "./topicHealth";
+import { buildDifficultyScale, EVIDENCE_WINDOW_DAYS, type DifficultyScale, type EvidenceEvent } from "@sarkaritaiyaari/core/intelligence";
 
 /**
  * Builds topic-health evidence from this device's own attempts (Weakness Radar v1, signed-out

@@ -74,8 +74,13 @@ server:
 app:
   cors:
     # Comma-separated. Dev default only — production sets APP_CORS_ALLOWED_ORIGINS to
-    # the deployed admin site's origin. See CorsConfig for why this is configuration.
-    allowed-origins: http://localhost:5173
+    # the deployed sites' origins. See CorsConfig for why this is configuration.
+    #
+    # Two dev servers now: 5173 is the admin console, 5174 the student web app (web/).
+    # Origins are matched exactly — http://127.0.0.1:5174 is a DIFFERENT origin from
+    # http://localhost:5174 and will fail preflight, which surfaces as an opaque network
+    # error in the browser rather than a helpful message.
+    allowed-origins: http://localhost:5173,http://localhost:5174
 
   auth:
     # Long-lived deliberately: this is a study app people open daily, and forcing a
@@ -105,3 +110,34 @@ app:
     # An admin clicking the wrong thing on production must not overwrite real curation with
     # demo values. See SyntheticCurationService.
     synthetic-seed-enabled: false
+
+  ai:
+    # AI provider foundation (infrastructure only — no AI feature calls this yet). See
+    # system-design/06-ai-foundation.md for the full architecture and precedence model.
+    #
+    # Off by default: even once a future feature is coded to call AIService, it does
+    # nothing until an operator flips this to true — the same "off unless explicitly
+    # turned on" posture as the epic-l/exam-guide/question-pool flags above.
+    enabled: false
+    # CLAUDE | OPENAI | GEMINI | MOCK. Only CLAUDE and MOCK are implemented — OPENAI/GEMINI
+    # resolve to AIUnknownProviderException until a provider bean exists for them.
+    provider: MOCK
+    # Never commit a real value here. Set via AI_API_KEY in application-local.yml
+    # (gitignored) or a real environment variable — never returned to any client, never
+    # logged (see AIProperties/ClaudeProvider).
+    api-key:
+    # Provider-specific default model id. Leave blank to use the provider's own built-in
+    # default (ClaudeProvider falls back to claude-sonnet-5). A request-level override
+    # (AIRequest.model) always wins over this.
+    model:
+    # Leave blank to use the provider's real endpoint. Only needed to point at a proxy or
+    # a test double.
+    base-url:
+    connect-timeout-ms: 10000
+    request-timeout-ms: 60000
+    max-retries: 2
+    # AI Admin Control Center (see system-design/06-ai-foundation.md and ADR-014): the
+    # server-side key used to encrypt/decrypt a provider API key stored in ai_provider_configs
+    # via AES-256-GCM. Base64, must decode to exactly 32 bytes. Never stored in the database.
+    # Blank is fine until an admin actually saves a key through the Control Center.
+    encryption-key:

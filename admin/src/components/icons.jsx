@@ -160,3 +160,14 @@ export function SourceIcon() {
     </svg>
   );
 }
+
+/** A chip/circuit glyph for the AI Control Center — distinct from IntelligenceIcon's plain
+ * trend line, since this page is about provider configuration, not a computed score. */
+export function AiIcon() {
+  return (
+    <svg {...base}>
+      <rect x="7" y="7" width="10" height="10" rx="2" />
+      <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1" />
+    </svg>
+  );
+}

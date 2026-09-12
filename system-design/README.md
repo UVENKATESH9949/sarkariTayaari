@@ -15,6 +15,7 @@ again?"* — this folder is the answer.
 | [03-how-data-flows.md](03-how-data-flows.md) | You wonder how a question you typed reaches somebody's phone |
 | [04-where-do-i-change-things.md](04-where-do-i-change-things.md) | You know *what* you want to change but not *which file* |
 | [05-why-its-built-this-way.md](05-why-its-built-this-way.md) | Something looks odd and you want the reason before you "fix" it |
+| [06-ai-foundation.md](06-ai-foundation.md) | You're adding an AI-powered feature, or an AI provider, and need to know where it plugs in |
 
 ## The one-line version
 

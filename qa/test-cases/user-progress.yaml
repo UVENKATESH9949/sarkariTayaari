@@ -1,0 +1,76 @@
+# USER-PROGRESS module — manual test cases
+#
+# Every case below is UNEXECUTED: actual_result empty, status Not Executed, defect_id empty.
+
+- id: TC-USERPROGRESS-001
+  requirement_ids: [REQ-USERPROGRESS-001]
+  scenario_id: SCN-USERPROGRESS-001
+  system: Web
+  module: USER-PROGRESS
+  feature: Web practice sessions upload via the existing write-once contract
+  title: A web practice session, completed while signed in, is visible via GET /api/progress
+  objective: >
+    Confirm a completed web Practice session becomes a real server-side record readable back
+    from the same account, the same way a mobile-recorded session already is.
+  preconditions:
+    - "Signed in as a real test account with a known, empty (or known) prior history"
+  test_data: "A disposable test account; one topic/difficulty with real questions"
+  test_environment: "web/ dev build, signed in, against a running backend"
+  priority: High
+  severity: Major
+  test_type: Integration
+  steps:
+    - step: 1
+      action: "Sign in, complete a short practice session (answer at least 2 questions), and reach the Summary screen"
+      expected: "Summary shows the correct score for the confirmed questions"
+    - step: 2
+      action: "Call GET /api/progress with the same account's token (or sign in on another client)"
+      expected: >
+        The just-completed session appears in practiceSessions, with the same id, correctCount,
+        totalCount, and per-result outcome/response the web app computed
+    - step: 3
+      action: "Repeat the upload (simulate a retry) with the same session id"
+      expected: "No duplicate session appears — the same id overwrites rather than creating a second row"
+  expected_result: >
+    Web practice sessions become real, correctly-shaped rows in the same history mobile
+    restores. (REQ-USERPROGRESS-001 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Creates a real session record on the target environment's account — use a disposable test account and clean up."
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-USERPROGRESS-002
+  requirement_ids: [REQ-USERPROGRESS-001]
+  scenario_id: SCN-USERPROGRESS-002
+  system: Web
+  module: USER-PROGRESS
+  feature: Web practice sessions upload via the existing write-once contract
+  title: A failed upload does not block the Summary screen or alarm the student
+  objective: >
+    Confirm the student reaches and can read their own results even when the background
+    upload to the server fails.
+  preconditions:
+    - "Signed in"
+  test_data: "n/a"
+  test_environment: "web/ dev build, signed in, backend made unreachable after sign-in"
+  priority: Medium
+  severity: Minor
+  test_type: ErrorHandling
+  steps:
+    - step: 1
+      action: "Sign in, then stop the backend (or block the network) before finishing a practice session"
+      expected: "Finish still navigates to Summary; the session's own results render correctly from sessionStorage"
+    - step: 2
+      action: "Check the browser console/UI for any error shown to the student about the failed sync"
+      expected: "None — the upload failure is silent by design"
+  expected_result: >
+    A failed upload never prevents the student from seeing their own results.
+    (REQ-USERPROGRESS-001 error_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""

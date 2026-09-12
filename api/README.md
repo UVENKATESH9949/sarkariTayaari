@@ -53,6 +53,8 @@ assumed from whether an endpoint happens to be public.
 | [EXAM-INTELLIGENCE.md](EXAM-INTELLIGENCE.md) | Topic trend/priority scoring ("Epic L") and its synthetic-data seeder |
 | [EXAM-GUIDE.md](EXAM-GUIDE.md) | Recruitment cycles, eligibility, dates, documents, application steps, fees ("Exam Guide") and its demo-data seeder |
 | [WEAKNESS-RADAR.md](WEAKNESS-RADAR.md) | Per-topic health, confidence, trend and recommended action for one student ("Weakness Radar" / Preparation Intelligence), plus its admin evidence view |
+| [AI-ADMIN.md](AI-ADMIN.md) | AI Admin Control Center — admin-managed AI provider enable/disable, model, API key, connection test, audit log. Configuration only; no AI-powered user feature exists yet |
+| [AI-CONTENT.md](AI-CONTENT.md) | AI-generated question/topic explanations — batch generation, answer-grounding validation, and the DRAFT→REVIEW→PUBLISHED human review workflow (TASK-2701 Phase 2). No public/mobile endpoint yet — sync is Phase 3 |
 
 Not documented as separate files (trivial, not a real integration contract):
 `GET /api/health` (liveness probe) and `GET /downloads` (serves APKs from a local

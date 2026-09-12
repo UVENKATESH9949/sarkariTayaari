@@ -1,62 +1,27 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { loadPreferences, savePreferences, DEFAULT_PREFERENCES, type UiLanguage } from "../db/preferences";
-import { en, type Catalogue } from "./en";
-import { te } from "./te";
-
-const CATALOGUES: Record<UiLanguage, Catalogue> = { en, te };
+import { translatorFor, type Translate, type UiLanguage } from "@sarkaritaiyaari/core/i18n";
+import { loadPreferences, savePreferences, DEFAULT_PREFERENCES } from "../db/preferences";
 
 /**
- * Dotted paths into the catalogue, derived from its shape.
+ * Mobile's i18n provider.
  *
- * This is why the catalogue is worth typing at all: `t("quiz.loading")` autocompletes,
- * `t("quiz.loadng")` is a compile error, and a key deleted from `en.ts` breaks every call
- * site immediately instead of rendering the literal string "quiz.loading" to a student.
+ * The catalogues, the dotted-key typing, lookup, `{placeholder}` interpolation and the
+ * English fallback all live in `@sarkaritaiyaari/core/i18n` as of TASK-2601 Phase 0 — web
+ * uses the identical engine, so a student sees the same strings on both. What stays here is
+ * only what is genuinely mobile: React context and persistence to the SQLite
+ * `app_preferences` row.
  */
-type Paths<T> = {
-  [K in keyof T & string]: T[K] extends string ? K : `${K}.${Paths<T[K]>}`;
-}[keyof T & string];
-
-export type TranslationKey = Paths<Catalogue>;
-
-export type TranslateVars = Record<string, string | number>;
 
 type I18nContextValue = {
   language: UiLanguage;
   setLanguage: (language: UiLanguage) => void;
-  t: (key: TranslationKey, vars?: TranslateVars) => string;
+  t: Translate;
 };
-
-function lookup(catalogue: Catalogue, key: string): string | undefined {
-  let node: unknown = catalogue;
-  for (const part of key.split(".")) {
-    if (typeof node !== "object" || node === null) return undefined;
-    node = (node as Record<string, unknown>)[part];
-  }
-  return typeof node === "string" ? node : undefined;
-}
-
-/**
- * Substitutes `{name}` placeholders. A placeholder with no matching variable is left as
- * written rather than replaced with "undefined": a visible `{count}` in the UI is an
- * obvious bug report, whereas "undefined questions" looks like a data problem and gets
- * chased in the wrong place.
- */
-function interpolate(template: string, vars?: TranslateVars): string {
-  if (!vars) return template;
-  return template.replace(/\{(\w+)\}/g, (whole, name: string) =>
-    name in vars ? String(vars[name]) : whole,
-  );
-}
-
-const FALLBACK_LANGUAGE: UiLanguage = "en";
-
-const defaultT: I18nContextValue["t"] = (key, vars) =>
-  interpolate(lookup(en, key) ?? key, vars);
 
 const I18nContext = createContext<I18nContextValue>({
   language: DEFAULT_PREFERENCES.uiLanguage,
   setLanguage: () => {},
-  t: defaultT,
+  t: translatorFor(DEFAULT_PREFERENCES.uiLanguage),
 });
 
 export function useI18n() {
@@ -104,16 +69,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     savePreferences({ uiLanguage: next }).catch((err) => console.warn("Failed to save language", err));
   }, []);
 
-  const t = useMemo<I18nContextValue["t"]>(() => {
-    const catalogue = CATALOGUES[language] ?? CATALOGUES[FALLBACK_LANGUAGE];
-    return (key, vars) => {
-      // The English fallback is unreachable while `te` is typed as the full Catalogue, but
-      // it is kept so that adding a third language as a Partial later degrades to English
-      // rather than to a raw key.
-      const template = lookup(catalogue, key) ?? lookup(en, key) ?? key;
-      return interpolate(template, vars);
-    };
-  }, [language]);
+  const t = useMemo(() => translatorFor(language), [language]);
 
   const value = useMemo<I18nContextValue>(() => ({ language, setLanguage, t }), [language, setLanguage, t]);
 

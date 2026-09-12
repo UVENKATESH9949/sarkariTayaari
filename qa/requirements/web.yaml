@@ -1,0 +1,408 @@
+# WEB module — requirement repository
+#
+# Scope: the student-facing web application (web/) and the shared package it stands on
+# (packages/core). Primary source: tasks/TASK-2601-student-web-application.md. Secondary:
+# web/src/**, packages/core/src/**, WEB-DEPLOY-SETUP.md.
+#
+# WHY THIS MODULE EXISTS AT ALL, given qa/README.md says module codes follow api/*.md contract
+# boundaries. Web adds no API contract — it consumes the ones that already exist. What it does
+# add is a whole client with behaviour of its own: responsive layout, theming, a translation
+# surface, session handling in a browser, and a hard dependency on the backend's CORS
+# allowlist. None of that belongs to AUTH or CATALOG. So WEB covers web-specific behaviour,
+# and from Phase 1 onward a feature area's cases attach to its existing contract module with
+# `Web` added to that requirement's `system` list, rather than being duplicated here.
+#
+# automation_status is evidence-based. `Automated` appears only where a named test genuinely
+# asserts the requirement. web/ has no browser-test runner configured in this project (no
+# Playwright/Vitest under web/ — the Phase 0 browser checks were one-off scripts, not a suite),
+# so every UI requirement is ManualOnly, the same standing as mobile/ and admin/.
+
+- id: REQ-WEB-001
+  feature: Shared logic has exactly one implementation
+  module: WEB
+  system: [Mobile, Web]
+  source_doc: tasks/TASK-2601-student-web-application.md
+  source_section: "Phase 0 — shared package extraction"
+  description: >
+    The question evaluator, topic-health algorithm, translation catalogues and engine, design
+    tokens, and the HTTP API client exist once, in packages/core, and are consumed by both
+    mobile/ and web/. Neither app carries its own copy.
+  business_rule: >
+    Scoring rules already exist twice on purpose (Java on the server, TypeScript on the
+    client) so evaluation can run offline. A third copy for web would make correctness a
+    three-way agreement problem with no test on two of the sides.
+  actor: Developer
+  preconditions:
+    - packages/core is installed in both consumers
+  inputs:
+    - "A change to any module under packages/core/src"
+  expected_outputs:
+    - "Both mobile/ and web/ observe the change without a second edit"
+  validations:
+    - Mobile typechecks, lints at its documented baseline, and produces a Metro bundle containing the shared modules
+    - scripts/check-topic-health-parity.js passes against the moved path
+  permissions: n/a
+  dependencies: []
+  error_conditions:
+    - "A shared module referencing a platform-specific global fails packages/core's platform-purity test"
+  edge_conditions:
+    - "__DEV__ exists on React Native and not in a browser; shared code must guard it with typeof"
+  offline_behavior: n/a
+  acceptance_criteria:
+    - No duplicate definition of the evaluator, topic-health constants, catalogues or palettes exists outside packages/core
+    - The topic-health parity script passes
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "packages/core platformPurity.test.ts + questionEvaluator.test.ts; scripts/check-topic-health-parity.js"
+
+- id: REQ-WEB-002
+  feature: Evaluator agreement between Java and TypeScript
+  module: WEB
+  system: [Backend, Mobile, Web]
+  source_doc: sample-data/question-evaluator-fixtures.json
+  source_section: "cases"
+  description: >
+    Every case in the shared fixture file evaluates to the same outcome and scoreFraction in
+    the Java evaluator and in the TypeScript evaluator.
+  business_rule: >
+    A student's answer must score identically wherever it is graded — on the phone offline, in
+    a browser, or on the server.
+  actor: Developer
+  preconditions:
+    - sample-data/question-evaluator-fixtures.json is the single shared source of cases
+  inputs:
+    - "questionType, answerKey, response per fixture case"
+  expected_outputs:
+    - "Identical outcome and scoreFraction on both sides"
+  validations:
+    - A case added for one side constrains the other
+  permissions: n/a
+  dependencies: [REQ-WEB-001]
+  error_conditions:
+    - "A divergence fails a real test run on at least one side"
+  edge_conditions:
+    - "Null answerKey and null response cases must not throw"
+  offline_behavior: "Evaluation never requires a network on any platform"
+  acceptance_criteria:
+    - All fixture cases pass in QuestionEvaluatorsTest (Java) and questionEvaluator.test.ts (TypeScript)
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_reference_hint: "QuestionEvaluatorsTest.everyFixtureCaseHolds; questionEvaluator.test.ts"
+  automation_hint: "Both sides read the same fixture file"
+
+- id: REQ-WEB-003
+  feature: Responsive layout from phone browser to desktop
+  module: WEB
+  system: [Web]
+  source_doc: tasks/TASK-2601-student-web-application.md
+  source_section: "Decisions already taken — decision 3"
+  description: >
+    The app is usable from roughly 360px wide up to desktop. Below 1024px navigation is a
+    bottom bar plus a compact top bar; from 1024px it is a sidebar. No layout produces
+    horizontal page scrolling.
+  business_rule: >
+    The web app exists partly to serve students who will not install an APK, so a phone
+    browser is a first-class target rather than a degraded one.
+  actor: Student
+  preconditions: []
+  inputs:
+    - "Viewport width"
+  expected_outputs:
+    - "Bottom bar + top bar below 1024px; sidebar at and above 1024px"
+  validations:
+    - No horizontal overflow at any supported width
+  permissions: n/a
+  dependencies: []
+  error_conditions: []
+  edge_conditions:
+    - "Exactly at the 1024px breakpoint, exactly one navigation treatment is visible"
+  offline_behavior: n/a
+  acceptance_criteria:
+    - Every primary destination is reachable at both widths
+    - document.scrollWidth never exceeds the viewport width
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "No browser-test runner is configured under web/"
+
+- id: REQ-WEB-004
+  feature: Account and Settings reachable at every width
+  module: WEB
+  system: [Web]
+  source_doc: tasks/TASK-2601-student-web-application.md
+  source_section: "Phase 0 — two real bugs found by looking at browser screenshots"
+  description: >
+    Account and Settings are reachable from the navigation at any supported viewport width —
+    from the sidebar footer on desktop, and from the top bar on narrow screens.
+  business_rule: >
+    The bottom bar holds five primary destinations and has no room for these two. A regression
+    here makes signing in impossible on a phone, which is silent — every other screen still
+    works.
+  actor: Student
+  preconditions: []
+  inputs:
+    - "Viewport width"
+  expected_outputs:
+    - "A control leading to /account and one leading to /settings is visible and operable"
+  validations:
+    - Icon-only controls meet a minimum 44px touch target
+    - Icon-only controls carry an accessible name
+  permissions: n/a
+  dependencies: [REQ-WEB-003]
+  error_conditions: []
+  edge_conditions:
+    - "Exactly one of the two treatments (top bar / sidebar footer) is visible at a given width, never both"
+  offline_behavior: n/a
+  acceptance_criteria:
+    - Activating the account control navigates to /account at phone width
+    - Activating it navigates to /account at desktop width
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "No browser-test runner is configured under web/"
+
+- id: REQ-WEB-005
+  feature: Theme and text size
+  module: WEB
+  system: [Web]
+  source_doc: web/src/theme/applyTheme.ts
+  source_section: "applyTheme"
+  description: >
+    A student can switch between light and dark and choose a text size from the same ladder
+    the phone app offers. Both persist per device and are applied before first paint on a
+    later visit. Colours come from the palette shared with the phone app.
+  business_rule: >
+    These are per-device conveniences, so they persist locally and are never uploaded — the
+    same stance the phone app takes.
+  actor: Student
+  preconditions: []
+  inputs:
+    - "Theme choice (light | dark)"
+    - "Zoom step"
+  expected_outputs:
+    - "Painted colours change; the choice survives a reload"
+  validations:
+    - Text scaling changes type size without moving layout
+  permissions: n/a
+  dependencies: []
+  error_conditions:
+    - "Unreadable or unavailable localStorage falls back to the default rather than failing"
+  edge_conditions:
+    - "A corrupt stored value is treated as absent"
+  offline_behavior: "Works with no network"
+  acceptance_criteria:
+    - The chosen theme is still applied after a full page reload
+    - No flash of the wrong theme on load
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "Requires rendering and computed styles; no browser-test runner under web/"
+
+- id: REQ-WEB-006
+  feature: Interface language
+  module: WEB
+  system: [Web]
+  source_doc: web/src/i18n/I18nProvider.tsx
+  source_section: "I18nProvider"
+  description: >
+    A student can switch the interface language between the catalogues that exist (English and
+    Telugu), using the same translation engine and catalogues as the phone app. The choice
+    persists per device.
+  business_rule: >
+    The interface language is deliberately separate from the question-content language, which
+    arrives with the practice screens.
+  actor: Student
+  preconditions: []
+  inputs:
+    - "Language code"
+  expected_outputs:
+    - "Translated strings render; the choice survives a reload"
+  validations:
+    - Only languages with a catalogue are offered
+  permissions: n/a
+  dependencies: []
+  error_conditions:
+    - "A key missing from the chosen catalogue falls back to English, then to the key itself"
+  edge_conditions:
+    - "There is no Hindi UI catalogue; question content is separately bilingual English/Hindi"
+  offline_behavior: "Works with no network"
+  acceptance_criteria:
+    - Switching language changes visible strings without a reload
+    - The choice survives a reload
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "No browser-test runner is configured under web/"
+
+- id: REQ-WEB-007
+  feature: Browser session
+  module: WEB
+  system: [Backend, Web]
+  source_doc: web/src/auth/AuthProvider.tsx
+  source_section: "AuthProvider"
+  description: >
+    A student can register, sign in and sign out from the browser against the same accounts the
+    phone app uses. A stored token is validated against the server on startup rather than
+    trusted, and a token the server rejects as unauthorised is discarded.
+  business_rule: >
+    Only the server knows a token has been revoked. A transient failure (offline, backend down)
+    is NOT evidence a token is bad and must not sign the student out.
+  actor: Student
+  preconditions:
+    - The backend is reachable and its CORS allowlist contains this origin
+  inputs:
+    - "email, password, optional display name"
+  expected_outputs:
+    - "A session that survives reload; sign-out clears it"
+  validations:
+    - Sign-out clears the local session even if the server call fails
+  permissions:
+    - "Any anonymous visitor may register or sign in"
+  dependencies: [REQ-WEB-008]
+  error_conditions:
+    - "401 on startup validation discards the stored token"
+    - "A network failure on startup validation retains the token"
+  edge_conditions:
+    - "The app is fully usable signed out — accounts are optional"
+  offline_behavior: "Sign-in requires a network; an existing session renders without one"
+  acceptance_criteria:
+    - A signed-in session survives a full page reload
+    - Signing out returns the app to its signed-out state
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "Backend-side auth is covered by AuthTest; the browser session layer has no runner"
+
+- id: REQ-WEB-008
+  feature: Cross-origin access to the backend
+  module: WEB
+  system: [Backend, Web]
+  source_doc: WEB-DEPLOY-SETUP.md
+  source_section: "4. Add the deployed origin to the backend's CORS allowlist"
+  description: >
+    The backend permits requests from exactly the origins listed in app.cors.allowed-origins
+    (APP_CORS_ALLOWED_ORIGINS). The web app's origin must be listed or every request fails.
+  business_rule: >
+    Origins are matched exactly. http://127.0.0.1:5174 is a different origin from
+    http://localhost:5174, and https://x.web.app is different from https://x.firebaseapp.com —
+    Firebase serves both by default.
+  actor: Student (via the browser)
+  preconditions:
+    - The backend is running with a known allowlist
+  inputs:
+    - "An Origin header on a preflight or actual request"
+  expected_outputs:
+    - "Allowlisted origin — 200 with Access-Control-Allow-Origin echoed"
+    - "Unlisted origin — 403 'Invalid CORS request'"
+  validations:
+    - The Authorization header is permitted, so bearer auth works cross-origin
+  permissions: n/a
+  dependencies: []
+  error_conditions:
+    - "A blocked origin surfaces in the browser only as an opaque network failure, indistinguishable from the backend being down"
+  edge_conditions:
+    - "Adding an origin requires a backend restart (local) or a new revision (Cloud Run)"
+    - "APP_CORS_ALLOWED_ORIGINS replaces rather than appends — omitting the admin origin breaks the admin console"
+  offline_behavior: n/a
+  acceptance_criteria:
+    - A preflight from an allowlisted origin returns Access-Control-Allow-Origin for that origin
+    - A preflight from an unlisted origin is refused
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: CandidateForAutomation
+  automation_hint: "A backend integration test could assert the allowlist behaviour directly; none exists today"
+
+- id: REQ-WEB-010
+  feature: Mock Test engine — timed, blind, navigable, with an unload guard
+  module: WEB
+  system: [Web]
+  source_doc: tasks/TASK-2601-student-web-application.md
+  source_section: "Phase 2 — Mock Test"
+  description: >
+    A full-length timed attempt in the browser: a countdown that auto-submits at zero, no
+    reveal of correct/incorrect until submit ("blind mode"), mark-for-review, clear-response,
+    a question-navigator grid scaled to real paper sizes (SSC/IBPS/RRB papers run 80-190
+    questions), per-question language switching, and a guard against losing an in-progress
+    attempt to an accidental tab close or refresh.
+  business_rule: >
+    A mock test must behave like the real exam it rehearses — no early feedback, and a
+    countdown that keeps running (and auto-submits) even if the student never returns.
+    Leaving mid-attempt is real work lost, so it is guarded, not silent — the browser
+    equivalent of mobile's hardware-back interceptor (`activeSessionContext.tsx`), built on
+    the two mechanisms a browser actually offers: in-app navigation is intercepted by the
+    app itself with a styled dialog; a tab close/refresh can only trigger the browser's own
+    native, un-stylable `beforeunload` prompt.
+  actor: Student
+  preconditions:
+    - "A mockable paper exists with at least one section that has available questions"
+  inputs:
+    - "paperId; the student's answers, marks-for-review, and navigation between questions"
+  expected_outputs:
+    - "A completed attempt with a real scorecard (marks scored, correct/wrong/unattempted, per-subject breakdown, per-question review)"
+  validations:
+    - "No .option-correct/.option-wrong (or equivalent reveal styling) exists anywhere before submit"
+    - "The question-navigator grid remains fully usable (its own Close button reachable) on a paper with 100+ questions"
+    - "The countdown is derived from a fixed end-timestamp, not a decrementing counter, so a throttled/backgrounded tab still reports the correct remaining time"
+  permissions: n/a
+  dependencies: [REQ-QUESTIONS-018]
+  error_conditions:
+    - "The countdown reaching zero auto-submits exactly once, even if triggered from a backgrounded tab"
+  edge_conditions:
+    - "In-app navigation away from an active attempt shows a styled confirmation dialog, not the native browser prompt"
+    - "A tab close/refresh during an active attempt triggers the browser's native beforeunload prompt; the dialog carries no custom text (browsers do not allow one)"
+    - "A section whose subjects have fewer live questions than requested runs with the shorter, honestly-disclosed count rather than failing"
+  offline_behavior: "None — Mock Test requires a live connection throughout (decision 2, online-only)"
+  acceptance_criteria:
+    - "Submitting shows a confirmation naming how many questions are answered, and cannot be undone once confirmed"
+    - "The result scorecard's marks match the paper's own marking scheme (+marksCorrect per correct, -marksWrong per wrong)"
+    - "Marked-for-review and answered are tracked and rendered as visually distinct navigator states"
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "No browser-test runner is configured under web/; verified this phase via a one-off Playwright script (not a committed suite), per this file's own header note"
+
+- id: REQ-WEB-009
+  feature: Client-side routing survives a direct hit
+  module: WEB
+  system: [Web]
+  source_doc: firebase.json
+  source_section: "hosting.rewrites"
+  description: >
+    Any in-app route opened directly — typed, bookmarked, shared or reloaded — renders that
+    screen rather than a host 404.
+  business_rule: >
+    A single-page app serves one HTML file; without a catch-all rewrite the CDN never hands
+    unmatched paths to the app.
+  actor: Student
+  preconditions:
+    - The app is served by a host configured with a catch-all rewrite to /index.html
+  inputs:
+    - "A direct request for an in-app path"
+  expected_outputs:
+    - "The corresponding screen renders"
+  validations:
+    - An unknown path renders the app's own not-found screen, not the host's
+  permissions: n/a
+  dependencies: []
+  error_conditions: []
+  edge_conditions:
+    - "index.html must not be cached, or a deploy leaves returning visitors on the previous build"
+  offline_behavior: n/a
+  acceptance_criteria:
+    - Reloading the browser while on a non-root route re-renders that route
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "Requires a served build; no runner configured"

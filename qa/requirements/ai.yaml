@@ -1,0 +1,776 @@
+# AI module — requirement repository
+#
+# Scope: the shared AI foundation in packages/core — the task registry, context building and
+# minimisation, structured-output validation and answer grounding, and tier routing. This is the
+# layer every AI surface goes through; it is deliberately provider-agnostic and platform-pure.
+#
+# Primary source: AI_ARCHITECTURE.md (the approved architecture, including the three decisions
+# recorded in its §13). Secondary: system-design/06-ai-foundation.md (the already-shipped backend
+# provider layer and admin control center), reports/architecture-decisions.md (ADR-013/014).
+#
+# Phase 2 requirements (REQ-AI-010 onward) cover the batch generation + human review pipeline
+# added in the same change — see api/AI-CONTENT.md for the endpoint contract. NOT in scope here,
+# because none of it is built yet: sync to device (Phase 3), the client-config/feature-flag
+# endpoint (Phase 4), and any on-device model runtime (Phase 6). AI_ARCHITECTURE.md §12 has the
+# phase plan. Admin-side AI *provider* configuration (which vendor, which key) has its own
+# contract (api/AI-ADMIN.md) and is not covered by this module — this module covers the content
+# AI *produces*, not the AI provider itself.
+#
+# automation_status is evidence-based. The packages/core vitest suite is a real runner, so cases
+# it genuinely covers are marked Automated with the actual test name; nothing is marked Automated
+# on the strength of "a similar test exists."
+
+- id: REQ-AI-001
+  feature: AI task registry
+  module: AI
+  system: [Mobile, Web]
+  source_doc: AI_ARCHITECTURE.md
+  source_section: "§7 The task registry"
+  description: >
+    Every AI capability is declared as a named task in a single registry. A task declares which
+    tiers may serve it, whether it is personalized, whether it is cacheable, which languages it
+    may answer in, which context it is entitled to, its output-token ceiling, the minimum device
+    band for the local-model path, and what the UI shows when nothing can serve it. A screen names
+    a task; it never composes a prompt or chooses a provider.
+  business_rule: >
+    Centralising the declaration is what makes "can this run offline", "does this cost money per
+    user" and "is this cacheable" answerable in one place instead of drifting per call site.
+  actor: Any client of the shared AI layer (mobile app, web app)
+  preconditions:
+    - The registry is loaded (it is a module-scope constant, always available)
+  inputs:
+    - "A task id"
+  expected_outputs:
+    - "The task's full definition, or a type error for an unknown id"
+  validations:
+    - A task must declare at least one tier
+    - Tiers must be listed in resolution order (GROUND_TRUTH, DETERMINISTIC, CACHED, GENERATED)
+    - A personalized task can never be cacheable
+    - A cacheable task must have a CACHED tier, and vice versa
+    - A task requiring learner context must be marked personalized, and vice versa
+    - A task must require at least one kind of context
+    - A task that can generate must allow a non-zero output budget, and one that cannot must not
+  permissions: none (library code, no endpoint)
+  dependencies: []
+  error_conditions:
+    - "An inconsistent registry throws in development and is reported via console.error in release"
+  edge_conditions:
+    - "The release path must not throw: expo-router imports every route file at startup, so a
+       module-scope throw would take down Practice and Mock Test over an unopened AI feature"
+  offline_behavior: >
+    Fully available offline — the registry is a constant with no I/O.
+  acceptance_criteria:
+    - The shipped registry reports zero self-inconsistencies
+    - Each invariant above is detected when deliberately violated
+    - No task is personalized and cacheable at the same time
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "packages/core/src/ai/tasks.test.ts"
+
+- id: REQ-AI-002
+  feature: Language scoping for AI answers
+  module: AI
+  system: [Mobile, Web]
+  source_doc: AI_ARCHITECTURE.md
+  source_section: "§3.1, §13 decision 3"
+  description: >
+    AI may answer only in languages that have real question content — English and Hindi. A request
+    in any other language is refused outright with a distinct reason, never served by falling back
+    to another language and never by translating the question first.
+  business_rule: >
+    Telugu (and the other nine entries in the app's language picker) have UI-chrome strings but no
+    question content at all. Explaining a question in a language the question does not exist in
+    would require the model to translate it first, which is exactly the fabrication risk this
+    product cannot carry for government-exam content.
+  actor: Any client of the shared AI layer
+  preconditions:
+    - A task has been selected and a language requested
+  inputs:
+    - "A task id and an ISO language code"
+  expected_outputs:
+    - "Either routing proceeds, or an UNAVAILABLE result with reason LANGUAGE_NOT_SUPPORTED"
+  validations:
+    - The requested language must appear in the task's declared language list
+  permissions: none
+  dependencies:
+    - REQ-AI-001
+  error_conditions:
+    - "An unsupported language returns reason LANGUAGE_NOT_SUPPORTED naming the requested code"
+  edge_conditions:
+    - "The refusal happens before any tier handler runs, so no work and no cost is incurred"
+  offline_behavior: >
+    Identical offline — the check is a comparison against a constant.
+  acceptance_criteria:
+    - A Telugu request is refused rather than answered in English
+    - No task declares a language without question content
+    - The refusal names the unsupported code so the UI can explain it
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "packages/core/src/ai/router.test.ts, packages/core/src/ai/tasks.test.ts"
+
+- id: REQ-AI-003
+  feature: Context minimisation
+  module: AI
+  system: [Mobile, Web]
+  source_doc: AI_ARCHITECTURE.md
+  source_section: "§8 Grounding, hallucination control, and privacy"
+  description: >
+    An AI task receives only the context kinds it declared. Learner context is a compact set of
+    aggregates already computed by the topic-health layer — state, score, recent accuracy,
+    evidence level, attempt count, a capped list of reason codes, and the preferred language — and
+    carries no user identifier, no topic identity, and no per-question history.
+  business_rule: >
+    Two separate risks. Privacy: raw learner history must not leave the device unnecessarily.
+    Correctness: a shared, cacheable answer built from one student's performance would be
+    generated once and then served to every other student.
+  actor: Any client of the shared AI layer
+  preconditions:
+    - The relevant diagnosis has already been computed (server radar, cache, or local radar)
+  inputs:
+    - "A task definition and a set of candidate context parts"
+  expected_outputs:
+    - "A context containing only the declared kinds"
+  validations:
+    - Context kinds not declared by the task are dropped
+    - Reason codes are capped at the ranked head
+    - Blank optional text normalises to null
+  permissions: none
+  dependencies:
+    - REQ-AI-001
+  error_conditions:
+    - "A task whose declared context is missing is refused with reason MISSING_CONTEXT, naming the gaps"
+  edge_conditions:
+    - "GET /api/progress returns a student's entire unpaginated history (~14,000 rows for the demo
+       account) and must never be used as a context source"
+  offline_behavior: >
+    Fully available offline — builders are pure functions over already-computed values and perform
+    no data access of their own.
+  acceptance_criteria:
+    - A shared task never receives learner context even when one is supplied
+    - Learner context contains no identifier and no raw history
+    - A missing required context kind is reported rather than silently prompted around
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "packages/core/src/ai/context/build.test.ts"
+
+- id: REQ-AI-004
+  feature: Answer grounding
+  module: AI
+  system: [Mobile, Web]
+  source_doc: AI_ARCHITECTURE.md
+  source_section: "§8, §23 of the source brief"
+  description: >
+    The correct answer is verified data supplied to the model as given; the model is never asked to
+    choose it. Any generated explanation that asserts an answer other than the verified one is
+    rejected before a student sees it.
+  business_rule: >
+    Converting the worst failure mode in exam preparation into a mechanical equality check is the
+    single cheapest safety measure available. A model that cannot choose the answer cannot choose
+    it wrongly.
+  actor: Any client of the shared AI layer
+  preconditions:
+    - The question's verified answer and options are known
+  inputs:
+    - "A candidate response and the question it was generated for"
+  expected_outputs:
+    - "The validated response, or a rejection with code UNGROUNDED_ANSWER"
+  validations:
+    - Matching is tolerant of form (casing, whitespace, an option label, letter-versus-text) and strict about substance
+    - A letter answer resolves to its option text in both directions
+  permissions: none
+  dependencies:
+    - REQ-AI-005
+  error_conditions:
+    - "A mismatched answer is rejected with both the claimed and the verified answer in the detail"
+  edge_conditions:
+    - "questions.correct_answer holds a letter for legacy single-choice rows and display text for
+       others (widened from VARCHAR(10) in V28), so both forms must validate"
+    - "Grounding is skipped when no question is supplied — an admin preview has none, and forcing
+       callers to invent a fake question would be worse"
+  offline_behavior: >
+    Identical offline — validation is pure and local.
+  acceptance_criteria:
+    - An explanation of the verified answer is accepted
+    - An explanation of a different option is rejected
+    - Option text validates against a stored letter answer and vice versa
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "packages/core/src/ai/schema/validate.test.ts"
+
+- id: REQ-AI-005
+  feature: Structured output validation
+  module: AI
+  system: [Mobile, Web]
+  source_doc: AI_ARCHITECTURE.md
+  source_section: "§8; §22 of the source brief"
+  description: >
+    Every generative task returns a typed object rather than prose. Output is parsed and validated
+    before use; a malformed or incomplete response is returned as a failure value with a specific
+    code, never thrown and never rendered.
+  business_rule: >
+    Malformed model output must never crash the application. A failure is a signal to fall down
+    the tier ladder, not an exception for a screen to handle.
+  actor: Any client of the shared AI layer
+  preconditions:
+    - A response has been produced by a cached row, a local model, or a cloud provider
+  inputs:
+    - "Raw model text or an already-parsed value, plus the task id"
+  expected_outputs:
+    - "{ ok: true, value } or { ok: false, code, detail }"
+  validations:
+    - A fenced code block around JSON is tolerated; otherwise malformed JSON is rejected, not repaired
+    - The payload's own taskId must match the requested task
+    - Required fields must be present and non-blank; optional blanks normalise to null
+    - Closed enums reject values outside the taxonomy
+    - Numeric fields reject out-of-range values
+    - A hint containing the answer is rejected
+  permissions: none
+  dependencies:
+    - REQ-AI-001
+  error_conditions:
+    - "NOT_JSON, NOT_AN_OBJECT, WRONG_TASK, MISSING_FIELD, EMPTY_FIELD, WRONG_TYPE, UNKNOWN_ENUM,
+       OUT_OF_RANGE, UNGROUNDED_ANSWER, HINT_REVEALS_ANSWER"
+  edge_conditions:
+    - "Short numeric answers must not trigger the hint-leak check — 'divide by 12' is a legitimate
+       hint for an answer of 12, and a validator that cries wolf gets switched off"
+  offline_behavior: >
+    Identical offline — validation is pure and local.
+  acceptance_criteria:
+    - No malformed input causes a throw
+    - Each failure mode returns its own distinguishable code
+    - A response for the wrong task is rejected rather than re-routed
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "packages/core/src/ai/schema/validate.test.ts"
+
+- id: REQ-AI-006
+  feature: Tier routing order
+  module: AI
+  system: [Mobile, Web]
+  source_doc: AI_ARCHITECTURE.md
+  source_section: "§4 The tier model, §5 Routing"
+  description: >
+    A request is served by the cheapest tier that can fully answer it, in the fixed order
+    GROUND_TRUTH, DETERMINISTIC, CACHED, GENERATED. Within the generated tier the local model is
+    tried before the cloud whenever both are available.
+  business_rule: >
+    Cost, latency, reliability and truthfulness all degrade in the same direction, so the order is
+    fixed rather than chosen per request. Local before cloud because it is free, private and needs
+    no round trip — cloud is the quality escalation, not the default.
+  actor: Any client of the shared AI layer
+  preconditions:
+    - The task is enabled and its language and context requirements are satisfied
+  inputs:
+    - "A route request and the set of tier handlers the host app supplies"
+  expected_outputs:
+    - "A SERVED result naming the tier (and provider, for generated) plus an ordered attempt trail"
+  validations:
+    - A tier the task does not declare is never attempted
+    - A tier with no handler is recorded as skipped rather than failing the request
+  permissions: none
+  dependencies:
+    - REQ-AI-001
+  error_conditions:
+    - "When no tier can serve, the result is UNAVAILABLE with reason ALL_TIERS_DECLINED"
+  edge_conditions:
+    - "A deterministic-only task must never reach a model even when a cloud handler is supplied"
+  offline_behavior: >
+    The first three tiers are fully offline. Offline only removes the cloud provider; it does not
+    change the order of anything above it.
+  acceptance_criteria:
+    - Ground truth is preferred over the cache, and the cache over generation
+    - The local model is attempted before the cloud when both are available
+    - The attempt trail records every tier tried, in order, with its outcome
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "packages/core/src/ai/router.test.ts"
+
+- id: REQ-AI-007
+  feature: Graceful degradation
+  module: AI
+  system: [Mobile, Web]
+  source_doc: AI_ARCHITECTURE.md
+  source_section: "§5, §11; §41 of the source brief"
+  description: >
+    A tier that throws, declines, or returns something invalid is recorded as an attempt and the
+    ladder continues. AI unavailability is a calm terminal state that names the fallback the UI
+    should show, never an error surfaced to the user and never a broken screen.
+  business_rule: >
+    AI is an enhancement layer. Every AI surface renders beside content that is already correct and
+    on screen, so the worst acceptable outcome is an absent enhancement.
+  actor: Any client of the shared AI layer
+  preconditions:
+    - At least one tier handler has been supplied
+  inputs:
+    - "A route request whose handlers may fail in any combination"
+  expected_outputs:
+    - "Either a SERVED result from a later tier, or UNAVAILABLE with a fallback instruction"
+  validations:
+    - An exception from a handler is caught and recorded, never propagated
+  permissions: none
+  dependencies:
+    - REQ-AI-006
+  error_conditions:
+    - "Every handler throwing still yields UNAVAILABLE rather than a thrown error"
+  edge_conditions:
+    - "No handlers supplied at all is a normal outcome, not a failure — every tier is skipped"
+  offline_behavior: >
+    Unchanged offline; being offline simply skips the cloud provider.
+  acceptance_criteria:
+    - Routing continues past a handler that throws
+    - The failure detail is preserved in the attempt trail for diagnosis
+    - The unavailable result names the task's fallback
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "packages/core/src/ai/router.test.ts"
+
+- id: REQ-AI-008
+  feature: Per-task feature flags default off
+  module: AI
+  system: [Mobile, Web]
+  source_doc: AI_ARCHITECTURE.md
+  source_section: "§10 Admin control and feature flags; §15 of the source brief"
+  description: >
+    Each AI task is individually gated by a flag. A task whose flag is absent is treated as
+    disabled, exactly as if it were explicitly false.
+  business_rule: >
+    Unknown means off, so a client config that failed to load — the normal offline case for an
+    app with no remote-config channel today — can never dark-launch a capability.
+  actor: Any client of the shared AI layer
+  preconditions:
+    - A flag map is supplied (possibly empty)
+  inputs:
+    - "A task id and the current flag map"
+  expected_outputs:
+    - "Either routing proceeds, or UNAVAILABLE with reason TASK_DISABLED"
+  validations:
+    - Only an explicit true enables a task
+  permissions: none
+  dependencies:
+    - REQ-AI-001
+  error_conditions:
+    - "A disabled task is refused before any handler runs"
+  edge_conditions:
+    - "No server-side client-config channel exists yet (verified: no config/settings/feature-flag
+       controller, and no client fetch path) — until Phase 4 builds one, flags come from the host app"
+  offline_behavior: >
+    The last known flags must be usable offline; this layer simply consumes whatever map it is
+    given and defaults to off.
+  acceptance_criteria:
+    - An empty flag map disables every task
+    - An explicitly false flag disables the task without invoking any handler
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "packages/core/src/ai/router.test.ts"
+
+- id: REQ-AI-009
+  feature: Device-tier gating for the local model
+  module: AI
+  system: [Mobile]
+  source_doc: AI_ARCHITECTURE.md
+  source_section: "§9.3 Device tiering"
+  description: >
+    The local-model path is attempted only when a verified model is installed and the device meets
+    the task's minimum band. Devices below 4 GB of RAM never load a model; they are served by the
+    non-generating tiers and by the cloud when online.
+  business_rule: >
+    Holding a quantised model resident on a low-memory device risks the operating system killing
+    the app. Losing Practice and Mock Test to power a hint is a bad trade.
+  actor: Mobile app
+  preconditions:
+    - The device's memory band has been determined
+  inputs:
+    - "The device band, whether a model is installed, and the task's minimum band"
+  expected_outputs:
+    - "Either the local handler runs, or it is skipped with a reason and routing continues"
+  validations:
+    - Bands compare by capability, not alphabetically
+  permissions: none
+  dependencies:
+    - REQ-AI-006
+  error_conditions:
+    - "A skip is recorded with the device band and the required band, not silently omitted"
+  edge_conditions:
+    - "No local runtime exists yet (Phase 6). Until then the local handler is absent and every
+       request skips it — the layer must report that honestly rather than stubbing an answer"
+  offline_behavior: >
+    This is the only tier that can generate offline, and only on a capable device with a model
+    installed. Offline AI on a low-end device means the non-generating tiers, not a model.
+  acceptance_criteria:
+    - A device below the task's band never invokes the local handler
+    - A missing model never invokes the local handler
+    - Routing continues to the cloud after a local skip
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "packages/core/src/ai/router.test.ts"
+
+- id: REQ-AI-010
+  feature: Batch generation is explicitly scoped, never open-ended
+  module: AI
+  system: [Backend]
+  source_doc: api/AI-CONTENT.md
+  source_section: "POST /api/admin/ai-content/generate"
+  description: >
+    Generation always names an explicit list of question or topic ids. There is no "generate for
+    every question" mode. A row is never regenerated over an existing non-deleted row for the
+    same (task, subject, language) — the caller reads FAILED/SKIPPED_EXISTING outcomes and, if a
+    fresh attempt is wanted, rejects or deletes the existing row first.
+  business_rule: >
+    Nothing in this backend distinguishes a real, authored question from one of the ~35,700
+    synthetic load-test rows generated for TICKET-501 (no column, no marker — verified by
+    grepping the schema and every migration). Generation spends real money per call, so scoping
+    which questions to spend it on is always the caller's explicit decision, matching decision 2
+    in AI_ARCHITECTURE.md §13 (real content only, not the synthetic bank).
+  actor: Admin
+  preconditions:
+    - Caller holds an ADMIN token
+  inputs:
+    - "taskId (QUESTION_EXPLANATION | CONCEPT_EXPLANATION), languageCode, subjectIds (question or topic ids)"
+  expected_outputs:
+    - "A summary: requested/generated/skippedExisting/failedValidation/failedProvider counts, plus a per-item outcome"
+  validations:
+    - taskId must be a known AiContentTask
+    - languageCode must be en or hi
+    - subjectIds must be non-empty
+  permissions: ADMIN only (not REVIEWER — this is the one action that spends money)
+  dependencies: []
+  error_conditions:
+    - "400 for an unknown taskId, an unsupported language, or an empty subjectIds list"
+    - "401 unauthenticated, 403 for a STUDENT or REVIEWER token"
+  edge_conditions:
+    - "A question/topic id with no translation in the requested language yields FAILED_VALIDATION for that item only — the batch continues"
+  offline_behavior: n/a (admin-only backend operation)
+  acceptance_criteria:
+    - Calling generate twice for the same (task, question, language) skips the second time
+    - An unauthenticated or non-admin caller is rejected before any generation runs
+    - One item's failure does not abort the rest of the batch
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "AiContentIntegrationTest (generate_skipsAQuestionThatAlreadyHasContent, generate_rejectsAnUnknownTask, generate_rejectsAnUnauthenticatedCaller, generate_rejectsAStudentCaller, generate_rejectsAReviewerCaller)"
+
+- id: REQ-AI-011
+  feature: Generated content is grounded against the verified answer before it is ever persisted
+  module: AI
+  system: [Backend]
+  source_doc: AI_ARCHITECTURE.md
+  source_section: "§8 Grounding, hallucination control, and privacy"
+  description: >
+    A QUESTION_EXPLANATION response is parsed and checked against questions.correct_answer (or
+    the resolved answer_key) before a database row is ever written. A response asserting a
+    different answer is discarded — no DRAFT row is created for a reviewer to have to reject.
+  business_rule: >
+    Mirrors REQ-AI-004 (the shared TypeScript grounding check), applied at the point content is
+    actually generated and stored, in Java. Kept in parity via
+    sample-data/ai-answer-grounding-fixtures.json, asserted by both AiAnswerGroundingTest.java and
+    packages/core's validate.test.ts.
+  actor: system (AiContentGenerationService)
+  preconditions:
+    - A generation call has produced a raw model response
+  inputs:
+    - "The raw response text and the question's verified answer + options"
+  expected_outputs:
+    - "A persisted DRAFT row, or a FAILED_VALIDATION outcome with no row created"
+  validations:
+    - Malformed JSON is rejected
+    - A response missing a required field is rejected
+    - An answer that does not match the verified one (tolerant of letter-vs-text form) is rejected
+  permissions: none (internal)
+  dependencies:
+    - REQ-AI-004
+    - REQ-AI-010
+  error_conditions:
+    - "FAILED_VALIDATION with a code (NOT_JSON, MISSING_FIELD, UNGROUNDED_ANSWER, ...) and a human-readable detail"
+  edge_conditions:
+    - "A legacy question storing correct_answer as a letter (e.g. \"A\") is graded by the same
+       tolerant match, not expanded to option text — the persisted payload echoes back whatever
+       form the model was given"
+  offline_behavior: n/a
+  acceptance_criteria:
+    - A grounded, well-formed response is persisted as DRAFT
+    - An ungrounded response never reaches the database
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "AiAnswerGroundingTest.everyFixtureCaseHolds; AiContentValidationTest; AiContentIntegrationTest.generate_producesAGroundedDraftFromTheConfiguredProvider"
+
+- id: REQ-AI-012
+  feature: Human review workflow — DRAFT to REVIEW to PUBLISHED
+  module: AI
+  system: [Backend]
+  source_doc: api/AI-CONTENT.md
+  source_section: "submit-for-review / publish / reject / unpublish"
+  description: >
+    Generated content starts DRAFT and reaches a student only once an admin or reviewer publishes
+    it, reusing the existing ContentStatus enum and REVIEWER role (Exam Guide spec §36) rather
+    than a parallel workflow. An admin/reviewer may publish directly from DRAFT (the same fast
+    path ExamGuideAdminController already allows for recruitment cycles); reject requires the
+    row to be in REVIEW and requires a non-blank reason; unpublish requires PUBLISHED.
+  business_rule: >
+    An AI explanation for a government exam question is never shown to a student because a model
+    produced it — only because a human approved it. This is this project's concrete answer to
+    "no invented facts."
+  actor: Admin or Reviewer
+  preconditions:
+    - A DRAFT (or REVIEW/PUBLISHED, depending on the transition) row exists
+  inputs:
+    - "expectedVersion; reason (reject only)"
+  expected_outputs:
+    - "The updated row, with reviewedAt/reviewedByEmail stamped on publish/reject/unpublish"
+  validations:
+    - submit-for-review only from DRAFT
+    - publish from DRAFT or REVIEW, never from an already-PUBLISHED row
+    - reject only from REVIEW, and only with a non-blank reason
+    - unpublish only from PUBLISHED
+  permissions: ADMIN or REVIEWER (AuthService.requireReviewer)
+  dependencies:
+    - REQ-AI-010
+  error_conditions:
+    - "400 for an illegal transition or a blank rejection reason"
+    - "404 for an unknown content id"
+  edge_conditions:
+    - "Publishing clears any prior rejectionReason"
+  offline_behavior: n/a
+  acceptance_criteria:
+    - The full DRAFT -> REVIEW -> DRAFT (rejected) -> PUBLISHED -> DRAFT (unpublished) cycle works
+    - A reject attempted on a DRAFT row (never submitted) is rejected 400
+    - A reject with a blank reason is rejected 400
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "AiContentIntegrationTest (reviewLifecycle_draftThroughPublishedAndBack, reject_requiresANonBlankReason, reject_onlyAppliesFromReview)"
+
+- id: REQ-AI-013
+  feature: Optimistic concurrency on every review transition
+  module: AI
+  system: [Backend]
+  source_doc: api/AI-CONTENT.md
+  source_section: "expectedVersion on every transition endpoint"
+  description: >
+    Every transition (submit-for-review, publish, reject, unpublish) requires the caller's last
+    known version. A stale value is rejected 409 rather than silently overwriting a more recent
+    change — the same pattern ADR-014's AI Admin Control Center already uses for ai_settings/
+    ai_provider_configs.
+  business_rule: >
+    Two reviewers acting on the same queue at once must not silently clobber each other's
+    decision on a piece of exam content.
+  actor: Admin or Reviewer
+  preconditions:
+    - A content row exists at some version
+  inputs:
+    - "expectedVersion"
+  expected_outputs:
+    - "200 with the updated row and an incremented version, or 409 on a stale value"
+  validations:
+    - expectedVersion must equal the row's current version
+  permissions: ADMIN or REVIEWER
+  dependencies:
+    - REQ-AI-012
+  error_conditions:
+    - "409 Conflict on a mismatched expectedVersion"
+  edge_conditions: []
+  offline_behavior: n/a
+  acceptance_criteria:
+    - A stale expectedVersion is rejected without changing the row
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "AiContentIntegrationTest.transition_rejectsAStaleVersion"
+
+- id: REQ-AI-014
+  feature: The review queue is filterable by task and status
+  module: AI
+  system: [Backend]
+  source_doc: api/AI-CONTENT.md
+  source_section: "GET /api/admin/ai-content?taskId=&status="
+  description: >
+    A reviewer can list content filtered by task id and/or content status (default REVIEW), so
+    the queue of work-to-review is distinguishable from drafts not yet submitted or content
+    already published.
+  business_rule: null
+  actor: Admin or Reviewer
+  preconditions: []
+  inputs:
+    - "taskId (optional), status (default REVIEW)"
+  expected_outputs:
+    - "An array of content rows matching the filter, oldest-generated first"
+  validations:
+    - An unknown status value is rejected 400
+  permissions: ADMIN or REVIEWER
+  dependencies:
+    - REQ-AI-012
+  error_conditions:
+    - "400 for an unknown status"
+  edge_conditions: []
+  offline_behavior: n/a
+  acceptance_criteria:
+    - A DRAFT-status query does not return a REVIEW-status row and vice versa
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "AiContentIntegrationTest.list_filtersByStatusAndTask"
+
+- id: REQ-AI-015
+  feature: Public sync feed withholds unpublished content
+  module: AI
+  system: [Backend]
+  source_doc: api/AI-CONTENT.md
+  source_section: "GET /api/ai-content/sync"
+  description: >
+    A signed-out or signed-in client can delta-sync AI-generated content the same way it syncs
+    questions or exam structure — no auth required. A row is included regardless of its
+    contentStatus (so a device can drop content that stopped being published), but its payload
+    and a `published` flag are the only signal: payload is present only when published is true.
+  business_rule: >
+    Never let unreviewed or rejected model output reach a public endpoint even as inert JSON — the
+    tombstone role `isDeleted` plays for every other synced table is played here by
+    `published: false`, which is a property of review state, not deletion.
+  actor: Any client (no auth)
+  preconditions: []
+  inputs:
+    - "since (ISO-8601 timestamp, or 0/omitted for a full sync)"
+  expected_outputs:
+    - "An array of {id, taskId, questionId, topicId, languageCode, published, payload, updatedAt}"
+  validations:
+    - A malformed since value is rejected 400
+    - payload is null whenever published is false
+  permissions: none (public)
+  dependencies:
+    - REQ-AI-012
+  error_conditions:
+    - "400 for a malformed since parameter"
+  edge_conditions:
+    - "A row that was PUBLISHED and is later unpublished still appears in a later sync, now with published=false and payload=null"
+  offline_behavior: >
+    This is the endpoint an offline-first client's own sync engine calls; the endpoint itself has
+    no offline behavior of its own.
+  acceptance_criteria:
+    - A DRAFT row's sync entry has published=false and no payload
+    - Publishing the row makes its next sync entry have published=true and a real payload
+    - Unpublishing it again reverts the sync entry to published=false with no payload
+    - No Authorization header is required
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "AiContentIntegrationTest.sync_omitsPayloadUnlessPublished_andNeverNeedsAuth"
+
+- id: REQ-AI-016
+  feature: Public client-config feed reports every AI task's enable state
+  module: AI
+  system: [Backend, Mobile]
+  source_doc: tasks/TASK-2701-on-device-and-hybrid-ai.md
+  source_section: "Phase 4 -- client-config / feature-flag endpoint"
+  description: >
+    Any client (no auth) can fetch GET /api/client-config to learn which of the 9 registered
+    AiTaskIds are currently enabled. Every known AiTaskId always appears in the response, whether
+    or not an admin has ever touched it -- a task with no ai_task_flags row is reported as
+    enabled=false rather than being silently absent, so "unknown means off" holds identically
+    whether the gap is "never toggled" or "not yet synced to this device."
+  business_rule: >
+    The router (packages/core/src/ai/router.ts) and this feed must agree: a task not present, or
+    present with false, is disabled. Never let a missing key be read as enabled by default,
+    server-side or client-side.
+  actor: Any client (no auth); the mobile app's own reference sync
+  preconditions: []
+  inputs: []
+  expected_outputs:
+    - "{ aiTasks: { <AiTaskId>: boolean, ... } } with all 9 known task ids present"
+  validations:
+    - A task with no ai_task_flags row is present in the response with value false
+    - An enabled task is present with value true
+  permissions: none (public)
+  dependencies:
+    - REQ-AI-017
+  error_conditions: []
+  edge_conditions:
+    - "A task disabled after being enabled reverts to false on the next fetch, not simply disappearing"
+  offline_behavior: >
+    The mobile app caches this feed locally (client_config_ai_tasks, full-replace on every
+    reference sync) so an AI surface can check a task's flag without a network call; a device
+    that has never synced treats every task as disabled (no local row = false), matching the
+    server's own default.
+  acceptance_criteria:
+    - GET /api/client-config with no Authorization header returns 200
+    - All 9 AiTaskIds are present in aiTasks even with zero ai_task_flags rows in the database
+    - Enabling a task via the admin endpoint flips its value to true on the very next fetch
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "AiTaskFlagTest.clientConfig_defaultsEveryKnownTaskToDisabled_andNeedsNoAuth"
+
+- id: REQ-AI-017
+  feature: Admin per-task AI enable/disable control
+  module: AI
+  system: [Backend, Admin]
+  source_doc: tasks/TASK-2701-on-device-and-hybrid-ai.md
+  source_section: "Phase 4 -- AI Admin Control Center per-task flags"
+  description: >
+    An authenticated admin can list every known AiTaskId's current flag (GET
+    /api/admin/ai-task-flags) and toggle one on or off (PUT
+    /api/admin/ai-task-flags/{taskId}), independent of the provider-level AI Control Center
+    settings shipped earlier. Every mutation is optimistic-locked via expectedVersion, matching
+    ai_content/ai_provider_configs/ai_settings's existing convention.
+  business_rule: >
+    A task new to the system (created after this feature shipped) has never had a row and must
+    still round-trip through this endpoint safely -- creating it for the first time is itself a
+    version transition (0 -> 1), not exempt from the stale-version check on a second call.
+  actor: ADMIN
+  preconditions:
+    - "Caller holds a valid ADMIN bearer token"
+  inputs:
+    - "taskId (path, must be a real AiTaskId)"
+    - "enabled (boolean)"
+    - "expectedVersion (long)"
+  expected_outputs:
+    - "AiTaskFlagView: { taskId, enabled, updatedAt, updatedByEmail, version }"
+    - "AiTaskFlagListResponse: { flags: [AiTaskFlagView, ...] }, one entry per known AiTaskId"
+  validations:
+    - An unauthenticated or non-admin (including REVIEWER) caller is rejected
+    - An unknown taskId is rejected 400
+    - A stale expectedVersion is rejected 409, including on the very first toggle of a
+      never-before-touched task (see business_rule above)
+  permissions: ADMIN only
+  dependencies:
+    - REQ-AI-016
+  error_conditions:
+    - "401 with no token"
+    - "403 for STUDENT or REVIEWER"
+    - "400 for an unknown taskId"
+    - "409 for a stale expectedVersion"
+  edge_conditions:
+    - "A task that has never been toggled is still listed (via a synthesized disabled/version-0 view), not omitted"
+  offline_behavior: n/a
+  acceptance_criteria:
+    - Enabling a task makes it appear enabled=true in both the admin list and the public client-config feed
+    - The very first toggle of an untouched task, followed immediately by a second call reusing expectedVersion=0, is rejected 409
+    - GET /api/admin/ai-task-flags always returns exactly 9 entries, one per AiTaskId
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "AiTaskFlagTest.adminCanEnableATask_andItThenAppearsInClientConfig; AiTaskFlagTest.update_rejectsAStaleVersion"

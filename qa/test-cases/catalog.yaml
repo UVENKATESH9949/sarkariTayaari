@@ -1,0 +1,1775 @@
+# CATALOG module — manual test cases (Phase 3)
+#
+# Every test case links to one scenario id and one or more requirement ids. A test case is a
+# reusable DEFINITION — never overwritten by an execution (qa/execution/*.yaml, not yet
+# created). Expected results are derived strictly from the linked requirement's
+# acceptance_criteria/error_conditions/edge_conditions — never from current controller/
+# admin-UI/database implementation. Every case below is freshly generated and UNEXECUTED:
+# actual_result is empty, status is Not Executed, defect_id is empty. No tester name, date,
+# build, credential, or result has been invented.
+#
+# Ambiguous-status test cases (deleting an exam with structure; badge/difficulty fallback)
+# deliberately do NOT pre-assert a specific expected status/behavior — they exist to
+# establish what actually happens, per qa/requirements/_conflicts.md and the approved Phase 2
+# scenarios. Documented-deviation cases (category free-text, sectional-timer display) DO
+# assert a concrete expected result, since the intended behavior there is known, not
+# undetermined — see the Phase 2/3 report's classification discussion.
+
+- id: TC-CATALOG-001
+  requirement_ids: [REQ-CATALOG-001]
+  scenario_id: SCN-CATALOG-001
+  system: Backend
+  module: CATALOG
+  feature: Exam CRUD
+  title: Full create-read-update-delete lifecycle for an exam with a unique code
+  objective: >
+    Confirm an exam can be created, retrieved, updated, and deleted in sequence, with `code`
+    acting as the stable identity throughout.
+  preconditions:
+    - "TESTDATA-CATALOG-NEW-EXAM-CODE-01 is not currently in use"
+  test_data: "TESTDATA-CATALOG-NEW-EXAM-CODE-01, a unique display name"
+  test_environment: "Backend (dev), admin token"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST /api/exams with code=TESTDATA-CATALOG-NEW-EXAM-CODE-01 and a valid name/displayOrder"
+      expected: "201 Created; response echoes the submitted code"
+    - step: 2
+      action: "GET /api/exams/{code} for that code (admin token)"
+      expected: "200 OK; fields match what was created"
+    - step: 3
+      action: "PUT /api/exams/{code} changing the name"
+      expected: "200 OK; response reflects the new name, code unchanged"
+    - step: 4
+      action: "DELETE /api/exams/{code}"
+      expected: "204 No Content; a subsequent GET for that code returns 404"
+  expected_result: >
+    Create/read/update/delete all succeed, and the exam's code remains its stable identity
+    throughout. (REQ-CATALOG-001 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: >
+    ExamCrudTest.createThenGet_returnsSameData, update_changesFields, delete_removesExam
+
+- id: TC-CATALOG-002
+  requirement_ids: [REQ-CATALOG-001]
+  scenario_id: SCN-CATALOG-002
+  system: Backend
+  module: CATALOG
+  feature: Exam CRUD
+  title: Duplicate exam code rejected
+  objective: Confirm creating a second exam with an already-used code is rejected.
+  preconditions:
+    - "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01 already exists"
+  test_data: "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01"
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: High
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "POST /api/exams with code=TESTDATA-CATALOG-EXISTING-EXAM-CODE-01 (already in use)"
+      expected: "400; error message is \"Exam code already exists: <code>\"; no second row created"
+  expected_result: "Duplicate code is rejected with 400. (REQ-CATALOG-001 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "ExamCrudTest.listActive_onlyIncludesActiveExams (fixture setup implies duplicate-code coverage exists; exact assertion method not independently confirmed by name)"
+
+- id: TC-CATALOG-003
+  requirement_ids: [REQ-CATALOG-001]
+  scenario_id: SCN-CATALOG-003
+  system: Backend
+  module: CATALOG
+  feature: Exam CRUD
+  title: Active exam list is public with no Authorization header
+  objective: Confirm GET /api/exams (active list) succeeds with zero auth.
+  preconditions: []
+  test_data: none
+  test_environment: "Backend (dev)"
+  priority: Critical
+  severity: Critical
+  test_type: Authorization
+  steps:
+    - step: 1
+      action: "GET /api/exams with no Authorization header"
+      expected: "200 OK; only active==true exams returned, ordered by displayOrder"
+  expected_result: >
+    The public active-list endpoint requires no authentication. (REQ-CATALOG-001
+    description, REQ-CATALOG-021 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "ExamCrudTest.listActive_onlyIncludesActiveExams"
+
+- id: TC-CATALOG-004
+  requirement_ids: [REQ-CATALOG-001]
+  scenario_id: SCN-CATALOG-003
+  system: Backend
+  module: CATALOG
+  feature: Exam CRUD
+  title: "Single-get, all-list, and writes are admin-gated (anonymous/student/admin matrix)"
+  objective: >
+    Confirm GET /api/exams/{code} (single), GET /api/exams/all, and every write reject
+    anonymous (401) and student (403) callers, and succeed for an admin — split from
+    TC-CATALOG-003's public-read check since these are gated endpoints with a materially
+    different (three-state) authorization outcome.
+  preconditions:
+    - "A STUDENT token and an ADMIN token are both available"
+    - "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01 exists"
+  test_data: "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01"
+  test_environment: "Backend (dev)"
+  priority: Critical
+  severity: Critical
+  test_type: Authorization
+  steps:
+    - step: 1
+      action: "GET /api/exams/{code} with no Authorization header"
+      expected: "401"
+    - step: 2
+      action: "GET /api/exams/{code} with a valid STUDENT token"
+      expected: "403"
+    - step: 3
+      action: "GET /api/exams/{code} with a valid ADMIN token"
+      expected: "200 OK"
+    - step: 4
+      action: "GET /api/exams/all with no Authorization header, then with a STUDENT token"
+      expected: "401, then 403 respectively"
+    - step: 5
+      action: "POST /api/exams with a STUDENT token"
+      expected: "403; no exam created"
+  expected_result: >
+    requireAdmin on create/update/delete/get-single/get-all; no auth on active list.
+    (REQ-CATALOG-001 permissions, acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: PartiallyAutomated
+  automation_reference: >
+    ExamCrudTest fixtures exercise admin-token writes; explicit 401/403-on-anonymous/student
+    for get-single and all-list not independently confirmed by a cited method name.
+
+- id: TC-CATALOG-005
+  requirement_ids: [REQ-CATALOG-002]
+  scenario_id: SCN-CATALOG-004
+  system: Backend
+  module: CATALOG
+  feature: Exam difficulty/badge reference
+  title: Blank difficulty/badge on an exam normalizes to null
+  objective: Confirm sending an empty string for difficulty or badge stores null, not a validation error.
+  preconditions:
+    - "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01 exists"
+  test_data: "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01"
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: Medium
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "PUT /api/exams/{code} with difficulty=\"\" and badge=\"\""
+      expected: "200 OK; response shows difficulty: null and badge: null, not a 400"
+  expected_result: >
+    A blank string in either field is normalized to null, not a constraint violation.
+    (REQ-CATALOG-002 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "ExamCrudTest.blankDifficultyOrBadge_clearsRatherThanFailing"
+
+- id: TC-CATALOG-006
+  requirement_ids: [REQ-CATALOG-002]
+  scenario_id: SCN-CATALOG-004
+  system: Backend
+  module: CATALOG
+  feature: Exam difficulty/badge reference
+  title: Unknown difficulty/badge code rejected
+  objective: Confirm a non-blank, unrecognized difficulty or badge code is rejected.
+  preconditions:
+    - "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01 exists"
+    - "\"nonexistent-code-xyz\" does not match any real difficulty_levels/exam_badges row"
+  test_data: "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01"
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: Medium
+  test_type: Validation
+  steps:
+    - step: 1
+      action: "PUT /api/exams/{code} with difficulty=\"nonexistent-code-xyz\""
+      expected: "400; error message is \"Unknown difficulty: nonexistent-code-xyz\""
+    - step: 2
+      action: "Repeat with an unrecognized badge code"
+      expected: "400; error message is \"Unknown badge: <value>\""
+  expected_result: >
+    A non-blank value that doesn't match an existing row is rejected. (REQ-CATALOG-002
+    error_conditions, acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "ExamCrudTest.difficultyAndBadge_defaultToNullAndRoundTrip"
+
+- id: TC-CATALOG-007
+  requirement_ids: [REQ-CATALOG-003]
+  scenario_id: SCN-CATALOG-005
+  system: Backend
+  module: CATALOG
+  feature: Exam category facet
+  title: Category field accepts any string with no server-side enum enforcement
+  objective: >
+    Determine whether the backend enforces the admin UI's fixed category dropdown, or accepts
+    any string via direct API access — REQ-CATALOG-003's own intended-behavior question is
+    unresolved, so this case documents current behavior without asserting it is correct.
+  preconditions:
+    - "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01 exists"
+  test_data: "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01, category=\"Not-A-Real-Category-XYZ\""
+  test_environment: "Backend (dev), admin token, calling the API directly (not through the admin UI's dropdown)"
+  priority: Low
+  severity: Low
+  test_type: Ambiguous
+  steps:
+    - step: 1
+      action: "PUT /api/exams/{code} with category set to a value NOT in the admin UI's fixed dropdown list"
+      expected: >
+        Record what actually happens — whether it is accepted and persisted verbatim (matching
+        the currently-documented lack of server-side validation) or rejected
+  expected_result: >
+    UNDETERMINED BY DESIGN — REQ-CATALOG-003 explicitly asks whether this should be
+    server-enforced; do not treat either outcome as pass/fail against a guessed expectation.
+    Record the actual observed behavior for a product/engineering decision.
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Per REQ-CATALOG-003's ambiguity field and qa/requirements/_conflicts.md — genuinely undetermined intended behavior, not a known/accepted deviation."
+  automation_status: CandidateForAutomation
+  automation_reference: "None found."
+
+- id: TC-CATALOG-008
+  requirement_ids: [REQ-CATALOG-004]
+  scenario_id: SCN-CATALOG-006
+  system: Backend
+  module: CATALOG
+  feature: Exam Discovery
+  title: Each of the six documented sort options produces correct ordering
+  objective: >
+    Confirm DEADLINE, EXAM_DATE, NEWLY_ANNOUNCED, RECENTLY_UPDATED, POPULAR, and ALPHABETICAL
+    each order the results as documented.
+  preconditions:
+    - "At least 3 active exams exist with distinguishable values for each sort dimension"
+  test_data: "Existing active exam catalogue (no dedicated fixture needed if the environment already has 3+ varied exams)"
+  test_environment: "Backend (dev)"
+  priority: High
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "GET /api/exams/discover?sort=ALPHABETICAL"
+      expected: "Results ordered alphabetically by name"
+    - step: 2
+      action: "Repeat for sort=DEADLINE, EXAM_DATE, NEWLY_ANNOUNCED, RECENTLY_UPDATED, POPULAR"
+      expected: "Each produces the documented order for that dimension"
+  expected_result: >
+    Sorting by each of the six options produces the documented order. (REQ-CATALOG-004
+    acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: >
+    ExamDiscoveryTest exists per memory/STATUS.md but was not among the files directly
+    inspected during Phase 1 extraction — treat as unverified until confirmed.
+
+- id: TC-CATALOG-009
+  requirement_ids: [REQ-CATALOG-004]
+  scenario_id: SCN-CATALOG-007
+  system: Backend
+  module: CATALOG
+  feature: Exam Discovery
+  title: CLOSING_SOON filter returns only open exams within the 14-day window
+  objective: >
+    Confirm status=CLOSING_SOON returns only exams whose status is APPLICATION_OPEN/
+    APPLICATION_CLOSING_SOON AND whose deadline is within 14 days.
+  preconditions:
+    - >
+      At least one exam with a current cycle deadline within 14 days, and at least one with a
+      deadline further out or no current cycle
+  test_data: "Existing/fixture exam cycles spanning both cases"
+  test_environment: "Backend (dev)"
+  priority: High
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "GET /api/exams/discover?status=CLOSING_SOON"
+      expected: >
+        Only exams matching both the open-status and the 14-day-deadline condition are
+        returned; an exam with a deadline further out (or no current cycle) is absent
+  expected_result: >
+    Filtering by status=CLOSING_SOON returns only open-status exams within 14 days of
+    deadline. (REQ-CATALOG-004 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "ExamDiscoveryTest exists per memory/STATUS.md — not independently confirmed this pass."
+
+- id: TC-CATALOG-010
+  requirement_ids: [REQ-CATALOG-004]
+  scenario_id: SCN-CATALOG-008
+  system: Backend
+  module: CATALOG
+  feature: Exam Discovery
+  title: Unknown sort value rejected
+  objective: Confirm an unrecognized `sort` query value returns 400.
+  preconditions: []
+  test_data: "sort=NOT_A_REAL_SORT"
+  test_environment: "Backend (dev)"
+  priority: Medium
+  severity: Low
+  test_type: Validation
+  steps:
+    - step: 1
+      action: "GET /api/exams/discover?sort=NOT_A_REAL_SORT"
+      expected: "400"
+  expected_result: "An unknown sort value returns 400. (REQ-CATALOG-004 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "ExamDiscoveryTest exists per memory/STATUS.md — not independently confirmed this pass."
+
+- id: TC-CATALOG-011
+  requirement_ids: [REQ-CATALOG-005]
+  scenario_id: SCN-CATALOG-009
+  system: Backend
+  module: CATALOG
+  feature: Exam syllabus
+  title: Setting an exam's syllabus and reading it back returns exactly those subjects
+  objective: Confirm PUT-ing a list of subjectIds is retrievable via GET, unchanged.
+  preconditions:
+    - "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01 exists"
+    - "At least two existing subjects are available to assign"
+  test_data: "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01, two existing subjectIds"
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "PUT /api/exams/{code}/subjects with { subjectIds: [subjectA, subjectB] }"
+      expected: "200 OK"
+    - step: 2
+      action: "GET /api/exams/{code}/subjects"
+      expected: "Returns exactly subjectA and subjectB, sorted by displayOrder then name"
+  expected_result: >
+    Setting an exam's syllabus and reading it back returns exactly those subjects.
+    (REQ-CATALOG-005 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: "None found among instructed test files — verified historically only via manual/curl checks."
+
+- id: TC-CATALOG-012
+  requirement_ids: [REQ-CATALOG-005]
+  scenario_id: SCN-CATALOG-009
+  system: Backend
+  module: CATALOG
+  feature: Exam syllabus
+  title: An empty subjectIds array clears the syllabus
+  objective: >
+    Confirm PUT-ing an empty array removes every subject from the syllabus — split from
+    TC-CATALOG-011 since "set" and "clear" are independently failable behaviors on the same
+    endpoint.
+  preconditions:
+    - "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01 currently has a non-empty syllabus"
+  test_data: "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01"
+  test_environment: "Backend (dev), admin token"
+  priority: Medium
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "PUT /api/exams/{code}/subjects with { subjectIds: [] }"
+      expected: "200 OK"
+    - step: 2
+      action: "GET /api/exams/{code}/subjects"
+      expected: "Returns an empty list"
+  expected_result: "Setting to [] clears the syllabus. (REQ-CATALOG-005 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: "None found among instructed test files."
+
+- id: TC-CATALOG-013
+  requirement_ids: [REQ-CATALOG-005]
+  scenario_id: SCN-CATALOG-010
+  system: Backend
+  module: CATALOG
+  feature: Exam syllabus
+  title: Unknown subjectId in syllabus payload rejects the whole request
+  objective: Confirm one unknown subjectId in the payload rejects wholesale, with no partial apply.
+  preconditions:
+    - "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01 exists"
+  test_data: "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01, one real subjectId + one nonexistent uuid"
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: Medium
+  test_type: Validation
+  steps:
+    - step: 1
+      action: "PUT /api/exams/{code}/subjects with subjectIds containing one real id and one nonexistent uuid"
+      expected: "400; error message is \"Unknown subjectId: <id>\""
+    - step: 2
+      action: "GET /api/exams/{code}/subjects"
+      expected: "Syllabus unchanged from before step 1 — the real id was NOT partially applied"
+  expected_result: >
+    An unknown subject id in the payload is rejected wholesale (no partial apply).
+    (REQ-CATALOG-005 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: "None found among instructed test files."
+
+- id: TC-CATALOG-014
+  requirement_ids: [REQ-CATALOG-006]
+  scenario_id: SCN-CATALOG-011
+  system: Backend
+  module: CATALOG
+  feature: Exam topic map
+  title: Topic map wholesale replace round-trips, including null weightage
+  objective: >
+    Confirm replacing an exam's topic map persists correctly, and an entry with an omitted
+    weightagePercent round-trips as null, not 0.
+  preconditions:
+    - "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01 exists"
+    - "At least two existing topics are available"
+  test_data: "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01, topicA (weightagePercent set), topicB (weightagePercent omitted)"
+  test_environment: "Backend (dev), admin token"
+  priority: Medium
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "PUT /api/exams/{code}/topics with topicA weighted and topicB unweighted"
+      expected: "200 OK"
+    - step: 2
+      action: "GET /api/exams/{code}/topics"
+      expected: "topicA's weightagePercent matches what was set; topicB's weightagePercent is null, not 0"
+  expected_result: >
+    A null-weightage entry round-trips as null, not 0. (REQ-CATALOG-006 acceptance_criteria,
+    edge_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "TopicModelTest.examTopics_replaceWholesaleAndCarryWeightage"
+
+- id: TC-CATALOG-015
+  requirement_ids: [REQ-CATALOG-006]
+  scenario_id: SCN-CATALOG-012
+  system: Backend
+  module: CATALOG
+  feature: Exam topic map
+  title: Duplicate topicId within the same topic-map payload rejected
+  objective: Confirm the same topicId listed twice in one PUT request is rejected.
+  preconditions:
+    - "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01 exists; a valid topicId is available"
+  test_data: "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01, one topicId repeated twice in the payload"
+  test_environment: "Backend (dev), admin token"
+  priority: Medium
+  severity: Low
+  test_type: Validation
+  steps:
+    - step: 1
+      action: "PUT /api/exams/{code}/topics with the same topicId appearing twice"
+      expected: "400; error message is \"Duplicate topicId in request\""
+  expected_result: "A duplicate topicId in the payload is rejected. (REQ-CATALOG-006 error_conditions)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "TopicModelTest.examTopics_rejectDuplicateAndUnknownTopic"
+
+- id: TC-CATALOG-016
+  requirement_ids: [REQ-CATALOG-006]
+  scenario_id: SCN-CATALOG-012
+  system: Backend
+  module: CATALOG
+  feature: Exam topic map
+  title: Unknown topicId in topic-map payload rejected
+  objective: >
+    Confirm a topicId that doesn't resolve to any real topic is rejected — split from
+    TC-CATALOG-015 since "duplicate" and "unknown" are distinct, independently-failable
+    validation rules.
+  preconditions:
+    - "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01 exists"
+  test_data: "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01, one nonexistent topicId uuid"
+  test_environment: "Backend (dev), admin token"
+  priority: Medium
+  severity: Low
+  test_type: Validation
+  steps:
+    - step: 1
+      action: "PUT /api/exams/{code}/topics with a nonexistent topicId"
+      expected: "400; error message is \"Unknown topicId\""
+  expected_result: "An unknown topicId is rejected. (REQ-CATALOG-006 error_conditions)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "TopicModelTest.examTopics_rejectDuplicateAndUnknownTopic"
+
+- id: TC-CATALOG-017
+  requirement_ids: [REQ-CATALOG-007]
+  scenario_id: SCN-CATALOG-013
+  system: Backend
+  module: CATALOG
+  feature: Subject CRUD
+  title: Subject create-read-update round trip
+  objective: Confirm subject create/get/update works and the public list reflects it correctly ordered.
+  preconditions:
+    - "TESTDATA-CATALOG-NEW-SUBJECT-NAME-01 is not currently in use"
+  test_data: "TESTDATA-CATALOG-NEW-SUBJECT-NAME-01"
+  test_environment: "Backend (dev), admin token"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST /api/subjects with name=TESTDATA-CATALOG-NEW-SUBJECT-NAME-01"
+      expected: "201 Created"
+    - step: 2
+      action: "GET /api/subjects (public list)"
+      expected: "The new subject appears, ordered by displayOrder then name"
+    - step: 3
+      action: "PUT /api/subjects/{id} changing displayOrder"
+      expected: "200 OK; reflected in the public list order"
+  expected_result: "Subject CRUD round trip succeeds. (REQ-CATALOG-007 acceptance_criteria, description)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: >
+    SubjectCrudTest.createThenGet_returnsSameData, list_includesCreatedSubject,
+    update_changesName
+
+- id: TC-CATALOG-018
+  requirement_ids: [REQ-CATALOG-007]
+  scenario_id: SCN-CATALOG-014
+  system: Backend
+  module: CATALOG
+  feature: Subject CRUD
+  title: Case-insensitive duplicate subject name rejected
+  objective: Confirm a subject name differing only in case from an existing one is rejected.
+  preconditions:
+    - "TESTDATA-CATALOG-EXISTING-SUBJECT-NAME-01 already exists"
+  test_data: "TESTDATA-CATALOG-EXISTING-SUBJECT-NAME-01 submitted in a different case"
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: High
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "POST /api/subjects with a name matching TESTDATA-CATALOG-EXISTING-SUBJECT-NAME-01 in a different case"
+      expected: "400; error message is \"Subject already exists: <name>\""
+  expected_result: >
+    A duplicate name differing only in case is rejected. (REQ-CATALOG-007
+    acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "No test method specifically cited for case-insensitive duplicate rejection among SubjectCrudTest's named methods."
+
+- id: TC-CATALOG-019
+  requirement_ids: [REQ-CATALOG-008]
+  scenario_id: SCN-CATALOG-015
+  system: Backend
+  module: CATALOG
+  feature: Topic CRUD
+  title: Topic create-read-update round trip within a subject
+  objective: Confirm topic CRUD works and is correctly listed when filtered by subjectId.
+  preconditions:
+    - "An existing subject (subjectA) is available"
+  test_data: "subjectA, TESTDATA-CATALOG-NEW-TOPIC-NAME-01"
+  test_environment: "Backend (dev), admin token"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST /api/topics with subjectId=subjectA, name=TESTDATA-CATALOG-NEW-TOPIC-NAME-01"
+      expected: "201 Created"
+    - step: 2
+      action: "GET /api/topics?subjectId=subjectA"
+      expected: "The new topic appears; topics from other subjects do not"
+    - step: 3
+      action: "PUT /api/topics/{id} changing displayOrder"
+      expected: "200 OK, change reflected"
+  expected_result: "Topic CRUD works, correctly scoped by subjectId on list. (REQ-CATALOG-008 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: >
+    TopicCrudTest.createThenGet_returnsSameData, listBySubjectId_onlyReturnsThatSubjectsTopics,
+    update_changesNameAndSubject
+
+- id: TC-CATALOG-020
+  requirement_ids: [REQ-CATALOG-008]
+  scenario_id: SCN-CATALOG-015
+  system: Backend
+  module: CATALOG
+  feature: Topic CRUD
+  title: Same topic name is valid under two different subjects
+  objective: >
+    Confirm topic name uniqueness is scoped per subject, not global — split from
+    TC-CATALOG-019 as a distinct positive assertion about scoping, not just basic CRUD.
+  preconditions:
+    - "Two existing subjects (subjectA, subjectB) are available"
+  test_data: "subjectA, subjectB, a shared topic name TESTDATA-CATALOG-SHARED-TOPIC-NAME-01"
+  test_environment: "Backend (dev), admin token"
+  priority: Medium
+  severity: Medium
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "POST /api/topics with subjectId=subjectA, name=TESTDATA-CATALOG-SHARED-TOPIC-NAME-01"
+      expected: "201 Created"
+    - step: 2
+      action: "POST /api/topics with subjectId=subjectB, the same name"
+      expected: "201 Created — both succeed, since uniqueness is per-subject"
+  expected_result: >
+    Two topics with the same name under different subjects are both valid.
+    (REQ-CATALOG-008 edge_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "Not independently confirmed by a cited test method name."
+
+- id: TC-CATALOG-021
+  requirement_ids: [REQ-CATALOG-008]
+  scenario_id: SCN-CATALOG-016
+  system: Backend
+  module: CATALOG
+  feature: Topic hierarchy
+  title: A topic cannot be assigned itself as parent
+  objective: Confirm the self-parent rejection.
+  preconditions:
+    - "An existing topic (topicA) is available"
+  test_data: "topicA"
+  test_environment: "Backend (dev), admin token"
+  priority: Medium
+  severity: Medium
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "PUT /api/topics/{topicA.id} with parentId=topicA.id"
+      expected: "400; error message is \"A topic cannot be its own parent\""
+  expected_result: "Self-parent assignment is rejected. (REQ-CATALOG-008 error_conditions)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "TopicModelTest.topicCannotBeItsOwnParent"
+
+- id: TC-CATALOG-022
+  requirement_ids: [REQ-CATALOG-008]
+  scenario_id: SCN-CATALOG-016
+  system: Backend
+  module: CATALOG
+  feature: Topic hierarchy
+  title: A topic's parent must belong to the same subject
+  objective: >
+    Confirm a cross-subject parent assignment is rejected — split from TC-CATALOG-021 as a
+    distinct validation rule (different failure trigger, different message).
+  preconditions:
+    - "Two topics under different subjects are available (topicA under subjectA, topicB under subjectB)"
+  test_data: "topicA, topicB"
+  test_environment: "Backend (dev), admin token"
+  priority: Medium
+  severity: Medium
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "PUT /api/topics/{topicA.id} with parentId=topicB.id (a different subject)"
+      expected: "400; error message is \"A topic's parent must belong to the same subject\""
+  expected_result: "Cross-subject parent assignment is rejected. (REQ-CATALOG-008 error_conditions)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "TopicModelTest.parentFromAnotherSubjectIsRejected"
+
+- id: TC-CATALOG-023
+  requirement_ids: [REQ-CATALOG-008]
+  scenario_id: SCN-CATALOG-016
+  system: Backend
+  module: CATALOG
+  feature: Topic hierarchy
+  title: Assigning a parent that would create a hierarchy cycle is rejected
+  objective: >
+    Confirm a parent assignment that would create even an indirect cycle in the hierarchy is
+    rejected — split from TC-CATALOG-021/022 since cycle detection is a distinct
+    (graph-reachability) rule from the simpler self/cross-subject checks.
+  preconditions:
+    - "Three topics under the same subject: topicA -> parent topicB -> parent topicC"
+  test_data: "topicA, topicB, topicC (a 3-topic chain)"
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: High
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "PUT /api/topics/{topicC.id} with parentId=topicA.id (would close the loop A->B->C->A)"
+      expected: "400; error message is \"That parent would create a cycle in the topic hierarchy\""
+  expected_result: >
+    A parent assignment creating even an indirect cycle is rejected. (REQ-CATALOG-008
+    error_conditions, acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "TopicModelTest.topicParentCycleIsRejected"
+
+- id: TC-CATALOG-024
+  requirement_ids: [REQ-CATALOG-009]
+  scenario_id: SCN-CATALOG-017
+  system: Backend
+  module: CATALOG
+  feature: Topic prerequisites
+  title: Omitting prerequisiteTopicIds on update preserves existing prerequisites
+  objective: Confirm a null/omitted prerequisiteTopicIds field leaves prior prerequisites untouched.
+  preconditions:
+    - "topicA already has at least one prerequisite set (topicB)"
+  test_data: "topicA (with existing prerequisite topicB)"
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: High
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "PUT /api/topics/{topicA.id} with a payload that omits prerequisiteTopicIds entirely (only changing e.g. displayOrder)"
+      expected: "200 OK"
+    - step: 2
+      action: "GET /api/topics/{topicA.id}"
+      expected: "prerequisiteTopicIds still contains topicB, unchanged"
+  expected_result: >
+    Omitting the field preserves existing prerequisites. (REQ-CATALOG-009 acceptance_criteria,
+    edge_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "TopicModelTest.prerequisites_roundTripAndNullLeavesThemUnchanged"
+
+- id: TC-CATALOG-025
+  requirement_ids: [REQ-CATALOG-009]
+  scenario_id: SCN-CATALOG-017
+  system: Backend
+  module: CATALOG
+  feature: Topic prerequisites
+  title: Sending an explicit empty array clears prerequisites
+  objective: >
+    Confirm an explicit [] clears prerequisites — split from TC-CATALOG-024 since null and []
+    are documented to have opposite effects, and conflating them in one test case would risk
+    masking a regression in either direction.
+  preconditions:
+    - "topicA already has at least one prerequisite set"
+  test_data: "topicA (with existing prerequisites)"
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: High
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "PUT /api/topics/{topicA.id} with prerequisiteTopicIds: []"
+      expected: "200 OK"
+    - step: 2
+      action: "GET /api/topics/{topicA.id}"
+      expected: "prerequisiteTopicIds is now empty"
+  expected_result: "Sending [] explicitly clears prerequisites. (REQ-CATALOG-009 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "TopicModelTest.prerequisites_roundTripAndNullLeavesThemUnchanged"
+
+- id: TC-CATALOG-026
+  requirement_ids: [REQ-CATALOG-009]
+  scenario_id: SCN-CATALOG-018
+  system: Backend
+  module: CATALOG
+  feature: Topic prerequisites
+  title: Indirect prerequisite cycle across 3+ topics rejected
+  objective: Confirm a prerequisite assignment creating an indirect cycle is rejected.
+  preconditions:
+    - "Three topics where topicA requires topicB, and topicB requires topicC"
+  test_data: "topicA, topicB, topicC (chained prerequisites)"
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: High
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "PUT /api/topics/{topicC.id} setting prerequisiteTopicIds to include topicA (closing the loop A<-B<-C<-A)"
+      expected: "400; a cycle-rejection message"
+  expected_result: >
+    A request creating even an indirect cycle across 3+ topics is rejected.
+    (REQ-CATALOG-009 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "TopicModelTest.indirectPrerequisiteCycleIsRejected"
+
+- id: TC-CATALOG-027
+  requirement_ids: [REQ-CATALOG-010]
+  scenario_id: SCN-CATALOG-019
+  system: Backend
+  module: CATALOG
+  feature: Language CRUD
+  title: Deactivating a language removes it from the public list but not /all
+  objective: Confirm the active/all split for languages.
+  preconditions:
+    - "An active language (TESTDATA-CATALOG-LANG-CODE-01) exists"
+  test_data: "TESTDATA-CATALOG-LANG-CODE-01"
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "PUT the language setting active=false"
+      expected: "200 OK"
+    - step: 2
+      action: "GET /api/languages (public, active-only)"
+      expected: "The now-inactive language is absent"
+    - step: 3
+      action: "GET /api/languages/all (admin)"
+      expected: "The language is still present, with active: false"
+  expected_result: >
+    Deactivating a language removes it from the public list but keeps it visible in /all.
+    (REQ-CATALOG-010 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Use a dedicated throwaway language code for this test, not "en"/"hi" — deactivating a
+    real content language would affect every other test relying on it.
+  automation_status: Automated
+  automation_reference: >
+    LanguageControllerTest.listActive_includesEnglishAndHindi,
+    createThenListAll_includesInactiveLanguage, update_changesActiveFlag
+
+- id: TC-CATALOG-028
+  requirement_ids: [REQ-CATALOG-011]
+  scenario_id: SCN-CATALOG-020
+  system: Backend
+  module: CATALOG
+  feature: Difficulty Level CRUD
+  title: A newly created difficulty level is immediately usable by a question with no code change
+  objective: >
+    Confirm a freshly admin-created difficulty level can be assigned to a question via its
+    code alone, with no application code change required — the "decisive test" this project's
+    own history already established once.
+  preconditions:
+    - "A valid topic/exam/language exist for a throwaway question"
+  test_data: "TESTDATA-CATALOG-NEW-DIFFICULTY-CODE-01 (e.g. label \"Expert\")"
+  test_environment: "Backend (dev), admin token"
+  priority: Critical
+  severity: High
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST /api/difficulty-levels with code=TESTDATA-CATALOG-NEW-DIFFICULTY-CODE-01, a color/icon/order"
+      expected: "201 Created"
+    - step: 2
+      action: "POST /api/questions using difficulty=TESTDATA-CATALOG-NEW-DIFFICULTY-CODE-01"
+      expected: "201 Created — the question accepts the new code with no rejection"
+    - step: 3
+      action: "GET /api/difficulty-levels (active list)"
+      expected: "The new level appears with correct color/icon/order"
+  expected_result: >
+    A newly created difficulty level is usable by a question and renders correctly with no
+    application code change. (REQ-CATALOG-011 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "DifficultyLevelTest.newLevel_isUsableByAQuestionWithoutACodeChange"
+
+- id: TC-CATALOG-029
+  requirement_ids: [REQ-CATALOG-011]
+  scenario_id: SCN-CATALOG-021
+  system: Backend
+  module: CATALOG
+  feature: Difficulty Level CRUD
+  title: Duplicate difficulty level code rejected
+  objective: Confirm creating a second difficulty level with an already-used code is rejected.
+  preconditions:
+    - "TESTDATA-CATALOG-EXISTING-DIFFICULTY-CODE-01 already exists"
+  test_data: "TESTDATA-CATALOG-EXISTING-DIFFICULTY-CODE-01"
+  test_environment: "Backend (dev), admin token"
+  priority: Medium
+  severity: Medium
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "POST /api/difficulty-levels with code=TESTDATA-CATALOG-EXISTING-DIFFICULTY-CODE-01"
+      expected: "400; error message is \"Difficulty level already exists\""
+  expected_result: "Duplicate code is rejected. (REQ-CATALOG-011 error_conditions)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "Not independently confirmed by a cited test method name among DifficultyLevelTest's methods."
+
+- id: TC-CATALOG-030
+  requirement_ids: [REQ-CATALOG-012]
+  scenario_id: SCN-CATALOG-022
+  system: Backend
+  module: CATALOG
+  feature: Paper Type CRUD
+  title: All paper types always appear in the list, regardless of "retired" status
+  objective: >
+    Confirm GET /api/paper-types is unfiltered — no paper type is ever hidden, since there is
+    no active flag for this lookup (unlike every sibling lookup in the module).
+  preconditions:
+    - "At least one paper type that would conceptually be \"retired\" exists (no way to actually mark it so — see remarks)"
+  test_data: "Existing paper_types rows"
+  test_environment: "Backend (dev)"
+  priority: Medium
+  severity: Low
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "GET /api/paper-types"
+      expected: "Every existing paper type is returned, with no filtering mechanism available to hide any of them"
+  expected_result: >
+    All paper types always appear in GET /api/paper-types — there is no active flag to hide
+    one. (REQ-CATALOG-012 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    This test confirms an absence (no hiding mechanism exists) rather than a specific
+    positive transformation — mainly a regression guard against someone later adding
+    filtering logic that assumes an active flag exists on this entity.
+  automation_status: CandidateForAutomation
+  automation_reference: "None found — no dedicated PaperTypeTest exists."
+
+- id: TC-CATALOG-031
+  requirement_ids: [REQ-CATALOG-013]
+  scenario_id: SCN-CATALOG-023
+  system: Backend
+  module: CATALOG
+  feature: Exam Stage versioning
+  title: Two stage versions with the same name coexist via distinct versionLabel
+  objective: Confirm creating a second, differently-versioned stage with an identical name succeeds.
+  preconditions:
+    - "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01 exists with one stage already created (versionLabel omitted)"
+  test_data: "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01, stage name \"Tier 1\", versionLabel=\"2027\""
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST /api/exam-stages with examCode, name=\"Tier 1\", versionLabel=\"2027\""
+      expected: "201 Created — succeeds despite an existing \"Tier 1\" stage with no versionLabel"
+    - step: 2
+      action: "GET /api/exams/{examCode}/structure"
+      expected: "Both stage versions are present, each with a correctly server-resolved active flag"
+  expected_result: >
+    Creating a second stage with the same name but a different versionLabel succeeds.
+    (REQ-CATALOG-013 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "ExamStructureTest covers general tree shape only, not versioning specifics."
+
+- id: TC-CATALOG-032
+  requirement_ids: [REQ-CATALOG-013]
+  scenario_id: SCN-CATALOG-024
+  system: Backend
+  module: CATALOG
+  feature: Exam Stage versioning
+  title: Identical name+versionLabel combination rejected
+  objective: Confirm an exact duplicate name+versionLabel pair is rejected.
+  preconditions:
+    - "An existing stage with name \"Tier 1\", versionLabel=\"2027\""
+  test_data: "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01, name=\"Tier 1\", versionLabel=\"2027\""
+  test_environment: "Backend (dev), admin token"
+  priority: Medium
+  severity: Medium
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "POST /api/exam-stages with the exact same examCode/name/versionLabel as an existing stage"
+      expected: "400; a duplicate name/version message"
+  expected_result: >
+    Creating a stage with an identical name+versionLabel is rejected. (REQ-CATALOG-013
+    acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "Not independently confirmed by a cited test method name."
+
+- id: TC-CATALOG-033
+  requirement_ids: [REQ-CATALOG-013]
+  scenario_id: SCN-CATALOG-024
+  system: Backend
+  module: CATALOG
+  feature: Exam Stage versioning
+  title: Two stages with both versionLabel blank are treated as duplicates
+  objective: >
+    Confirm the coalesce(version_label,'') uniqueness rule specifically — two stages with the
+    exact same name and both a blank versionLabel must collide, not silently coexist as if
+    NULL made them distinct (the specific documented risk of a naive 3-column UNIQUE
+    constraint). Split from TC-CATALOG-032 because this exercises the null-vs-blank
+    normalization rule specifically, not just the general duplicate case.
+  preconditions:
+    - "An existing stage with name \"Tier 1\" and no versionLabel set"
+  test_data: "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01, name=\"Tier 1\", versionLabel omitted"
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: High
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "POST /api/exam-stages with the same examCode/name, versionLabel omitted (both blank)"
+      expected: "400 — rejected as a duplicate, exactly as if both had used the same explicit versionLabel value"
+  expected_result: >
+    Blank vs null versionLabel must be treated identically for uniqueness; creating one with
+    an identical name+versionLabel including both blank fails 400. (REQ-CATALOG-013
+    acceptance_criteria, edge_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "Not independently confirmed by a cited test method name."
+
+- id: TC-CATALOG-034
+  requirement_ids: [REQ-CATALOG-013]
+  scenario_id: SCN-CATALOG-025
+  system: Backend
+  module: CATALOG
+  feature: Exam Stage versioning
+  title: effectiveFrom after effectiveTo rejected
+  objective: Confirm a stage with an inverted effectivity window is rejected.
+  preconditions:
+    - "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01 exists"
+  test_data: "effectiveFrom=2028-01-01, effectiveTo=2027-01-01 (inverted)"
+  test_environment: "Backend (dev), admin token"
+  priority: Medium
+  severity: Medium
+  test_type: Validation
+  steps:
+    - step: 1
+      action: "POST /api/exam-stages with effectiveFrom later than effectiveTo"
+      expected: "400; error message is \"'Effective from' cannot be after 'effective to'.\""
+  expected_result: >
+    A stage with effectiveFrom later than effectiveTo is rejected. (REQ-CATALOG-013
+    error_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "Not independently confirmed by a cited test method name."
+
+- id: TC-CATALOG-035
+  requirement_ids: [REQ-CATALOG-014]
+  scenario_id: SCN-CATALOG-026
+  system: Backend
+  module: CATALOG
+  feature: Exam Paper CRUD
+  title: A paper's mockable flag echoes live from its referenced paper type
+  objective: >
+    Confirm a paper's mockable value reflects the current mockability of its referenced
+    paper type, and changing the paper type retroactively changes the paper's echoed value.
+  preconditions:
+    - "An existing paper referencing a paper type that is currently mockable=true"
+  test_data: "The existing paper and its referenced paper type"
+  test_environment: "Backend (dev), admin token"
+  priority: Medium
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "GET the paper; confirm mockable: true"
+      expected: "mockable reflects the paper type's current value"
+    - step: 2
+      action: "PUT the referenced paper type, setting mockable=false"
+      expected: "200 OK"
+    - step: 3
+      action: "GET the same paper again"
+      expected: "mockable is now false, without the paper itself being edited"
+  expected_result: >
+    mockable is echoed live from the referenced paper_types row, not stored on the paper.
+    (REQ-CATALOG-014 business_rule, acceptance_criteria — implied by "retroactively affects
+    every paper using it")
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Use a dedicated throwaway paper/paper-type pair, not a real seeded one, since step 2
+    changes shared reference data other tests may depend on.
+  automation_status: CandidateForAutomation
+  automation_reference: "Not independently confirmed by a cited test method name."
+
+- id: TC-CATALOG-036
+  requirement_ids: [REQ-CATALOG-014]
+  scenario_id: SCN-CATALOG-027
+  system: Backend
+  module: CATALOG
+  feature: Exam Paper CRUD
+  title: Duplicate paper name rejected within a stage, allowed across stages
+  objective: >
+    Confirm paper name uniqueness is scoped per stage — the same name is rejected within one
+    stage but permitted under a different stage of the same exam.
+  preconditions:
+    - "Two stages under the same exam (stageA, stageB); a paper named \"Prelims\" already exists under stageA"
+  test_data: "stageA, stageB, paper name \"Prelims\""
+  test_environment: "Backend (dev), admin token"
+  priority: Medium
+  severity: Medium
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "POST /api/exam-papers with stageId=stageA, name=\"Prelims\" (already exists there)"
+      expected: "400; error message is \"Paper already exists in this stage\""
+    - step: 2
+      action: "POST /api/exam-papers with stageId=stageB, the same name \"Prelims\""
+      expected: "201 Created — succeeds, since the scoping is per-stage"
+  expected_result: >
+    Two papers with the same name under the same stage are rejected; the same name under
+    different stages is allowed. (REQ-CATALOG-014 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "Not independently confirmed by a cited test method name."
+
+- id: TC-CATALOG-037
+  requirement_ids: [REQ-CATALOG-015]
+  scenario_id: SCN-CATALOG-028
+  system: Backend
+  module: CATALOG
+  feature: Paper Section inheritance
+  title: Section without its own timing/marks inherits the paper's effective values
+  objective: >
+    Confirm a section with durationMinutes/marksCorrect/marksWrong all null reports
+    sectionallyTimed: false and the paper's own values as its effective marks.
+  preconditions:
+    - "An existing paper with known durationMinutes/marksCorrect/marksWrong"
+  test_data: "The existing paper, a new section referencing >=1 subject, all timing/marks fields omitted"
+  test_environment: "Backend (dev), admin token"
+  priority: Critical
+  severity: High
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST /api/paper-sections omitting durationMinutes/marksCorrect/marksWrong"
+      expected: "201 Created"
+    - step: 2
+      action: "GET the admin structure tree for this exam"
+      expected: >
+        The section reports sectionallyTimed: false, and effectiveMarksCorrect/
+        effectiveMarksWrong equal the paper's own values
+  expected_result: >
+    A section left null inherits the paper's effective values and reports
+    sectionallyTimed: false. (REQ-CATALOG-015 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "ExamStructureTest.section_inheritsPaperMarking_whenNotOverridden, sectionallyTimed_reflectsWhetherSectionHasItsOwnDuration"
+
+- id: TC-CATALOG-038
+  requirement_ids: [REQ-CATALOG-015]
+  scenario_id: SCN-CATALOG-029
+  system: Backend
+  module: CATALOG
+  feature: Paper Section inheritance
+  title: Section with its own timing/marks overrides the paper's values
+  objective: >
+    Confirm a section given its own durationMinutes/marksCorrect/marksWrong reports
+    sectionallyTimed: true and its own values as effective — split from TC-CATALOG-037 since
+    override and inheritance are the two opposite branches of the same rule, each needing
+    independent verification.
+  preconditions:
+    - "An existing paper"
+  test_data: "The existing paper, a new section with its own durationMinutes/marksCorrect/marksWrong"
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: High
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST /api/paper-sections with an explicit durationMinutes different from the paper's own"
+      expected: "201 Created"
+    - step: 2
+      action: "GET the admin structure tree"
+      expected: >
+        The section reports sectionallyTimed: true and its own override values as effective,
+        not the paper's
+  expected_result: >
+    A section with its own override reports sectionallyTimed correctly and uses its own
+    values as effective. (REQ-CATALOG-015 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "ExamStructureTest.section_overridesPaperMarking_whenSet"
+
+- id: TC-CATALOG-039
+  requirement_ids: [REQ-CATALOG-015]
+  scenario_id: SCN-CATALOG-030
+  system: Backend
+  module: CATALOG
+  feature: Paper Section CRUD
+  title: A section with an empty subjectIds array is rejected
+  objective: Confirm subjectIds:[] is rejected at section creation.
+  preconditions:
+    - "An existing paper"
+  test_data: "The existing paper, subjectIds: []"
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: Medium
+  test_type: Validation
+  steps:
+    - step: 1
+      action: "POST /api/paper-sections with subjectIds: []"
+      expected: "400; error message states at least one subject is required"
+  expected_result: "Creating a section with subjectIds:[] is rejected 400. (REQ-CATALOG-015 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "Not independently confirmed by a cited test method name among ExamStructureTest's methods."
+
+- id: TC-CATALOG-040
+  requirement_ids: [REQ-CATALOG-016]
+  scenario_id: SCN-CATALOG-031
+  system: Backend
+  module: CATALOG
+  feature: Syllabus/structure consistency
+  title: Saving a section auto-adds its subjects to the syllabus; deleting the section does not retract it
+  objective: >
+    Confirm the one-way, additive-only sync between paper sections and the exam syllabus.
+  preconditions:
+    - "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01's syllabus does NOT currently include subjectX"
+  test_data: "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01, subjectX, an existing paper"
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: Medium
+  test_type: Integration
+  steps:
+    - step: 1
+      action: "POST /api/paper-sections referencing subjectX (not currently in the exam's syllabus)"
+      expected: "201 Created"
+    - step: 2
+      action: "GET /api/exams/{code}/subjects"
+      expected: "subjectX now appears in the syllabus"
+    - step: 3
+      action: "DELETE the section created in step 1"
+      expected: "204 No Content"
+    - step: 4
+      action: "GET /api/exams/{code}/subjects again"
+      expected: >
+        subjectX is STILL present in the syllabus — the deletion did NOT retract the earlier
+        automatic addition
+  expected_result: >
+    Saving a section auto-adds its subjects to the syllabus if not already present; deleting
+    that section afterward leaves the syllabus unchanged (subject still present).
+    (REQ-CATALOG-016 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: "None found among instructed test files — verified historically only via manual/curl checks."
+
+- id: TC-CATALOG-041
+  requirement_ids: [REQ-CATALOG-017]
+  scenario_id: SCN-CATALOG-032
+  system: Backend
+  module: CATALOG
+  feature: Structure cascade delete
+  title: Deleting a stage cascades to its papers and sections with zero orphans
+  objective: Confirm a stage delete removes all descendant papers/sections, leaving no orphaned rows.
+  preconditions:
+    - "A throwaway stage with at least one paper, each with at least one section"
+  test_data: "A dedicated throwaway stage/paper/section tree"
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: High
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Record the ids of the stage's papers and sections"
+      expected: "IDs recorded"
+    - step: 2
+      action: "DELETE /api/exam-stages/{id}"
+      expected: "204 No Content"
+    - step: 3
+      action: "Attempt to GET each recorded paper/section id directly, or confirm via the admin structure tree"
+      expected: "None of them exist anymore — zero orphaned rows"
+  expected_result: >
+    Deleting a stage removes its papers and sections with zero orphaned rows.
+    (REQ-CATALOG-017 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: PartiallyAutomated
+  automation_reference: "ExamStructureTest.deletingStage_cascadesToPapersAndSections"
+
+- id: TC-CATALOG-042
+  requirement_ids: [REQ-CATALOG-001, REQ-CATALOG-017]
+  scenario_id: SCN-CATALOG-033
+  system: Backend
+  module: CATALOG
+  feature: Structure cascade delete
+  title: Deleting an exam that still has stages/structure — behavior undetermined
+  objective: >
+    Determine what DELETE /api/exams/{code} actually does when the exam still has
+    stages/papers/sections referencing it. No source documents the expected outcome — this
+    case establishes the real behavior rather than testing against a guess.
+  preconditions:
+    - "A throwaway exam with at least one stage/paper/section attached"
+  test_data: "A dedicated throwaway exam with real structure attached"
+  test_environment: "Backend (dev), admin token"
+  priority: High
+  severity: High
+  test_type: Ambiguous
+  steps:
+    - step: 1
+      action: "DELETE /api/exams/{code} for an exam that still has stages/papers/sections attached"
+      expected: >
+        Record the ACTUAL response precisely — status code, whether it's the documented
+        {error} shape or a raw unmapped error, and whether the exam row and/or its structure
+        rows survive or are removed
+  expected_result: >
+    UNDETERMINED BY DESIGN — no source specifies a clean 400, a raw 500, or silent success.
+    Do not pre-assert a status code as "expected"; record what execution actually observes
+    and escalate for a product/engineering decision on the correct contract.
+    (qa/requirements/_conflicts.md §3, REQ-CATALOG-017 ambiguity field)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    If the observed result is data-destructive in an unexpected way (e.g. silent deletion of
+    an exam while orphaning its structure, or vice versa), treat that as a high-priority
+    finding regardless of "no requirement was violated" — a genuinely undefined contract that
+    corrupts data is worth escalating immediately, not just logging.
+  automation_status: CandidateForAutomation
+  automation_reference: "None — this exact case has no automated coverage, and none should be written until the intended contract is decided."
+
+- id: TC-CATALOG-043
+  requirement_ids: [REQ-CATALOG-018]
+  scenario_id: SCN-CATALOG-034
+  system: Backend
+  module: CATALOG
+  feature: Admin structure editor read
+  title: Admin structure read returns every stage version with correct active flags
+  objective: >
+    Confirm the admin-only GET /api/exams/{examCode}/structure surfaces every stage version
+    for an exam, each correctly flagged active or not.
+  preconditions:
+    - "An exam with two versions of the same stage (e.g. one superseded, one current per TC-CATALOG-031's setup)"
+  test_data: "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01 with 2+ stage versions"
+  test_environment: "Backend (dev), admin token"
+  priority: Medium
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "GET /api/exams/{examCode}/structure (admin)"
+      expected: >
+        Both stage versions are present in the response, each with a correctly
+        server-resolved active flag (only the currently-effective one is true)
+  expected_result: >
+    For an exam with 2+ versions of the same stage, both appear in the response with
+    correct active flags. (REQ-CATALOG-018 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: PartiallyAutomated
+  automation_reference: "ExamStructureTest.structure_returnsStagePaperSectionTreeInDisplayOrder (general tree shape; multi-version-specific assertion not confirmed present)"
+
+- id: TC-CATALOG-044
+  requirement_ids: [REQ-CATALOG-019]
+  scenario_id: SCN-CATALOG-035
+  system: Backend
+  module: CATALOG
+  feature: Public structure sync
+  title: Public structure sync never includes a superseded stage version
+  objective: >
+    Confirm GET /api/exam-structures (public) returns only the currently-effective version of
+    a stage, never a superseded one, for an exam whose pattern has changed.
+  preconditions:
+    - "An exam with a superseded-then-replaced stage version (as set up for TC-CATALOG-031/043)"
+  test_data: "TESTDATA-CATALOG-EXISTING-EXAM-CODE-01"
+  test_environment: "Backend (dev)"
+  priority: Critical
+  severity: High
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "GET /api/exam-structures (public, no auth) and locate this exam's entry"
+      expected: >
+        Only the currently-effective stage version appears — no superseded version is present
+        anywhere in the response
+  expected_result: >
+    An exam with a superseded-then-replaced stage version never shows the old version in this
+    endpoint's response. (REQ-CATALOG-019 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: "None found among instructed test files — verified historically only on-device."
+
+- id: TC-CATALOG-045
+  requirement_ids: [REQ-CATALOG-019]
+  scenario_id: SCN-CATALOG-036
+  system: Backend
+  module: CATALOG
+  feature: Public structure sync
+  title: An active exam with zero defined structure still appears with an empty stages array
+  objective: >
+    Confirm an active exam with no stage/paper/section at all still appears in the public
+    structure sync, distinguishable from "doesn't exist."
+  preconditions:
+    - "An active exam with genuinely zero structure defined"
+  test_data: "A throwaway active exam with no stages created"
+  test_environment: "Backend (dev)"
+  priority: Medium
+  severity: Medium
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "GET /api/exam-structures and locate the no-structure exam's entry"
+      expected: >
+        The exam is present in the response with stages: [], not omitted from the array
+        entirely
+  expected_result: >
+    An active exam with zero defined structure still appears with stages: [], not omitted.
+    (REQ-CATALOG-019 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: CandidateForAutomation
+  automation_reference: "Not independently confirmed by a cited test method name."
+
+- id: TC-CATALOG-046
+  requirement_ids: [REQ-CATALOG-020]
+  scenario_id: SCN-CATALOG-037
+  system: Backend
+  module: CATALOG
+  feature: Exam badges
+  title: An inactive badge appears in /all but not the active list
+  objective: Confirm the badge active/all split.
+  preconditions:
+    - "An existing active badge (TESTDATA-CATALOG-BADGE-CODE-01)"
+  test_data: "TESTDATA-CATALOG-BADGE-CODE-01"
+  test_environment: "Backend (dev), admin token"
+  priority: Low
+  severity: Low
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Deactivate TESTDATA-CATALOG-BADGE-CODE-01 (if the environment allows; badges are read-only via API per REQ-CATALOG-020 — see remarks)"
+      expected: "Reflects an inactive state"
+    - step: 2
+      action: "GET /api/exam-badges (active-only, public)"
+      expected: "The badge is absent"
+    - step: 3
+      action: "GET /api/exam-badges/all (admin)"
+      expected: "The badge is present with active: false"
+  expected_result: >
+    An inactive badge appears in /all but not the active-only list. (REQ-CATALOG-020
+    acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    REQ-CATALOG-020 documents badges as read-only via the API (no CRUD endpoint — "adding a
+    badge requires a migration"). If no way exists to toggle a badge's active flag through
+    any available interface in the target environment, mark this Blocked rather than
+    fabricate a result, and note that a pre-existing inactive badge fixture should be sought
+    instead of creating one via API.
+  automation_status: CandidateForAutomation
+  automation_reference: "None found — no dedicated ExamBadgeTest exists."
+
+- id: TC-CATALOG-047
+  requirement_ids: [REQ-CATALOG-020]
+  scenario_id: SCN-CATALOG-043
+  system: Backend
+  module: CATALOG
+  feature: Exam badges / difficulty levels
+  title: An exam's badge/difficulty code that no longer resolves — client fallback undetermined
+  objective: >
+    Determine what mobile/admin actually render for an exam whose badge (or difficulty) code
+    was valid when assigned but has since been deactivated/removed. No source documents an
+    expected fallback.
+  preconditions:
+    - "An exam whose badge/difficulty code can be made to point at a no-longer-active reference row"
+  test_data: "A throwaway exam + a badge/difficulty code that is deactivated after assignment"
+  test_environment: "Backend, Mobile, Admin (all three surfaces, since the fallback could differ per client)"
+  priority: Low
+  severity: Low
+  test_type: Ambiguous
+  steps:
+    - step: 1
+      action: "Assign a badge (or difficulty) code to an exam while it is still active"
+      expected: "Assignment succeeds"
+    - step: 2
+      action: "Deactivate that badge/difficulty row"
+      expected: "Deactivation succeeds"
+    - step: 3
+      action: "Observe how the exam's badge/difficulty renders on mobile and in the admin console, and what the raw API response contains"
+      expected: >
+        Record the actual observed rendering/response — no expected value is asserted here
+  expected_result: >
+    UNDETERMINED BY DESIGN — record actual behavior for a product/engineering decision rather
+    than asserting a guessed fallback. (REQ-CATALOG-020 ambiguity field)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Per qa/requirements/_conflicts.md and REQ-CATALOG-020's ambiguity field."
+  automation_status: CandidateForAutomation
+  automation_reference: "None found."
+
+- id: TC-CATALOG-048
+  requirement_ids: [REQ-CATALOG-021]
+  scenario_id: SCN-CATALOG-038
+  system: Backend
+  module: CATALOG
+  feature: Cross-cutting authorization
+  title: Every documented public catalog endpoint is reachable with zero Authorization header
+  objective: >
+    Confirm the full documented public-read list (exams, subjects, topics, difficulty levels,
+    paper types, exam badges, exam structures, exam discovery) works with no auth — a single
+    cross-cutting pass rather than re-verifying auth per entity a second time (already covered
+    individually by TC-CATALOG-003 and similar per-entity cases).
+  preconditions: []
+  test_data: none
+  test_environment: "Backend (dev)"
+  priority: Critical
+  severity: Critical
+  test_type: Regression
+  steps:
+    - step: 1
+      action: >
+        GET /api/exams, /api/subjects, /api/topics, /api/difficulty-levels, /api/paper-types,
+        /api/exam-badges, /api/exam-structures, /api/exams/discover — each with no
+        Authorization header
+      expected: "Every call returns 200"
+  expected_result: >
+    Every endpoint in the public list returns 200 with no Authorization header.
+    (REQ-CATALOG-021 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: PartiallyAutomated
+  automation_reference: "Covered implicitly across each entity's own CRUD test class; no single cited cross-cutting sweep test."
+
+- id: TC-CATALOG-049
+  requirement_ids: [REQ-CATALOG-022]
+  scenario_id: SCN-CATALOG-039
+  system: Mobile
+  module: CATALOG
+  feature: Offline catalog availability
+  title: Full catalog sync enables complete offline Practice/Mock Test browsing
+  objective: >
+    Confirm that after a full reference-data sync and going fully offline, Practice's subject
+    list, the Levels screen, and Mock Test's paper list all render correctly using only local
+    data.
+  preconditions:
+    - "A device/emulator with a completed full reference-data sync"
+  test_data: none
+  test_environment: "Mobile (Android emulator or device)"
+  priority: Critical
+  severity: High
+  test_type: Offline
+  steps:
+    - step: 1
+      action: "Complete a full sync, then enable airplane mode"
+      expected: "Sync reaches 100%; device is now fully offline"
+    - step: 2
+      action: "Navigate Practice's subject list, drill into a topic's Levels screen"
+      expected: "Both render correctly using local data, no network errors"
+    - step: 3
+      action: "Open Mock Test's paper list for an exam with defined structure"
+      expected: "Papers render correctly with the right question counts and marking scheme"
+  expected_result: >
+    After a full sync and going fully offline, Practice's subject list, Levels screen, and
+    Mock Test's paper list all render correctly using only local data. (REQ-CATALOG-022
+    acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: "None — no mobile test runner exists in this project; verified historically via on-device/emulator checks only."
+
+- id: TC-CATALOG-050
+  requirement_ids: [REQ-CATALOG-023]
+  scenario_id: SCN-CATALOG-040
+  system: Mobile
+  module: CATALOG
+  feature: Sectional timing display
+  title: Mock Test Start screen shows accurate per-section limits and correct total duration
+  objective: >
+    Confirm the Start screen for a sectionally-timed paper displays each section's own time
+    limit correctly and the total countdown equals their sum — the documented, currently-
+    correct part of this requirement. Does NOT test per-section lock/auto-advance enforcement
+    during the actual test, since REQ-CATALOG-023 documents that as a confirmed, disclosed
+    gap, not something to test as if it were built.
+  preconditions:
+    - "An active, mockable paper with sectionallyTimed: true on at least one section, synced to the device"
+  test_data: "The sectionally-timed paper"
+  test_environment: "Mobile (Android emulator or device)"
+  priority: Medium
+  severity: Low
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Open the Mock Test Start screen for the sectionally-timed paper"
+      expected: >
+        Each section's own time limit is displayed correctly, and the total duration shown
+        equals the sum of the section limits
+  expected_result: >
+    The Start screen displays each section's own time limit correctly and the total matches
+    their sum. (REQ-CATALOG-023 acceptance_criteria — display only, enforcement explicitly
+    out of scope for this case per the requirement's own documented, disclosed gap)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Do NOT fail this test case for the absence of per-section lock/auto-advance during the
+    actual test-taking screen — that is confirmed, disclosed, current behavior
+    (REQ-CATALOG-023), not a defect to raise here.
+  automation_status: ManualOnly
+  automation_reference: "None — no mobile test runner exists in this project."
+
+- id: TC-CATALOG-051
+  requirement_ids: [REQ-CATALOG-024]
+  scenario_id: SCN-CATALOG-041
+  system: Admin
+  module: CATALOG
+  feature: Admin structure editor UX
+  title: A section without its own timing/marks shows "shares paper"/"inherited," never blank
+  objective: >
+    Confirm the admin structure editor surfaces inherited values as labeled text, not an
+    empty-looking field.
+  preconditions:
+    - "A section with no override on duration/marks, viewed in the admin editor"
+  test_data: "The existing section from TC-CATALOG-037's setup, or an equivalent"
+  test_environment: "Admin console (browser)"
+  priority: Medium
+  severity: Low
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Open the exam structure editor and locate a section with no timing/marks override"
+      expected: >
+        The timing field reads "shares paper" (not a blank cell), and the marking field shows
+        the resolved value with an "inherited" note
+  expected_result: >
+    A section left without its own duration/marks shows "shares paper"/"inherited," not a
+    blank. (REQ-CATALOG-024 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: "None — no admin automated test suite exists in this project."
+
+- id: TC-CATALOG-052
+  requirement_ids: [REQ-CATALOG-024, REQ-CATALOG-017]
+  scenario_id: SCN-CATALOG-042
+  system: Admin
+  module: CATALOG
+  feature: Admin structure editor UX
+  title: Deleting a stage through the admin UI leaves zero orphaned papers/sections
+  objective: >
+    Confirm the admin editor's delete-with-confirmation flow, used on a stage, results in
+    zero orphaned papers/sections — the UI-level confirmation of the backend cascade already
+    covered at the API level by TC-CATALOG-041.
+  preconditions:
+    - "A throwaway stage with at least one paper and section, visible in the admin editor"
+  test_data: "A dedicated throwaway stage/paper/section tree"
+  test_environment: "Admin console (browser)"
+  priority: Medium
+  severity: Medium
+  test_type: Recovery
+  steps:
+    - step: 1
+      action: "In the structure editor, delete the throwaway stage using its delete action and confirm the dialog"
+      expected: "The stage and its listed papers/sections all disappear from the editor's tree view"
+    - step: 2
+      action: "Reload the editor / re-fetch the structure"
+      expected: "No orphaned paper or section reappears anywhere in the tree"
+  expected_result: >
+    Deleting a stage through the UI leaves zero orphaned papers/sections. (REQ-CATALOG-024
+    acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: "None — no admin automated test suite exists in this project."

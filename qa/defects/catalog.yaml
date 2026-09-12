@@ -1,0 +1,6 @@
+# CATALOG module — defects
+#
+# Empty by design. See qa/defects/auth.yaml's header comment for the schema and the rule:
+# a defect is created only from a real failed execution, never fabricated in advance.
+
+[]

@@ -60,7 +60,7 @@ export function IconBox({
   const content = showImage ? (
     <Image
       source={{ uri: imageUrl as string }}
-      style={{ width: size * 0.62, height: size * 0.62 }}
+      style={{ width: size, height: size, borderRadius: Math.round(size * 0.27) }}
       resizeMode="contain"
       onError={() => setFailedUrl(imageUrl ?? null)}
     />

@@ -3,8 +3,20 @@ import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { Alert, Linking, Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { setDocumentStatus, getChangesFromPrevious, getPreparePlan, type CycleComparison, type DocumentSummary, type ExamGuide, type PreparePlan, type SourceSummary } from "../api/examGuide";
-import { cancelReminder, createReminder, listReminders, type Reminder } from "../api/reminders";
+import {
+  setDocumentStatus,
+  getChangesFromPrevious,
+  getPreparePlan,
+  cancelReminder,
+  createReminder,
+  listReminders,
+  type CycleComparison,
+  type DocumentSummary,
+  type ExamGuide,
+  type PreparePlan,
+  type SourceSummary,
+  type Reminder,
+} from "@sarkaritaiyaari/core/api";
 import { getExamGuideHybrid } from "../data/examGuideData";
 import { getSyncedExams, getDifficultyLevels, getExamBadges, type ExamOption, type DifficultyLevel, type ExamBadge } from "../data/practiceData";
 import { useHybridMode } from "../data/hybridSource";

@@ -1,0 +1,34 @@
+# Regression — AUTH
+#
+# Every test case belonging to the AUTH module. Run after any change confined to that module.
+#
+# 26 test case(s). Membership rule: module == AUTH (mechanical filter).
+
+suite: Regression — AUTH
+test_case_ids:
+  - TC-AUTH-001
+  - TC-AUTH-002
+  - TC-AUTH-003
+  - TC-AUTH-004
+  - TC-AUTH-005
+  - TC-AUTH-006
+  - TC-AUTH-007
+  - TC-AUTH-008
+  - TC-AUTH-009
+  - TC-AUTH-010
+  - TC-AUTH-011
+  - TC-AUTH-012
+  - TC-AUTH-013
+  - TC-AUTH-014
+  - TC-AUTH-015
+  - TC-AUTH-016
+  - TC-AUTH-017
+  - TC-AUTH-018
+  - TC-AUTH-019
+  - TC-AUTH-020
+  - TC-AUTH-021
+  - TC-AUTH-022
+  - TC-AUTH-023
+  - TC-AUTH-024
+  - TC-AUTH-025
+  - TC-AUTH-026

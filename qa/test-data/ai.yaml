@@ -1,0 +1,7 @@
+# AI module — test data catalog
+#
+# Logical test-data identifiers only. NEVER a real credential, token, or personal data —
+# every entry describes what the identifier MEANS and how to provision it per environment,
+# not a literal reusable value. used_by_test_cases is computed from the real test-case
+# files, not hand-maintained (regenerate via scripts/qa/generate-test-data.js).
+

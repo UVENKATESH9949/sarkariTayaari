@@ -22,10 +22,11 @@ enough to act:
    session, what's next, what's not verified. This is the single most current file in
    the repo and changes every session — always re-read it fresh, never rely on a memory
    of a previous read.
-3. **[system-design/](system-design/)** (5 short files) — architecture, the database
-   model, how sync works, "which file do I change for X," and *why* the non-obvious
-   things are built the way they are. Read `05-why-its-built-this-way.md` before
-   "simplifying" anything that looks odd — most of it was simple once and broke.
+3. **[system-design/](system-design/)** (6 short files) — architecture, the database
+   model, how sync works, "which file do I change for X," *why* the non-obvious things
+   are built the way they are, and the internal AI provider abstraction. Read
+   `05-why-its-built-this-way.md` before "simplifying" anything that looks odd — most of
+   it was simple once and broke.
 4. **[reports/open-questions.md](reports/open-questions.md)** — unresolved
    business/technical decisions. Check this before assuming something is a gap that
    needs filling; it may already be a known, deliberately deferred decision.
@@ -35,7 +36,11 @@ enough to act:
 6. **[api/](api/)** — the API contract, separated from backend implementation. A mobile
    or admin task should not need to read backend Java to know what an endpoint does;
    a backend task should not need to read mobile/admin source to know who calls it.
-7. Only then: the specific source files the task actually touches.
+7. **[qa/](qa/README.md)** — the manual test-case register: what's already covered for a
+   module, what suites/test data exist, and the exact schema for adding a requirement/
+   scenario/test case. Every feature or change updates this — see §3's QA rule — so check
+   what already exists for the area before adding to it from scratch.
+8. Only then: the specific source files the task actually touches.
 
 Do **not** default to reading the entirety of `backend/`, `mobile/`, `admin/`, or
 `offline-exam-app-requirements.md` (the full chronological history, 80K+ words). Go
@@ -57,6 +62,7 @@ have.
 | An unresolved business/technical question | `reports/open-questions.md` | re-opening it as if new |
 | What a past piece of work did and verified | `reports/<NN-topic>/` | re-summarizing it elsewhere |
 | Scoping a large/cross-system task before starting it | `tasks/` (see `tasks/README.md` and `tasks/TEMPLATE.md`) | jumping straight into code on a task that needs sign-off first |
+| Manual/automated test coverage for a feature, change, or fix | `qa/requirements/`, `qa/scenarios/`, `qa/test-cases/<module>.yaml` (see `qa/README.md`) | skipping QA, or leaving ad-hoc test notes in a report instead |
 | Full historical build log | `offline-exam-app-requirements.md` (shipped) / `preparation-os-requirements.md` (future, unbuilt) | — |
 
 **If several of these disagree, `memory/STATUS.md` and the actual code win** — the rest
@@ -117,6 +123,19 @@ per §6.
     table in §2. Extend or correct the existing one instead.
 20. Don't write large docs that just restate what's directly readable from source
     (e.g. don't transcribe every DTO field into prose) — link to the file/line instead.
+21. **Every feature, change, or fix gets manual QA coverage in the same piece of work —
+    never a separate later pass.** Add or update the requirement(s) in
+    `qa/requirements/<module>.yaml`, the scenario(s) in `qa/scenarios/<module>.yaml`, and
+    the manual test case(s) in `qa/test-cases/<module>.yaml`, following the schema in
+    `qa/README.md`. A fresh test case is always `Not Executed` with no invented result —
+    writing the case is the deliverable, not running it. **Then, if a real automated test
+    can cover it, write that automated test in the same change** (today that means the
+    backend's `mvn test` suite; mobile and admin have no automated runner yet, so their
+    cases stay `ManualOnly` until one exists) and set the test case's `automation_status`/
+    `automation_reference` to the real, verified test method — never mark `Automated`
+    speculatively. Three steps per change, in order: **develop → write the manual test
+    case → automate it if you can.** If the change touches a module `qa/` doesn't cover
+    yet, add that module rather than leaving it out.
 
 ## 4. Project-specific traps (read once, save yourself a debugging session)
 
@@ -175,11 +194,14 @@ per §6.
    rather than trusting a clean build — this project's history is full of real bugs
    that only a clean-compile check would have missed (see any `reports/<NN>/` "bugs
    found and fixed" section for examples of this actually happening, repeatedly).
+   Then write the feature's manual QA coverage into `qa/` and automate what's
+   automatable, per §3.21 — this is a step in Test, not something deferred to later.
 5. **Review.** Report: files changed/added/deleted, behavior changed, checks run and
-   their results, what was **not** verified, risks, assumptions, and which documents
-   were updated (per §2's table). This is the same shape `reports/<NN-topic>/*.md`
-   files already use — write the report there for anything non-trivial, and update
-   `memory/STATUS.md`'s resume point before ending the session.
+   their results, what was **not** verified, risks, assumptions, which documents were
+   updated (per §2's table), and the `qa/` requirement/scenario/test-case ids added or
+   changed. This is the same shape `reports/<NN-topic>/*.md` files already use — write
+   the report there for anything non-trivial, and update `memory/STATUS.md`'s resume
+   point before ending the session.
 
 ## 6. When you find stale documentation
 

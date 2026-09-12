@@ -1,0 +1,20 @@
+# AUTH module — defects
+#
+# Empty by design. A defect record is created ONLY when a real test execution fails
+# (qa/execution/*.yaml records status: Fail) and someone determines it represents a genuine
+# product defect, not an environment issue or a known/documented deviation. Never fabricated
+# ahead of a real execution.
+#
+# Schema (for when the first real defect is logged):
+# - id: DEF-AUTH-NNN
+#   title: <short summary>
+#   severity: Critical|High|Medium|Low
+#   status: Open|Fixed|WontFix|Duplicate
+#   found_in_execution: EXEC-AUTH-NNNN
+#   test_case_id: TC-AUTH-NNN
+#   requirement_ids: [REQ-AUTH-NNN]
+#   description: <what was observed vs. what the requirement expected>
+#   external_ref: null   # e.g. a Jira key, if/when an external tracker is connected
+#   remarks: null
+
+[]

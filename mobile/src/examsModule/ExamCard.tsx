@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import type { ExamCard as ExamCardData } from "../api/examDiscovery";
+import type { ExamCard as ExamCardData } from "@sarkaritaiyaari/core/api";
 import { formatDate } from "../examGuide/dates";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";

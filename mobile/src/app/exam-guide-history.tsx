@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { ScrollView, Text, View, StyleSheet } from "react-native";
-import { getCycleHistory, type CycleHistoryEntry } from "../api/examGuide";
+import { getCycleHistory, type CycleHistoryEntry } from "@sarkaritaiyaari/core/api";
 import { Card } from "../ui/Card";
 import { EmptyState } from "../ui/EmptyState";
 import { ContextualLoading } from "../ui/ContextualLoading";

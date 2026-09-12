@@ -1,0 +1,202 @@
+# WEB module — test scenarios
+#
+# Every scenario references one or more qa/requirements/web.yaml requirement_ids.
+# categories used here: Positive, Negative, Boundary, Validation, Authentication,
+# StateTransition, Compatibility, Integration, ErrorHandling, Recovery, Security.
+#
+# Scope note: these cover TASK-2601 Phase 0 — the shared package, the app shell, theming,
+# language, the browser session and cross-origin access. Feature-area scenarios (Practice,
+# Mock Test, Exam Guide and so on) belong to their own contract modules with `Web` added to the
+# requirement's `system` list, not here.
+
+- id: SCN-WEB-001
+  requirement_ids: [REQ-WEB-001]
+  category: Integration
+  title: Mobile still builds and runs after shared logic moves out of it
+  objective: >
+    Verify extracting the evaluator, topic-health algorithm, catalogues, tokens and API client
+    into packages/core leaves the shipped phone app functionally unchanged.
+  systems: [Mobile]
+  status: Ready
+  notes: "Mobile is a shipped app; this is the regression gate for the whole extraction."
+
+- id: SCN-WEB-002
+  requirement_ids: [REQ-WEB-001]
+  category: Negative
+  title: Shared code cannot reference a platform-specific global
+  objective: >
+    Verify a browser-only or Node-only global introduced into packages/core fails a real check
+    rather than compiling and breaking at runtime on one platform.
+  systems: [Mobile, Web]
+  status: Ready
+  notes: "Both failure directions are silent until runtime, which is why this is enforced by test rather than review."
+
+- id: SCN-WEB-003
+  requirement_ids: [REQ-WEB-002]
+  category: Positive
+  title: Every shared fixture case scores identically in Java and TypeScript
+  objective: >
+    Verify the two deliberate implementations of the evaluator agree on all shared cases,
+    including the null-answerKey and null-response cases.
+  systems: [Backend, Mobile, Web]
+  status: Ready
+  notes: null
+
+- id: SCN-WEB-004
+  requirement_ids: [REQ-WEB-003]
+  category: Compatibility
+  title: Layout adapts between phone and desktop widths without horizontal scrolling
+  objective: >
+    Verify the navigation treatment switches at the breakpoint and no width produces
+    horizontal page overflow.
+  systems: [Web]
+  status: Ready
+  notes: null
+
+- id: SCN-WEB-005
+  requirement_ids: [REQ-WEB-004, REQ-WEB-003]
+  category: Positive
+  title: Account and Settings are reachable at phone width
+  objective: >
+    Verify the two destinations that do not fit in the bottom bar remain reachable on a narrow
+    screen, and that activating them navigates.
+  systems: [Web]
+  status: Ready
+  notes: >
+    Regression guard for a real Phase 0 defect — both were unreachable below 1024px, which is
+    invisible unless specifically checked because every other screen still worked.
+
+- id: SCN-WEB-006
+  requirement_ids: [REQ-WEB-005]
+  category: StateTransition
+  title: Theme choice applies immediately and survives a reload
+  objective: >
+    Verify switching to dark repaints from the shared palette, persists, and is applied before
+    first paint on the next visit.
+  systems: [Web]
+  status: Ready
+  notes: null
+
+- id: SCN-WEB-007
+  requirement_ids: [REQ-WEB-005]
+  category: Recovery
+  title: Unusable or corrupt stored preferences fall back to defaults
+  objective: >
+    Verify a corrupt stored appearance value, or storage that throws outright, renders the app
+    with defaults instead of failing to start.
+  systems: [Web]
+  status: Ready
+  notes: "Private browsing modes can make localStorage throw rather than return null."
+
+- id: SCN-WEB-008
+  requirement_ids: [REQ-WEB-006]
+  category: StateTransition
+  title: Interface language switches and persists
+  objective: >
+    Verify choosing Telugu changes visible strings without a reload and survives one, using the
+    catalogues shared with the phone app.
+  systems: [Web]
+  status: Ready
+  notes: null
+
+- id: SCN-WEB-009
+  requirement_ids: [REQ-WEB-007]
+  category: Authentication
+  title: Register, sign in, reload, sign out
+  objective: >
+    Verify the full browser session lifecycle against the same accounts the phone app uses,
+    including that a session survives a reload.
+  systems: [Backend, Web]
+  status: Ready
+  notes: null
+
+- id: SCN-WEB-010
+  requirement_ids: [REQ-WEB-007]
+  category: ErrorHandling
+  title: A revoked token is discarded, a transient failure is not
+  objective: >
+    Verify startup validation distinguishes "the server rejected this token" from "the server
+    could not be reached" — only the former signs the student out.
+  systems: [Backend, Web]
+  status: Ready
+  notes: >
+    The distinction matters: treating an outage as a revocation would sign every student out
+    whenever the backend hiccuped.
+
+- id: SCN-WEB-011
+  requirement_ids: [REQ-WEB-008]
+  category: Security
+  title: The CORS allowlist admits listed origins and refuses everything else
+  objective: >
+    Verify an allowlisted origin receives Access-Control-Allow-Origin and an unlisted one is
+    refused, including the near-miss cases that look identical to a human.
+  systems: [Backend, Web]
+  status: Ready
+  notes: >
+    127.0.0.1 versus localhost, and *.web.app versus *.firebaseapp.com, are distinct origins.
+    Both near-misses have caused or would cause a total outage of the client.
+
+- id: SCN-WEB-012
+  requirement_ids: [REQ-WEB-008]
+  category: ErrorHandling
+  title: A blocked origin surfaces as a readable message, not a blank screen
+  objective: >
+    Verify the app renders its shell and an explanatory banner when the backend refuses the
+    origin, rather than appearing broken or empty.
+  systems: [Web]
+  status: Ready
+  notes: null
+
+- id: SCN-WEB-013
+  requirement_ids: [REQ-WEB-009]
+  category: Positive
+  title: A non-root route survives a direct load or reload
+  objective: >
+    Verify deep-linking and reloading on an in-app route renders that screen rather than a host
+    404.
+  systems: [Web]
+  status: Ready
+  notes: "Passes trivially on the Vite dev server; the real risk is the deployed host's rewrite configuration."
+
+- id: SCN-WEB-014
+  requirement_ids: [REQ-WEB-010]
+  category: Positive
+  title: A full mock attempt runs blind, submits, and scores correctly
+  objective: >
+    Verify a real timed attempt shows no correct/incorrect styling before submit, the
+    confirmation dialog names the answered count, and the resulting scorecard's marks match
+    the paper's own +correct/-wrong scheme, with a per-question review afterward.
+  systems: [Web]
+  status: Ready
+  notes: null
+
+- id: SCN-WEB-015
+  requirement_ids: [REQ-WEB-010]
+  category: Regression
+  title: The question navigator stays fully usable on a real 100+ question paper
+  objective: >
+    Verify the navigator's own Close button — and every cell — stays reachable and clickable
+    when a real paper has far more questions than fit on screen, and that answered/marked
+    counts in the grid match the student's actual actions.
+  systems: [Web]
+  status: Ready
+  notes: >
+    Regression guard: the grid was previously unscrollable, so on a real 100-question SSC CGL
+    paper the panel overflowed both the top and bottom of the screen and its own Close button
+    became unreachable at ordinary viewport heights, at both desktop and phone widths.
+
+- id: SCN-WEB-016
+  requirement_ids: [REQ-WEB-010]
+  category: Negative
+  title: Leaving an active attempt is guarded, finishing it is not
+  objective: >
+    Verify in-app navigation away from an active attempt shows this app's own styled
+    confirmation dialog, a tab close/refresh during an active attempt arms the browser's
+    native beforeunload prompt, and neither guard is armed once the attempt has been
+    submitted.
+  systems: [Web]
+  status: Ready
+  notes: >
+    beforeunload cannot be driven end-to-end by an automated headless script — browsers
+    intentionally suppress the native prompt under automation — so this scenario's
+    beforeunload half is manual-only by nature, not by omission.

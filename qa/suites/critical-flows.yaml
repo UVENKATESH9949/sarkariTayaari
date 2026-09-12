@@ -1,0 +1,17 @@
+# Critical Business Flow
+#
+# The closest current approximation of this project's real end-to-end user journeys, assembled from existing per-module test cases. HONEST SCOPE NOTE: no independent cross-system INT-/E2E- scenario or test-case pass has been done yet — that would need its own dedicated Phase 2/3 work spanning module boundaries. This suite is a starting point, not a substitute for that.
+#
+# 9 test case(s). Membership rule: Hand-picked, composing existing per-module Critical-path cases into the closest approximation of a real user journey.
+
+suite: Critical Business Flow
+test_case_ids:
+  - TC-AUTH-001
+  - TC-AUTH-005
+  - TC-AUTH-011
+  - TC-CATALOG-003
+  - TC-CATALOG-044
+  - TC-CATALOG-049
+  - TC-QUESTIONS-001
+  - TC-QUESTIONS-027
+  - TC-QUESTIONS-047

@@ -1,36 +1,15 @@
 /**
- * The theme-invariant design tokens: spacing and corner radii.
+ * Mobile's design-token entry point.
  *
- * Colours, shadows and typography used to live here too, as plain module constants. They
- * now come from `ThemeContext` instead, because they differ between light and dark and
- * font sizes additionally depend on the zoom preference — none of which a value frozen
- * at import time can express. See `palettes.ts` for the two colour sets and
- * `ThemeContext.tsx` for how a component gets them.
+ * The tokens themselves live in `@sarkaritaiyaari/core/design` as of TASK-2601 Phase 0, so
+ * that the web app renders from the same spacing scale, radii and palettes rather than a
+ * drifting second copy. This file stays because roughly fifty screens and components already
+ * import `ui/theme`, and because it is the right place to add a genuinely mobile-only token
+ * if one is ever needed — the shared package must stay platform-independent.
  *
- * Spacing and radius stayed here deliberately. They are identical in both themes, they
- * are read by roughly every file in the app, and routing them through a hook would have
- * meant every one of those files taking a dependency on React state for two numbers that
- * cannot change. Import them directly, as before.
+ * Why spacing and radius are plain constants while colours come from `ThemeContext`: these
+ * two are identical in both themes and cannot change at runtime, so routing them through a
+ * hook would make every consumer take a React-state dependency for two frozen numbers. See
+ * `palettes.ts` for the colour sets and `ThemeContext.tsx` for how a component gets them.
  */
-export const spacing = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  base: 16,
-  lg: 20,
-  xl: 24,
-  "2xl": 32,
-  "3xl": 40,
-  "4xl": 48,
-  "5xl": 64,
-} as const;
-
-export const radius = {
-  sm: 8,
-  md: 12,
-  lg: 14,
-  xl: 16,
-  /** The redesigned exam/hero cards' corner radius — bigger and softer than xl. */
-  "2xl": 20,
-  pill: 999,
-} as const;
+export { spacing, radius } from "@sarkaritaiyaari/core/design";

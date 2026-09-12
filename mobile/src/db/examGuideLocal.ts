@@ -20,7 +20,7 @@ import type {
   FeeSummary,
   ImportantDateSummary,
   SourceSummary,
-} from "../api/examGuide";
+} from "@sarkaritaiyaari/core/api";
 
 /**
  * Reads the Exam Guide offline cache (spec §44) written by writeExamGuides() during the

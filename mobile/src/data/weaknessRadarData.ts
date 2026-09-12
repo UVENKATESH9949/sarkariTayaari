@@ -1,8 +1,8 @@
-import { fetchWeaknessRadar, recomputeWeaknessRadar } from "../api/weaknessRadar";
+import { fetchWeaknessRadar, recomputeWeaknessRadar } from "@sarkaritaiyaari/core/api";
 import { loadSession } from "../db/authSession";
 import { readCachedRadar, writeCachedRadar } from "../db/radarCache";
 import { buildLocalRadar } from "../intelligence/localRadar";
-import type { RadarResult } from "../intelligence/types";
+import type { RadarResult } from "@sarkaritaiyaari/core/intelligence";
 
 /**
  * Where a Weakness Radar comes from (Weakness Radar v1 — `tasks/TASK-2201-weakness-radar.md`).

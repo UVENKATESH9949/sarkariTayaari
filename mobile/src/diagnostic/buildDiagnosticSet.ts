@@ -1,7 +1,7 @@
 import { getPriorityTopics } from "../db/topicIntelligence";
 import { getPracticeQuestions, type PracticeQuestion } from "../data/practiceData";
 import type { HybridMode } from "../data/hybridSource";
-import { isIndexBasedType } from "../db/answerResolution";
+import { isIndexBasedType } from "@sarkaritaiyaari/core/evaluation";
 
 export type DiagnosticQuestion = PracticeQuestion & {
   topicId: string;

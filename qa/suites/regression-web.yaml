@@ -1,0 +1,25 @@
+# Regression — WEB
+#
+# Every test case belonging to the WEB module. Run after any change confined to that module.
+#
+# 17 test case(s). Membership rule: module == WEB (mechanical filter).
+
+suite: Regression — WEB
+test_case_ids:
+  - TC-WEB-001
+  - TC-WEB-002
+  - TC-WEB-003
+  - TC-WEB-004
+  - TC-WEB-005
+  - TC-WEB-006
+  - TC-WEB-007
+  - TC-WEB-008
+  - TC-WEB-009
+  - TC-WEB-010
+  - TC-WEB-011
+  - TC-WEB-012
+  - TC-WEB-013
+  - TC-WEB-014
+  - TC-WEB-015
+  - TC-WEB-016
+  - TC-WEB-017

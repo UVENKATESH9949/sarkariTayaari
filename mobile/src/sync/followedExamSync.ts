@@ -10,7 +10,7 @@ import {
   restoreFollowedExams,
   uploadFollowedExams,
   type FollowedExamPayload,
-} from "../api/followedExams";
+} from "@sarkaritaiyaari/core/api";
 
 /**
  * Mirrors sync/bookmarkSync.ts exactly. Simpler than bookmarks in one respect: a

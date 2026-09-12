@@ -722,3 +722,39 @@ export function rejectQuestionCandidate(candidateId, reason) {
 export function setQuestionContentStatus(questionId, status) {
   return request(`/api/questions/${questionId}/content-status`, jsonBody("PUT", { status }));
 }
+
+/* ---------------------------------------------------------------- AI Control Center */
+
+export function getAiConfig() {
+  return request(`/api/admin/ai/config`);
+}
+
+export function updateAiSettings(payload) {
+  return request(`/api/admin/ai/settings`, jsonBody("PUT", payload));
+}
+
+export function updateAiProviderConfig(providerId, payload) {
+  return request(`/api/admin/ai/providers/${providerId}`, jsonBody("PUT", payload));
+}
+
+// apiKey/model/baseUrl are all optional -- omitted means "test whatever's already saved
+// (or falls back to static config) for this provider," per the draft-before-save flow.
+export function testAiConnection(providerId, draft = {}) {
+  return request(`/api/admin/ai/providers/${providerId}/test-connection`, jsonBody("POST", draft));
+}
+
+export function getAiProviderModels(providerId) {
+  return request(`/api/admin/ai/providers/${providerId}/models`);
+}
+
+export function getAiAuditLog() {
+  return request(`/api/admin/ai/audit-log`);
+}
+
+export function getAiTaskFlags() {
+  return request(`/api/admin/ai-task-flags`);
+}
+
+export function updateAiTaskFlag(taskId, payload) {
+  return request(`/api/admin/ai-task-flags/${taskId}`, jsonBody("PUT", payload));
+}

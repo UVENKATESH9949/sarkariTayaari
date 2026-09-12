@@ -3,7 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { Pressable, RefreshControl, ScrollView, Text, TextInput, View, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { discoverExams, type ExamCard as ExamCardData, type ExamSortOption } from "../../api/examDiscovery";
+import { discoverExams, type ExamCard as ExamCardData, type ExamSortOption } from "@sarkaritaiyaari/core/api";
 import { followExam, getFollowedExams, unfollowExam } from "../../db/followedExams";
 import { useHybridMode } from "../../data/hybridSource";
 import { getSubjectStats } from "../../data/practiceData";

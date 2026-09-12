@@ -1,6 +1,6 @@
 import { db } from "../db/client";
 import { getLastSyncedAt, setLastSyncedAt } from "../db/syncMeta";
-import { syncQuestions } from "../api/questions";
+import { syncQuestions } from "@sarkaritaiyaari/core/api";
 import { writeLanguages, writeReferenceData, upsertQuestionsBatch, deleteQuestionsLocally } from "./writeQuestions";
 import { downloadPendingMedia } from "./mediaDownload";
 

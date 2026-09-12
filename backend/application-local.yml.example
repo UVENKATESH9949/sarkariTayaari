@@ -31,3 +31,18 @@ app:
 # development only — never set this on a deployed instance.
   exam-guide:
     demo-seed-enabled: true
+
+# Optional — AI provider foundation (infrastructure only; no feature calls this yet, see
+# system-design/06-ai-foundation.md). Leave `enabled: false` unless you're actually testing
+# a real provider call. Never commit a real api-key here — this file is gitignored, but
+# treat the key itself with the same care as the Cloudinary secret above.
+  ai:
+    enabled: false
+    provider: CLAUDE
+    api-key: FILL_ME_IN
+    model:
+    # AI Admin Control Center: only needed if you'll save a provider API key through the
+    # admin console locally. Generate one with `openssl rand -base64 32` (or, with no
+    # openssl available, `python -c "import os,base64;print(base64.b64encode(os.urandom(32)).decode())"`).
+    # Must decode to exactly 32 bytes. Never share this value or commit a real one.
+    encryption-key: FILL_ME_IN

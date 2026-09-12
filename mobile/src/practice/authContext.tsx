@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { AppState } from "react-native";
 import { clearSession, loadSession, saveSession } from "../db/authSession";
-import { login as apiLogin, logout as apiLogout, register as apiRegister, type AuthUser } from "../api/auth";
+import { login as apiLogin, logout as apiLogout, register as apiRegister, type AuthUser } from "@sarkaritaiyaari/core/api";
 import { syncProgress, uploadPendingProgress } from "../sync/progressSync";
 import { syncBookmarks, uploadPendingBookmarks } from "../sync/bookmarkSync";
 import { syncFollowedExams, uploadPendingFollowedExams } from "../sync/followedExamSync";

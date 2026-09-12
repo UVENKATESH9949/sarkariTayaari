@@ -1,0 +1,273 @@
+# AUTH module — test scenarios (Phase 2)
+#
+# Every scenario references one or more qa/requirements/auth.yaml requirement_ids.
+# category values used in this file: Positive, Negative, Validation, Boundary, Authorization,
+# StateTransition, Security, ErrorHandling, Integration, Offline, Recovery.
+#
+# Where a requirement's own `ambiguity` field says REQUIRES CLARIFICATION, or a real
+# implementation/documentation gap was recorded in qa/requirements/_conflicts.md, the
+# corresponding scenario is marked `status: Ambiguous` and its `notes` field says so
+# explicitly — the expected result is NOT pre-asserted as pass/fail; execution determines the
+# actual current behavior, per the approved Phase 2 rules.
+
+- id: SCN-AUTH-001
+  requirement_ids: [REQ-AUTH-001]
+  category: Positive
+  title: New student registers and is signed in immediately
+  objective: >
+    Verify a fresh registration with valid email/password creates a STUDENT account and
+    returns a usable token in the same response, per REQ-AUTH-001's documented contract.
+  systems: [Backend, Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-AUTH-002
+  requirement_ids: [REQ-AUTH-001]
+  category: Negative
+  title: Duplicate email registration rejected, case-insensitively
+  objective: >
+    Verify registering with an email that already exists (in any case) is rejected with 400
+    and does not create a second account.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AUTH-003
+  requirement_ids: [REQ-AUTH-001]
+  category: Validation
+  title: Password under 8 characters rejected
+  objective: Verify a password shorter than the documented minimum is rejected with 400.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AUTH-004
+  requirement_ids: [REQ-AUTH-002]
+  category: Positive
+  title: Existing student and admin accounts both log in and receive their correct role
+  objective: >
+    Verify login succeeds for both a STUDENT and an ADMIN account via the same endpoint, and
+    the response's `role` field correctly distinguishes them.
+  systems: [Backend, Mobile, Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-AUTH-005
+  requirement_ids: [REQ-AUTH-002]
+  category: Negative
+  title: Wrong password and unknown email are rejected with an identical message
+  objective: >
+    Verify both a wrong-password attempt against a real account and a login attempt against
+    an unregistered email return 401 with byte-identical error text (enumeration-resistance
+    message contract; timing safety is covered separately in SCN-AUTH-022).
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AUTH-006
+  requirement_ids: [REQ-AUTH-002]
+  category: Boundary
+  title: Login succeeds regardless of email case
+  objective: Verify logging in with the account's email in a different case than registered still succeeds.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AUTH-007
+  requirement_ids: [REQ-AUTH-003]
+  category: Positive
+  title: Logout revokes only the calling device's token
+  objective: >
+    Verify a valid logout returns 204 and the same token is rejected (401) on any subsequent
+    authenticated call.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AUTH-008
+  requirement_ids: [REQ-AUTH-003, REQ-AUTH-006]
+  category: StateTransition
+  title: Concurrent device sessions are independent
+  objective: >
+    Verify logging in twice for the same account produces two distinct, independently valid
+    tokens, and revoking one (logout) does not affect the other. Merges REQ-AUTH-003's
+    multi-device isolation edge condition with REQ-AUTH-006's multi-session positive case,
+    since both describe the same underlying behavior from two requirement angles — see the
+    Phase 2 report's overlap notes.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AUTH-009
+  requirement_ids: [REQ-AUTH-004]
+  category: Positive
+  title: /me returns the correct profile for a valid token
+  objective: Verify GET /api/auth/me returns the signed-in user's id/email/displayName/role.
+  systems: [Backend, Mobile, Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-AUTH-010
+  requirement_ids: [REQ-AUTH-004]
+  category: Negative
+  title: /me rejects a missing or garbage token with "Not signed in"
+  objective: >
+    Verify a request with no Authorization header, and separately a request with an unknown
+    token value, both return 401 "Not signed in".
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AUTH-011
+  requirement_ids: [REQ-AUTH-004, REQ-AUTH-005]
+  category: Negative
+  title: "/me rejects a genuinely expired token with the distinct \"Session expired\" message"
+  objective: >
+    Verify a token past its expiresAt returns 401 with "Session expired — please sign in
+    again", distinct from the "Not signed in" message used for a missing/unknown token.
+  systems: [Backend]
+  status: Ready
+  notes: >
+    No automated test was found covering this exact message path (per
+    qa/requirements/auth.yaml's automation_hint on REQ-AUTH-004) — this scenario closes a
+    real coverage gap, not a documentation gap.
+
+- id: SCN-AUTH-012
+  requirement_ids: [REQ-AUTH-005]
+  category: Boundary
+  title: Authorization header without the "Bearer " prefix is rejected
+  objective: >
+    Verify a malformed Authorization header (missing the "Bearer " prefix, or otherwise not
+    matching the documented format) is rejected the same as a missing header.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AUTH-013
+  requirement_ids: [REQ-AUTH-007]
+  category: Authorization
+  title: requireUser accepts any signed-in role
+  objective: >
+    Verify a requireUser-gated endpoint accepts both a STUDENT token and an ADMIN token, and
+    rejects no-token/expired-token with 401.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AUTH-014
+  requirement_ids: [REQ-AUTH-008]
+  category: Authorization
+  title: requireAdmin three-state matrix (anonymous / student / admin)
+  objective: >
+    Verify a requireAdmin-gated endpoint returns 401 for an anonymous caller, 403 for a valid
+    STUDENT token, and succeeds for a valid ADMIN token.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AUTH-015
+  requirement_ids: [REQ-AUTH-008]
+  category: Security
+  title: A demoted admin account is rejected immediately, not cached
+  objective: >
+    Verify that once an account's role changes from ADMIN to STUDENT, its existing token is
+    rejected by requireAdmin on the very next call — role is read fresh, not cached on the
+    token.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AUTH-016
+  requirement_ids: [REQ-AUTH-009]
+  category: Integration
+  title: Public content-sync endpoints remain reachable with zero Authorization header
+  objective: >
+    Verify every endpoint on the documented public list (exams, subjects, topics, languages,
+    difficulty levels, paper types, exam structure, /api/questions/sync) returns 200 with no
+    Authorization header at all — a regression guard against an accidental requireAdmin/
+    requireUser being added to a public sync endpoint.
+  systems: [Backend, Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-AUTH-017
+  requirement_ids: [REQ-AUTH-010]
+  category: StateTransition
+  title: First admin is created only via bootstrap when zero admins exist
+  objective: >
+    Verify that with zero ADMIN-role users in the database, startup creates exactly one
+    ADMIN from the configured bootstrap credentials, and that account can log in immediately.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AUTH-018
+  requirement_ids: [REQ-AUTH-010]
+  category: Recovery
+  title: Restarting with an admin already present creates no duplicate
+  objective: Verify a second application startup, with an ADMIN already present, is a no-op.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AUTH-019
+  requirement_ids: [REQ-AUTH-011]
+  category: Authorization
+  title: Admin-invites-admin three-state matrix
+  objective: >
+    Verify POST /api/auth/admin/register returns 401 for anonymous, 403 for a STUDENT
+    caller, and 201 for a valid ADMIN caller.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AUTH-020
+  requirement_ids: [REQ-AUTH-011]
+  category: Security
+  title: Admin-register response leaks no token, password, or password hash
+  objective: >
+    Verify the response body of a successful admin-invite contains only id/email/
+    displayName/role — no token, no expiresAt, no password or hash under any key.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AUTH-021
+  requirement_ids: [REQ-AUTH-012]
+  category: ErrorHandling
+  title: AUTH error responses consistently follow the documented {error} shape and status codes
+  objective: >
+    Verify that across register/login/logout/me/admin-register, every documented error
+    response is exactly {"error": "<message>"} with no extra fields, and the status code
+    (400/401/403/404) matches the documented meaning for that failure.
+  systems: [Backend, Mobile, Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-AUTH-022
+  requirement_ids: [REQ-AUTH-013]
+  category: Security
+  title: Login response timing does not distinguishably leak account existence
+  objective: >
+    Verify a login attempt against a non-existent email takes approximately the same time as
+    one against a real email with a wrong password (both run a real BCrypt comparison, no
+    short-circuit).
+  systems: [Backend]
+  status: Ready
+  notes: >
+    No automated timing assertion exists (only message-equality is automated, per
+    REQ-AUTH-013's automation_hint) — this needs a manual/tooled timing measurement, not a
+    simple functional check. Flag results honestly if timing variance is inconclusive rather
+    than forcing a pass/fail.
+
+- id: SCN-AUTH-023
+  requirement_ids: [REQ-AUTH-014]
+  category: Offline
+  title: Mobile app remains fully usable with no signed-in session
+  objective: >
+    Verify that on a signed-out device, core mobile functionality (content browsing,
+    practice) works normally with no auth-related blocking of any kind — accounts are
+    additive (cross-device sync), never a gate.
+  systems: [Mobile]
+  status: Ready
+  notes: null

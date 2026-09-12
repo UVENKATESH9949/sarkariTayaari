@@ -120,6 +120,16 @@ public class QuestionController {
         return questionService.countsGroupedBy(groupBy, examCode, subjectId, topicId, difficulty);
     }
 
+    /**
+     * Batch hydration by id — public, same visibility as /live. Built for a client with no
+     * local question bank (the web app) to turn a bare questionId from a session/attempt
+     * review or a bookmark into real content. Capped at 100 ids per call.
+     */
+    @GetMapping("/by-ids")
+    public List<QuestionResponse> byIds(@RequestParam List<UUID> ids) {
+        return questionService.getByIds(ids);
+    }
+
     /** Mock Test's per-section availability, live — how many non-deleted questions exist across this set of subjects for this exam. */
     @GetMapping("/mock-count")
     public Map<String, Long> mockCount(@RequestParam String examCode, @RequestParam List<UUID> subjectIds) {

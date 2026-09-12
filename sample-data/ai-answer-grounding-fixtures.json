@@ -1,0 +1,15 @@
+{
+  "//": "TASK-2701 Phase 2. The answer-grounding check (packages/core/src/ai/schema/validate.ts's answerMatches, mirrored in backend AiAnswerGrounding.groundedAnswer) exists in two languages because generation happens server-side (Java) but the same check must hold for any client-side validation and for the test suite that proves both sides agree — the same reason question-evaluator-fixtures.json is shared between QuestionEvaluatorsTest and questionEvaluator.test.ts. Every case here is run by both AiAnswerGroundingTest.java and validate.test.ts's 'shared fixture parity' block.",
+  "cases": [
+    { "claimedAnswer": "Kolkata", "correctAnswer": "Kolkata", "options": ["Mumbai", "Kolkata", "Chennai", "Patna"], "expectedMatch": true, "note": "exact match" },
+    { "claimedAnswer": "  kolkata ", "correctAnswer": "Kolkata", "options": ["Mumbai", "Kolkata", "Chennai", "Patna"], "expectedMatch": true, "note": "case and whitespace tolerant" },
+    { "claimedAnswer": "B) Kolkata", "correctAnswer": "Kolkata", "options": ["Mumbai", "Kolkata", "Chennai", "Patna"], "expectedMatch": true, "note": "tolerates an option label the model added" },
+    { "claimedAnswer": "(b) Kolkata", "correctAnswer": "Kolkata", "options": ["Mumbai", "Kolkata", "Chennai", "Patna"], "expectedMatch": true, "note": "parenthesised label form" },
+    { "claimedAnswer": "B", "correctAnswer": "Kolkata", "options": ["Mumbai", "Kolkata", "Chennai", "Patna"], "expectedMatch": true, "note": "model answers with the letter, stored answer is text" },
+    { "claimedAnswer": "Kolkata", "correctAnswer": "B", "options": ["Mumbai", "Kolkata", "Chennai", "Patna"], "expectedMatch": true, "note": "legacy row stores a letter, model answers with text" },
+    { "claimedAnswer": "Chennai", "correctAnswer": "Kolkata", "options": ["Mumbai", "Kolkata", "Chennai", "Patna"], "expectedMatch": false, "note": "a genuinely different option must still fail" },
+    { "claimedAnswer": "C", "correctAnswer": "Kolkata", "options": ["Mumbai", "Kolkata", "Chennai", "Patna"], "expectedMatch": false, "note": "a different option's letter must still fail" },
+    { "claimedAnswer": "12", "correctAnswer": "12", "options": ["10", "12", "14", "16"], "expectedMatch": true, "note": "numeric answers compare as text" },
+    { "claimedAnswer": "True", "correctAnswer": "TRUE", "options": ["TRUE", "FALSE"], "expectedMatch": true, "note": "case-insensitive on a True/False question" }
+  ]
+}

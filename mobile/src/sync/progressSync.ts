@@ -12,7 +12,7 @@ import {
   uploadProgress,
   type MockAttemptPayload,
   type PracticeSessionPayload,
-} from "../api/progress";
+} from "@sarkaritaiyaari/core/api";
 
 export type ProgressSyncResult = {
   uploadedSessions: number;

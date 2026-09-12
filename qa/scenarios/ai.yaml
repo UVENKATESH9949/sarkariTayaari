@@ -1,0 +1,416 @@
+# AI module — test scenarios
+#
+# Every scenario references one or more qa/requirements/ai.yaml requirement_ids.
+# category values used in this file: Positive, Negative, Validation, Authorization, Security,
+# ErrorHandling, Offline, DataIntegrity, Compatibility, StateTransition, Concurrency.
+#
+# SCN-AI-001 through SCN-AI-022 cover the shared AI foundation in packages/core — registry,
+# context, validation, routing (Phase 1). SCN-AI-023 onward cover the backend batch generation +
+# human review pipeline (Phase 2). Sync to device, the client-config endpoint and any on-device
+# model runtime are later phases (AI_ARCHITECTURE.md §12) and have no scenarios here because none
+# of them exist yet.
+#
+# No scenario below is Ambiguous: every behaviour traces to a decided requirement, including the
+# three decisions recorded in AI_ARCHITECTURE.md §13.
+
+- id: SCN-AI-001
+  requirement_ids: [REQ-AI-001]
+  category: DataIntegrity
+  title: The shipped task registry is internally consistent
+  objective: >
+    Confirm every task in the registry satisfies all declared invariants, so no capability can be
+    declared in a self-contradictory way.
+  systems: [Mobile, Web]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-002
+  requirement_ids: [REQ-AI-001]
+  category: Negative
+  title: Registry self-check detects each class of drift
+  objective: >
+    Confirm the consistency check actually fails when an invariant is deliberately violated — a
+    guard nobody has watched fail is not known to work.
+  systems: [Mobile, Web]
+  status: Ready
+  notes: >
+    Deliberately separate from SCN-AI-001: that one proves the current registry is clean, this one
+    proves the mechanism that keeps it clean is real.
+
+- id: SCN-AI-003
+  requirement_ids: [REQ-AI-001, REQ-AI-003]
+  category: Security
+  title: No task is both personalized and cacheable
+  objective: >
+    Confirm no task can produce a per-student answer that is then cached and served to other
+    students.
+  systems: [Mobile, Web]
+  status: Ready
+  notes: >
+    Called out as its own scenario rather than folded into SCN-AI-001 because the consequence is
+    a cross-user data leak, not merely an inconsistent declaration.
+
+- id: SCN-AI-004
+  requirement_ids: [REQ-AI-002]
+  category: Negative
+  title: A request in a language with no question content is refused
+  objective: >
+    Confirm a Telugu request is refused with a specific reason rather than silently answered in
+    English or served by translating the question first.
+  systems: [Mobile, Web]
+  status: Ready
+  notes: >
+    Directly exercises decision 3 in AI_ARCHITECTURE.md §13.
+
+- id: SCN-AI-005
+  requirement_ids: [REQ-AI-002]
+  category: DataIntegrity
+  title: No task offers a language that has no question content
+  objective: >
+    Confirm the registry itself never advertises a language the app has no questions in.
+  systems: [Mobile, Web]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-006
+  requirement_ids: [REQ-AI-003]
+  category: Security
+  title: A shared task never receives learner context
+  objective: >
+    Confirm context assembly drops learner state for a task that did not declare it, even when a
+    caller supplies it.
+  systems: [Mobile, Web]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-007
+  requirement_ids: [REQ-AI-003]
+  category: Security
+  title: Learner context carries no identifier and no raw history
+  objective: >
+    Confirm the learner projection is aggregates only — no user id, no topic identity, no
+    per-question history — and that reason codes are capped.
+  systems: [Mobile, Web]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-008
+  requirement_ids: [REQ-AI-003, REQ-AI-006]
+  category: ErrorHandling
+  title: A task missing its required context is refused before any tier runs
+  objective: >
+    Confirm missing context is reported by name rather than prompted around.
+  systems: [Mobile, Web]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-009
+  requirement_ids: [REQ-AI-004]
+  category: Positive
+  title: An explanation of the verified answer is accepted
+  objective: >
+    Confirm a well-formed explanation that asserts the verified answer passes validation.
+  systems: [Mobile, Web]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-010
+  requirement_ids: [REQ-AI-004]
+  category: Security
+  title: An explanation asserting a different answer is rejected
+  objective: >
+    Confirm the grounding check rejects a model that explained the wrong option, before a student
+    could see it.
+  systems: [Mobile, Web]
+  status: Ready
+  notes: >
+    The single most consequential check in this module — a wrong answer presented confidently is
+    the failure mode a government-exam product cannot absorb.
+
+- id: SCN-AI-011
+  requirement_ids: [REQ-AI-004]
+  category: Compatibility
+  title: Letter and option-text answers validate against each other
+  objective: >
+    Confirm a stored letter answer and a model reply in option text (and the reverse) are treated
+    as the same answer.
+  systems: [Mobile, Web]
+  status: Ready
+  notes: >
+    Real data carries both forms — questions.correct_answer was widened from VARCHAR(10) in V28
+    precisely because newer question types store display text.
+
+- id: SCN-AI-012
+  requirement_ids: [REQ-AI-005]
+  category: ErrorHandling
+  title: Malformed model output is rejected as a value, never thrown
+  objective: >
+    Confirm unparseable text, a non-object, a wrong-task payload, and missing or blank required
+    fields each produce a distinguishable failure rather than an exception.
+  systems: [Mobile, Web]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-013
+  requirement_ids: [REQ-AI-005]
+  category: Validation
+  title: Closed enums and numeric ranges are enforced
+  objective: >
+    Confirm an invented mistake type and an out-of-range confidence are both rejected.
+  systems: [Mobile, Web]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-014
+  requirement_ids: [REQ-AI-005]
+  category: Validation
+  title: A hint that gives the answer away is rejected, without false positives
+  objective: >
+    Confirm a hint containing the answer is rejected, while a legitimate hint that incidentally
+    contains a short numeric value is not.
+  systems: [Mobile, Web]
+  status: Ready
+  notes: >
+    Both halves matter: a check that rejects good hints would be switched off, and the cost of a
+    false reject is a wasted generation rather than a wrong answer.
+
+- id: SCN-AI-015
+  requirement_ids: [REQ-AI-006]
+  category: Positive
+  title: The cheapest capable tier serves the request
+  objective: >
+    Confirm ground truth is preferred over the cache, the cache over generation, and that no later
+    tier is invoked once one succeeds.
+  systems: [Mobile, Web]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-016
+  requirement_ids: [REQ-AI-006]
+  category: Positive
+  title: The local model is tried before the cloud
+  objective: >
+    Confirm that when both a local model and the cloud are available, the local path runs first and
+    the cloud is not called.
+  systems: [Mobile]
+  status: Ready
+  notes: >
+    Guards against the intuitive-but-wrong framing "offline? then local", which quietly bills for
+    work the device could have done itself.
+
+- id: SCN-AI-017
+  requirement_ids: [REQ-AI-006]
+  category: DataIntegrity
+  title: A deterministic-only task never reaches a model
+  objective: >
+    Confirm a task served by existing deterministic intelligence does not call a cloud handler even
+    when one is supplied.
+  systems: [Mobile, Web]
+  status: Ready
+  notes: >
+    Protects the architecture's central finding — weakness, mastery and the study plan are already
+    computed deterministically and must not quietly migrate to an LLM.
+
+- id: SCN-AI-018
+  requirement_ids: [REQ-AI-007]
+  category: ErrorHandling
+  title: A tier that throws does not stop the ladder
+  objective: >
+    Confirm an exception from one handler is recorded and routing continues to the next tier.
+  systems: [Mobile, Web]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-019
+  requirement_ids: [REQ-AI-007]
+  category: Recovery
+  title: Total failure yields a calm unavailable result with a fallback
+  objective: >
+    Confirm that when every handler fails or is absent, the caller receives an unavailable result
+    naming what the UI should show instead, rather than an error.
+  systems: [Mobile, Web]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-020
+  requirement_ids: [REQ-AI-008]
+  category: Authorization
+  title: A task with no flag is disabled
+  objective: >
+    Confirm an absent flag behaves exactly as an explicitly false one, and that no handler runs.
+  systems: [Mobile, Web]
+  status: Ready
+  notes: >
+    The offline case is the normal case here: with no client-config channel built yet, a failed or
+    absent config must fail closed.
+
+- id: SCN-AI-021
+  requirement_ids: [REQ-AI-009]
+  category: Compatibility
+  title: A device below the task's band never loads a model
+  objective: >
+    Confirm the local handler is skipped on an under-specified device and on a device with no model
+    installed, and that routing continues.
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-022
+  requirement_ids: [REQ-AI-009, REQ-AI-006]
+  category: Offline
+  title: A low-end offline device can still be offered a non-generating task
+  objective: >
+    Confirm a task with a non-generating tier remains attemptable on a low-RAM device with no
+    network and no model, while a generate-only task is correctly reported as unattemptable.
+  systems: [Mobile]
+  status: Ready
+  notes: >
+    This is the architecture's core claim made checkable: offline AI on a low-end device means the
+    non-generating tiers, not a local model.
+
+- id: SCN-AI-023
+  requirement_ids: [REQ-AI-010]
+  category: Positive
+  title: Generation produces a grounded draft from the configured provider
+  objective: >
+    Confirm a real end-to-end generate call, against a test provider that actually answers in the
+    expected shape, produces a persisted DRAFT row echoing the verified answer.
+  systems: [Backend]
+  status: Ready
+  notes: >
+    MockAIProvider echoes plain text and correctly fails JSON parsing, so this uses a dedicated
+    test-fixture provider registered under the AI Admin Control Center's own dynamic override —
+    the same mechanism AiConfigurationTest already exercises for MOCK/CLAUDE.
+
+- id: SCN-AI-024
+  requirement_ids: [REQ-AI-010]
+  category: DataIntegrity
+  title: Generation skips a question that already has content
+  objective: >
+    Confirm a second generate call for the same (task, question, language) is reported
+    SKIPPED_EXISTING rather than creating a duplicate row.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-025
+  requirement_ids: [REQ-AI-010]
+  category: Validation
+  title: Generation rejects an unsupported language or an unknown task
+  objective: >
+    Confirm the endpoint refuses a "te" language request and an unrecognized taskId with 400,
+    before any provider call is made.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-026
+  requirement_ids: [REQ-AI-010]
+  category: Authorization
+  title: Generation is admin-only
+  objective: >
+    Confirm an unauthenticated caller, a STUDENT, and a REVIEWER are all rejected — generation is
+    the one action in this pipeline gated stricter than the rest of the review workflow, because
+    it is the one that spends money.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-027
+  requirement_ids: [REQ-AI-011]
+  category: Security
+  title: Ungrounded generated content never reaches the database
+  objective: >
+    Confirm the same answer-grounding check proven in packages/core also runs at the point of
+    generation in the backend, against a real question's verified answer, before any row is
+    persisted.
+  systems: [Backend]
+  status: Ready
+  notes: >
+    The Java-side check (AiAnswerGrounding) and the shared TypeScript check (answerMatches) are
+    both asserted against sample-data/ai-answer-grounding-fixtures.json — the same parity
+    discipline as question-evaluator-fixtures.json.
+
+- id: SCN-AI-028
+  requirement_ids: [REQ-AI-012]
+  category: StateTransition
+  title: A generated row moves through the full review lifecycle
+  objective: >
+    Confirm DRAFT -> REVIEW -> DRAFT (rejected, with a reason) -> PUBLISHED -> DRAFT (unpublished)
+    all work, matching ExamGuideAdminController's own recruitment-cycle transition shape.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-029
+  requirement_ids: [REQ-AI-012]
+  category: Validation
+  title: Rejection requires a non-blank reason and only applies from REVIEW
+  objective: >
+    Confirm a blank rejection reason is refused, and a DRAFT row that was never submitted for
+    review cannot be rejected.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-030
+  requirement_ids: [REQ-AI-013]
+  category: Concurrency
+  title: A stale version is rejected on every transition
+  objective: >
+    Confirm submitting a transition with an expectedVersion that no longer matches the row's
+    current version is rejected 409, without changing the row.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-031
+  requirement_ids: [REQ-AI-014]
+  category: Positive
+  title: The review queue filters by task and status correctly
+  objective: >
+    Confirm a DRAFT-status query does not surface a REVIEW-status row and vice versa, and that a
+    taskId filter narrows the result correctly.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-032
+  requirement_ids: [REQ-AI-015]
+  category: Security
+  title: The public sync feed never leaks unreviewed content
+  objective: >
+    Confirm a DRAFT row's sync entry carries no payload, publishing flips it to carry one, and
+    unpublishing reverts it — all with no Authorization header on the request.
+  systems: [Backend]
+  status: Ready
+  notes: >
+    The mobile/web consumer of this endpoint does not exist yet (Phase 3's client side) — this
+    scenario covers the backend contract only.
+
+- id: SCN-AI-033
+  requirement_ids: [REQ-AI-016]
+  category: Positive
+  title: The client-config feed always reports all 9 known AI tasks
+  objective: >
+    Confirm GET /api/client-config needs no auth, defaults every untouched task to false, and
+    reflects an admin-enabled task as true on the very next fetch.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-034
+  requirement_ids: [REQ-AI-017]
+  category: Concurrency
+  title: A never-before-touched task's first toggle still enforces optimistic locking
+  objective: >
+    Confirm creating a task's flag row for the first time (expectedVersion=0) and then
+    immediately reusing expectedVersion=0 on a second call is rejected 409, not silently
+    accepted — the initial INSERT must still count as a version transition.
+  systems: [Backend]
+  status: Ready
+  notes: >
+    Found as a real bug during Phase 4 implementation: Hibernate's @Version does not bump on the
+    row's initial INSERT, only on a later UPDATE, so this case needed an explicit fix
+    (AiTaskFlagService seeds version=1 on first creation) rather than being free from the
+    @Version annotation alone.

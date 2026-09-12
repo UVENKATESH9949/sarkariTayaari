@@ -7,7 +7,7 @@ import { getSyncedExams } from "../data/practiceData";
 import { getExamGuideHybrid } from "../data/examGuideData";
 import { useHybridMode } from "../data/hybridSource";
 import { formatDate } from "../examGuide/dates";
-import type { ImportantDateSummary } from "../api/examGuide";
+import type { ImportantDateSummary } from "@sarkaritaiyaari/core/api";
 import { Card } from "../ui/Card";
 import { ContextualLoading } from "../ui/ContextualLoading";
 import { EmptyState } from "../ui/EmptyState";

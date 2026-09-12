@@ -888,3 +888,56 @@ export const appPreferences = sqliteTable("app_preferences", {
   /** Interface language code ("en" | "te"), NOT the quiz-content language. */
   uiLanguage: text("ui_language"),
 });
+
+/**
+ * TASK-2701 Phase 3 — AI-generated question/topic explanations, cached locally the same way
+ * exam_guide_* content is: full-replace on every reference sync (GET /api/ai-content/sync has
+ * no `since` param, matching getAllExamGuides — volume is currently small and admin-reviewed,
+ * not per-user).
+ *
+ * `subjectId` is a question id for `taskId: "QUESTION_EXPLANATION"` and a topic id for
+ * `"CONCEPT_EXPLANATION"` — one column rather than two nullable ones (`questionId`/`topicId`)
+ * deliberately: SQLite's unique-index semantics treat every NULL as distinct from every other
+ * NULL, so a `(taskId, questionId, topicId, languageCode)` index would never actually detect a
+ * duplicate question row (its `topicId` is NULL on every single row). A single non-null column
+ * keyed by whichever server field the sync response actually populated avoids that trap
+ * entirely, and the caller already knows which kind an id is from `taskId`.
+ *
+ * `published` is the local mirror of the server's review state, not a tombstone by itself —
+ * a row can be present and `published: false` (still in review, or unpublished again), in
+ * which case `payloadJson` is always null. See AI_ARCHITECTURE.md §4: this table is what makes
+ * "Explain with AI" work fully offline, on any device, once a row has synced once — no model,
+ * no network call, at read time.
+ */
+export const aiContent = sqliteTable(
+  "ai_content",
+  {
+    id: text("id").primaryKey(),
+    taskId: text("task_id").notNull(),
+    subjectId: text("subject_id").notNull(),
+    languageCode: text("language_code").notNull(),
+    published: integer("published", { mode: "boolean" }).notNull().default(false),
+    payloadJson: text("payload_json", { mode: "json" }).$type<Record<string, unknown> | null>(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    index("idx_ai_content_subject_id").on(table.subjectId),
+    uniqueIndex("idx_ai_content_key").on(table.taskId, table.subjectId, table.languageCode),
+  ],
+);
+
+/**
+ * TASK-2701 Phase 4 — the local cache of `GET /api/client-config`, the channel that lets an
+ * admin switch an AI task off without an app release. One row per task id, full-replace on
+ * every reference sync, same reasoning as `radar_cache`/`ai_content`: this is server-computed,
+ * read-only state a device caches, never edits.
+ *
+ * Absence of a row for a given task id means disabled — the same "unknown means off" rule
+ * `packages/core/src/ai/router.ts` already enforces — so a device that has never synced this
+ * table at all (first launch, before the first reference sync completes) correctly treats
+ * every AI task as off rather than crashing on a missing lookup.
+ */
+export const clientConfigAiTasks = sqliteTable("client_config_ai_tasks", {
+  taskId: text("task_id").primaryKey(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(false),
+});

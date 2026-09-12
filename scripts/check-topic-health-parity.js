@@ -29,7 +29,7 @@ const JAVA = path.join(
   root,
   "backend/src/main/java/com/sarkaritaiyaari/backend/service/TopicHealthService.java",
 );
-const TS = path.join(root, "mobile/src/intelligence/topicHealth.ts");
+const TS = path.join(root, "packages/core/src/intelligence/topicHealth.ts");
 const FIXTURES = path.join(root, "sample-data/weakness-radar-fixtures.json");
 
 /**
@@ -119,7 +119,7 @@ for (const [label, found] of [["Java", java.found], ["TypeScript", ts.found]]) {
 if (process.exitCode) {
   console.error(
     "\nThe two copies of the topic-health algorithm have drifted. See TASK-2201 and the module\n" +
-      "comment in mobile/src/intelligence/topicHealth.ts: change both sides together, and bump\n" +
+      "comment in packages/core/src/intelligence/topicHealth.ts: change both sides together, and bump\n" +
       "ALGORITHM_VERSION in both when the formula itself changes.",
   );
 } else {

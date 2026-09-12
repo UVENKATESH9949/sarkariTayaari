@@ -1,0 +1,112 @@
+# CATALOG module — test data catalog
+#
+# Logical test-data identifiers only. NEVER a real credential, token, or personal data —
+# every entry describes what the identifier MEANS and how to provision it per environment,
+# not a literal reusable value. used_by_test_cases is computed from the real test-case
+# files, not hand-maintained (regenerate via scripts/qa/generate-test-data.js).
+
+- id: TESTDATA-CATALOG-BADGE-CODE-01
+  type: Fixture
+  description: >-
+    An existing exam badge code. Badges are documented as read-only via the API (REQ-CATALOG-020) —
+    if no way exists to toggle its active flag through any available interface, TC-CATALOG-046
+    should be marked Blocked rather than fabricate a result.
+  provisioning: >-
+    Use an existing seeded badge, or locate a pre-existing inactive one instead of trying to create
+    one via API.
+  used_by_test_cases:
+    - TC-CATALOG-046
+
+- id: TESTDATA-CATALOG-EXISTING-DIFFICULTY-CODE-01
+  type: Fixture
+  description: An existing difficulty-level code, used to test duplicate-code rejection.
+  provisioning: Use any existing difficulty level in the target environment.
+  used_by_test_cases:
+    - TC-CATALOG-029
+
+- id: TESTDATA-CATALOG-EXISTING-EXAM-CODE-01
+  type: Fixture
+  description: >-
+    An existing, active exam reused across many CATALOG cases as 'the' ordinary exam fixture for
+    syllabus/topic-map/stage/paper/section operations. Cases that mutate its structure should use a
+    throwaway stage/paper/section under it, not delete the exam itself.
+  provisioning: >-
+    Use an existing seeded exam (e.g. SSC_CGL) in the target environment, or create a dedicated
+    throwaway exam reserved for QA use.
+  used_by_test_cases:
+    - TC-CATALOG-002
+    - TC-CATALOG-004
+    - TC-CATALOG-005
+    - TC-CATALOG-006
+    - TC-CATALOG-007
+    - TC-CATALOG-011
+    - TC-CATALOG-012
+    - TC-CATALOG-013
+    - TC-CATALOG-014
+    - TC-CATALOG-015
+    - TC-CATALOG-016
+    - TC-CATALOG-031
+    - TC-CATALOG-032
+    - TC-CATALOG-033
+    - TC-CATALOG-034
+    - TC-CATALOG-040
+    - TC-CATALOG-043
+    - TC-CATALOG-044
+
+- id: TESTDATA-CATALOG-EXISTING-SUBJECT-NAME-01
+  type: Fixture
+  description: An existing subject name, used to test case-insensitive duplicate rejection.
+  provisioning: Use any existing subject in the target environment.
+  used_by_test_cases:
+    - TC-CATALOG-018
+
+- id: TESTDATA-CATALOG-LANG-CODE-01
+  type: Fixture
+  description: >-
+    A dedicated, throwaway language code — deliberately NOT a real content language like en/hi,
+    since the active/all-split test deactivates it and that must not affect any other test relying
+    on real content languages.
+  provisioning: Create a throwaway language code reserved for QA use.
+  used_by_test_cases:
+    - TC-CATALOG-027
+
+- id: TESTDATA-CATALOG-NEW-DIFFICULTY-CODE-01
+  type: Value shape
+  description: >-
+    A difficulty-level code not currently in use, for the 'new level usable with no code change'
+    case.
+  provisioning: Generate a unique code per execution.
+  used_by_test_cases:
+    - TC-CATALOG-028
+
+- id: TESTDATA-CATALOG-NEW-EXAM-CODE-01
+  type: Value shape
+  description: >-
+    An exam code not currently in use, for the full-CRUD-lifecycle case (created then deleted within
+    the same test).
+  provisioning: Generate a unique code per execution (e.g. a short random suffix) so re-runs don't collide.
+  used_by_test_cases:
+    - TC-CATALOG-001
+
+- id: TESTDATA-CATALOG-NEW-SUBJECT-NAME-01
+  type: Value shape
+  description: A subject name not currently in use.
+  provisioning: Generate a unique name per execution.
+  used_by_test_cases:
+    - TC-CATALOG-017
+
+- id: TESTDATA-CATALOG-NEW-TOPIC-NAME-01
+  type: Value shape
+  description: A topic name not currently in use under the subject being tested.
+  provisioning: Generate a unique name per execution.
+  used_by_test_cases:
+    - TC-CATALOG-019
+
+- id: TESTDATA-CATALOG-SHARED-TOPIC-NAME-01
+  type: Value shape
+  description: >-
+    A topic name deliberately created under two different subjects, to prove per-subject uniqueness
+    scoping.
+  provisioning: Generate a unique name per execution; create it under both subjectA and subjectB.
+  used_by_test_cases:
+    - TC-CATALOG-020

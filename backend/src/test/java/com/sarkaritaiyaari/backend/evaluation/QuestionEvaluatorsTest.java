@@ -27,9 +27,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@link QuestionEvaluators}), so nothing new to prove.
  *
  * The fixture file is shared with the TypeScript mirror
- * ({@code mobile/src/evaluation/questionEvaluator.ts}), which has no test runner in this
- * project — its correctness against these same cases is verified by reading and by tracing
- * them by hand, stated in the fixture file's own comment rather than implied here.
+ * ({@code packages/core/src/evaluation/questionEvaluator.ts}), which asserts against these
+ * same cases in {@code questionEvaluator.test.ts} (Vitest) as of TASK-2601 Phase 0. Adding a
+ * case here therefore constrains both implementations, and a case that holds in Java but not
+ * in TypeScript now fails a real test run rather than going unnoticed.
  */
 class QuestionEvaluatorsTest {
 

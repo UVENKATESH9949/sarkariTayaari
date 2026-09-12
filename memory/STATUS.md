@@ -1,9 +1,938 @@
 # Project Status — Resume Point
 
-**Last updated:** 2026-09-07 — see **"Session of 2026-09-07 — TASK-2501 Question
-Intelligence & Ingestion System: Phase 1 + Phase 2 shipped, fully verified including a
-real admin-UI click-through"** immediately below for the current state; everything after
-it is earlier history, kept for context.
+**Last updated:** 2026-09-12 (3) — TASK-2601 web Phase 2 (Mock Test) closed out. **Three
+sessions ran on 2026-09-12**, and this one found yet more evidence of concurrent/uncommitted
+work: `web/src/mocktest/` (8 files, a complete Mock Test feature) already existed on disk,
+wired into `App.tsx`, with no report, no task-doc entry, and no `qa/` coverage — read in full,
+verified end-to-end against the real backend, one real bug found and fixed, then documented.
+See **"Session of 2026-09-12 (3) — TASK-2601 web Phase 2: Mock Test"** immediately below.
+Read that, then **"Session of 2026-09-12 (2) — on-device & hybrid AI"**, then **"Session of
+2026-09-12 — TASK-2601 student web application"** (Phase 0/1). Everything past those (the QA
+register, AI Admin
+Control Center and AI Foundation Phase 1 entries) is earlier history, kept for context.
+
+## Session of 2026-09-12 (3) — TASK-2601 web Phase 2: Mock Test
+
+**User asked to continue the web part.** Read `tasks/TASK-2601-student-web-application.md`
+and this file's own Phase 0/1 entries first, then checked `web/` on disk before assuming Phase
+2 needed to be started from scratch — and found it already fully built. `web/src/mocktest/`
+(`MockTestExams.tsx`, `MockTestPapers.tsx`, `MockTestStart.tsx`, `MockTestEngine.tsx`,
+`MockTestResult.tsx`, `mockTestApi.ts`, `attempt.ts`, `types.ts`) existed on disk, wired into
+`App.tsx`'s routes, uncommitted (`web/` is entirely untracked in git), with **no report, no
+task-doc entry, and no `qa/` coverage** — the same concurrent/interrupted-session pattern this
+file has flagged more than once for `mobile/`, now showing up in `web/` too. Rather than
+re-plan or rebuild, this session read the existing code in full, verified it end-to-end
+against the real backend, found and fixed one real bug, then closed out the documentation the
+code itself was missing.
+
+**What was already there, confirmed correct by reading then by running it.** Built on
+`GET /api/exam-structures` plus `/mock-count`/`/mock-sample` — exactly the endpoints the task
+doc's own Phase 2 section named, no new backend work needed. Scoring reuses Phase 1's shared
+`@sarkaritaiyaari/core/evaluation` module and the identical `answerDraft.ts`/`QuestionBody`
+renderer set Practice uses — the engine is blind (no reveal until submit) only because it
+always calls `QuestionBody` with `revealed={false}`, not because the renderers have a separate
+blind-mode branch. The countdown is driven by a fixed end-timestamp rather than a decrementing
+counter (correct under a throttled/backgrounded tab — the same lesson the Weakness Radar
+session's timestamp-precision bug already taught this project once). A completed attempt lives
+in `sessionStorage` and, when signed in, uploads via the same `POST /api/progress/sync` shape
+mobile uses (silent-by-design on failure). `ActiveSessionProvider.tsx` ports mobile's
+`activeSessionContext.tsx` tab-press guard to the two mechanisms a browser actually offers:
+in-app navigation intercepted by `AppShell` with a styled dialog; tab close/refresh only
+reachable via the browser's own native, un-stylable `beforeunload` prompt.
+
+**One real bug found and fixed.** The question-navigator's own Close button was unreachable on
+a real 100-question paper. `index.css` already defined `.navigator-scroll` (scrolling, with a
+capped `.navigator-panel { max-height: 85vh }`) — its own comment describes this exact failure
+as already found and fixed once before, from testing against a real 100-question SSC CGL
+paper. But `MockTestEngine.tsx`'s JSX never actually wrapped `.navigator-grid` in that div —
+grepped the whole `web/src` tree and confirmed the class was defined but referenced nowhere.
+The documented fix was never applied to the component that needed it. Reproduced independently
+first, before reading the CSS comment: a Playwright script against the real SSC CGL Tier 1
+paper (100 questions) timed out clicking Close, Playwright reporting the element "outside of
+the viewport." Fixed with a one-line JSX change (wrap the grid in the already-defined class,
+no CSS change needed); re-ran the same script clean immediately after.
+
+**Verified against real, live production data — a full attempt, start to scorecard**, via a
+headless Playwright script against the real dev backend, then repeated at a 390px phone
+viewport. Confirmed: zero reveal-styling elements before any answer (blind mode holds); 5
+questions answered, one marked for review, the navigator correctly showing 4 answered + 1
+marked (marked takes visual precedence, by design) across its full 100-cell grid with the
+Close button now reachable; submit confirmation naming the answered count; a Result scorecard
+of **−2.5** for 0 correct/5 wrong under the real +2/−0.5 marking scheme — exact arithmetic
+match — with a correct by-subject breakdown and a full per-question review (real question
+text, the student's wrong answer, the correct answer, the stored explanation). Zero browser
+console errors, both runs. No horizontal overflow at 390px on any of the three screens walked.
+`tsc`/`oxlint`/`vite build` clean before and after the fix (364 kB JS / 108.8 kB gzipped, up
+from Phase 1's 96 kB — expected for a whole new feature area).
+
+**Not verified**: the signed-in upload-to-`/api/progress/sync` path (no disposable test account
+created, same disclosed gap Phase 1 already carries for Practice); the `beforeunload`
+tab-close/refresh guard (browsers suppress the native prompt under automated control — needs a
+human driving a real tab); only SINGLE_CHOICE was exercised live this session (every other
+type's scoring is already proven at the shared-evaluator unit level and, for Practice, against
+live data in Phase 1 — the Mock Test engine reuses the identical renderer set, so risk here is
+low but unconfirmed for this specific screen); no mobile emulator pass; no deploy — unchanged
+standing gaps from Phase 0/1.
+
+**QA per §3.21**: `REQ-QUESTIONS-018` gained `Web` to its `system` list (Mock Test on web has
+no fallback path — decision 2, online-only, means it's the *only* consumer path, not a hybrid
+fallback the way mobile's is). New `REQ-WEB-010` (Mock Test engine — timed, blind, navigable,
+with an unload guard) plus `SCN-WEB-014/015/016` and `TC-WEB-015/016/017` — the navigator case
+(`TC-WEB-016`) written explicitly as a regression guard for the bug found this phase, the
+unload-guard case (`TC-WEB-017`) disclosed as manual-only by nature (not by omission). RTM:
+93/175/192 → **94/178/195**. Full account:
+`reports/28-web-application-phase-0/web-application-phase-2.md`.
+
+**Next**: Phase 3 (Progress, history, Revise) — the phase needing real backend work (paged/
+filtered history reads, a hydrated single-session/attempt fetch, a bookmarks read that returns
+question content). Nothing blocks starting it.
+
+## Session of 2026-09-12 (2) — on-device & hybrid AI: Phase 0 through Phase 4 (client config)
+
+**Continuation of this same session, per explicit "continue with all tasks, up to 1 hour, no
+permission needed" instruction.** Also created the task-scoping doc this feature had been missing:
+`tasks/TASK-2701-on-device-and-hybrid-ai.md` (the `AI_ARCHITECTURE.md` write-up covered design
+only, not the per-phase status/scope record `tasks/` is for — corrected once flagged).
+
+**Phase 2 shipped and fully verified.** Migration **V41** (`ai_content` — one row per generated
+question/topic explanation, reusing `ContentStatus`, a partial-unique index guaranteeing at most
+one `PUBLISHED` row per task/subject/language). New backend package `ai/content/`: batch
+generation through the existing `AIService` (`AiContentGenerationService`, deliberately no
+top-level `@Transactional` — the same `NoticeDiscoveryService.scan()` shape this project already
+fixed a real bug into once), a Java mirror of the shared TypeScript answer-grounding check
+(`AiAnswerGrounding`, kept in parity via a new shared fixture,
+`sample-data/ai-answer-grounding-fixtures.json` — the same cross-language discipline as
+`question-evaluator-fixtures.json`), and the full DRAFT→REVIEW→PUBLISHED review workflow reusing
+`ContentStatus` + `REVIEWER` (`AiContentReviewService`, with real transition validation this
+project's own `ExamGuideService.setCycleContentStatus` precedent doesn't bother with — safe to add
+since this is new code with nothing depending on the looser behavior). New
+`AiContentController` (`/api/admin/ai-content`) — generation is `requireAdmin` only (the one
+action that spends real money), every review transition is `requireReviewer`, matching
+`ExamGuideAdminController`'s exact shape. Contract: `api/AI-CONTENT.md`.
+
+**Generation always requires an explicit `subjectIds` list — there is no "generate for every
+question" mode**, because nothing in this codebase distinguishes a real, authored question from
+one of the ~35,700 synthetic load-test rows (no column, no marker exists — confirmed by a
+dedicated research pass). This is the concrete mechanism enforcing decision 2 from Phase 0/1
+(real content only).
+
+**Four real bugs found by running the tests, not by review:**
+1. **A `PropertyReferenceException` from a derived repository query** — `AiContent`'s boolean
+   field is `deleted` (accessor `isDeleted()`, this codebase's usual convention), so a derived
+   `...IsDeletedFalse...` method name resolved to a non-existent "isDeleted" property and failed
+   at context startup. This is the *third* time this exact trap has bitten a session in this
+   project (see the `QuestionCandidateRepository` history already on record) — worth internalizing
+   as a standing rule: **derived query names must match the entity's field name, never its
+   accessor name.**
+2. **The identical mistake one level up, in hand-written JPQL** (`c.isDeleted` instead of
+   `c.deleted`) — same root cause, different layer (`UnknownPathException` instead of
+   `PropertyReferenceException`).
+3. **A column-width mismatch, surfaced by the test fixture, not production code**:
+   `ai_provider_configs.provider` is `VARCHAR(20)` (V40); a first-draft test-fixture AI provider
+   bean named `"ai-content-test-fixture"` didn't fit once canonicalized. Renamed to
+   `"aicontentfixture"` — test-only, no schema touched.
+4. **A real test-isolation bug in this session's own cleanup code**: `AiConfigurationService`
+   canonicalizes a provider id to **uppercase** before storing it (the same convention
+   `AiConfigurationTest`'s own cleanup already uses for `"MOCK"`/`"CLAUDE"`), but this session's
+   first cleanup draft deleted the **lowercase** bean name — a silent no-op that let a stale row
+   leak into every subsequent test, each then failing with `409 Conflict` against the leftover
+   row's version. Fixed to match the existing test's own uppercase convention.
+
+**Why `MockAIProvider` couldn't prove the success path**: it echoes the prompt back as plain text,
+which correctly fails JSON parsing but can't produce a real `GENERATED` outcome. A new test-only
+`FixtureAiContentProvider` (registered under its own bean name, selected via the AI Admin Control
+Center's existing dynamic-override mechanism — the same one `AiConfigurationTest` already
+exercises for MOCK/CLAUDE) extracts the verified answer straight out of the real prompt
+`AiContentPrompts` builds and echoes it back as a valid, grounded payload — proving the real
+prompt genuinely carries `questions.correct_answer` through to a model and back, not a canned
+response disconnected from production code.
+
+**Verified**: `mvn -f backend/pom.xml compile` clean, full backend. **All 24 new tests pass
+against the real dev database — 0 failures, 0 errors** (`AiAnswerGroundingTest` 2/2,
+`AiContentValidationTest` 10/10, `AiContentIntegrationTest` 12/12 — a real end-to-end HTTP round
+trip: grounded generation, skip-on-existing, unsupported-language/unknown-task 400,
+unauthenticated/student/reviewer all correctly rejected on generate, the full review lifecycle
+with `reviewedByEmail` stamped, blank-reason and wrong-state rejects both 400, a stale
+`expectedVersion` 409, and the queue's filters). Real `ai.usage` log lines confirmed the existing
+`LoggingAIUsageRecorder` extension point works unmodified for this new caller. QA per §3.21: 5 new
+requirements, 9 scenarios, 9 test cases, every one citing a real passing test method. RTM →
+**90/172/189**. Full account: `reports/29-on-device-and-hybrid-ai/phase-2-generation-and-review.md`.
+
+**A deliberate scope decision on verification**: the full backend regression suite was **not**
+re-run this phase — a real `spring-boot:run` dev server from the concurrent session (see the
+warning below) was active on this machine throughout, and this project has twice before
+documented real corruption from overlapping Maven processes. A scoped, targeted run of only the
+new test classes was used instead, judged low-risk since this phase added only new files plus one
+additive migration and touched no existing entity/service/controller.
+
+**Not done**: no admin console page for the review queue yet
+(`admin/src/pages/AiContentReview.jsx`) — the API is fully built and tested but nothing renders it
+in a browser; no sync to devices (Phase 3); no real Anthropic API cost/quality check (still gated
+on the open LLM provider/budget decision in `reports/open-questions.md`).
+
+**Phase 3 (backend half) — also shipped this session.** New `GET /api/ai-content/sync?since=`
+(`AiContentSyncController`) — public, no auth at all, the same convention `/api/questions/sync`
+already uses. Withholds `payload` for anything not currently `PUBLISHED`; a row that's DRAFT, in
+REVIEW, or was unpublished after once being live still appears in the feed — with
+`published: false` and no payload — so an already-synced device can drop it, the same tombstone
+role `isDeleted` plays for every other synced table in this schema. `since` parsing mirrors
+`QuestionService.parseSince` exactly. **Verified with a real, unauthenticated end-to-end test**
+confirming the payload appears only once published and disappears again once unpublished — **full
+`AiContentIntegrationTest` class re-run: 13/13 pass, 0 failures**, against the real dev database.
+QA: one more requirement/scenario/test-case (REQ-AI-015/SCN-AI-032/TC-AI-032), RTM →
+**91/173/190**. Full account, including the addendum, is in
+`reports/29-on-device-and-hybrid-ai/phase-2-generation-and-review.md`.
+
+**The mobile half was completed and verified live the same session**, once the user explicitly
+authorized starting the emulator. New local table `ai_content` (hand-written migration **0022**)
+— one non-null `subjectId` column rather than nullable `questionId`/`topicId`, deliberately:
+SQLite's unique-index semantics treat every `NULL` as distinct from every other `NULL`, so a
+`(taskId, questionId, topicId, languageCode)` index would never actually catch a duplicate
+question row (its `topicId` is `NULL` on every one). New `writeAiContent()` in the existing
+`writeReferenceData()` sync path (full replace, same shape as `writeExamGuides`), a plain local
+read (`db/aiContentLocal.ts` — no re-validation, since the row was already grounded and reviewed
+before publish), and `questionRenderer/AiExplanationCard.tsx` — renders nothing when no cached
+row exists, matching the tier model's "an enhancement a screen must look correct without."
+
+**Verified live on `emulator-5554`**, against a real, already-populated (536 questions attempted)
+pre-existing local database — not a fresh install. To avoid touching the concurrent session's own
+dev backend already running on port 8080, ran an isolated second backend (port 8090) plus a
+separate Metro instance, purely for this pass. **Migration 0022 applied cleanly with zero data
+loss** — the single highest-risk item in this phase. A real row was seeded (via a scoped,
+since-deleted scratch runner mirroring `AdminTokenMintRunner`'s own precedent — no real Anthropic
+key exists on this machine, and `MockAIProvider` cannot produce valid JSON, so this is the same
+category of workaround TASK-2401 already used once), confirmed reachable via a genuine
+unauthenticated `curl` to the new sync endpoint, confirmed landing in the device's local table
+after a real "Sync Now" tap, and **confirmed rendering correctly and visually** (screenshot) in
+Revise → Bookmarked — the "AI EXPLANATION" card, styled distinctly with a sparkle icon, appearing
+beneath the existing authored explanation. The negative case (no cached content shows nothing
+extra) was confirmed live, twice, before that.
+
+**A real gap found by this pass, not by review**: `AiExplanationCard` had only been wired into
+`practice/quiz.tsx` — `app/revise.tsx`, arguably the more natural place to review an AI
+explanation, had no such surface. Fixed in the same session (one import, one hook call, one
+render line); `tsc --noEmit` stayed clean throughout.
+
+**A real, unrelated, pre-existing bug found and disclosed, not fixed**: a duplicate-React-key
+warning in a `MULTIPLE_CHOICE` (checkbox) question's option rendering — while the warning is
+showing, the LogBox overlay's bounds genuinely overlap the Previous/Finish button row in the view
+hierarchy, and taps on that screen stop registering. Worth flagging for whoever next touches
+`MultiSelectOptionList.tsx` or the practice question list's key assignment.
+
+**Full cleanup performed**: the test bookmark removed via the app's own star button, all three
+seeded `ai_content` rows deleted, the scratch seed-runner file deleted (never committed), the
+minted admin token confirmed naturally expired, both scratch servers (backend 8090, Metro) and
+`adb reverse` stopped/removed, and every scratch screenshot/database file removed from the project
+root. **The concurrent session's own dev backend on port 8080 was confirmed healthy and completely
+untouched throughout.** Three stale local `ai_content` rows remain on this one emulator's device
+(will self-clear on the next real sync, full-replace semantics) — disclosed rather than
+force-cleaned, since the scratch backend that would serve the empty state is already stopped.
+
+**Next**: Phase 4 — the client-config/feature-flag endpoint and per-task admin control, then
+Phase 5's benchmark (which gates whether Phase 6, on-device inference, is ever built at all).
+
+**Phase 4 — client config + per-task flags done, same continued session ("ok continue with
+next tasks"). The cloud-tier half of this phase's original scope was not started.** Migration
+**V42** (`ai_task_flags` — one row per `AiTaskId`, `@Version` optimistic concurrency, mirroring
+`ai_content`/`ai_provider_configs`/`ai_settings`'s existing convention). Backend:
+`GET /api/client-config` (public, no auth — every one of the 9 known `AiTaskId`s always present,
+synthesizing `enabled: false` for any task with no row, so "unknown means off" holds identically
+for "never toggled" and "not yet synced"), `GET /api/admin/ai-task-flags` (list, admin),
+`PUT /api/admin/ai-task-flags/{taskId}` (toggle, admin, optimistic-locked). Mobile: local table
+`client_config_ai_tasks` (migration **0023**), `writeClientConfig()` full-replace folded into
+`writeReferenceData()`, a new `getLocalAiTaskFlags()` read helper
+(`mobile/src/db/clientConfigLocal.ts`), and `AiExplanationCard` now checks
+`flags.QUESTION_EXPLANATION === true` **before** even querying its cached content — the first AI
+surface gated on a flag, not just on content presence. Admin: a new "AI Tasks" table on
+`AiControlCenter.jsx` (independent of that page's existing provider-level settings) with one
+Enable/Disable button per task.
+
+**A real bug found by the new integration test, not by review, and fixed the same session**:
+the very first `PUT` for a task with no existing row succeeded, but an immediate second `PUT`
+reusing `expectedVersion: 0` also succeeded instead of conflicting — because Hibernate's
+`@Version` is bumped only by an `UPDATE`, never by a row's initial `INSERT`, so the freshly
+created row's real persisted version stayed 0. Fixed by having `AiTaskFlagService` explicitly
+seed `version = 1` on the creating save only (Hibernate honors an already-non-null version on a
+transient entity as its insert value rather than seeding its own default 0); existing-row
+updates are untouched and still auto-increment normally. Confirmed via a full re-run of
+`AiTaskFlagTest` against the real dev database after the fix: **6/6 pass** (it had been 5/6
+before, with exactly this case failing: "expected 409 CONFLICT but was 200 OK").
+
+**Verified**: backend compiles clean; `AiTaskFlagTest` 6/6 against the real dev database after
+the fix above; mobile `npx tsc --noEmit` clean, `npx expo lint` at the exact pre-existing
+9-problem baseline (none in any file this phase touched); admin `npm run build` clean, `oxlint`
+at its exact pre-existing one-warning baseline (an untouched file). QA: REQ-AI-016/REQ-AI-017,
+SCN-AI-033/034, TC-AI-033/034 — RTM → **93/175/192**. Task doc's own Implementation status
+section updated with the full account.
+
+**Then verified live on `emulator-5554`, end to end — the flag genuinely gates cached content,
+not just typechecks.** Same isolated-verification pattern as Phase 3 (a scratch backend on port
+8090 + a separate Metro instance; the concurrent session's own dev backend on port 8080 was
+confirmed untouched by PID both before and after). This device's local question bank is a
+frozen pre-question-pool-lift snapshot (the 2026-09-02 finding elsewhere in this file), so the
+question a fresh `ai_content` seed targets had to be one this device already had — found via a
+direct SQLite query, then bookmarked by editing a pulled copy of the local database and pushing
+it back (random practice sampling can't reliably land on one specific question, the same
+difficulty Phase 3 documented). Seeded one grounded, `PUBLISHED` row via a scratch,
+since-deleted seed runner (mirroring Phase 3's own precedent).
+
+**Negative case, confirmed by direct SQLite inspection of the device, not just a screenshot**:
+with the flag `0` and the real published content *also* synced locally, Revise → Bookmarked
+showed the ordinary authored explanation but genuinely no "AI EXPLANATION" card — a case Phase
+3 alone could never exercise, since the flag didn't exist yet. **Positive case, same device,
+same content, no re-seed**: enabled the flag via the admin endpoint, tapped Sync Now on-device,
+confirmed the local flag flipped to `1` via SQLite, and the exact same cached content then
+rendered correctly (sparkle icon, "AI EXPLANATION" label, the seeded explanation text).
+
+**A second real, minor finding, noted rather than fixed**: disabling the flag afterward returned
+a stale `version` in the PUT response body (one behind the true persisted value, confirmed via
+an immediate `GET`) — Spring's deferred flush means the in-memory entity hasn't been
+version-bumped yet when the response is built. **Not unique to this new code** —
+`AiContentReviewService` has the identical shape and would behave the same way; left as-is for
+consistency with that sibling rather than fixed asymmetrically in just one service. Neither this
+session's new admin "AI Tasks" table nor the existing provider-settings section trusts a
+mutation response's own version (both refetch), so this never surfaces to a real caller.
+
+**Full cleanup performed**: the seeded `ai_content` row and the scratch seed-runner file (never
+committed) deleted; the flag disabled again server-side; the test bookmark removed via the
+app's own "Remove bookmark" button (the one pre-existing real bookmark confirmed untouched); the
+minted admin token revoked; the scratch backend/Metro processes stopped (confirmed by PID); the
+`adb reverse` mapping removed; the app force-stopped.
+
+**Not done**: the cloud tier for uncached/personalized tasks (this phase's other original scope
+item) — genuinely separate work, not started; no admin console click-through in a real browser
+for the new "AI Tasks" table (build+lint clean, verified end-to-end via direct API calls and the
+on-device pass instead).
+
+**Next**: Phase 5's benchmark harness (which gates whether Phase 6's on-device inference is ever
+built) — nothing blocks starting it.
+
+---
+
+### Original Phase 0/1 entry (unchanged below)
+
+**User supplied a 52-section brief** asking for AI as a foundational capability — on-device small
+LLM, hybrid online/offline routing, personalization, mistake intelligence, admin control,
+evaluation and benchmarking — with its own §46/§51 requiring an architecture document before any
+code. Full detail: `reports/29-on-device-and-hybrid-ai/`; architecture: **`AI_ARCHITECTURE.md`**
+(new, at the repo root — deliberately one file rather than the eight the brief asked for, per
+`AI_RULES.md` §19).
+
+### The audit reordered the whole plan
+
+1. **Roughly a third of the brief is already shipped** — `AIService`/`AIProvider`/registry/retry/
+   usage (ADR-013) and the DB-backed admin control center with an encrypted key and audit log
+   (ADR-014). The brief's Phases 1 and 7 largely describe `backend/.../ai/`.
+2. **The deterministic layer already does the diagnosis.** `topicHealth` + `localRadar` (11 typed
+   reason codes, confidence, evidence levels) run offline on device today, and
+   `WeaknessRadarService`/`PreparePlanService` already answer "where am I weak" / "what should I
+   study". An LLM re-deriving that would be slower, costlier, non-deterministic and less accurate.
+3. **The question bank is finite and shared, and `question_translations.explanation` already
+   exists and is populated.** So the flagship feature needs no on-device model: generate once
+   server-side, review through the **existing** `ContentStatus`/`REVIEWER` queue, ship via the
+   sync pipeline as reference content. That reaches every device including low-RAM ones, costs
+   nothing per user, and puts a human between the model and the student — the real answer to the
+   brief's §23 hallucination requirement.
+4. **Telugu has no question content at all** (`mobile/src/practice/appLanguage.tsx:4` calls the
+   11-language picker a mock; the seed generator writes `en`/`hi` only). The brief's §33 assumes
+   otherwise.
+
+Also corrected: **no feature-flag/client-config channel exists anywhere** (verified by enumerating
+all 33 controllers plus two independent greps); `GET /api/progress` is unpaginated (~14k rows for
+the demo account) and unusable as AI context; and **the backend cannot host a model file** —
+`/downloads` is dead on Cloud Run, and both Cloudinary paths buffer in memory and cap at 20MB.
+
+**Recommendation, accepted: do NOT build on-device inference first.** It is Phase 6, gated on a
+Phase 5 benchmark — partly because model *distribution* (~$800 of egress per 10,000 devices for a
+700MB model) may cost more than the cloud inference it saves.
+
+**Three decisions taken by the project owner before any code changed** (`AI_ARCHITECTURE.md` §13):
+
+| # | Decision | Chosen |
+|---|---|---|
+| 1 | Build order | **Tier 2 first** — Phases 1-4; on-device becomes Phase 6 behind a benchmark gate |
+| 2 | Which corpus gets generated explanations | **Real content only** (~113 authored questions), not the ~35,700 synthetic load-test questions already slated for replacement |
+| 3 | Telugu | **Out of scope** until real Telugu question content exists |
+
+### Shipped: Phase 1, `packages/core/src/ai/`
+
+Platform-pure, consumed identically by `mobile/` and `web/`. **No schema change, no endpoint, no
+native code, no new dependency, no user-visible change.** `tasks.ts` (the registry — 9 tasks, each
+declaring tiers / personalization / cacheability / languages / entitled context / output ceiling /
+minimum device band / fallback, plus a self-consistency check), `context/` (typed minimal context
+plus builders that are pure projections over already-computed values), `schema/` (structured
+response types, validation, answer grounding), `router.ts` (tier resolution, capability gating,
+fall-through).
+
+Three design points worth keeping: **the model is never asked for the answer** (it is given the
+verified one, so a mismatch is mechanical rather than a judgement call); **the registry, not a
+comment, is what keeps Telugu out**; and **failures fall through in exactly one place**, so a host
+app cannot forget the rule at a call site.
+
+### Verified
+
+- `packages/core`: **155 tests pass** (up from 67 — 79 new), both typecheck configs clean.
+- **The registry guard caught a real inconsistency in this session's own work**:
+  `QUESTION_CLASSIFICATION` was declared `cacheable: true` with no `CACHED` tier. Fixed. Found by
+  the check, not by review.
+- **Drift detection proven, not assumed** — `registryViolations` is exercised against a
+  deliberately broken registry for every invariant, the same discipline used for
+  `check-topic-health-parity.js`.
+- `mobile/` `tsc` clean; `web/` `tsc` clean; parity script passes (35 constants agree); no
+  export-name collisions in the core barrel (109 names checked).
+- **QA per §3.21**: new `AI` module — 9 requirements, 22 scenarios, 22 manual test cases, all
+  `Not Executed` with no invented results. Every case cites a real, written, executed automated
+  test. RTM → **85/163/180**, plus a new `regression-ai` suite.
+
+### Not done
+
+- **Nothing beyond Phase 1 exists** — no `ai_content` table, no generation pass, no review queue,
+  no sync to device, no client-config endpoint, no model runtime. The router's local branch is
+  typed and gated but has no implementation behind it; it reports "unavailable" rather than
+  stubbing an answer.
+- **No AI output has ever been generated or validated end to end** — the validators are proven
+  against constructed payloads, not a real model response.
+- Every model size / latency / licensing / cost figure in `AI_ARCHITECTURE.md` comes from public
+  documentation and arithmetic over published pricing — **none of it is measured**. That is exactly
+  what Phase 5 exists to fix, and why Phase 6 is gated on it.
+- Nothing committed to git.
+
+### ⚠️ Concurrent writer detected — read before the next session
+
+**Another session was working in this repo at the same time as this one.** Evidence: this file's
+own TASK-2601 entry below (dated 2026-09-12) did not exist when this session started — its loaded
+copy said "Last updated: 2026-09-11" — and `qa/requirements/user-progress.yaml` appeared at 11:02
+after this session had already listed that directory and not seen it, with `questions.yaml`
+touched at 11:01. The whole `qa/` tree is **untracked** (`?? qa/`), and no QA generator writes to
+`requirements/` (checked). This session's RTM/dashboard/suite regeneration **incorporated** the
+other session's `user-progress` module rather than dropping it, and this entry was inserted above
+the TASK-2601 entry rather than over it — but concurrent writers to an untracked tree is a real
+way to lose work. **Committing `qa/` and this file is worth doing before anything else.**
+
+**Next:** Phase 2 — `ai_content` (migration **V41**), batch generation through the existing
+`AIService`, review/publish reusing `ContentStatus` + `REVIEWER`. Gated on the still-open LLM
+provider/budget decision in `reports/open-questions.md`, though only for a small one-time spend
+given decision 2.
+
+## Session of 2026-09-12 — TASK-2601 student web application: premium visual bar + Phase 1 (Practice)
+
+**Continuation of Phase 0** (recorded immediately below this entry, from 2026-09-11). Two
+things this session: (1) a standing visual-quality bar the user set explicitly — *"we are
+developing government exam preparation application. so css looks like should premium with
+proffessional... think in that [enterprise] level"* — saved to memory
+(`feedback_premium_visual_design`) so it persists past this session, and applied by rebuilding
+Phase 0's shell before Phase 1 added anything on top of it: real typography (Inter), a
+hand-written SVG icon set matching `admin/`'s exact convention (replacing every emoji), a
+brand mark, real elevation (mobile's shadow tokens were sitting unused in the shared package —
+now converted to CSS), and a left accent bar on the active nav item. (2) **Phase 1 (Practice)
+shipped and verified end-to-end against real production data.**
+
+**Two more shared-package extractions**, same pattern as Phase 0: `mobile/src/data/
+liveQuestions.ts` (the `/live`/`/counts`/`/mock-count`/`/mock-sample` wrappers) and
+`mobile/src/db/answerResolution.ts` (the letter-to-index resolver) → `packages/core/src/
+evaluation/` and `.../api/`. Mobile stayed at its exact typecheck/lint baseline throughout.
+
+**All nine question types render and score in the browser** via a single `AnswerDraft`
+discriminated union dispatched by `QuestionBody.tsx` — `OptionList`/`MultiSelectOptionList`/
+`FreeTextInput`/`MatchPairing`/`OrderingBuilder`, all click-driven (no drag dependency, same
+choice mobile made). Question groups (passages/media) render via a new `getQuestionGroups()`
+paging the bulk sync endpoint once. Sessions are held in `sessionStorage` (no local DB exists
+on web) and, when signed in, uploaded via the exact `POST /api/progress/sync` payload mobile
+uses — a real step further than the plan's minimum: web practice becomes a genuine row in the
+same account history mobile restores.
+
+**Two real bugs found by testing against real production data:**
+1. MATCH/ORDERING's reveal styling silently coloured nothing (right "Incorrect" banner, every
+   item left neutral grey) — a CSS cascade-order bug: two equal-specificity classes combined
+   on one element, and the wrong one was declared later in the stylesheet. Fixed by moving the
+   state-class block to the end of the file with a comment on why position is load-bearing.
+2. A stale Vite dependency cache (from mid-session additions to the linked `@sarkaritaiyaari/
+   core` package) made a real data fetch look like an infinite hang — diagnosed down to "the
+   promise never even reaches the network," fixed by restarting the dev server with `--force`.
+
+**A genuine, disclosed backend finding**: `GET /api/questions/counts?groupBy=topic` took
+30-60+ seconds against the real Neon dev database from a browser — correct data, real latency,
+not investigated further (no backend code changed this phase).
+
+**Verified against real, live production data, not synthetic fixtures** — driven via
+Playwright against the actual dev backend: browsed 11 real exams → SSC CGL (4 syllabus-scoped
+subjects, confirming scoping works) → a real 140-question topic → 10 real SINGLE_CHOICE
+questions answered with correct reveal and real explanations → Summary → **reload survived**
+→ zero console errors. Separately drove the real `[WAVEB-VERIFY]`/`[P3-VERIFY]` tagged content
+(the same content an earlier mobile session seeded): NUMERIC, FILL_BLANK, MATCH, ORDERING all
+scored and revealed correctly (including the corrected per-item colouring), and a real
+passage-grouped question rendered its full text, collapsed/expanded, and revealed correctly
+alongside the EN/HI content-language toggle. `tsc`/`oxlint`/`vite build` clean throughout
+(`web/` still zero lint warnings); core's test suite: **70 tests pass**.
+
+**Not verified**: MULTIPLE_CHOICE/TRUE_FALSE against live data (none existed in the topics
+walked; proven at the unit level only); the signed-in upload path against a real account (code
+matches the documented contract, not executed); no mobile emulator pass (explicit instruction
+this session); `web/` still not deployed anywhere.
+
+**QA per §3.21**: two existing QUESTIONS requirements gained `Web` in their `system` list; two
+new QUESTIONS requirements for the new browser behaviour; **a new `USER-PROGRESS` module** — a
+real, pre-existing gap in `qa/`'s original AUTH/CATALOG/QUESTIONS-only scope, added now
+because this phase is the first thing to touch it, scoped to exactly what was touched. RTM:
+73/136/153 → **76/141/158**, several new cases written as explicit regression guards for the
+two bugs above.
+
+**One thing noticed, not caused by this session and not investigated further**: partway
+through, `packages/core/src/index.ts` and `package.json` picked up an `./ai` export/module
+neither Phase 0 nor Phase 1 added — evidence of concurrent work elsewhere in this same shared
+package. Left untouched per this project's standing rule about not touching work that isn't
+yours; worth reconciling before either piece of work is committed.
+
+**Next**: Phase 2 (Mock Test) per the task doc's plan, or closing Phase 1's disclosed gaps
+(MULTIPLE_CHOICE/TRUE_FALSE live verification, the signed-in upload path, a deploy).
+
+## Session of 2026-09-11 (2) — TASK-2601 student web application: Phase 0
+
+## Session of 2026-09-11 (2) — TASK-2601 student web application: Phase 0 (foundation) done
+
+**User asked for a web version of the mobile app.** Scoped first, per `AI_RULES.md` §5 and
+§2's doc map, into `tasks/TASK-2601-student-web-application.md` — a 7-phase plan covering all
+30 mobile screens across 9 feature areas. Four parallel research passes over the real code
+grounded it; five decisions were taken by the project owner before any code changed:
+
+| # | Decision | Chosen |
+|---|---|---|
+| 1 | Scope | Full parity with mobile, delivered in phases |
+| 2 | Offline | **Online-only** — no local DB, no sync engine on web |
+| 3 | Screens | Responsive, **phone browsers included** |
+| 4 | Implementation | A **new React app in `web/`**, not `react-native-web` |
+| 5 | Shared logic | A **shared package via npm workspaces** |
+
+Decision 4 went against the cheaper option deliberately: `react-native-web` is already
+installed and `app.json` already declares `"web": {"output": "static"}`, so running the
+existing app in a browser was real — but it serves phone browsers worst (bundle size), fights
+the online-only decision (every content screen branches on local SQLite sync state), and would
+couple a shipped Android app to web layout changes. **Neither path had ever actually been
+run**; that is reasoning from configuration, not from an observed build.
+
+### The research finding that shaped everything
+
+**The backend needs far less work than expected.** The live endpoints built for the hybrid
+sync (`/questions/live`, `/counts`, `/mock-count`, `/mock-sample`) already cover the browsing
+and practice half, publicly. `mobile/src/api/` turned out to be portable almost verbatim — no
+React, no `react-native`, no `__DEV__`; its single Expo dependency was `config.ts` (~15 lines).
+**The real gap is history**: `GET /api/progress` returns a student's entire practice and mock
+history unpaginated (the demo account has 350 sessions + 85 attempts), which is fine as a
+one-time restore into SQLite and unusable as a browser screen's data source. Also: bookmarks,
+history and question groups are stored server-side without enough content to render, and
+diagnostic attempts have **no server representation at all**.
+
+### Shipped: `packages/core` (`@sarkaritaiyaari/core`)
+
+Five modules extracted with `git mv`: `evaluation/`, `intelligence/` (topicHealth + types),
+`i18n/` (catalogues + a new `translate.ts`), `design/` (tokens + palettes), `api/` (everything
+but `config.ts`). Root `package.json` declares `workspaces: ["packages/*", "web"]`; **`mobile/`
+and `admin/` stay independent npm projects** — mobile consumes core via a
+`file:../packages/core` dependency plus two `metro.config.js` additions. Effect on mobile's
+install: **577 → 578 packages, 13 added lockfile lines, nothing re-resolved.**
+
+The API client no longer imports a base URL — `configureApi({ baseUrl })` injects it and
+throws if a request is attempted first. Mobile calls it at module scope in `_layout.tsx`
+beside the existing `Sentry.init()`; web in `main.tsx`. Verified statically that no
+module-scope API call can run before either.
+
+The i18n split went further than moving catalogues: `lookup`, `interpolate`, the dotted-key
+`Paths<Catalogue>` typing and the English-fallback rule were pure functions trapped inside
+mobile's React context, and now live in core as `translatorFor()`. Web inherits the identical
+engine rather than a reimplementation.
+
+### Three real findings
+
+1. **`topicHealth.ts` referenced `__DEV__`, which does not exist in a browser.** It sits
+   inside the weight-sum assertion, so a web bundle would have thrown
+   `ReferenceError: __DEV__ is not defined` in exactly the situation that assertion exists to
+   diagnose. Now guarded with `typeof`; `web/` defines it via Vite so both platforms behave
+   identically. Found by the package's own type guard, before any web code existed.
+2. **The evaluator's Java/TypeScript duplication is no longer asymmetric.** Adding Vitest let
+   `sample-data/question-evaluator-fixtures.json` — 36 cases, previously asserted only by
+   `QuestionEvaluatorsTest` — run against the TypeScript evaluator too. **It passed all 36
+   unmodified**, so the mirror was genuinely correct; it is now proven. This is the first
+   automated JavaScript test in this repo.
+3. **The QA generator scripts had an undeclared `js-yaml` dependency and a module list
+   hardcoded in three separate files** — so adding a module produced no RTM row, no suite and
+   no test-data until someone found and edited all three. Both fixed (declared at the root;
+   list now derived from `qa/requirements/`). Found only because this task added a module.
+
+### Shipped: `web/`
+
+Vite + React 19 + TypeScript + `react-router-dom` + oxlint — the same stack as `admin/`, with
+TypeScript added because consuming the shared package requires it. `applyTheme()` flattens the
+**shared** palette into CSS custom properties, called synchronously before React renders so the
+first paint is correct; mobile's WeakMap-cached `useThemedStyles` is deliberately not ported
+(it exists because React Native has no cascade). Auth stores an opaque bearer token in
+localStorage and validates it with `fetchMe` on startup — the same choice `admin/` makes,
+because only the server knows a token was revoked. Shell is a sidebar from 1024px and a bottom
+bar below; **`More` does not survive translation** (it exists on mobile because a phone tab bar
+runs out of room), and `Progress` becomes a real destination rather than mobile's `href: null`.
+
+Contexts are split from providers so Fast Refresh works — a deliberate, documented deviation
+from `admin/`, whose single documented lint warning is exactly that pattern. **`web/` starts at
+zero lint warnings.**
+
+### Two real bugs found by looking at browser screenshots, not by building successfully
+
+1. **Account and Settings were completely unreachable on a phone** — they live in the sidebar
+   footer, hidden below 1024px, and the bottom bar was full with five primary destinations.
+   This is the same pressure that made the native app invent its "More" tab. Fixed with a
+   narrow-screens-only top bar at a 44px touch target; verified by actually tapping it at 390px
+   and landing on `/account`. Nothing else on screen looked wrong — only a width-specific check
+   finds this.
+2. **The Exams card rendered as a bare heading when the fetch failed** — neither the loading nor
+   the loaded branch matched.
+
+### CORS: verified for the first time, and it is strict
+
+The plan flagged that CORS "has never been exercised by a real cross-origin browser request"
+(`reports/14-cloud-run-deployment/`). It has now. `application.yml`'s dev default now lists
+both `http://localhost:5173` (admin) and `http://localhost:5174` (web).
+
+| Check | Result |
+|---|---|
+| Preflight from an allowlisted origin | `200`, origin echoed, `GET,POST,PUT,DELETE`, `authorization` allowed, `Max-Age: 1800` |
+| Preflight from an unlisted origin | **`403 Invalid CORS request`** |
+| `127.0.0.1:5174` while `localhost:5174` is listed | **`403`** — the "exact origin" warning is real and demonstrable |
+| Real browser | Chromium blocked it with the standard no-`Access-Control-Allow-Origin` error |
+
+**A stale backend was found on :8080, started 17:20 — before the CORS change.** Identified by
+PID/command line rather than assumed, and restarted only with the user's explicit approval.
+This is the same trap `reports/13-hybrid-online-sync/` documented once before: always check
+what is actually listening before trusting a health check as evidence of *your* build.
+
+### Verified
+
+- `packages/core`: **67 tests** (36 evaluator fixtures + platform-purity scans + guards), both
+  typecheck configs clean. **Both guards proven to fail correctly** — inverting one comparison
+  failed exactly the 4 cases that reach it while the 2 unattempted ones still passed; a
+  `localStorage` reference in shared source failed the purity test; a `process.env` reference
+  failed the library typecheck.
+- `mobile/`: `tsc` clean, `expo lint` at its **exact documented baseline (9 problems, 8 errors,
+  1 warning)**, and a real `expo export` Metro bundle (7MB Hermes) containing all five shared
+  modules. Non-ASCII needed a **UTF-16LE** byte search — a plain grep reports the Telugu
+  catalogue missing when it is present.
+- `web/`: `tsc` clean, `oxlint` **zero findings**, `vite build` succeeds (**305 kB JS / 95 kB
+  gzipped**). Driven in Chromium at 1280px and 390px: no horizontal overflow at either, CSS
+  variables resolve from the shared palette, dark mode flips `data-theme`, repaints to
+  `#0A0D14` and persists, routing works, **and against the restarted backend it renders all 11
+  real active exams cross-origin with zero console errors.**
+- `scripts/check-topic-health-parity.js`: path updated, passes (35 constants agree).
+- **QA per §3.21**: new `WEB` module — 9 requirements, 13 scenarios, 14 manual test cases, all
+  `Not Executed` with no invented results. RTM went 64/123/139 → **73/136/153**, plus a new
+  `regression-web` suite. Cases covering the shared package cite real automated tests; web UI
+  cases are `ManualOnly` (no browser-test runner exists in this project).
+
+### Not done
+
+- **`web/` has never been deployed.** Firebase Hosting was chosen and fully configured
+  (`firebase.json`, `.firebaserc`, `.github/workflows/web-deploy.yml`, `WEB-DEPLOY-SETUP.md`),
+  but the one-time setup needs the Firebase Console and `gcloud` — same category as the
+  backend's Workload Identity setup. The workflow fails fast until three repository variables
+  exist. **Whoever deploys must add the deployed origin to `APP_CORS_ALLOWED_ORIGINS`, and
+  Firebase serves both `*.web.app` and `*.firebaseapp.com`, which are different origins.**
+- No feature screens. Practice, Mock Test, Progress and Exams are honest placeholder routes
+  naming the phase that builds them.
+- Nothing committed to git.
+- **Left running:** a dev backend on :8080 (restarted with approval) and the web dev server on
+  :5174.
+
+**Next:** Phase 1 (Practice — the core loop and all question renderers). It is blocked on
+nothing; the signed-out behaviour decision was taken this session (browse and practise freely,
+session held for the visit in localStorage, prompt to sign in to keep history).
+
+## Session of 2026-09-11 — a manual QA test register (`qa/`), plus a standing rule to keep it current with every feature
+
+**Two things this session, the second building on a gap found while resuming.** Resuming
+from the 2026-09-09 AI Admin Control Center session, this session found the working tree
+already contained a git-native, file-based QA system (`qa/` + `scripts/qa/*.js`, dated
+2026-09-10 — built in a session this file never recorded, an oversight now corrected by
+this entry) — requirements &rarr; scenarios &rarr; test cases &rarr; suites &rarr;
+execution &rarr; defects, one YAML file per module, generated `traceability/RTM.md` and
+`reports/dashboard.md`. Scope so far: **AUTH, CATALOG, QUESTIONS only** — 64 requirements,
+123 scenarios, 139 manual test cases, 42% evidence-based automation coverage, **zero real
+executions** (the mechanism exists, genuinely unused). See `qa/README.md` for the full
+schema/rules. **Still not committed to git**, same as the AI Admin Control Center work
+from the prior session.
+
+**A browsable HTML view of the register was published as an Artifact** (raw YAML is
+unreadable at this volume) — a filterable Test Cases explorer (module/priority/
+automation/status/search, each case expandable to its steps table), Requirements/
+Scenarios views with click-through to their covering test cases, a Suites view, a
+Dashboard (coverage/automation/priority stats, generated from the live YAML at build
+time, not hand-typed), and the `_conflicts.md` doc-drift findings rendered readably. It's
+a point-in-time snapshot of the YAML, not a live view — regenerate it if `qa/*.yaml`
+changes materially enough to be worth re-browsing.
+
+**Standing rule adopted, per explicit user instruction, and written into the project's
+own binding rules (not just this file):** from now on, every feature/change/fix is a
+three-step cycle — **develop &rarr; write its manual test case(s) in `qa/` &rarr; automate
+it if a real test runner exists for that system.** This is now `AI_RULES.md` §3 rule 21
+(cross-referenced from §1's reading list, §2's doc-map table, and §5.4's Test step) and a
+new "Standing rule" section in `qa/README.md` — both should be read by any future session
+before this file's own history is needed. Automation stays scoped to what's actually
+possible today: backend (`mvn test`) only; mobile/admin have no automated test runner in
+this project (confirmed, not assumed), so their manual cases stay `ManualOnly` until one
+exists. The old "Phase 1/2/3 separate review gates" note in `qa/README.md` is explicitly
+superseded for day-to-day work — it applied only to this register's one-time initial bulk
+build, not to features going forward.
+
+**Not done this session:** no feature work happened to exercise the new rule yet — the
+next session that ships anything is the first real test of whether this sticks. The
+pre-existing `qa/` scope gap (everything beyond AUTH/CATALOG/QUESTIONS — question groups,
+question intelligence/ingestion, exam intelligence, exam guide, weakness radar, AI admin —
+is entirely unscoped) is unchanged; per the new rule, it now grows the next time any of
+those areas is touched, rather than needing its own dedicated catch-up session.
+
+## Session of 2026-09-09 (2) — AI Admin Control Center: DB-backed AI provider config, encrypted at rest, admin-managed from the Admin console
+
+**Same-day continuation of AI Foundation Phase 1** (recorded immediately below this entry).
+User asked for exactly the "next layer" Phase 1's own ADR-013 predicted: an authorized
+admin managing AI provider config (enable/disable, active provider, model, API key,
+connection test) from the Admin console, with **no backend redeploy** for a normal change
+— still explicitly **not** an AI-powered user feature. Per the request's own §46 and
+`AI_RULES.md` §5, a full architecture proposal was written and approved via
+`EnterPlanMode`/`ExitPlanMode` before any code changed, after two parallel research passes
+(admin frontend conventions; backend encryption/audit/versioning conventions — both
+confirmed **zero existing precedent** for reversible encryption, audit logging, or
+`@Version` anywhere in this codebase, so all three were built from scratch, narrowly
+scoped to this feature). Full detail: `reports/27-ai-admin-control-center/`; architecture:
+`system-design/06-ai-foundation.md`'s "AI Admin Control Center" section; decision record:
+new ADR-014 in `reports/architecture-decisions.md` (explicitly marking ADR-013's "no DB
+table" half superseded within hours of being written — a feature of the process working
+as intended, not a sign Phase 1 was wrong: Phase 1's own doc named this as "the deliberate
+next layer").
+
+**Shipped.** Migration V40: `ai_settings` (singleton, nullable `enabled`/`active_provider`
+— null means "no admin override yet, fall back to the static `app.ai.*` env-var config"),
+`ai_provider_configs` (one row per provider, created only once an admin saves one;
+`encrypted_api_key` plus `last_test_*` connection-test metadata), `ai_config_audit_log`
+(append-only, never a secret value). Both mutable tables carry `@Version` — this
+codebase's first use of optimistic locking.
+
+**The key architectural move**: a small port interface, `ai.config.DynamicAiConfigSource`,
+lives in the pluggable `ai` package; the new `service.AiConfigurationService` (DB-aware,
+flat `service/` package, same as every other admin CRUD service) implements it; a new
+`ai.config.AiConfigResolver` consults it. `AIProviderRegistry`, `AIServiceImpl`, and
+`ClaudeProvider` (all three, already-shipped Phase 1 files) were updated to read through
+`AiConfigResolver` instead of `AIProperties` directly, for exactly the fields an admin can
+change — an admin's saved override always wins, `AIProperties` is the fallback. **This is
+what makes Phase 1's env-var-only mode keep working completely unchanged** for any
+deployment that never touches the admin UI. New `ai.config.AiCredentialCipher`
+(AES-256-GCM via the JDK's own `javax.crypto`, zero new dependency; key from
+`app.ai.encryption-key`/`AI_ENCRYPTION_KEY`, **never stored in the database**). New
+`AIProvider.validateCredentials(ProviderCredentialOverride)` default method so "Test
+Connection" can check a not-yet-saved draft key without persisting or logging it —
+`ClaudeProvider` overrides it, sharing its HTTP call with `listModels()`/
+`validateCredentials()` via one new `fetchModels(apiKey, baseUrl)` helper (a small,
+mechanical refactor: `send()` gained an explicit `baseUrl` parameter). New
+`controller/AiConfigurationController` (`/api/admin/ai/*`, five endpoints, mirroring
+`IngestionAdminController`'s exact shape — `requireAdmin` on every method). One new
+`GlobalExceptionHandler` mapping (`ObjectOptimisticLockingFailureException` → 409).
+
+**Two real bugs found only by running the app, not by review or a clean `mvn compile`.**
+(1) A genuine Spring bean cycle at context-startup:
+`AiConfigurationService` → `AIProviderRegistry` → (its own registered bean) `ClaudeProvider`
+→ `AiConfigResolver` → `DynamicAiConfigSource` → back to `AiConfigurationService`. A real
+mutual dependency, not a mistake — fixed with `@Lazy` on `AiConfigurationService`'s
+`AIProviderRegistry` constructor parameter, the standard narrow fix for exactly this
+shape, no package restructuring needed. (2) The **exact same trap this project's own
+history already documents once** (an earlier Epic L session's derived `deleteByExamCode`):
+a custom derived `deleteByChangedByEmail` repository method threw
+`TransactionRequiredException` when called from a plain (non-transactional) JUnit
+`@AfterEach` — fixed with `@Transactional` directly on the repository interface method,
+with a doc comment naming the trap so it's recognized instantly next time, not
+re-diagnosed.
+
+**Validation (§14 of the request)**: enabling AI for a non-`MOCK` provider with no API key
+configured anywhere (DB or static fallback) is rejected with a clear 400. Model validity
+is deliberately *not* strictly enforced at save time — every registered provider either
+needs no credential (`MOCK`) or has a safe built-in default model (`ClaudeProvider`'s
+`claude-sonnet-5`).
+
+**Admin console**: new `pages/AiControlCenter.jsx` under a new `Settings` sidebar group
+(the first one this app has had) — status badges, a settings form (`<select>`s for
+Enabled/Active Provider, matching this app's existing Active/Inactive convention, since no
+toggle/switch component exists anywhere in it), one card per **registered** provider only
+(never a hardcoded list — `MOCK`/`CLAUDE` today, `OPENAI`/`GEMINI` simply don't appear
+until a provider bean exists for them), a masked API-key field (always blank on load, a
+"Configured ✓ — leave blank to keep the current key" note — the first masked-secret field
+this admin app has ever had), Test Connection (existing verb→verb-ing disabled-button
+idiom), a read-only audit-log table, and an honest "Usage is logged to application logs
+only — a queryable dashboard isn't built yet" note rather than invented numbers (per the
+request's own explicit §23 instruction not to fabricate figures).
+
+**Verified.** New unit tests (`AiConfigResolverTest`, `AiCredentialCipherTest` — plain
+JUnit, no Spring, no database) cover DB-override-vs-static-fallback precedence and
+AES-GCM round-tripping (including a fresh random IV per call and fail-fast on a
+wrong-length key). New real-database integration test `AiConfigurationTest` (extends
+`AbstractIntegrationTest`) — **12 tests, 0 failures, 0 errors** against the real Neon dev
+database: admin/non-admin/unauthenticated on every endpoint; enabling `MOCK` needs no key;
+enabling `CLAUDE` with no key anywhere is rejected 400, succeeds once a key is saved; a
+stale `expectedVersion` is rejected 409; a saved key is confirmed encrypted at rest by
+reading the raw repository row directly (asserted neither equal to nor containing the raw
+key string) — not just trusting the API response; a blank `apiKey` on a second save leaves
+the previously-encrypted value byte-for-byte unchanged; `Test Connection` against `MOCK`
+succeeds sub-second with no real network; the audit log shows the expected rows, and every
+response body plus every audit summary is explicitly asserted to never contain the raw
+test key. Phase 1's existing AI unit tests were updated for the new constructor shapes
+(a no-override `DynamicAiConfigSource` test double, keeping them plain-JUnit and
+Spring-free) and re-confirmed passing unchanged. Admin `npm run build` clean; `oxlint` at
+the exact pre-existing baseline (1 warning, untouched file) — zero new issues from any
+new/changed frontend file. `mvn compile` clean throughout, including both times the two
+bugs above were found and fixed.
+
+**Full existing backend regression suite re-run in the background, confirmed clean**:
+**287 tests, 0 failures, 0 errors, 2 skipped** (the two real-Anthropic-API tests,
+correctly skipped), `BUILD SUCCESS` — confirms the three previously-shipped Phase 1 files
+this phase touches (`AIProviderRegistry`, `AIServiceImpl`, `ClaudeProvider`) caused zero
+regression anywhere else in the suite.
+
+**A real Playwright click-through completed against a real dev backend — the standard
+this project holds every admin-console phase to, not skipped here.** Minted a 45-minute
+admin token via the existing `AdminTokenMintRunner` fixture (the same harmless
+`automated-test-admin@sarkaritaiyaari.internal` account this project already uses for
+this exact purpose), started a real dev backend (`mvn spring-boot:run`) and admin dev
+server (`npm run dev`), and drove the real page in a real browser: the API key field
+rendered correctly (`type="password"`, always blank, stays blank after a reload); Save
+Settings persisted for real (confirmed via the audit log rendering `AI_ENABLED`/
+`ACTIVE_PROVIDER_CHANGED` rows); **Test Connection against MOCK succeeded instantly
+(0ms, no network) and against CLAUDE made a genuinely real HTTPS call to Anthropic's
+actual API** (no key configured) and correctly surfaced Anthropic's own real response —
+"x-api-key header is required" — a safe, accurate, non-leaking failure message. Zero
+browser console errors throughout.
+
+**A real bug found by this pass, not by review**: the top-level "Settings saved."
+success banner was never cleared when a subsequent Test Connection ran, staying
+misleadingly visible indefinitely. Fixed (`setNotice(null)` added to
+`handleTestConnection`, matching the other two handlers) and re-verified clean.
+
+**Full cleanup performed afterward**: the AI settings row and both providers' test-only
+rows were reset via `AiConfigurationTest`'s own fixture cleanup (same admin-fixture
+email), the minted token was revoked, both scratch Playwright scripts were deleted
+(never committed), and both dev servers were stopped — confirmed by matching PID to
+command line exactly (not assumed) and by both ports refusing connections afterward.
+
+**This closes the AI Admin Control Center phase.** Full detail:
+`reports/27-ai-admin-control-center/ai-admin-control-center.md`.
+
+**Next**: the first real AI-powered feature itself, which should depend only on
+`AIService` per `system-design/06-ai-foundation.md` — none is scoped yet.
+
+
+## Session of 2026-09-09 — AI Foundation Phase 1: a provider-independent internal AI infrastructure layer, no AI feature
+
+**User asked for a general-purpose AI infrastructure layer** — explicitly **not** an AI
+feature (no chatbot, no doubt-solver, no question generator, no study planner, no
+user-facing anything). The point: a future feature calls one internal `AIService`, never a
+vendor SDK directly, so switching Claude → OpenAI/Gemini six months from now means writing
+one new provider class and flipping a config value, not touching any feature's own code.
+Per the brief's own explicit process and `AI_RULES.md` §5, a full architecture proposal was
+written and approved via `EnterPlanMode`/`ExitPlanMode` before any code changed. Full
+detail: `reports/26-ai-foundation/ai-foundation-phase1.md`; architecture doc:
+`system-design/06-ai-foundation.md`; decision record: ADR-013 in
+`reports/architecture-decisions.md`.
+
+**Confirmed genuinely greenfield first** — grepped the whole backend for
+`claude|anthropic|openai|gemini`, zero hits — then read the actual existing patterns
+before designing anything: `ingestion.NoticeSourceAdapter`'s `Map<String, Interface>`
+registry keyed by bean name (not an `if/else` chain), `ReminderService`'s and the
+`ingestion` package's outbound-HTTP convention (the JDK's own `java.net.http.HttpClient`,
+no SDK dependency), `AuthService`/`CorsConfig`/`CloudinaryConfig`'s `@Value`-per-field
+config style (not `@ConfigurationProperties`), `GlobalExceptionHandler`'s one-handler-per-
+exception-type shape, and `TopicHealthScoringTest`/`QuestionEvaluatorsTest`'s "plain JUnit,
+no Spring context" precedent for pure-logic services.
+
+**Shipped, zero new Maven dependency, zero DB migration, zero HTTP endpoint.** New
+`backend/src/main/java/.../ai/` package: `AIService`/`AIServiceImpl` (the one interface a
+future feature depends on; the impl is the *only* place that resolves the active provider,
+retries a transient failure, enforces `app.ai.enabled` as a hard off-switch, and records a
+usage event); `AIRequest`/`AIResponse`/`AIMessage`/`AIUsage`/`AIModelInfo`/
+`AICredentialStatus` (the internal, provider-agnostic vocabulary); `AICapability`/
+`ResponseFormat` (the capability and structured-output extension points, §11/§12 of the
+brief — not enforced beyond a hint yet); `provider/AIProvider` (the interface every vendor
+implements, with a default `stream()` that throws `UnsupportedOperationException` — §13's
+streaming extension point); `provider/AIProviderRegistry` (the registry, mirroring
+`ingestion.NoticeSourceAdapter` exactly); `provider/claude/ClaudeProvider` (a real
+implementation against Anthropic's Messages API, plain REST over `java.net.http.HttpClient`
+— no SDK — with every HTTP status/error body translated into the right normalized
+exception); `provider/mock/MockAIProvider` (deterministic, zero network — the default
+`app.ai.provider` value, so a fresh checkout with no key still exercises the whole path);
+`config/AIProperties` (every `app.ai.*` value via constructor `@Value`); `exception/`
+(`AIException` + 7 subtypes — auth/rate-limit/provider-unavailable/invalid-request/
+model-not-found/timeout/unknown-provider/configuration — wired into
+`GlobalExceptionHandler` via one new pattern-matching-`switch` handler, so the first future
+controller that calls `AIService` gets correct HTTP statuses for free); `usage/`
+(`AIUsageEvent`/`AIUsageRecorder`/`LoggingAIUsageRecorder` — a structured log line today,
+swappable for a DB-backed recorder later via a `@Primary` bean with zero change to
+`AIServiceImpl`).
+
+**Retry, centralized in `AIServiceImpl` only**: rate-limit/provider-unavailable/timeout are
+retried with exponential backoff (500ms base, doubling, capped at 4s) up to
+`app.ai.max-retries` (default 2) additional attempts; every other error type — bad
+credentials, malformed request, unknown model/provider, disabled-by-config — fails
+immediately. No provider implementation contains its own retry loop.
+
+**Config** (`app.ai.*`/`AI_*` env vars, all with safe defaults — `enabled: false`,
+`provider: MOCK`): added to `application.yml` and to `backend/application-local.yml.example`
+(commented, alongside the existing Cloudinary/Epic-L blocks). The real, gitignored
+`application-local.yml` was deliberately **not** touched — it's the user's own local
+secrets file.
+
+**No database table for provider config or usage — a real, considered decision (ADR-013),
+not an oversight.** Storing an API key in Postgres needs encryption at rest, which this
+project has no infrastructure for, and building that purely to support an admin UI nobody
+has asked for yet is exactly the "table because it sounds useful" mistake the brief's own
+§21 warns against. Usage tracking has no consumer yet either — nothing calls `AIService`.
+Both have a documented, zero-friction extension point for when a real feature needs them.
+
+**A real bug caught by the compiler, not by review**: `AICredentialStatus`'s first draft
+had a static factory method named `valid()` — colliding with its own `boolean valid` record
+component, which Java's record rules reject outright (an accessor-name collision with a
+static method never compiles). Renamed to `AICredentialStatus.ok()`.
+
+**Verified.** `mvn compile` clean. New unit tests — `AIServiceImplTest`/
+`AIProviderRegistryTest`, plain JUnit, no Spring context, no database, matching the
+`TopicHealthScoringTest` precedent — **9 tests, 0 failures**: a successful call through
+`MockAIProvider` with a usage event recorded; retry-then-succeed; no-retry on an
+authentication failure; retries genuinely exhausted after the configured attempt count;
+`app.ai.enabled=false` throwing `AIConfigurationException` **without the provider ever
+being invoked** (asserted via a call counter, not just an exception type); an empty
+`messages` list rejected. A third test class, `ClaudeProviderRealApiTest`, makes a **real**
+call to the real Anthropic API and is gated
+`@EnabledIfEnvironmentVariable(named="AI_REAL_PROVIDER_TESTS", matches="true")` — correctly
+skipped (not failed) with no env var set, both standalone and inside the full suite.
+**Genuinely not run against the real Anthropic API this session** — no real API key was
+available in this environment; this is disclosed as a real gap, not assumed to work.
+Grepped the full diff for `api-key`/`API_KEY` occurrences to confirm the key value never
+appears in a log line, DTO, or test assertion — clean.
+
+**Full existing backend regression suite re-run at the end, confirmed clean**: **266 tests,
+0 failures, 0 errors, 2 skipped** (the two real-Anthropic-API tests, correctly skipped with
+no `AI_REAL_PROVIDER_TESTS` env var set), `BUILD SUCCESS` — run against the real Neon dev
+database. This phase's only touch of an existing file was one additive `@ExceptionHandler`
+method in `GlobalExceptionHandler` plus additive config blocks, and the result confirms
+zero regression anywhere else.
+
+**Explicitly not built, matching the brief's own scope-control section exactly**: no
+`/api/ai/*` endpoint, no admin UI, no mobile change, no navigation change;
+`OpenAIProvider`/`GeminiProvider` (the interface makes either a one-file addition — see
+`system-design/06-ai-foundation.md`'s "how to add a provider" — not built now); no
+JSON-schema-enforced structured output or tool-use pipeline; no real streaming
+implementation, only the extension point.
+
+**Documentation updated in the same change**: new `system-design/06-ai-foundation.md`;
+`system-design/README.md`'s file table and `AI_RULES.md`'s "(5 short files)" line (→ "6")
+both corrected in place per §6; new ADR-013; this session's own
+`reports/26-ai-foundation/ai-foundation-phase1.md`.
+
+**Next, whenever the first real AI feature is actually scoped**: it should depend only on
+`AIService`, expose its own narrow endpoint (never a generic `/api/ai/*` passthrough), and
+tag its `AIRequest.metadata` with a `"feature"` key for usage tracking. Treat any user- or
+scraped-supplied content placed into `systemPrompt`/`messages` as untrusted input, per the
+security note in `system-design/06-ai-foundation.md`.
 
 ## Session of 2026-09-07 — TASK-2501 Question Intelligence & Ingestion System: Phase 1 + Phase 2 shipped and verified end-to-end
 

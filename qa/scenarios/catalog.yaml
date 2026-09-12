@@ -1,0 +1,488 @@
+# CATALOG module — test scenarios (Phase 2)
+#
+# Every scenario references one or more qa/requirements/catalog.yaml requirement_ids.
+# Scenarios flagged `status: Ambiguous` correspond to a requirement whose own `ambiguity`
+# field is REQUIRES CLARIFICATION, or a gap recorded in qa/requirements/_conflicts.md — their
+# expected result is deliberately NOT pre-asserted; execution establishes actual behavior.
+
+- id: SCN-CATALOG-001
+  requirement_ids: [REQ-CATALOG-001]
+  category: Positive
+  title: Full CRUD round trip for an exam with a unique code
+  objective: >
+    Verify create -> get -> update -> delete all succeed for an exam with a unique code, and
+    the code (once set) acts as the stable identity throughout.
+  systems: [Backend, Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-002
+  requirement_ids: [REQ-CATALOG-001]
+  category: Negative
+  title: Duplicate exam code rejected
+  objective: Verify creating a second exam with an already-used code is rejected with 400.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-003
+  requirement_ids: [REQ-CATALOG-001, REQ-CATALOG-021]
+  category: Authorization
+  title: Exam read/write authorization split
+  objective: >
+    Verify GET /api/exams (active list) succeeds with no token; GET /api/exams/all, GET
+    /api/exams/{code} (single), and all writes require a valid admin token, rejecting
+    anonymous (401) and student (403) callers.
+  systems: [Backend, Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-004
+  requirement_ids: [REQ-CATALOG-002]
+  category: Boundary
+  title: Blank difficulty/badge normalizes to null; unknown code rejected
+  objective: >
+    Verify sending an empty string for difficulty or badge stores null (not an error), while
+    a non-blank, unrecognized code is rejected with 400.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-005
+  requirement_ids: [REQ-CATALOG-003]
+  category: Ambiguous
+  title: Exam category accepts any string with no server-side enum enforcement
+  objective: >
+    Verify any string value for `category` (including one outside the admin UI's fixed
+    dropdown) is accepted and persisted without validation via a direct API call.
+  systems: [Backend]
+  status: Ambiguous
+  notes: >
+    REQ-CATALOG-003's own ambiguity field asks whether the backend SHOULD enforce the admin
+    dropdown's fixed list. This scenario documents current (accepted) behavior as-is; it is
+    not asserting this is the intended long-term contract.
+
+- id: SCN-CATALOG-006
+  requirement_ids: [REQ-CATALOG-004]
+  category: Positive
+  title: Exam Discovery sort options produce correct ordering
+  objective: >
+    Verify each of the six documented sort values (DEADLINE, EXAM_DATE, NEWLY_ANNOUNCED,
+    RECENTLY_UPDATED, POPULAR, ALPHABETICAL) returns results in the documented order.
+  systems: [Backend, Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-007
+  requirement_ids: [REQ-CATALOG-004]
+  category: Positive
+  title: CLOSING_SOON status filter returns only open exams within the 14-day window
+  objective: >
+    Verify status=CLOSING_SOON returns exams whose status is APPLICATION_OPEN/
+    APPLICATION_CLOSING_SOON AND whose deadline is within 14 days, and no others.
+  systems: [Backend, Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-008
+  requirement_ids: [REQ-CATALOG-004]
+  category: Validation
+  title: Unknown sort value rejected
+  objective: Verify an unrecognized `sort` query value returns 400.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-009
+  requirement_ids: [REQ-CATALOG-005]
+  category: Positive
+  title: Exam syllabus set/get round trip, including clearing
+  objective: >
+    Verify PUT-ing a list of subjectIds then GET-ing returns exactly those subjects, and
+    PUT-ing an empty array clears the syllabus.
+  systems: [Backend, Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-010
+  requirement_ids: [REQ-CATALOG-005]
+  category: Validation
+  title: Unknown subjectId in syllabus payload rejected wholesale
+  objective: Verify one unknown subjectId in the PUT payload rejects the whole request, no partial apply.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-011
+  requirement_ids: [REQ-CATALOG-006]
+  category: Positive
+  title: Exam topic map wholesale replace, weightage round-trips including null
+  objective: >
+    Verify PUT-ing a topic map with mixed weighted/unweighted entries round-trips correctly,
+    and an omitted weightagePercent returns null, not 0.
+  systems: [Backend, Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-012
+  requirement_ids: [REQ-CATALOG-006]
+  category: Validation
+  title: Duplicate or unknown topicId in topic map rejected
+  objective: Verify a topic map payload with a duplicate topicId, or an unknown one, is rejected 400.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-013
+  requirement_ids: [REQ-CATALOG-007]
+  category: Positive
+  title: Subject CRUD round trip
+  objective: Verify create -> get -> update for a subject succeeds and is correctly ordered in the public list.
+  systems: [Backend, Admin, Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-014
+  requirement_ids: [REQ-CATALOG-007]
+  category: Negative
+  title: Case-insensitive duplicate subject name rejected
+  objective: Verify creating a subject whose name differs only in case from an existing one is rejected 400.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-015
+  requirement_ids: [REQ-CATALOG-008]
+  category: Positive
+  title: Topic CRUD round trip, per-subject name scoping
+  objective: >
+    Verify topic create/get/update works, and two topics with the same name under different
+    subjects are both valid (uniqueness is per-subject, not global).
+  systems: [Backend, Admin, Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-016
+  requirement_ids: [REQ-CATALOG-008]
+  category: Negative
+  title: Topic hierarchy validation rejects self-parent, cross-subject parent, and cycles
+  objective: >
+    Verify a topic cannot be its own parent, cannot have a parent from a different subject,
+    and cannot be assigned a parent that would create even an indirect cycle.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-017
+  requirement_ids: [REQ-CATALOG-009]
+  category: Positive
+  title: "Topic prerequisites: null leaves unchanged, empty array clears"
+  objective: >
+    Verify omitting prerequisiteTopicIds on an update preserves existing prerequisites, while
+    sending an explicit empty array clears them.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-018
+  requirement_ids: [REQ-CATALOG-009]
+  category: Negative
+  title: Indirect prerequisite cycle across 3+ topics rejected
+  objective: Verify a prerequisite assignment that would create an indirect (not just direct) cycle is rejected.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-019
+  requirement_ids: [REQ-CATALOG-010]
+  category: Positive
+  title: Language active/all split
+  objective: >
+    Verify deactivating a language removes it from the public active list while it remains
+    visible in the admin /all list.
+  systems: [Backend, Admin, Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-020
+  requirement_ids: [REQ-CATALOG-011]
+  category: Positive
+  title: A newly created difficulty level is immediately usable with no code change
+  objective: >
+    Verify a freshly admin-created difficulty level can be assigned to a question and renders
+    correctly (color/icon/order) with zero application code change.
+  systems: [Backend, Admin, Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-021
+  requirement_ids: [REQ-CATALOG-011]
+  category: Negative
+  title: Duplicate difficulty level code rejected
+  objective: Verify creating a second difficulty level with an already-used code is rejected 400.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-022
+  requirement_ids: [REQ-CATALOG-012]
+  category: Positive
+  title: Paper types have no active/inactive split — all always appear
+  objective: >
+    Verify GET /api/paper-types is unfiltered — every paper type, including one that would
+    otherwise be "retired," always appears (there is no active flag to hide it).
+  systems: [Backend, Admin, Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-023
+  requirement_ids: [REQ-CATALOG-013]
+  category: Positive
+  title: Two stage versions with the same name coexist via distinct versionLabel
+  objective: >
+    Verify creating a second stage with an identical name but a different versionLabel (or
+    non-overlapping effectivity window) succeeds, and the server-resolved `active` flag is
+    correct for each.
+  systems: [Backend, Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-024
+  requirement_ids: [REQ-CATALOG-013]
+  category: Negative
+  title: "Identical stage name+versionLabel (including both blank) rejected"
+  objective: Verify creating a stage with an exact name+versionLabel duplicate (including blank==blank) is rejected 400.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-025
+  requirement_ids: [REQ-CATALOG-013]
+  category: Validation
+  title: "effectiveFrom after effectiveTo rejected"
+  objective: Verify a stage with effectiveFrom later than effectiveTo is rejected with the documented message.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-026
+  requirement_ids: [REQ-CATALOG-014]
+  category: Positive
+  title: Paper's mockable flag echoes live from its paper type
+  objective: >
+    Verify a paper's `mockable` field reflects the current value of its referenced paper
+    type, and changing the paper type's mockability retroactively affects the paper's echoed
+    value.
+  systems: [Backend, Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-027
+  requirement_ids: [REQ-CATALOG-014]
+  category: Negative
+  title: Duplicate paper name within the same stage rejected; allowed across stages
+  objective: >
+    Verify two papers with the same name under the same stage are rejected, but the same name
+    under two different stages is allowed.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-028
+  requirement_ids: [REQ-CATALOG-015]
+  category: Positive
+  title: Section without its own timing/marks inherits the paper's effective values
+  objective: >
+    Verify a section left with durationMinutes/marksCorrect/marksWrong null reports
+    sectionallyTimed: false and the paper's own values as effectiveMarksCorrect/
+    effectiveMarksWrong.
+  systems: [Backend, Admin, Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-029
+  requirement_ids: [REQ-CATALOG-015]
+  category: Positive
+  title: Section with its own override reports sectionallyTimed correctly
+  objective: >
+    Verify a section given its own durationMinutes reports sectionallyTimed: true and its own
+    override values as effective, not the paper's.
+  systems: [Backend, Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-030
+  requirement_ids: [REQ-CATALOG-015]
+  category: Validation
+  title: Section with empty subjectIds rejected
+  objective: Verify creating a section with subjectIds:[] is rejected 400.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-031
+  requirement_ids: [REQ-CATALOG-016]
+  category: Integration
+  title: "Saving a section auto-adds its subjects to the exam syllabus (one-way)"
+  objective: >
+    Verify saving a section referencing a subject not currently in the exam's syllabus causes
+    that subject to appear in a subsequent GET /api/exams/{code}/subjects call, and deleting
+    that section afterward does NOT shrink the syllabus back down.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-032
+  requirement_ids: [REQ-CATALOG-017]
+  category: Positive
+  title: Deleting a stage cascades to its papers and sections with zero orphans
+  objective: >
+    Verify deleting a stage removes all its descendant papers and sections, with no orphaned
+    rows left behind (confirmed via a direct API check after deletion).
+  systems: [Backend, Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-033
+  requirement_ids: [REQ-CATALOG-001, REQ-CATALOG-017]
+  category: Ambiguous
+  title: Deleting an exam that still has stages/structure — behavior undetermined
+  objective: >
+    Determine what actually happens when DELETE /api/exams/{code} is called on an exam that
+    still has stages/papers/sections referencing it: a clean 400, a raw 500 from an
+    unenforced FK violation, or silent success. No source documents the expected outcome.
+  systems: [Backend]
+  status: Ambiguous
+  notes: >
+    Per qa/requirements/_conflicts.md §3 — this is a genuine, previously-unresolved gap, not
+    a guess. Do NOT pre-assert a specific status code as "expected"; record whatever
+    execution actually observes and flag it for a product/engineering decision on the correct
+    contract, not as a pass/fail against an invented expectation.
+
+- id: SCN-CATALOG-034
+  requirement_ids: [REQ-CATALOG-018]
+  category: Positive
+  title: Admin structure read returns every stage version with correct active flags
+  objective: >
+    Verify that for an exam with 2+ versions of the same stage, the admin-only
+    GET /api/exams/{examCode}/structure returns all of them, each with a correctly
+    server-resolved `active` flag.
+  systems: [Backend, Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-035
+  requirement_ids: [REQ-CATALOG-019]
+  category: Positive
+  title: Public structure sync excludes any superseded stage version
+  objective: >
+    Verify GET /api/exam-structures never includes a superseded (non-current) stage version
+    for an exam whose pattern has changed — every returned stage's `active` is effectively
+    true.
+  systems: [Backend, Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-036
+  requirement_ids: [REQ-CATALOG-019]
+  category: Boundary
+  title: Active exam with zero defined structure still appears with an empty stages array
+  objective: >
+    Verify an active exam that has no stage/paper/section defined at all still appears in
+    GET /api/exam-structures with stages: [], not omitted.
+  systems: [Backend, Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-037
+  requirement_ids: [REQ-CATALOG-020]
+  category: Positive
+  title: Exam badge active/all split
+  objective: >
+    Verify an inactive badge appears in GET /api/exam-badges/all but not in the public
+    active-only list.
+  systems: [Backend, Admin, Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-038
+  requirement_ids: [REQ-CATALOG-021]
+  category: Authorization
+  title: Full catalog public-vs-admin auth sweep
+  objective: >
+    Verify every documented public catalog endpoint (exams, subjects, topics, difficulty
+    levels, paper types, exam badges, exam structures, exam discovery) returns 200 with no
+    Authorization header, and every write/admin-only-read endpoint returns 401 anonymous /
+    403 non-admin — a single cross-cutting pass across the whole module rather than
+    re-verifying auth per entity (already covered individually by SCN-CATALOG-003 and
+    similar per-entity scenarios).
+  systems: [Backend]
+  status: Ready
+  notes: >
+    Deliberately broader/cross-cutting rather than duplicating each entity's own admin-gate
+    check — see the Phase 2 report's duplication-avoidance notes.
+
+- id: SCN-CATALOG-039
+  requirement_ids: [REQ-CATALOG-022]
+  category: Offline
+  title: Full catalog sync enables complete offline Practice/Mock Test browsing
+  objective: >
+    Verify that after a full reference-data sync and going fully offline, Practice's subject
+    list, the Levels screen, and Mock Test's paper list all render correctly using only local
+    SQLite data, with no live network dependency.
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-040
+  requirement_ids: [REQ-CATALOG-023]
+  category: Positive
+  title: Sectionally-timed paper's Start screen shows accurate limits and correct total
+  objective: >
+    Verify the Mock Test Start screen displays each section's own time limit correctly and
+    the total countdown equals their sum, for a paper with sectionally-timed sections.
+  systems: [Mobile]
+  status: Ready
+  notes: >
+    Do NOT write this scenario to assert per-section lock/auto-advance enforcement during the
+    actual test — REQ-CATALOG-023 documents that as a confirmed, disclosed gap, not something
+    to test as if it were built. This scenario only covers the documented display/total-
+    duration correctness.
+
+- id: SCN-CATALOG-041
+  requirement_ids: [REQ-CATALOG-024]
+  category: Positive
+  title: Admin structure editor shows inherited values correctly, never a blank cell
+  objective: >
+    Verify a section left without its own duration/marks shows "shares paper"/"inherited" in
+    the admin editor, not a blank field.
+  systems: [Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-042
+  requirement_ids: [REQ-CATALOG-024, REQ-CATALOG-017]
+  category: Recovery
+  title: Deleting a stage through the admin UI leaves zero orphaned papers/sections
+  objective: >
+    Verify the admin structure editor's delete-with-confirmation flow, when used on a stage,
+    results in zero orphaned papers/sections — the UI-level confirmation of the backend
+    cascade already covered by SCN-CATALOG-032.
+  systems: [Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-CATALOG-043
+  requirement_ids: [REQ-CATALOG-020]
+  category: Ambiguous
+  title: An exam's badge/difficulty code that no longer resolves — client fallback undetermined
+  objective: >
+    Determine what mobile/admin actually render for an exam whose `badge` (or `difficulty`)
+    code was valid at assignment time but has since been deactivated/removed from the
+    lookup table — no source documents an expected fallback (blank pill? hidden badge?
+    a rendering error?).
+  systems: [Backend, Mobile, Admin]
+  status: Ambiguous
+  notes: >
+    Per REQ-CATALOG-020's ambiguity field — record the actual observed rendering rather than
+    asserting a guessed expectation.

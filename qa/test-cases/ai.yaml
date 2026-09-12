@@ -1,0 +1,1220 @@
+# AI module — manual test cases
+#
+# Every test case links to one scenario id and one or more requirement ids. A test case is a
+# reusable DEFINITION — it is never overwritten by an execution. Expected results are derived from
+# the linked requirement's acceptance_criteria/error_conditions/edge_conditions, never from current
+# implementation behaviour. Every case below is freshly generated and UNEXECUTED: actual_result is
+# empty, status is Not Executed, defect_id is empty. No tester, date, build or result is invented.
+#
+# `system` is recorded as Mobile because the mobile app is the first and primary consumer of this
+# shared layer (AI_ARCHITECTURE.md §12 ships it there in Phase 3); the code itself lives in
+# packages/core and is consumed by web/ identically, which is why the requirements declare both.
+#
+# TC-AI-001 through TC-AI-022 cover Phase 1 (packages/core, `npm run test --workspace
+# @sarkaritaiyaari/core`). TC-AI-023 onward cover Phase 2 (the backend generation + review
+# pipeline) and cite real backend test classes run against the actual dev database
+# (`mvn -f backend/pom.xml test -Dtest=...`), confirmed passing in this change: 12/12 in
+# AiContentIntegrationTest, 2/2 in AiAnswerGroundingTest, 10/10 in AiContentValidationTest.
+#
+# automation_status is evidence-based. Every Automated reference below names a test that was
+# actually written and run in this change. Phase 1's layer is pure logic with no I/O, no UI and
+# no database, which is why it is unusually automatable; Phase 2's backend tests are real
+# integration tests against the shared dev database. Sync (Phase 3) and any on-device runtime
+# (Phase 6) will need manual coverage of their own once built.
+
+- id: TC-AI-001
+  requirement_ids: [REQ-AI-001]
+  scenario_id: SCN-AI-001
+  system: Mobile
+  module: AI
+  feature: AI task registry
+  title: The shipped registry reports zero self-inconsistencies
+  objective: >
+    Confirm every declared task satisfies all registry invariants, so no AI capability can exist
+    in a self-contradictory state.
+  preconditions:
+    - "packages/core dependencies installed"
+  test_data: "n/a — the registry is a source constant"
+  test_environment: "Developer machine"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Run `npm run test --workspace @sarkaritaiyaari/core`"
+      expected: "The suite passes with no registry violation reported to stderr"
+    - step: 2
+      action: "Import the registry in a scratch script and print the result of the consistency check"
+      expected: "An empty list of violations"
+  expected_result: >
+    The registry is internally consistent. (REQ-AI-001 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "packages/core/src/ai/tasks.test.ts (it 'is internally consistent')"
+
+- id: TC-AI-002
+  requirement_ids: [REQ-AI-001]
+  scenario_id: SCN-AI-002
+  system: Mobile
+  module: AI
+  feature: AI task registry
+  title: The registry self-check fails when an invariant is deliberately broken
+  objective: >
+    Confirm the consistency check is real rather than merely configured, by violating each
+    invariant in turn and observing a specific complaint.
+  preconditions:
+    - "The suite passes before the change"
+  test_data: "n/a"
+  test_environment: "Developer machine"
+  priority: High
+  severity: Major
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "Mark any cacheable task `personalized: true` without removing `cacheable: true`"
+      expected: "The suite fails, naming 'personalized tasks can never be cacheable'"
+    - step: 2
+      action: "Add a language code with no question content (for example `te`) to any task"
+      expected: "The suite fails, naming that language as having no question content"
+    - step: 3
+      action: "Reorder a task's tiers so they no longer follow resolution order"
+      expected: "The suite fails, naming the expected order"
+    - step: 4
+      action: "Revert every change and re-run"
+      expected: "All tests pass again"
+  expected_result: >
+    Each invariant is genuinely enforced, not merely declared. (REQ-AI-001 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    A guard nobody has watched fail is not known to work — the same discipline used to prove
+    scripts/check-topic-health-parity.js.
+  automation_status: Automated
+  automation_reference: "packages/core/src/ai/tasks.test.ts (describe 'registryViolations detects drift')"
+
+- id: TC-AI-003
+  requirement_ids: [REQ-AI-001, REQ-AI-003]
+  scenario_id: SCN-AI-003
+  system: Mobile
+  module: AI
+  feature: AI task registry
+  title: No task is both personalized and cacheable
+  objective: >
+    Confirm no declared task could produce a per-student answer that is then cached and served to
+    a different student.
+  preconditions: []
+  test_data: "n/a"
+  test_environment: "Developer machine"
+  priority: Critical
+  severity: Critical
+  test_type: Security
+  steps:
+    - step: 1
+      action: "For every task in the registry, read `personalized` and `cacheable`"
+      expected: "No task has both set to true"
+    - step: 2
+      action: "For every personalized task, read its tier list"
+      expected: "None includes the CACHED tier"
+  expected_result: >
+    A per-student answer can never enter a shared cache. (REQ-AI-003 business_rule)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Separated from TC-AI-001 because the consequence is a cross-user data leak rather than an
+    inconsistent declaration.
+  automation_status: Automated
+  automation_reference: "packages/core/src/ai/tasks.test.ts (it 'keeps every personalized task out of the cache')"
+
+- id: TC-AI-004
+  requirement_ids: [REQ-AI-002]
+  scenario_id: SCN-AI-004
+  system: Mobile
+  module: AI
+  feature: Language scoping for AI answers
+  title: A Telugu request is refused rather than answered in another language
+  objective: >
+    Confirm a request in a language with no question content is refused with a specific reason and
+    that no tier handler runs.
+  preconditions:
+    - "The task under test is enabled and all its required context is supplied"
+  test_data: "Language code 'te'; any enabled question task"
+  test_environment: "Developer machine"
+  priority: Critical
+  severity: Critical
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "Route a question-explanation request with languageCode 'te'"
+      expected: "An UNAVAILABLE result with reason LANGUAGE_NOT_SUPPORTED, whose detail names 'te'"
+    - step: 2
+      action: "Inspect whether any tier handler was invoked"
+      expected: "No handler ran — the refusal happened before any work or cost"
+  expected_result: >
+    The request is refused, not translated and not silently answered in English.
+    (REQ-AI-002 acceptance_criteria; AI_ARCHITECTURE.md §13 decision 3)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "packages/core/src/ai/router.test.ts (it 'refuses a language the task has no content for')"
+
+- id: TC-AI-005
+  requirement_ids: [REQ-AI-002]
+  scenario_id: SCN-AI-005
+  system: Mobile
+  module: AI
+  feature: Language scoping for AI answers
+  title: No task advertises a language the app has no questions in
+  objective: >
+    Confirm the supported-language list matches the languages real question content exists in.
+  preconditions: []
+  test_data: "n/a"
+  test_environment: "Developer machine"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Read the module's supported-language constant"
+      expected: "Exactly English and Hindi"
+    - step: 2
+      action: "For every task, confirm each declared language is in that constant"
+      expected: "No task declares anything else"
+  expected_result: >
+    Language support is registry-enforced, not a comment. (REQ-AI-002 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Revisit when real Telugu question content is authored — this case should then be updated
+    deliberately rather than quietly relaxed.
+  automation_status: Automated
+  automation_reference: "packages/core/src/ai/tasks.test.ts (it 'offers no language that has no question content')"
+
+- id: TC-AI-006
+  requirement_ids: [REQ-AI-003]
+  scenario_id: SCN-AI-006
+  system: Mobile
+  module: AI
+  feature: Context minimisation
+  title: A shared task never receives learner context
+  objective: >
+    Confirm context assembly drops learner state for a task that did not declare it, even when the
+    caller supplies it.
+  preconditions: []
+  test_data: "A question context and a learner context, both well-formed"
+  test_environment: "Developer machine"
+  priority: Critical
+  severity: Critical
+  test_type: Security
+  steps:
+    - step: 1
+      action: "Assemble context for a shared question task, supplying question, learner, exam and topic parts"
+      expected: "Only the question part is present; learner, exam and topic are absent"
+    - step: 2
+      action: "Assemble context for a personalized task, supplying the same parts"
+      expected: "Question and learner are present; the parts it did not declare are absent"
+  expected_result: >
+    A task receives only what it declared, so a shared answer cannot carry one student's state.
+    (REQ-AI-003 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "packages/core/src/ai/context/build.test.ts (it 'drops context the task did not ask for')"
+
+- id: TC-AI-007
+  requirement_ids: [REQ-AI-003]
+  scenario_id: SCN-AI-007
+  system: Mobile
+  module: AI
+  feature: Context minimisation
+  title: Learner context contains no identifier and no raw history
+  objective: >
+    Confirm the learner projection carries only aggregates, and that reason codes are capped at the
+    ranked head.
+  preconditions: []
+  test_data: "A radar topic with more reason codes than the cap"
+  test_environment: "Developer machine"
+  priority: Critical
+  severity: Critical
+  test_type: Security
+  steps:
+    - step: 1
+      action: "Build a learner context from a radar topic and list its keys"
+      expected: >
+        No user id, email, name, topic id, topic name, per-question history, prerequisite list or
+        recommended action is present
+    - step: 2
+      action: "Serialise the learner context and search it for the topic's name"
+      expected: "The topic name does not appear"
+    - step: 3
+      action: "Count the reason codes carried through"
+      expected: "At most the documented cap, preserving the highest-ranked ones"
+  expected_result: >
+    Only aggregates already computed by the topic-health layer reach a prompt.
+    (REQ-AI-003 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    This is the case that fails if someone widens the type to "just pass the whole radar topic".
+  automation_status: Automated
+  automation_reference: "packages/core/src/ai/context/build.test.ts (it 'carries no identifier and no raw history', it 'caps reason codes, keeping the ranked head')"
+
+- id: TC-AI-008
+  requirement_ids: [REQ-AI-003, REQ-AI-006]
+  scenario_id: SCN-AI-008
+  system: Mobile
+  module: AI
+  feature: Context minimisation
+  title: A task missing required context is refused by name
+  objective: >
+    Confirm a task whose declared context is absent is refused with the missing kinds named, before
+    any tier runs.
+  preconditions: []
+  test_data: "An empty context"
+  test_environment: "Developer machine"
+  priority: High
+  severity: Major
+  test_type: ErrorHandling
+  steps:
+    - step: 1
+      action: "Route an enabled task with an empty context"
+      expected: "An UNAVAILABLE result with reason MISSING_CONTEXT naming each missing kind"
+    - step: 2
+      action: "Inspect whether any tier handler was invoked"
+      expected: "No handler ran"
+  expected_result: >
+    Missing context is reported rather than prompted around. (REQ-AI-003 error_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "packages/core/src/ai/router.test.ts (it 'refuses when required context is missing')"
+
+- id: TC-AI-009
+  requirement_ids: [REQ-AI-004]
+  scenario_id: SCN-AI-009
+  system: Mobile
+  module: AI
+  feature: Answer grounding
+  title: An explanation of the verified answer is accepted
+  objective: >
+    Confirm a well-formed explanation asserting the verified answer passes validation intact.
+  preconditions: []
+  test_data: "A question with a known verified answer and a matching explanation payload"
+  test_environment: "Developer machine"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Validate an explanation whose answer equals the question's verified answer"
+      expected: "Validation succeeds and the payload is returned unchanged"
+  expected_result: >
+    A correct explanation is not obstructed by the safety check. (REQ-AI-004 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "packages/core/src/ai/schema/validate.test.ts (it 'accepts an explanation of the verified answer')"
+
+- id: TC-AI-010
+  requirement_ids: [REQ-AI-004]
+  scenario_id: SCN-AI-010
+  system: Mobile
+  module: AI
+  feature: Answer grounding
+  title: An explanation asserting a different answer is rejected
+  objective: >
+    Confirm a model that explained the wrong option is caught before a student could see it.
+  preconditions: []
+  test_data: "A question whose verified answer is one option, and a payload asserting another"
+  test_environment: "Developer machine"
+  priority: Critical
+  severity: Critical
+  test_type: Security
+  steps:
+    - step: 1
+      action: "Validate an explanation whose answer is a different option from the verified one"
+      expected: "Validation fails with code UNGROUNDED_ANSWER"
+    - step: 2
+      action: "Read the failure detail"
+      expected: "It names both the claimed answer and the verified answer, so the failure is diagnosable"
+  expected_result: >
+    A wrong answer can never be rendered as an explanation. (REQ-AI-004 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    The most consequential check in this module.
+  automation_status: Automated
+  automation_reference: "packages/core/src/ai/schema/validate.test.ts (it 'rejects an explanation of a different answer')"
+
+- id: TC-AI-011
+  requirement_ids: [REQ-AI-004]
+  scenario_id: SCN-AI-011
+  system: Mobile
+  module: AI
+  feature: Answer grounding
+  title: Letter and option-text answers validate against each other
+  objective: >
+    Confirm the grounding check tolerates form differences that real data genuinely contains,
+    without becoming lenient about substance.
+  preconditions: []
+  test_data: "One question storing a letter answer, one storing option text"
+  test_environment: "Developer machine"
+  priority: High
+  severity: Major
+  test_type: Compatibility
+  steps:
+    - step: 1
+      action: "Validate a payload answering with option text against a question storing a letter"
+      expected: "Validation succeeds"
+    - step: 2
+      action: "Validate a payload answering with a letter against a question storing option text"
+      expected: "Validation succeeds"
+    - step: 3
+      action: "Validate a payload answering with a leading option label, for example 'B) Kolkata'"
+      expected: "Validation succeeds"
+    - step: 4
+      action: "Validate a payload answering with a different option's letter"
+      expected: "Validation fails with UNGROUNDED_ANSWER — tolerance of form must not become tolerance of substance"
+  expected_result: >
+    Both stored answer forms in real data validate correctly, and a genuinely wrong answer still
+    fails. (REQ-AI-004 edge_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "packages/core/src/ai/schema/validate.test.ts (describe 'answerMatches', it 'accepts option text when the stored answer is a letter')"
+
+- id: TC-AI-012
+  requirement_ids: [REQ-AI-005]
+  scenario_id: SCN-AI-012
+  system: Mobile
+  module: AI
+  feature: Structured output validation
+  title: Malformed model output is rejected as a value, never thrown
+  objective: >
+    Confirm each malformed-output class produces a distinguishable failure code and that nothing
+    raises an exception.
+  preconditions: []
+  test_data: "Unparseable text, a bare string, a null, an array, a wrong-task payload, a payload with a blank required field"
+  test_environment: "Developer machine"
+  priority: Critical
+  severity: Critical
+  test_type: ErrorHandling
+  steps:
+    - step: 1
+      action: "Parse unparseable text"
+      expected: "A failure with code NOT_JSON; no exception raised"
+    - step: 2
+      action: "Parse JSON wrapped in a fenced code block"
+      expected: "Parsing succeeds — the fence is tolerated"
+    - step: 3
+      action: "Validate a string, a number, null and an array in turn"
+      expected: "Each fails with code NOT_AN_OBJECT"
+    - step: 4
+      action: "Validate a payload whose own task id differs from the requested task"
+      expected: "Failure with code WRONG_TASK — it is rejected, not re-routed"
+    - step: 5
+      action: "Validate a payload with a missing required field, then one with a whitespace-only field"
+      expected: "MISSING_FIELD and EMPTY_FIELD respectively"
+  expected_result: >
+    No malformed output can crash a caller, and each failure is distinguishable.
+    (REQ-AI-005 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "packages/core/src/ai/schema/validate.test.ts (describe 'parseAiJson', describe 'shape validation')"
+
+- id: TC-AI-013
+  requirement_ids: [REQ-AI-005]
+  scenario_id: SCN-AI-013
+  system: Mobile
+  module: AI
+  feature: Structured output validation
+  title: Closed enums and numeric ranges are enforced
+  objective: >
+    Confirm an invented enum value and an out-of-range number are both rejected.
+  preconditions: []
+  test_data: "A mistake-analysis payload with an invented type; a classification payload with confidence above 1"
+  test_environment: "Developer machine"
+  priority: High
+  severity: Major
+  test_type: Validation
+  steps:
+    - step: 1
+      action: "Validate a mistake analysis whose type is outside the taxonomy"
+      expected: "Failure with code UNKNOWN_ENUM"
+    - step: 2
+      action: "Validate a mistake analysis using a real taxonomy member"
+      expected: "Validation succeeds"
+    - step: 3
+      action: "Validate a classification with confidence 1.4, then with a non-numeric confidence"
+      expected: "OUT_OF_RANGE and WRONG_TYPE respectively"
+  expected_result: >
+    A model cannot invent a new category or an impossible score. (REQ-AI-005 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    An open-ended mistake type would be unusable for the aggregate reporting this taxonomy exists
+    to enable.
+  automation_status: Automated
+  automation_reference: "packages/core/src/ai/schema/validate.test.ts (describe 'closed enums and ranges')"
+
+- id: TC-AI-014
+  requirement_ids: [REQ-AI-005]
+  scenario_id: SCN-AI-014
+  system: Mobile
+  module: AI
+  feature: Structured output validation
+  title: A hint revealing the answer is rejected, without false positives
+  objective: >
+    Confirm the hint check catches genuine leakage while leaving legitimate hints alone.
+  preconditions: []
+  test_data: "A method-based hint, a hint naming the answer, and a numeric-answer question"
+  test_environment: "Developer machine"
+  priority: Medium
+  severity: Medium
+  test_type: Validation
+  steps:
+    - step: 1
+      action: "Validate a hint that points at the method without naming the answer"
+      expected: "Validation succeeds"
+    - step: 2
+      action: "Validate a hint that names the answer outright"
+      expected: "Failure with code HINT_REVEALS_ANSWER"
+    - step: 3
+      action: "For a question whose answer is a short number, validate a hint that mentions that number incidentally"
+      expected: "Validation succeeds — short tokens are deliberately not checked"
+    - step: 4
+      action: "Validate a hint containing the answer as part of a longer word"
+      expected: "Validation succeeds — matching is on whole words only"
+  expected_result: >
+    Genuine leakage is caught and legitimate hints are not obstructed.
+    (REQ-AI-005 edge_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Both halves matter — a check that rejects good hints gets switched off, and a false reject only
+    costs a regeneration whereas a leak costs the feature its purpose.
+  automation_status: Automated
+  automation_reference: "packages/core/src/ai/schema/validate.test.ts (describe 'hints must not give the answer away')"
+
+- id: TC-AI-015
+  requirement_ids: [REQ-AI-006]
+  scenario_id: SCN-AI-015
+  system: Mobile
+  module: AI
+  feature: Tier routing order
+  title: The cheapest capable tier serves the request
+  objective: >
+    Confirm tiers are attempted in the fixed order and that no later tier runs once one succeeds.
+  preconditions:
+    - "The task is enabled and its context is complete"
+  test_data: "Handlers for ground truth, cache and cloud, each returning a distinguishable value"
+  test_environment: "Developer machine"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Route with all three handlers succeeding"
+      expected: "Served from GROUND_TRUTH; neither the cache nor the cloud handler is invoked"
+    - step: 2
+      action: "Route with ground truth declining"
+      expected: "Served from CACHED; the cloud handler is not invoked"
+    - step: 3
+      action: "Route with ground truth and cache both declining"
+      expected: "Served from the GENERATED tier"
+  expected_result: >
+    Work is never paid for at a more expensive tier than necessary. (REQ-AI-006 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "packages/core/src/ai/router.test.ts (describe 'tier order')"
+
+- id: TC-AI-016
+  requirement_ids: [REQ-AI-006]
+  scenario_id: SCN-AI-016
+  system: Mobile
+  module: AI
+  feature: Tier routing order
+  title: The local model is tried before the cloud
+  objective: >
+    Confirm that with both available, the local path runs first and the cloud is not billed.
+  preconditions:
+    - "A capable device with a model installed, and the cloud enabled and reachable"
+  test_data: "Local and cloud handlers, each returning a distinguishable value"
+  test_environment: "Developer machine (handlers simulated); on-device once Phase 6 exists"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Route a generating task with both a local and a cloud handler, both able to succeed"
+      expected: "Served by the local provider; the cloud handler is not invoked"
+    - step: 2
+      action: "Route again with the local handler declining"
+      expected: "Served by the cloud provider"
+  expected_result: >
+    Local is the default and cloud is the escalation, not the reverse.
+    (REQ-AI-006 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Guards against the intuitive-but-wrong framing "offline? then local", which bills for work the
+    device could have done itself.
+  automation_status: Automated
+  automation_reference: "packages/core/src/ai/router.test.ts (it 'tries the local model before the cloud when both are available')"
+
+- id: TC-AI-017
+  requirement_ids: [REQ-AI-006]
+  scenario_id: SCN-AI-017
+  system: Mobile
+  module: AI
+  feature: Tier routing order
+  title: A deterministic-only task never reaches a model
+  objective: >
+    Confirm a task already answered by existing deterministic intelligence does not call a model
+    even when one is available.
+  preconditions: []
+  test_data: "A study-plan request with both a deterministic and a cloud handler supplied"
+  test_environment: "Developer machine"
+  priority: Critical
+  severity: Major
+  test_type: DataIntegrity
+  steps:
+    - step: 1
+      action: "Route a deterministic-only task with both handlers supplied"
+      expected: "Served from the DETERMINISTIC tier; the cloud handler is not invoked"
+  expected_result: >
+    Work already done deterministically does not silently migrate to an LLM.
+    (REQ-AI-006 edge_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Protects the architecture's central finding — weakness, mastery and the study plan are already
+    computed on device, offline, and testably.
+  automation_status: Automated
+  automation_reference: "packages/core/src/ai/router.test.ts (describe 'deterministic-only tasks')"
+
+- id: TC-AI-018
+  requirement_ids: [REQ-AI-007]
+  scenario_id: SCN-AI-018
+  system: Mobile
+  module: AI
+  feature: Graceful degradation
+  title: A tier that throws does not stop the ladder
+  objective: >
+    Confirm an exception from one handler is caught, recorded, and followed by the next tier.
+  preconditions: []
+  test_data: "A ground-truth handler that throws and a cache handler that succeeds"
+  test_environment: "Developer machine"
+  priority: Critical
+  severity: Critical
+  test_type: ErrorHandling
+  steps:
+    - step: 1
+      action: "Route with the first handler throwing"
+      expected: "The request is served by the next tier; no exception escapes"
+    - step: 2
+      action: "Read the attempt trail"
+      expected: "The failed tier is recorded with status ERROR and the thrown message preserved"
+  expected_result: >
+    A failing tier degrades the result, never the caller. (REQ-AI-007 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "packages/core/src/ai/router.test.ts (it 'continues past a handler that throws')"
+
+- id: TC-AI-019
+  requirement_ids: [REQ-AI-007]
+  scenario_id: SCN-AI-019
+  system: Mobile
+  module: AI
+  feature: Graceful degradation
+  title: Total failure yields a calm unavailable result naming the fallback
+  objective: >
+    Confirm that when every handler fails or is absent, the caller gets an unavailable result with
+    a fallback instruction rather than an error.
+  preconditions: []
+  test_data: "A handler set where every handler throws; and an empty handler set"
+  test_environment: "Developer machine"
+  priority: Critical
+  severity: Critical
+  test_type: Recovery
+  steps:
+    - step: 1
+      action: "Route with every handler throwing"
+      expected: "An UNAVAILABLE result with reason ALL_TIERS_DECLINED; no exception escapes"
+    - step: 2
+      action: "Route with no handlers supplied at all"
+      expected: "An UNAVAILABLE result; every tier is recorded as SKIPPED, which is a normal outcome"
+    - step: 3
+      action: "Read the fallback field on an unavailable result for a question task"
+      expected: "It names the authored-explanation fallback, so the UI knows what to show instead"
+  expected_result: >
+    AI unavailability is never an error state for the user. (REQ-AI-007 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Every AI surface renders beside content that is already correct, so the worst acceptable
+    outcome is an absent enhancement.
+  automation_status: Automated
+  automation_reference: "packages/core/src/ai/router.test.ts (it 'survives every handler throwing', it 'reports the task's fallback so the UI knows what to show instead')"
+
+- id: TC-AI-020
+  requirement_ids: [REQ-AI-008]
+  scenario_id: SCN-AI-020
+  system: Mobile
+  module: AI
+  feature: Per-task feature flags default off
+  title: A task with no flag is disabled
+  objective: >
+    Confirm an absent flag behaves exactly as an explicitly false one, and that no handler runs.
+  preconditions: []
+  test_data: "An empty flag map; a flag map with the task explicitly false"
+  test_environment: "Developer machine"
+  priority: High
+  severity: Major
+  test_type: Authorization
+  steps:
+    - step: 1
+      action: "Route an otherwise valid request with an empty flag map"
+      expected: "An UNAVAILABLE result with reason TASK_DISABLED"
+    - step: 2
+      action: "Route again with the task's flag explicitly false"
+      expected: "The same refusal, and no tier handler is invoked"
+    - step: 3
+      action: "Ask whether the task can be attempted at all, with an empty flag map"
+      expected: "False — so the UI does not offer an action guaranteed to fail"
+  expected_result: >
+    Unknown means off, so a config that failed to load cannot dark-launch a capability.
+    (REQ-AI-008 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    The offline case is the normal case: no client-config channel exists yet, so failing closed is
+    the only safe default.
+  automation_status: Automated
+  automation_reference: "packages/core/src/ai/router.test.ts (it 'treats an absent flag as disabled', it 'treats an explicitly disabled flag as disabled')"
+
+- id: TC-AI-021
+  requirement_ids: [REQ-AI-009]
+  scenario_id: SCN-AI-021
+  system: Mobile
+  module: AI
+  feature: Device-tier gating for the local model
+  title: A device below the task's band never loads a model
+  objective: >
+    Confirm the local path is skipped on an under-specified device and when no model is installed,
+    and that routing continues to the cloud.
+  preconditions: []
+  test_data: "A low-band device profile; a capable device with no model installed"
+  test_environment: "Developer machine (profiles simulated); real low-end Android once Phase 6 exists"
+  priority: High
+  severity: Critical
+  test_type: Compatibility
+  steps:
+    - step: 1
+      action: "Route a generating task on a low-band device with a local handler supplied"
+      expected: "The local handler is not invoked; the skip records the device band and the required band"
+    - step: 2
+      action: "Confirm what served the request"
+      expected: "The cloud provider, since routing continued past the skip"
+    - step: 3
+      action: "Route on a capable device that has no model installed"
+      expected: "The local handler is not invoked; the skip says no local model is installed"
+  expected_result: >
+    A model is never loaded on a device that cannot carry it. (REQ-AI-009 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Severity is Critical even though priority is High: if this fails on a real low-memory device
+    the operating system may kill the whole app, not just the AI feature.
+  automation_status: Automated
+  automation_reference: "packages/core/src/ai/router.test.ts (describe 'capability gating')"
+
+- id: TC-AI-022
+  requirement_ids: [REQ-AI-009, REQ-AI-006]
+  scenario_id: SCN-AI-022
+  system: Mobile
+  module: AI
+  feature: Device-tier gating for the local model
+  title: A low-end offline device can still be offered a non-generating task
+  objective: >
+    Confirm the architecture's central offline claim: a task with a non-generating tier stays
+    attemptable with no network, no model and low memory, while a generate-only task does not.
+  preconditions: []
+  test_data: "A low-band, offline device profile with no model and the cloud disabled"
+  test_environment: "Developer machine (profile simulated); real low-end Android once Phase 3 ships"
+  priority: Critical
+  severity: Major
+  test_type: Offline
+  steps:
+    - step: 1
+      action: "Ask whether the question-explanation task can be attempted on that profile"
+      expected: "True — it has non-generating tiers that work offline on any device"
+    - step: 2
+      action: "Ask whether a generate-only personalized task can be attempted on the same profile"
+      expected: "False — there is no way to generate, and the UI should not offer it"
+    - step: 3
+      action: "Ask again for the generate-only task with the cloud enabled and online"
+      expected: "True"
+  expected_result: >
+    Offline AI on a low-end device means the non-generating tiers, not a local model — and the
+    layer reports that honestly rather than offering an action that must fail.
+    (REQ-AI-009 offline_behavior)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    This case is the reason the flagship feature is placed in the cached tier rather than behind a
+    local model.
+  automation_status: Automated
+  automation_reference: "packages/core/src/ai/router.test.ts (describe 'canAttemptTask')"
+
+- id: TC-AI-023
+  requirement_ids: [REQ-AI-010]
+  scenario_id: SCN-AI-023
+  system: Backend
+  module: AI
+  feature: Batch generation
+  title: Generation produces a grounded DRAFT row from the configured provider
+  objective: >
+    Confirm a real generate call, end to end, against a real question and a real (test-fixture)
+    AI provider, persists a DRAFT row whose payload answer matches the question's verified answer.
+  preconditions:
+    - "Caller holds an ADMIN token"
+    - "A test-fixture AI provider is configured active via the AI Admin Control Center"
+    - "A question exists with an English translation and a known correct answer"
+  test_data: "A question with correctAnswer=\"A\", option 0 = \"Kolkata\""
+  test_environment: "Backend (dev, real Neon database), real HTTP round trip"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST /api/admin/ai-content/generate with taskId=QUESTION_EXPLANATION, languageCode=en, subjectIds=[questionId]"
+      expected: "200 OK; generated=1, failedValidation=0, failedProvider=0; items[0].outcome=GENERATED"
+    - step: 2
+      action: "GET /api/admin/ai-content/{contentId} using the returned contentId"
+      expected: >
+        200 OK; contentStatus=DRAFT; questionId matches; payload.answer equals the question's
+        verified correct answer exactly as stored
+  expected_result: >
+    A real generation call produces a persisted, grounded DRAFT row. (REQ-AI-010 acceptance_criteria;
+    REQ-AI-011 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "AiContentIntegrationTest.generate_producesAGroundedDraftFromTheConfiguredProvider"
+
+- id: TC-AI-024
+  requirement_ids: [REQ-AI-010]
+  scenario_id: SCN-AI-024
+  system: Backend
+  module: AI
+  feature: Batch generation
+  title: A second generate call for the same question is skipped, not duplicated
+  objective: >
+    Confirm calling generate twice for the same (task, question, language) does not create a
+    second row.
+  preconditions:
+    - "A content row already exists for the question/task/language"
+  test_data: "n/a"
+  test_environment: "Backend (dev, real Neon database)"
+  priority: Critical
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST /generate for a question, then POST /generate again for the same question/task/language"
+      expected: "The second call reports generated=0, skippedExisting=1"
+  expected_result: >
+    Generation is never spent twice on the same (task, subject, language).
+    (REQ-AI-010 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "AiContentIntegrationTest.generate_skipsAQuestionThatAlreadyHasContent"
+
+- id: TC-AI-025
+  requirement_ids: [REQ-AI-010]
+  scenario_id: SCN-AI-025
+  system: Backend
+  module: AI
+  feature: Batch generation
+  title: Generation rejects an unsupported language and an unknown task
+  objective: >
+    Confirm a "te" language request and an unrecognized taskId are both refused with 400 before
+    any provider call is made.
+  preconditions: []
+  test_data: "languageCode=\"te\"; taskId=\"NOT_A_REAL_TASK\""
+  test_environment: "Backend (dev, real Neon database)"
+  priority: High
+  severity: Major
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "POST /generate with languageCode=\"te\" for an otherwise valid question"
+      expected: "400 Bad Request"
+    - step: 2
+      action: "POST /generate with taskId=\"NOT_A_REAL_TASK\""
+      expected: "400 Bad Request"
+  expected_result: >
+    Both refusals happen before any AI provider is called. (REQ-AI-010 validations)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "AiContentIntegrationTest (generate_rejectsAnUnsupportedLanguage, generate_rejectsAnUnknownTask)"
+
+- id: TC-AI-026
+  requirement_ids: [REQ-AI-010]
+  scenario_id: SCN-AI-026
+  system: Backend
+  module: AI
+  feature: Batch generation
+  title: Generation is admin-only
+  objective: >
+    Confirm an unauthenticated caller, a STUDENT, and a REVIEWER are all rejected — this is the
+    one action in the pipeline gated stricter than the review transitions, since it spends money.
+  preconditions: []
+  test_data: "n/a"
+  test_environment: "Backend (dev, real Neon database)"
+  priority: Critical
+  severity: Critical
+  test_type: Authorization
+  steps:
+    - step: 1
+      action: "POST /generate with no Authorization header"
+      expected: "401 Unauthorized"
+    - step: 2
+      action: "POST /generate with a STUDENT token"
+      expected: "403 Forbidden"
+    - step: 3
+      action: "POST /generate with a REVIEWER token"
+      expected: "403 Forbidden"
+  expected_result: >
+    Only an ADMIN token can trigger generation. (REQ-AI-010 permissions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "AiContentIntegrationTest (generate_rejectsAnUnauthenticatedCaller, generate_rejectsAStudentCaller, generate_rejectsAReviewerCaller)"
+
+- id: TC-AI-027
+  requirement_ids: [REQ-AI-011]
+  scenario_id: SCN-AI-027
+  system: Backend
+  module: AI
+  feature: Generation-time answer grounding
+  title: The Java grounding check agrees with the shared TypeScript check on every shared fixture case
+  objective: >
+    Confirm AiAnswerGrounding.groundedAnswer produces the same verdict as packages/core's
+    answerMatches on every case in the shared fixture file.
+  preconditions: []
+  test_data: "sample-data/ai-answer-grounding-fixtures.json"
+  test_environment: "Developer machine (plain JUnit, no Spring, no database)"
+  priority: Critical
+  severity: Critical
+  test_type: DataIntegrity
+  steps:
+    - step: 1
+      action: "Run every fixture case through AiAnswerGrounding.groundedAnswer and compare to expectedMatch"
+      expected: "Every case matches its expected verdict"
+  expected_result: >
+    The Java and TypeScript grounding checks stay in parity by construction, the same discipline
+    as question-evaluator-fixtures.json. (REQ-AI-011 business_rule)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "AiAnswerGroundingTest.everyFixtureCaseHolds"
+
+- id: TC-AI-028
+  requirement_ids: [REQ-AI-012]
+  scenario_id: SCN-AI-028
+  system: Backend
+  module: AI
+  feature: Human review workflow
+  title: A generated row moves through the full DRAFT-REVIEW-PUBLISHED lifecycle
+  objective: >
+    Confirm submit-for-review, reject (with a reason), publish (the DRAFT fast path), and
+    unpublish all transition the row correctly and stamp reviewedAt/reviewedByEmail.
+  preconditions:
+    - "A DRAFT content row exists"
+  test_data: "n/a"
+  test_environment: "Backend (dev, real Neon database)"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "PUT .../submit-for-review with the correct expectedVersion"
+      expected: "200 OK; contentStatus=REVIEW"
+    - step: 2
+      action: "PUT .../reject with a real reason and the correct expectedVersion"
+      expected: "200 OK; contentStatus=DRAFT; rejectionReason set; reviewedByEmail = the reviewer's email"
+    - step: 3
+      action: "PUT .../publish directly from DRAFT with the correct expectedVersion"
+      expected: "200 OK; contentStatus=PUBLISHED; rejectionReason cleared to null"
+    - step: 4
+      action: "PUT .../unpublish with the correct expectedVersion"
+      expected: "200 OK; contentStatus=DRAFT"
+  expected_result: >
+    The full review cycle works exactly like ExamGuideAdminController's recruitment-cycle
+    transitions. (REQ-AI-012 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "AiContentIntegrationTest.reviewLifecycle_draftThroughPublishedAndBack"
+
+- id: TC-AI-029
+  requirement_ids: [REQ-AI-012]
+  scenario_id: SCN-AI-029
+  system: Backend
+  module: AI
+  feature: Human review workflow
+  title: Rejection requires a non-blank reason and only applies from REVIEW
+  objective: >
+    Confirm a whitespace-only rejection reason is refused, and a DRAFT row that was never
+    submitted for review cannot be rejected.
+  preconditions:
+    - "One content row still DRAFT (never submitted); one submitted to REVIEW"
+  test_data: "reason=\"   \""
+  test_environment: "Backend (dev, real Neon database)"
+  priority: High
+  severity: Major
+  test_type: Validation
+  steps:
+    - step: 1
+      action: "PUT .../reject on a REVIEW row with reason=\"   \""
+      expected: "400 Bad Request"
+    - step: 2
+      action: "PUT .../reject on a row still in DRAFT (never submitted)"
+      expected: "400 Bad Request"
+  expected_result: >
+    Rejection is only legal from REVIEW and always needs a real reason.
+    (REQ-AI-012 validations)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "AiContentIntegrationTest (reject_requiresANonBlankReason, reject_onlyAppliesFromReview)"
+
+- id: TC-AI-030
+  requirement_ids: [REQ-AI-013]
+  scenario_id: SCN-AI-030
+  system: Backend
+  module: AI
+  feature: Optimistic concurrency
+  title: A stale expectedVersion is rejected on a review transition
+  objective: >
+    Confirm submitting a transition with an expectedVersion that no longer matches the row's
+    actual version is rejected 409.
+  preconditions:
+    - "A content row exists at version 0"
+  test_data: "expectedVersion=99 (deliberately wrong)"
+  test_environment: "Backend (dev, real Neon database)"
+  priority: High
+  severity: Major
+  test_type: Concurrency
+  steps:
+    - step: 1
+      action: "PUT .../submit-for-review with expectedVersion=99 against a row actually at version 0"
+      expected: "409 Conflict; the row's status is unchanged"
+  expected_result: >
+    A stale version can never silently overwrite a more recent change.
+    (REQ-AI-013 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "AiContentIntegrationTest.transition_rejectsAStaleVersion"
+
+- id: TC-AI-031
+  requirement_ids: [REQ-AI-014]
+  scenario_id: SCN-AI-031
+  system: Backend
+  module: AI
+  feature: Review queue listing
+  title: The review queue filters correctly by task and status
+  objective: >
+    Confirm a DRAFT-status query surfaces a freshly generated row and a REVIEW-status query does
+    not, for the same taskId filter.
+  preconditions:
+    - "A freshly generated DRAFT row exists"
+  test_data: "n/a"
+  test_environment: "Backend (dev, real Neon database)"
+  priority: Medium
+  severity: Low
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "GET /api/admin/ai-content?taskId=QUESTION_EXPLANATION&status=DRAFT"
+      expected: "The list contains the freshly generated row's id"
+    - step: 2
+      action: "GET /api/admin/ai-content?status=REVIEW"
+      expected: "The list does not contain that row's id"
+  expected_result: >
+    The queue's filters actually narrow the result set. (REQ-AI-014 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "AiContentIntegrationTest.list_filtersByStatusAndTask"
+
+- id: TC-AI-032
+  requirement_ids: [REQ-AI-015]
+  scenario_id: SCN-AI-032
+  system: Backend
+  module: AI
+  feature: Public sync feed
+  title: Sync withholds payload for anything not currently PUBLISHED
+  objective: >
+    Confirm a generated row's sync entry has published=false and null payload while DRAFT, flips
+    to published=true with a real payload once published, and reverts once unpublished — with no
+    Authorization header on any of the sync calls.
+  preconditions:
+    - "A content row exists, initially DRAFT"
+  test_data: "n/a"
+  test_environment: "Backend (dev, real Neon database), unauthenticated HTTP calls"
+  priority: Critical
+  severity: Critical
+  test_type: Security
+  steps:
+    - step: 1
+      action: "GET /api/ai-content/sync?since=0 with no Authorization header, while the row is DRAFT"
+      expected: "200 OK; the row's entry has published=false and payload=null"
+    - step: 2
+      action: "PUT .../publish (as reviewer), then GET /api/ai-content/sync?since=0 again with no auth"
+      expected: "The row's entry now has published=true and a non-null payload"
+    - step: 3
+      action: "PUT .../unpublish (as reviewer), then GET /api/ai-content/sync?since=0 again with no auth"
+      expected: "The row's entry reverts to published=false and payload=null"
+  expected_result: >
+    Unreviewed or no-longer-published content is never reachable through the public sync feed,
+    and the feed itself needs no authentication. (REQ-AI-015 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    The tombstone role isDeleted plays for every other synced table is played here by
+    published=false — a property of review state, not deletion.
+  automation_status: Automated
+  automation_reference: "AiContentIntegrationTest.sync_omitsPayloadUnlessPublished_andNeverNeedsAuth"
+
+- id: TC-AI-033
+  requirement_ids: [REQ-AI-016]
+  scenario_id: SCN-AI-033
+  system: Backend
+  module: AI
+  feature: Public client-config feed
+  title: Client-config reports all 9 AiTaskIds, untouched tasks default to false
+  objective: >
+    Confirm GET /api/client-config needs no auth, includes every known AiTaskId even with zero
+    ai_task_flags rows, and reflects an admin-enabled task as true on the next fetch.
+  preconditions:
+    - "No ai_task_flags row exists for QUESTION_EXPLANATION"
+  test_data: "n/a"
+  test_environment: "Backend (dev, real Neon database)"
+  priority: Critical
+  severity: High
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "GET /api/client-config with no Authorization header"
+      expected: "200 OK; aiTasks contains QUESTION_EXPLANATION: false and all 8 other AiTaskIds"
+    - step: 2
+      action: "As admin, PUT /api/admin/ai-task-flags/QUESTION_EXPLANATION {enabled: true, expectedVersion: 0}"
+      expected: "200 OK"
+    - step: 3
+      action: "GET /api/client-config again with no Authorization header"
+      expected: "aiTasks.QUESTION_EXPLANATION is now true"
+  expected_result: >
+    Every known AI task is always present in the public feed, and an admin's toggle is reflected
+    immediately with no auth required to read it. (REQ-AI-016 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "AiTaskFlagTest.clientConfig_defaultsEveryKnownTaskToDisabled_andNeedsNoAuth; AiTaskFlagTest.adminCanEnableATask_andItThenAppearsInClientConfig"
+
+- id: TC-AI-034
+  requirement_ids: [REQ-AI-017]
+  scenario_id: SCN-AI-034
+  system: Backend
+  module: AI
+  feature: Admin per-task AI flag control
+  title: A never-before-touched task's first toggle still rejects a reused stale version
+  objective: >
+    Confirm the very first PUT for a task with no existing row (expectedVersion=0, creating the
+    row) succeeds, and an immediate second PUT reusing expectedVersion=0 is rejected 409 rather
+    than silently succeeding again.
+  preconditions:
+    - "No ai_task_flags row exists for QUESTION_EXPLANATION"
+  test_data: "n/a"
+  test_environment: "Backend (dev, real Neon database)"
+  priority: High
+  severity: High
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "As admin, PUT /api/admin/ai-task-flags/QUESTION_EXPLANATION {enabled: true, expectedVersion: 0}"
+      expected: "200 OK (creates the row)"
+    - step: 2
+      action: "As admin, PUT /api/admin/ai-task-flags/QUESTION_EXPLANATION {enabled: false, expectedVersion: 0} again"
+      expected: "409 CONFLICT -- the row's real version is now 1, not 0"
+  expected_result: >
+    Optimistic locking is enforced starting from a task's very first toggle, not only from its
+    second onward. (REQ-AI-017 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    This exact case failed before the fix (AiTaskFlagService now seeds version=1 on the
+    creating save, since Hibernate's @Version does not bump on an initial INSERT).
+  automation_status: Automated
+  automation_reference: "AiTaskFlagTest.update_rejectsAStaleVersion"

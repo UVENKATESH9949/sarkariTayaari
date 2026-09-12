@@ -1,0 +1,10 @@
+# WEB module — defects
+#
+# Starts empty and stays empty until a real execution fails. A defect here must trace to an
+# execution record in qa/execution/, never to a bug found while writing code — those are
+# fixed in the same change and written up in the task doc or a reports/ entry.
+#
+# (Phase 0 did find two real defects — Account/Settings unreachable below 1024px, and an
+# empty Exams card on fetch failure — but both were found and fixed during development, before
+# any test case existed to execute. TC-WEB-006 and TC-WEB-013 exist as their regression guards.)
+[]

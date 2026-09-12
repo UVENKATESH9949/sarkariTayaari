@@ -1,0 +1,23 @@
+{
+  "name": "sarkaritaiyaari",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Workspace root. Holds the shared package and the student web app; mobile/ and admin/ remain independent npm projects (see packages/core/README.md).",
+  "workspaces": [
+    "packages/*",
+    "web"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace @sarkaritaiyaari/web",
+    "build:web": "npm run build --workspace @sarkaritaiyaari/web",
+    "test": "npm run test --workspace @sarkaritaiyaari/core",
+    "typecheck": "npm run typecheck --workspace @sarkaritaiyaari/core && npm run typecheck --workspace @sarkaritaiyaari/web",
+    "lint:web": "npm run lint --workspace @sarkaritaiyaari/web",
+    "check:parity": "node scripts/check-topic-health-parity.js",
+    "qa:generate": "node scripts/qa/generate-test-data.js && node scripts/qa/generate-suites.js && node scripts/qa/generate-reports.js"
+  },
+  "devDependenciesComment": "js-yaml is required by scripts/qa/*.js. Those scripts predate this file, so until now the dependency was undeclared and they only ran where it happened to be installed globally.",
+  "devDependencies": {
+    "js-yaml": "^4.1.0"
+  }
+}

@@ -1,4 +1,4 @@
-import { getExamStructures, type ExamStructureResponse } from "../api/reference";
+import { getExamStructures, type ExamStructureResponse } from "@sarkaritaiyaari/core/api";
 import type { SyncedPaper, SyncedSection } from "../db/examStructure";
 
 /**

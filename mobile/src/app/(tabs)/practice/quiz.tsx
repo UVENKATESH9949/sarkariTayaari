@@ -25,6 +25,7 @@ import { OptionList } from "../../../questionRenderer/OptionList";
 import { MultiSelectOptionList } from "../../../questionRenderer/MultiSelectOptionList";
 import { ContentPreamble } from "../../../questionRenderer/ContentPreamble";
 import { GroupContent } from "../../../questionRenderer/GroupContent";
+import { AiExplanationCard } from "../../../questionRenderer/AiExplanationCard";
 import { FreeTextAnswerInput } from "../../../questionRenderer/FreeTextAnswerInput";
 import { MatchPairing, type MatchItem } from "../../../questionRenderer/MatchPairing";
 import { OrderingBuilder, type OrderingItem } from "../../../questionRenderer/OrderingBuilder";
@@ -37,7 +38,7 @@ import {
   textAnswerEvaluator,
   mappingEvaluator,
   sequenceEvaluator,
-} from "../../../evaluation/questionEvaluator";
+} from "@sarkaritaiyaari/core/evaluation";
 import type { QuestionResult } from "../../../practice/sessionHistory";
 
 /** `null` for an empty/non-numeric entry — the same "not really a number" case NumericEvaluator itself treats as unattempted, not zero. */
@@ -851,6 +852,9 @@ export default function Quiz() {
               <Text style={styles.explanationLabel}>{t("common.explanation")}</Text>
               <Text style={styles.explanationText}>{translation.explanation}</Text>
             </View>
+          )}
+          {isCurrentAnswered && (
+            <AiExplanationCard key={question.id} questionId={question.id} languageCode={languageCode} />
           )}
         </ScrollView>
 

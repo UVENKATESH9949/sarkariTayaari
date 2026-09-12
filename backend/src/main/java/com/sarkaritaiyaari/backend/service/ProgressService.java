@@ -8,8 +8,12 @@ import com.sarkaritaiyaari.backend.entity.UserPracticeSession;
 import com.sarkaritaiyaari.backend.entity.UserPracticeSessionResult;
 import com.sarkaritaiyaari.backend.repository.UserMockAttemptRepository;
 import com.sarkaritaiyaari.backend.repository.UserPracticeSessionRepository;
+import com.sarkaritaiyaari.backend.repository.UserPracticeSessionResultRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,7 +21,9 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -31,16 +37,21 @@ import java.util.stream.Collectors;
 @Transactional
 public class ProgressService {
 
+    private static final int MAX_HISTORY_PAGE_SIZE = 100;
+
     private final UserPracticeSessionRepository practiceSessions;
     private final UserMockAttemptRepository mockAttempts;
+    private final UserPracticeSessionResultRepository practiceSessionResults;
 
     @PersistenceContext
     private EntityManager entityManager;
 
     public ProgressService(UserPracticeSessionRepository practiceSessions,
-                           UserMockAttemptRepository mockAttempts) {
+                           UserMockAttemptRepository mockAttempts,
+                           UserPracticeSessionResultRepository practiceSessionResults) {
         this.practiceSessions = practiceSessions;
         this.mockAttempts = mockAttempts;
+        this.practiceSessionResults = practiceSessionResults;
     }
 
     /**
@@ -100,6 +111,59 @@ public class ProgressService {
                         .stream().map(ProgressService::toDto).toList();
 
         return new ProgressDtos.RestoreResponse(sessions, attempts);
+    }
+
+    /* ------------------------------------------- Phase 3 (TASK-2601, web history/review) */
+
+    @Transactional(readOnly = true)
+    public Page<ProgressDtos.PracticeSessionSummary> listSessions(User user, int page, int size) {
+        int clampedSize = Math.min(Math.max(size, 1), MAX_HISTORY_PAGE_SIZE);
+        var pageable = PageRequest.of(page, clampedSize,
+                Sort.by("completedAt").descending());
+        return practiceSessions.findByUserId(user.getId(), pageable).map(ProgressService::toSummary);
+    }
+
+    /** 404s (via {@link NoSuchElementException}) for an unknown id or one owned by someone else — never distinguished. */
+    @Transactional(readOnly = true)
+    public ProgressDtos.PracticeSession getSession(User user, String id) {
+        return practiceSessions.findByIdAndUserId(id, user.getId())
+                .map(ProgressService::toDto)
+                .orElseThrow(() -> new NoSuchElementException("No practice session " + id));
+    }
+
+    @Transactional(readOnly = true)
+    public Page<ProgressDtos.MockAttemptSummary> listAttempts(User user, int page, int size) {
+        int clampedSize = Math.min(Math.max(size, 1), MAX_HISTORY_PAGE_SIZE);
+        var pageable = PageRequest.of(page, clampedSize,
+                Sort.by("completedAt").descending());
+        return mockAttempts.findByUserId(user.getId(), pageable).map(ProgressService::toSummary);
+    }
+
+    @Transactional(readOnly = true)
+    public ProgressDtos.MockAttempt getAttempt(User user, String id) {
+        return mockAttempts.findByIdAndUserId(id, user.getId())
+                .map(ProgressService::toDto)
+                .orElseThrow(() -> new NoSuchElementException("No mock attempt " + id));
+    }
+
+    /**
+     * Revise's "Wrong Answers" tab. Deliberately not deduplicated by questionId here — the
+     * caller accumulates pages and dedupes client-side, the same reduction mobile's own
+     * {@code getWrongAnswers} already performs over its (locally unbounded) input list.
+     */
+    @Transactional(readOnly = true)
+    public Page<ProgressDtos.WrongAnswerRow> listWrongAnswers(User user, int page, int size) {
+        int clampedSize = Math.min(Math.max(size, 1), MAX_HISTORY_PAGE_SIZE);
+        return practiceSessionResults.findWrongAnswers(user.getId(), PageRequest.of(page, clampedSize))
+                .map(r -> new ProgressDtos.WrongAnswerRow(
+                        r.getQuestionId(),
+                        r.getSession().getSubjectName(),
+                        r.getSession().getTopicName(),
+                        r.getSession().getCompletedAt(),
+                        r.getQuestionType(),
+                        r.getResponse(),
+                        r.getSelectedIndex(),
+                        r.getCorrectIndex()));
     }
 
     /* ------------------------------------------------------------------ mapping */
@@ -190,6 +254,36 @@ public class ProgressService {
         }
         attempt.setResults(results);
         return attempt;
+    }
+
+    private static ProgressDtos.PracticeSessionSummary toSummary(UserPracticeSession session) {
+        return new ProgressDtos.PracticeSessionSummary(
+                session.getId(),
+                session.getCompletedAt(),
+                session.getExamLabel(),
+                session.getSubjectName(),
+                session.getTopicName(),
+                session.getLevelLabel(),
+                session.getCorrectCount(),
+                session.getTotalCount());
+    }
+
+    private static ProgressDtos.MockAttemptSummary toSummary(UserMockAttempt attempt) {
+        return new ProgressDtos.MockAttemptSummary(
+                attempt.getId(),
+                attempt.getExamCode(),
+                attempt.getExamLabel(),
+                attempt.getStartedAt(),
+                attempt.getCompletedAt(),
+                attempt.getDurationSeconds(),
+                attempt.getTimeTakenSeconds(),
+                attempt.getMarksCorrect(),
+                attempt.getMarksWrong(),
+                attempt.getTotalMarksScored(),
+                attempt.getCorrectCount(),
+                attempt.getWrongCount(),
+                attempt.getUnattemptedCount(),
+                attempt.getTotalQuestions());
     }
 
     private static ProgressDtos.PracticeSession toDto(UserPracticeSession session) {

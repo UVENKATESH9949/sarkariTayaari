@@ -2,7 +2,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "./client";
 import { exams, questionExams, questions, questionTranslations, subjects, topics } from "./schema";
 import { getSyllabusSubjectIds } from "./examStructure";
-import { isIndexBasedType, resolveCorrectIndex } from "./answerResolution";
+import { isIndexBasedType, resolveCorrectIndex } from "@sarkaritaiyaari/core/evaluation";
 
 const ALL_EXAMS = "ALL";
 

@@ -1,0 +1,22 @@
+# Smoke
+#
+# The smallest set of checks that answer "is the system fundamentally alive" across AUTH, CATALOG, and QUESTIONS. Hand-curated, not a mechanical priority filter — real smoke suites are deliberately small and specific, not "everything marked Critical."
+#
+# 14 test case(s). Membership rule: Hand-picked (see this script's SMOKE_IDS list).
+
+suite: Smoke
+test_case_ids:
+  - TC-AUTH-001
+  - TC-AUTH-005
+  - TC-AUTH-006
+  - TC-AUTH-009
+  - TC-AUTH-011
+  - TC-AUTH-017
+  - TC-AUTH-019
+  - TC-CATALOG-001
+  - TC-CATALOG-003
+  - TC-CATALOG-044
+  - TC-CATALOG-049
+  - TC-QUESTIONS-001
+  - TC-QUESTIONS-027
+  - TC-QUESTIONS-037

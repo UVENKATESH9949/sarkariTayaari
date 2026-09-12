@@ -1,0 +1,28 @@
+# USER-PROGRESS module — test scenarios
+#
+# Scoped to what TASK-2601 Phase 1 actually touches (web practice-session upload). Bookmarks,
+# topic-progress and followed-exams remain uncovered until something touches them — see this
+# module's requirements file for why it starts this narrow.
+
+- id: SCN-USERPROGRESS-001
+  requirement_ids: [REQ-USERPROGRESS-001]
+  category: Integration
+  title: A signed-in web practice session appears in the same account's restored history
+  objective: >
+    Verify a practice session completed on web, while signed in, uploads via the existing
+    write-once contract and is visible in a subsequent GET /api/progress restore — proving
+    web and mobile genuinely share one history, not two.
+  systems: [Backend, Web]
+  status: Ready
+  notes: null
+
+- id: SCN-USERPROGRESS-002
+  requirement_ids: [REQ-USERPROGRESS-001]
+  category: ErrorHandling
+  title: A failed upload does not block or alarm the student
+  objective: >
+    Verify that when the upload fails (offline, expired token), the student still reaches and
+    sees their own Summary screen normally, with no error surfaced about the failed sync.
+  systems: [Web]
+  status: Ready
+  notes: null

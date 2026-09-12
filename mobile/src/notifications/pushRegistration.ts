@@ -1,7 +1,7 @@
 import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
-import { registerPushToken } from "../api/reminders";
+import { registerPushToken } from "@sarkaritaiyaari/core/api";
 
 /**
  * Exam Guide spec §8 "Reminder System" — the mobile half. Requests notification

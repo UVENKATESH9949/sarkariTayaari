@@ -1,0 +1,624 @@
+# AUTH module — requirement repository
+#
+# Scope: authentication, authorization, session/token mechanics, admin bootstrap/invite.
+# Primary source: api/AUTH.md (current documented contract). Secondary: reports/10-admin-authentication/,
+# reports/08-v1.1-accounts-and-progress-sync/, reports/architecture-decisions.md (ADR-001/003/009).
+#
+# A requirement here represents the INTENDED/documented behavior, not necessarily whatever the code
+# currently does if the two diverge — see the `ambiguity` field per requirement, and
+# qa/requirements/_conflicts.md for cross-module drift that doesn't belong to one requirement alone.
+#
+# automation_status is evidence-based (see qa/README.md once written): Automated only when a cited
+# test genuinely covers the exact requirement; PartiallyAutomated when it covers only part of it;
+# CandidateForAutomation for untested backend behavior; ManualOnly for anything with no automated
+# test runner in this project (mobile, admin) or requiring human/visual judgment.
+
+- id: REQ-AUTH-001
+  feature: Student self-registration
+  module: AUTH
+  system: [Backend, Mobile]
+  source_doc: api/AUTH.md
+  source_section: "POST /api/auth/register"
+  description: >
+    Any anonymous caller can create a new account with email, password (>=8 chars), optional
+    display name, and optional device label. The account is always created with role STUDENT
+    and the caller is immediately signed in (a token is issued in the same response).
+  business_rule: >
+    There is no public path to create an ADMIN account (ADR-009) — this is the only
+    account-creation path reachable without already being an admin.
+  actor: Anonymous user
+  preconditions:
+    - Email not already registered (case-insensitive)
+  inputs:
+    - "email (string)"
+    - "password (string, min 8 chars)"
+    - "displayName (optional)"
+    - "deviceLabel (optional)"
+  expected_outputs:
+    - "201 Created — { token, expiresAt, user: { id, email, displayName, role: STUDENT } }"
+  validations:
+    - Email format validity
+    - Password length >= 8 chars (no complexity rule beyond length — deliberate)
+    - Email stored lower-cased (case-insensitive uniqueness/lookup)
+  permissions: none (public)
+  dependencies:
+    - REQ-AUTH-005
+  error_conditions:
+    - "400 on validation failure"
+    - "400 \"An account already exists for <email>\" on duplicate email (case-insensitive)"
+  edge_conditions:
+    - Registering with an email differing only in case from an existing account must be
+      rejected as a duplicate, not create a second account
+  offline_behavior: >
+    Online-only — registration requires a live backend call; there is no offline/local
+    registration path.
+  acceptance_criteria:
+    - Valid registration returns 201 with a non-blank token and role STUDENT
+    - Duplicate email (any case) returns 400 and does not create a second row
+    - Password under 8 characters returns 400
+    - Stored/returned email is lower-cased regardless of input case
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    AuthTest.register_returnsATokenAndNormalisesTheEmail,
+    AuthTest.register_rejectsADuplicateEmailRegardlessOfCase,
+    AuthTest.register_rejectsAShortPassword
+
+- id: REQ-AUTH-002
+  feature: Login (student and admin)
+  module: AUTH
+  system: [Backend, Mobile, Admin]
+  source_doc: api/AUTH.md
+  source_section: "POST /api/auth/login"
+  description: >
+    Any existing account — student or admin — can sign in with email + password and receive a
+    fresh token. The response's `role` field is how a calling client (notably the admin console)
+    determines whether the session is privileged.
+  business_rule: >
+    One endpoint serves both mobile student sign-in and admin console sign-in; the client
+    distinguishes by reading `role` in the response, not by calling a different endpoint.
+  actor: Student, Admin
+  preconditions:
+    - Account exists with matching credentials
+  inputs:
+    - email
+    - password
+    - "deviceLabel (optional)"
+  expected_outputs:
+    - "200 OK — { token, expiresAt, user: { id, email, displayName, role } }"
+  validations:
+    - Non-blank email/password
+  permissions: none (public)
+  dependencies:
+    - REQ-AUTH-005
+    - REQ-AUTH-006
+  error_conditions:
+    - "400 on blank email/password"
+    - "401 \"Email or password is incorrect\" — identical message and identical response timing for both a wrong password and an unknown email"
+  edge_conditions:
+    - Login must not reveal, via message content or response timing, whether the failure was
+      "wrong password" vs "no such account" (enumeration-resistance requirement)
+  offline_behavior: "Online-only."
+  acceptance_criteria:
+    - Correct credentials return 200 with a token and the account's real role
+    - Wrong password and unknown email both return 401 with byte-identical error message
+    - Login works regardless of the case used for the email
+    - A successful login opportunistically deletes the account's already-expired tokens
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: PartiallyAutomated
+  automation_hint: >
+    AuthTest.login_worksWithADifferentlyCasedEmail,
+    AuthTest.login_failsIdenticallyForAWrongPasswordAndAnUnknownEmail (message equality only,
+    not response-time equality — see REQ-AUTH-013).
+
+- id: REQ-AUTH-003
+  feature: Logout / single-device session revocation
+  module: AUTH
+  system: [Backend, Mobile, Admin]
+  source_doc: api/AUTH.md
+  source_section: "POST /api/auth/logout"
+  description: >
+    A signed-in caller can revoke the specific token used to make the request. Other
+    tokens/devices/sessions belonging to the same account remain valid.
+  business_rule: >
+    Opaque server-side tokens make revocation a plain row delete (ADR-001) — no blocklist
+    needed, no other session affected.
+  actor: Student, Admin
+  preconditions:
+    - Caller holds a valid (non-expired) bearer token
+  inputs:
+    - "None (token read from Authorization header)"
+  expected_outputs:
+    - "204 No Content"
+  validations: []
+  permissions: "requireUser (any signed-in user)"
+  dependencies:
+    - REQ-AUTH-005
+  error_conditions:
+    - "401 if the header is missing, malformed, or the token isn't found/already expired"
+  edge_conditions:
+    - Logging out one of several concurrent sessions for the same account must not affect
+      the others (multi-device isolation)
+  offline_behavior: >
+    Online-only — revocation is a server-side operation; a device may locally discard the
+    token regardless of server reachability, but that local-only behavior is not documented
+    either way.
+  acceptance_criteria:
+    - Logout with a valid token returns 204
+    - The same token then fails subsequent authenticated requests with 401
+    - A second, still-valid device token for the same account continues to work after the
+      first is revoked
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "AuthTest.logout_revokesOnlyTheDeviceThatCalledIt"
+
+- id: REQ-AUTH-004
+  feature: Session validation / profile fetch on launch
+  module: AUTH
+  system: [Backend, Mobile, Admin]
+  source_doc: api/AUTH.md
+  source_section: "GET /api/auth/me"
+  description: >
+    A client holding a stored token can confirm it is still valid and fetch the current user's
+    profile (id, email, displayName, role) in one call — used on app/console launch to decide
+    whether to show a signed-in or signed-out state.
+  business_rule: >
+    Returns the bare UserResponse shape, not the full AuthResponse — no token/expiresAt is
+    re-issued here.
+  actor: Student, Admin
+  preconditions:
+    - "Caller holds a token (may be expired/invalid — that is the case being tested for)"
+  inputs:
+    - "None (token from header)"
+  expected_outputs:
+    - "200 OK — { id, email, displayName, role }"
+  validations: []
+  permissions: requireUser
+  dependencies:
+    - REQ-AUTH-005
+  error_conditions:
+    - "401 \"Not signed in\" (missing/unknown token)"
+    - "401 \"Session expired — please sign in again\" (expired token)"
+  edge_conditions:
+    - A token that is well-formed but unknown to the server, and a token that is known but
+      past its expiry, must both fail with 401 but the two cases have different messages
+  offline_behavior: >
+    Online-only — this is explicitly the mechanism used to detect an offline/unreachable
+    state on launch (its failure is what triggers cached/offline fallback logic elsewhere in
+    the app, outside AUTH's own scope).
+  acceptance_criteria:
+    - Valid token returns 200 with correct profile data including role
+    - Missing header returns 401
+    - Garbage/unknown token returns 401
+    - The admin console re-fetches /me on every load rather than trusting a cached user
+      object, so a revoked/expired token is caught immediately
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: PartiallyAutomated
+  automation_hint: >
+    AuthTest.me_returnsTheSignedInUser, AuthTest.me_rejectsAMissingOrInvalidToken (covers
+    "missing" and "garbage token"; no cited test exercises a genuinely *expired* token
+    producing the distinct "Session expired" message).
+
+- id: REQ-AUTH-005
+  feature: Opaque bearer token mechanism
+  module: AUTH
+  system: [Backend]
+  source_doc: api/AUTH.md
+  source_section: "\"Facts worth flagging\""
+  description: >
+    Every authenticated call carries a `Bearer <token>` where the token is a 32-byte random
+    value, base64url-encoded, opaque (not a JWT), looked up against `user_tokens` on every
+    request. Default TTL is 365 days, configurable via `app.auth.token-ttl-days`.
+  business_rule: >
+    ADR-001 — chosen specifically so revocation is a plain delete rather than a JWT blocklist;
+    deliberately long TTL because forced re-login has real UX cost on a study app with no
+    compensating security benefit while tokens remain server-revocable.
+  actor: Student, Admin (any signed-in caller)
+  preconditions: []
+  inputs:
+    - Token value
+  expected_outputs:
+    - A resolved User (with role) for a valid, unexpired token
+  validations:
+    - "Header must be \"Authorization: Bearer <token>\", non-empty after the prefix"
+  permissions: "N/A — this is the primitive requireUser/requireAdmin are built on"
+  dependencies: []
+  error_conditions:
+    - "Malformed/missing header -> 401 \"Not signed in\""
+    - "Unknown token -> 401 \"Not signed in\""
+    - "Expired token -> 401 \"Session expired — please sign in again\""
+  edge_conditions:
+    - An Authorization header without the "Bearer " prefix must be rejected the same as a
+      missing header
+  offline_behavior: >
+    Online-only — token validation requires a live DB lookup on the backend; there is no
+    offline/cached validation of a token's validity.
+  acceptance_criteria:
+    - A freshly issued token authenticates successfully
+    - A token past expiresAt is rejected with the expired-specific message
+    - A syntactically invalid Authorization header is rejected with 401
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: PartiallyAutomated
+  automation_hint: >
+    Exercised indirectly by nearly every test in AuthTest/AdminAuthTest; no single test
+    isolates the raw token-resolution primitive itself.
+
+- id: REQ-AUTH-006
+  feature: Multiple concurrent device sessions per account
+  module: AUTH
+  system: [Backend]
+  source_doc: api/AUTH.md
+  source_section: "POST /api/auth/login business rules"
+  description: >
+    Logging in on a new device issues a new token without revoking any existing token for that
+    account. A user can be signed in on multiple devices simultaneously.
+  business_rule: "Simplicity trade-off — no session cap, no \"sign out other devices on login\" behavior."
+  actor: Student, Admin
+  preconditions:
+    - Account already has at least one valid token from a prior login
+  inputs:
+    - Same as REQ-AUTH-002
+  expected_outputs:
+    - A new, independent token; the prior token(s) remain valid
+  validations: []
+  permissions: none
+  dependencies:
+    - REQ-AUTH-002
+    - REQ-AUTH-005
+  error_conditions: []
+  edge_conditions: []
+  offline_behavior: "Online-only."
+  acceptance_criteria:
+    - Logging in twice for the same account produces two distinct, independently valid tokens
+    - Using the first token after the second login succeeds (me returns 200)
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: PartiallyAutomated
+  automation_hint: >
+    AuthTest.logout_revokesOnlyTheDeviceThatCalledIt (proves the "other device stays valid"
+    half as a side effect of testing logout scoping, not a dedicated test of this requirement).
+
+- id: REQ-AUTH-007
+  feature: "requireUser — any-signed-in-role authorization primitive"
+  module: AUTH
+  system: [Backend]
+  source_doc: api/README.md
+  source_section: "Conventions — requireUser(authorization)"
+  description: >
+    A controller method may opt into requireUser(authorization), which requires any valid,
+    non-expired token regardless of role (STUDENT, ADMIN, or REVIEWER all satisfy it). This is
+    the baseline "must be signed in" check reused across the whole backend, not just AUTH's
+    own endpoints.
+  business_rule: >
+    ADR-003 — opt-in per endpoint, not a global servlet filter; an endpoint that forgets to
+    call it is silently public.
+  actor: Any signed-in role
+  preconditions: []
+  inputs:
+    - Authorization header
+  expected_outputs:
+    - The resolved User object on success
+  validations: []
+  permissions: Any signed-in account
+  dependencies:
+    - REQ-AUTH-005
+  error_conditions:
+    - "401 for missing/invalid/expired token (same conditions as REQ-AUTH-005)"
+  edge_conditions:
+    - A signed-in but non-admin user must be accepted here (this check does not gate by role)
+  offline_behavior: "Online-only."
+  acceptance_criteria:
+    - A STUDENT token passes a requireUser-gated call
+    - An ADMIN token passes a requireUser-gated call
+    - No token / expired token fails with 401
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: PartiallyAutomated
+  automation_hint: >
+    Indirectly via every bearer(token)-authenticated call in AuthTest; no dedicated cross-role
+    "any role passes requireUser" test found.
+
+- id: REQ-AUTH-008
+  feature: "requireAdmin — admin-only authorization primitive, 401 vs 403 distinction"
+  module: AUTH
+  system: [Backend]
+  source_doc: api/AUTH.md
+  source_section: "intro; ADR-009"
+  description: >
+    A controller method may opt into requireAdmin(authorization), which requires a valid
+    token AND role == ADMIN. A signed-in STUDENT is rejected with 403 (not 401); an
+    unauthenticated caller is rejected with 401.
+  business_rule: >
+    ADR-009 — 401 vs 403 must be distinguishable so a client can tell "not signed in" from
+    "signed in but not permitted." Admin role reuses the same opaque-token infrastructure
+    rather than a second auth system.
+  actor: "Admin (allowed); Student (rejected 403); Anonymous (rejected 401)"
+  preconditions: []
+  inputs:
+    - Authorization header
+  expected_outputs:
+    - The resolved admin User object on success
+  validations: []
+  permissions: "role = ADMIN exactly"
+  dependencies:
+    - REQ-AUTH-005
+    - REQ-AUTH-007
+  error_conditions:
+    - "401 anonymous/invalid token"
+    - "403 \"Admin access required\" for a valid, signed-in, non-admin token"
+  edge_conditions:
+    - A demoted account (formerly ADMIN, now STUDENT) must be rejected the same as any other
+      STUDENT token the moment its role changes — no caching of the old role on the token
+  offline_behavior: "Online-only."
+  acceptance_criteria:
+    - Anonymous request to an admin-gated endpoint -> 401
+    - Valid STUDENT token to the same endpoint -> 403
+    - Valid ADMIN token to the same endpoint -> success (2xx)
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    AdminAuthTest.createExam_rejectsAnonymousRequests, AdminAuthTest.createExam_rejectsAStudentToken,
+    AdminAuthTest.createExam_succeedsWithAnAdminToken
+
+- id: REQ-AUTH-009
+  feature: Public content-sync endpoints require no auth
+  module: AUTH
+  system: [Backend, Mobile]
+  source_doc: api/README.md
+  source_section: "Conventions; ADR-009 consequences"
+  description: >
+    A defined set of read endpoints (exams, subjects, topics, languages, difficulty levels,
+    paper types, exam structure, /api/questions/sync) require neither requireUser nor
+    requireAdmin and must remain reachable with zero Authorization header, so a signed-out
+    student's app can sync content.
+  business_rule: >
+    ADR-009 — this split was decided endpoint-by-endpoint against what the mobile client
+    actually calls (mobile/src/api/reference.ts, mobile/src/db/schema.ts), not applied
+    blanket. Getting this wrong (accidentally requiring auth) would break the shipped app
+    for every signed-out student.
+  actor: Anonymous user (mobile app, signed out)
+  preconditions: []
+  inputs: []
+  expected_outputs:
+    - "200 with no Authorization header at all"
+  validations: []
+  permissions: none (explicitly public)
+  dependencies: []
+  error_conditions: []
+  edge_conditions:
+    - >
+      Must be re-verified as a regression guard any time a new admin-gated controller is
+      added near these endpoints, since the check is opt-in per method (ADR-003's stated
+      risk) — nothing prevents a future author from accidentally adding requireAdmin here.
+  offline_behavior: >
+    N/A to this requirement itself — this requirement is precisely what enables the app's
+    offline-first sync to work while signed out, unlike every other AUTH requirement.
+  acceptance_criteria:
+    - Each of the listed endpoints returns 200 with zero Authorization header
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "AdminAuthTest.publicSyncEndpoints_remainAccessibleWithNoToken"
+
+- id: REQ-AUTH-010
+  feature: First admin creation via server-side bootstrap only
+  module: AUTH
+  system: [Backend]
+  source_doc: api/AUTH.md
+  source_section: "\"Facts worth flagging\"; ADR-009"
+  description: >
+    AdminBootstrapRunner runs once at application startup and creates exactly one ADMIN user
+    from admin.bootstrap-email/admin.bootstrap-password (local, gitignored config) — but only
+    if zero ADMIN-role users currently exist.
+  business_rule: >
+    Solves the chicken-and-egg problem of "how does the first admin get created" without a
+    public admin-signup endpoint.
+  actor: "System (startup process); resulting actor is Admin"
+  preconditions:
+    - No ADMIN-role user exists in the database at startup
+  inputs:
+    - admin.bootstrap-email
+    - admin.bootstrap-password
+  expected_outputs:
+    - One new ADMIN user, able to log in via the normal /login endpoint
+  validations: []
+  permissions: "N/A (runs as a trusted startup process, not via HTTP)"
+  dependencies: []
+  error_conditions: []
+  edge_conditions:
+    - Restarting the app when an ADMIN already exists must be a no-op — no duplicate admin
+      created, no error
+  offline_behavior: "N/A — server-side startup behavior, not a client interaction."
+  acceptance_criteria:
+    - With zero admins and bootstrap config set, startup creates exactly one admin, logged
+    - Login with the bootstrap credentials returns a token with role ADMIN
+    - A second startup with an admin already present creates no duplicate and logs nothing
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: >
+    none found — manually verified once per reports/10-admin-authentication/admin-auth.md;
+    no automated test file for AdminBootstrapRunner was located.
+
+- id: REQ-AUTH-011
+  feature: Admin-invites-admin (no token leak to the creator)
+  module: AUTH
+  system: [Backend]
+  source_doc: api/AUTH.md
+  source_section: "POST /api/auth/admin/register"
+  description: >
+    A signed-in admin can create another admin account via POST /api/auth/admin/register. The
+    response deliberately contains no token — the new admin must sign in themselves via the
+    normal /login flow, so the creating admin never has access to the new admin's session.
+  business_rule: >
+    Deliberate: the creator not holding the new account's session/token is a stated design
+    choice, not an incidental gap.
+  actor: "Admin (caller); resulting actor is a new Admin"
+  preconditions:
+    - Caller holds a valid ADMIN token
+    - Target email not already registered
+  inputs:
+    - email
+    - "password (>= 8 chars)"
+    - "displayName (optional)"
+    - "deviceLabel (optional, meaningless here — no token is issued)"
+  expected_outputs:
+    - "201 Created — bare UserResponse { id, email, displayName, role: ADMIN }, no token, no expiresAt, no password hash"
+  validations:
+    - Same as registration
+    - Email uniqueness
+  permissions: requireAdmin
+  dependencies:
+    - REQ-AUTH-008
+    - REQ-AUTH-001
+  error_conditions:
+    - "401 anonymous"
+    - "403 \"Admin access required\" for a STUDENT caller"
+    - "400 if email already registered"
+  edge_conditions:
+    - "The response must not leak token, passwordHash, or password under any key"
+  offline_behavior: "Online-only."
+  acceptance_criteria:
+    - Anonymous call -> 401, no account created
+    - STUDENT caller -> 403, no account created
+    - ADMIN caller -> 201, new account has role ADMIN, response body contains no token/password fields
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    AdminAuthTest.registerAdmin_rejectsAnonymousAndStudentCallers,
+    AdminAuthTest.registerAdmin_createsAnAdminAccountWithNoTokenOrPasswordHashLeaked
+
+- id: REQ-AUTH-012
+  feature: Uniform AUTH error contract
+  module: AUTH
+  system: [Backend, Mobile, Admin]
+  source_doc: api/README.md
+  source_section: "\"Error shape\" table"
+  description: >
+    Every AUTH error response is {"error": "<message>"}. Status code carries the meaning: 400
+    = validation failure, 401 = not signed in, 403 = signed in but not admin (on a
+    requireAdmin endpoint), 404 = not found (not applicable to any current AUTH endpoint, but
+    part of the global contract AUTH participates in).
+  business_rule: >
+    Global convention (GlobalExceptionHandler), applies beyond AUTH but is load-bearing for
+    how any AUTH client (mobile, admin) must interpret a failure.
+  actor: Any caller
+  preconditions: []
+  inputs: []
+  expected_outputs: []
+  validations: []
+  permissions: N/A
+  dependencies:
+    - REQ-AUTH-001
+    - REQ-AUTH-002
+    - REQ-AUTH-003
+    - REQ-AUTH-004
+    - REQ-AUTH-011
+  error_conditions: []
+  edge_conditions: []
+  offline_behavior: N/A
+  acceptance_criteria:
+    - "Every documented AUTH error response body is exactly {\"error\": \"<message>\"} with no additional leaked fields"
+    - Status codes match the documented table consistently across register/login/logout/me/admin-register
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: PartiallyAutomated
+  automation_hint: >
+    Verified indirectly by every negative-path test in AuthTest/AdminAuthTest asserting the
+    expected HttpStatus; message-content equality specifically checked in
+    AuthTest.login_failsIdenticallyForAWrongPasswordAndAnUnknownEmail.
+
+- id: REQ-AUTH-013
+  feature: Login/register timing must not leak account existence
+  module: AUTH
+  system: [Backend]
+  source_doc: api/AUTH.md
+  source_section: "login business rules"
+  description: >
+    A login attempt against a non-existent email must take approximately the same time as one
+    against a real email with a wrong password — implemented by always running a real BCrypt
+    comparison (against a hardcoded dummy hash when no user is found) rather than
+    short-circuiting.
+  business_rule: >
+    Fixed as a real bug during V1.1 accounts work — originally, only requests against a real
+    account paid the BCrypt cost, making timing a side channel for email enumeration.
+  actor: "Anonymous user (attacker perspective) / system property"
+  preconditions: []
+  inputs:
+    - Any email/password pair
+  expected_outputs: []
+  validations: []
+  permissions: N/A
+  dependencies:
+    - REQ-AUTH-002
+  error_conditions: []
+  edge_conditions:
+    - Must hold for both a syntactically valid-but-unregistered email and a
+      malformed-but-parseable one
+  offline_behavior: N/A
+  acceptance_criteria:
+    - Both failure paths (unknown email, wrong password) run a real hash comparison, not a short-circuit
+    - "Response time for both is not distinguishably different (not automated — see gap below)"
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: >
+    none found — no test measures/asserts actual timing; only message-equality is automated
+    (AuthTest.login_failsIdenticallyForAWrongPasswordAndAnUnknownEmail), which is a proxy,
+    not a direct timing assertion. A real timing-safety check needs manual/tooled measurement.
+
+- id: REQ-AUTH-014
+  feature: Accounts are optional — full app usability while signed out
+  module: AUTH
+  system: [Mobile]
+  source_doc: reports/08-v1.1-accounts-and-progress-sync/accounts-and-progress-sync.md
+  source_section: "Accounts (TICKET-605)"
+  description: >
+    Signing in/up is never mandatory for the mobile app's core function — a student can use
+    the app fully offline/signed-out (browsing content, practicing, etc.), with an account
+    only adding cross-device sync of that separate module's data.
+  business_rule: >
+    Stated explicitly: "exactly as before" account-less usage is preserved by design.
+  actor: Anonymous user
+  preconditions: []
+  inputs: []
+  expected_outputs: []
+  validations: []
+  permissions: none
+  dependencies:
+    - REQ-AUTH-009
+  error_conditions: []
+  edge_conditions: []
+  offline_behavior: >
+    This requirement IS the offline-behavior statement for the module: a signed-out user has
+    full core functionality with no auth-related blocking of any kind.
+  acceptance_criteria:
+    - No core mobile screen requires a signed-in session to function (progress-sync-specific
+      data restore is out of this module's scope)
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: >
+    none found — product-level/negative assertion, a consequence of REQ-AUTH-009 being true;
+    no mobile test runner exists in this project.

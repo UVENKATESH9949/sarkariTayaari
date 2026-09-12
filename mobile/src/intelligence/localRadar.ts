@@ -7,18 +7,20 @@ import {
   loadPyqCounts,
   loadQuestionCounts,
 } from "./localEvidence";
-import { scoreTopicHealth, ALGORITHM_VERSION, type TopicHealthResult } from "./topicHealth";
-import type {
-  ActionStep,
-  PrerequisiteRef,
-  RadarOverview,
-  RadarOverviewStatus,
-  RadarReasonCode,
-  RadarTopic,
-  RecommendedActionName,
-  TopicHealthStateName,
-  WeaknessRadar,
-} from "./types";
+import {
+  scoreTopicHealth,
+  ALGORITHM_VERSION,
+  type TopicHealthResult,
+  type ActionStep,
+  type PrerequisiteRef,
+  type RadarOverview,
+  type RadarOverviewStatus,
+  type RadarReasonCode,
+  type RadarTopic,
+  type RecommendedActionName,
+  type TopicHealthStateName,
+  type WeaknessRadar,
+} from "@sarkaritaiyaari/core/intelligence";
 
 /**
  * Builds a Weakness Radar entirely on this device (Weakness Radar v1, signed-out path).

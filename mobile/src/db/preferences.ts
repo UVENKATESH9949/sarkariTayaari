@@ -1,11 +1,16 @@
 import { eq } from "drizzle-orm";
+import type { UiLanguage } from "@sarkaritaiyaari/core/i18n";
 import { db } from "./client";
 import { appPreferences } from "./schema";
 
 const CURRENT_KEY = "current";
 
 export type ThemeMode = "dark" | "light";
-export type UiLanguage = "en" | "te";
+/**
+ * Re-exported so existing call sites keep importing it from here. The set of UI languages is
+ * defined by which catalogues exist in `@sarkaritaiyaari/core/i18n`, not by this table.
+ */
+export type { UiLanguage };
 
 export type AppPreferences = {
   themeMode: ThemeMode;

@@ -13,7 +13,7 @@ import { ListSkeleton } from "../../../ui/Skeleton";
 import { radius, spacing } from "../../../ui/theme";
 import { useTheme, useThemedStyles, type Theme } from "../../../ui/ThemeContext";
 import { useT } from "../../../i18n/I18nContext";
-import { questionsLabel } from "../../../i18n/counts";
+import { questionsLabel } from "@sarkaritaiyaari/core/i18n";
 import { getSubjectStats, type SubjectStat } from "../../../data/practiceData";
 import { useHybridMode } from "../../../data/hybridSource";
 
