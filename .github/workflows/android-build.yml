@@ -25,6 +25,16 @@ on:
         description: "Backend URL baked into the APK (must be reachable from the device)"
         required: false
         default: "https://sarkaritaiyaari-backend-815653276881.asia-south1.run.app/api"
+      # Since llama.rn landed, the native build compiles the llama.cpp inference engine per
+      # ABI, and four ABIs does not fit in this job's budget on a 2-core runner. A manual
+      # test build only ever has to run on the tester's own phone, so it defaults to
+      # arm64-v8a alone (every 64-bit Android device, and one of only two ABIs llama.rn
+      # ships libraries for). Left empty on push/tag runs, which therefore keep building
+      # the full default ABI set — production distribution is deliberately unchanged.
+      android_abis:
+        description: "ABIs to build. Fewer is much faster; arm64-v8a covers modern phones."
+        required: false
+        default: "arm64-v8a"
   push:
     branches: [main]
     tags: ["v*"]
@@ -61,7 +71,9 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # 45 was sized before llama.rn added a per-ABI llama.cpp compile; run #24 was killed
+    # mid-build at exactly that limit. Raised for headroom on the native step.
+    timeout-minutes: 90
 
     steps:
       - name: Checkout
@@ -261,9 +273,18 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x ./gradlew
+          # Empty on push/tag runs (inputs only exist for workflow_dispatch), so those keep
+          # gradle.properties' full ABI list and production output is unchanged.
+          ABIS="${{ inputs.android_abis }}"
+          ABI_ARG=()
+          if [ -n "$ABIS" ]; then
+            echo "Restricting native build to: $ABIS"
+            ABI_ARG=(-PreactNativeArchitectures="$ABIS")
+          fi
           # Signing material is passed as Gradle properties, never written into
           # gradle.properties, so it stays out of the workspace and out of any artifact.
           ./gradlew assembleRelease \
+            "${ABI_ARG[@]}" \
             --no-daemon \
             --stacktrace \
             -PST_UPLOAD_STORE_FILE="${RUNNER_TEMP}/upload.jks" \
