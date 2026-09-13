@@ -218,6 +218,21 @@ export default function More() {
         />
       </Card>
 
+      {/* TEMPORARY — the on-device LLM feasibility spike (TASK-2701 Phase 5). Not a product
+          feature: it exists so the benchmark can be run on a real low-end phone without a USB
+          cable and an adb deep link. Remove this row, and src/app/llm-spike.tsx with it, once
+          the benchmark question ("can a 1B model run usefully on this hardware?") is answered.
+          Deliberately last and labelled as a test so it reads as scaffolding, not a feature. */}
+      <SectionLabel label="Developer" style={styles.sectionSpacing} />
+      <Card variant="container" style={styles.card}>
+        <CardRow
+          icon="flask-outline"
+          label="LLM Test (temporary)"
+          value="On-device AI benchmark — not a real feature"
+          onPress={() => router.push("/llm-spike")}
+        />
+      </Card>
+
       <SectionLabel label={t("more.about")} style={styles.sectionSpacing} />
       <Card variant="container" style={styles.card}>
         <CardRow icon="information-circle-outline" label={t("common.appName")} value={t("more.version", { version: "0.1.0" })} />

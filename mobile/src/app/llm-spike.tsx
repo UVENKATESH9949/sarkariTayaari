@@ -62,11 +62,31 @@ function buildUserPrompt(): string {
 
 type Phase = "idle" | "downloading" | "downloaded" | "loading" | "loaded" | "generating" | "done" | "error";
 
+/**
+ * Module scope so it can seed useState lazily. Every call here is synchronous in
+ * expo-file-system's SDK 57 class API (`exists` is a property, not a promise), and wrapped
+ * because a not-yet-created directory throws rather than reporting false on some platforms.
+ */
+function findExistingModel(): File | null {
+  try {
+    if (!modelDir.exists) return null;
+    const file = new File(modelDir, MODEL_FILENAME);
+    return file.exists ? file : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function LlmSpikeScreen() {
-  const [phase, setPhase] = useState<Phase>("idle");
+  // Resolved at first render rather than in an effect: expo-file-system's `exists` is a
+  // synchronous property, so the already-downloaded case needs no effect (and therefore
+  // trips none of the `set-state-in-effect` violations this codebase keeps hitting). Without
+  // this, reopening the app after a download showed "idle" with Load disabled, and the only
+  // way forward was tapping Download again to re-detect the file already on disk.
+  const [modelPath, setModelPath] = useState<string | null>(() => findExistingModel()?.uri ?? null);
+  const [phase, setPhase] = useState<Phase>(() => (findExistingModel() ? "downloaded" : "idle"));
   const [progress, setProgress] = useState<{ bytesWritten: number; totalBytes: number } | null>(null);
   const [context, setContext] = useState<LlamaContext | null>(null);
-  const [modelPath, setModelPath] = useState<string | null>(null);
   const [output, setOutput] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<{
@@ -77,16 +97,10 @@ export default function LlmSpikeScreen() {
     tokenCount?: number;
   }>({});
 
-  function existingModelFile(): File | null {
-    if (!modelDir.exists) return null;
-    const file = new File(modelDir, MODEL_FILENAME);
-    return file.exists ? file : null;
-  }
-
   async function handleDownload() {
     setErrorMessage(null);
     try {
-      const already = existingModelFile();
+      const already = findExistingModel();
       if (already) {
         setModelPath(already.uri);
         setPhase("downloaded");
