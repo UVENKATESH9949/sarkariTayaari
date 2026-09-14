@@ -55,6 +55,7 @@ assumed from whether an endpoint happens to be public.
 | [WEAKNESS-RADAR.md](WEAKNESS-RADAR.md) | Per-topic health, confidence, trend and recommended action for one student ("Weakness Radar" / Preparation Intelligence), plus its admin evidence view |
 | [AI-ADMIN.md](AI-ADMIN.md) | AI Admin Control Center — admin-managed AI provider enable/disable, model, API key, connection test, audit log. Configuration only; no AI-powered user feature exists yet |
 | [AI-CONTENT.md](AI-CONTENT.md) | AI-generated question/topic explanations — batch generation, answer-grounding validation, and the DRAFT→REVIEW→PUBLISHED human review workflow (TASK-2701 Phase 2). No public/mobile endpoint yet — sync is Phase 3 |
+| [AI-FEEDBACK.md](AI-FEEDBACK.md) | Live, per-student AI-phrased narratives — Practice/Mock Test session feedback (`POST /api/practice-sessions\|mock-attempts/{id}/feedback`) and the Preparation Radar profile summary (`POST /api/exams/{code}/profile-summary`) — the first live per-request AI calls, distinct from AI-CONTENT.md's batch-and-review pipeline (TASK-2701 Phase 7.1/7.2/7.3) |
 
 Not documented as separate files (trivial, not a real integration contract):
 `GET /api/health` (liveness probe) and `GET /downloads` (serves APKs from a local

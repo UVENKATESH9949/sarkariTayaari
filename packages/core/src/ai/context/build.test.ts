@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-import type { RadarTopic } from "../../intelligence/types";
+import type { RadarTopic, WeaknessRadar } from "../../intelligence/types";
 import { AI_TASKS } from "../tasks";
 import {
+  MAX_PROFILE_TOPICS,
   MAX_REASON_CODES,
   assembleContext,
   buildExamContext,
   buildLearnerContext,
+  buildLearnerProfileContext,
   buildQuestionContext,
+  buildSessionContext,
   buildTopicContext,
+  buildTopicSnapshot,
   contextGaps,
 } from "./build";
 
@@ -131,6 +135,112 @@ describe("buildLearnerContext", () => {
   });
 });
 
+function radarTopic(overrides: Partial<RadarTopic>): RadarTopic {
+  return { ...RADAR_TOPIC, ...overrides };
+}
+
+describe("buildTopicSnapshot", () => {
+  it("projects a RadarTopic to the compact session/profile shape, capping reason codes", () => {
+    const snapshot = buildTopicSnapshot(RADAR_TOPIC);
+
+    expect(snapshot).toEqual({
+      topicId: "t-1",
+      topicName: "Fundamental Rights",
+      subjectName: "Polity",
+      state: "NEEDS_REVISION",
+      healthScore: 53,
+      trend: "DECLINING",
+      reasonCodes: ["RECENT_DECLINE", "LOW_ACCURACY", "HIGH_EXAM_WEIGHT"],
+    });
+    expect(snapshot.reasonCodes).toHaveLength(MAX_REASON_CODES);
+  });
+});
+
+describe("buildSessionContext", () => {
+  it("computes accuracy from the given counts and projects every session topic", () => {
+    const context = buildSessionContext({
+      sessionKind: "PRACTICE",
+      examCode: "SSC_CGL",
+      answeredCount: 10,
+      correctCount: 7,
+      preferredLanguage: "en",
+      sessionTopics: [radarTopic({ topicId: "t-1" }), radarTopic({ topicId: "t-2", state: "STRONG" })],
+    });
+
+    expect(context.sessionKind).toBe("PRACTICE");
+    expect(context.examCode).toBe("SSC_CGL");
+    expect(context.answeredCount).toBe(10);
+    expect(context.correctCount).toBe(7);
+    expect(context.accuracyPercent).toBe(70);
+    expect(context.topics).toHaveLength(2);
+    expect(context.topics[1].state).toBe("STRONG");
+  });
+
+  it("does not divide by zero when nothing was answered", () => {
+    const context = buildSessionContext({
+      sessionKind: "MOCK",
+      examCode: null,
+      answeredCount: 0,
+      correctCount: 0,
+      preferredLanguage: "en",
+      sessionTopics: [],
+    });
+    expect(context.accuracyPercent).toBe(0);
+    expect(context.topics).toEqual([]);
+  });
+});
+
+describe("buildLearnerProfileContext", () => {
+  const radar: WeaknessRadar = {
+    examCode: "SSC_CGL",
+    algorithmVersion: "TOPIC_HEALTH_V1",
+    computedAt: "2026-09-01T00:00:00Z",
+    overview: {
+      status: "ON_TRACK",
+      topicsInSyllabus: 61,
+      topicsWithEvidence: 23,
+      topicsReliable: 10,
+      needsAttentionCount: 1,
+      needsRevisionCount: 1,
+      improvingCount: 1,
+      strongCount: 1,
+      developingCount: 0,
+      insufficientDataCount: 0,
+      headline: "On track",
+    },
+    // Already ranked, concern states first, strong states last — matching the real radar's
+    // own ordering guarantee, which is what lets this builder skip re-ranking entirely.
+    topics: [
+      radarTopic({ topicId: "t-attn", state: "NEEDS_ATTENTION" }),
+      radarTopic({ topicId: "t-rev", state: "NEEDS_REVISION" }),
+      radarTopic({ topicId: "t-improving", state: "IMPROVING" }),
+      radarTopic({ topicId: "t-strong", state: "STRONG" }),
+    ],
+  };
+
+  it("takes weaknesses from the concern states and strengths from the strong states, unranked further", () => {
+    const context = buildLearnerProfileContext(radar, { preferredLanguage: "en" });
+
+    expect(context.examCode).toBe("SSC_CGL");
+    expect(context.overviewStatus).toBe("ON_TRACK");
+    expect(context.topicsInSyllabus).toBe(61);
+    expect(context.topicsWithEvidence).toBe(23);
+    expect(context.weaknesses.map((t) => t.topicId)).toEqual(["t-attn", "t-rev"]);
+    expect(context.strengths.map((t) => t.topicId)).toEqual(["t-improving", "t-strong"]);
+  });
+
+  it("caps each side at MAX_PROFILE_TOPICS", () => {
+    const manyWeak: WeaknessRadar = {
+      ...radar,
+      topics: Array.from({ length: 10 }, (_, i) =>
+        radarTopic({ topicId: `t-weak-${i}`, state: "NEEDS_ATTENTION" }),
+      ),
+    };
+    const context = buildLearnerProfileContext(manyWeak, { preferredLanguage: "en" });
+    expect(context.weaknesses).toHaveLength(MAX_PROFILE_TOPICS);
+  });
+});
+
 describe("assembleContext", () => {
   const question = buildQuestionContext({
     questionId: "q-1",
@@ -171,6 +281,22 @@ describe("assembleContext", () => {
     expect(assembled.question).toBeDefined();
     expect(assembled.learner).toBeDefined();
     expect(assembled.exam).toBeUndefined();
+  });
+
+  it("keeps session context for SESSION_FEEDBACK and drops everything else", () => {
+    const session = buildSessionContext({
+      sessionKind: "PRACTICE",
+      examCode: "SSC_CGL",
+      answeredCount: 5,
+      correctCount: 3,
+      preferredLanguage: "en",
+      sessionTopics: [],
+    });
+    const assembled = assembleContext(AI_TASKS.SESSION_FEEDBACK, { session, question, learner });
+
+    expect(assembled.session).toBeDefined();
+    expect(assembled.question).toBeUndefined();
+    expect(assembled.learner).toBeUndefined();
   });
 });
 

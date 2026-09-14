@@ -70,6 +70,14 @@ public class UserMockAttempt {
     @Column(name = "uploaded_at", nullable = false)
     private OffsetDateTime uploadedAt = OffsetDateTime.now();
 
+    /** Phase 7.2 -- opportunistic cache of a generated SESSION_FEEDBACK narrative, mirroring
+     *  {@code UserPracticeSession}'s identical pair of columns. Null means "never generated." */
+    @Column(name = "feedback_narrative")
+    private String feedbackNarrative;
+
+    @Column(name = "feedback_generated_at")
+    private OffsetDateTime feedbackGeneratedAt;
+
     @OneToMany(mappedBy = "attempt", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("orderIndex ASC")
     private List<UserMockAttemptResult> results = new ArrayList<>();
@@ -124,4 +132,10 @@ public class UserMockAttempt {
 
     public List<UserMockAttemptResult> getResults() { return results; }
     public void setResults(List<UserMockAttemptResult> results) { this.results = results; }
+
+    public String getFeedbackNarrative() { return feedbackNarrative; }
+    public void setFeedbackNarrative(String feedbackNarrative) { this.feedbackNarrative = feedbackNarrative; }
+
+    public OffsetDateTime getFeedbackGeneratedAt() { return feedbackGeneratedAt; }
+    public void setFeedbackGeneratedAt(OffsetDateTime feedbackGeneratedAt) { this.feedbackGeneratedAt = feedbackGeneratedAt; }
 }

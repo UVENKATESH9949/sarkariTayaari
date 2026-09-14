@@ -51,6 +51,15 @@ public class UserPracticeSession {
     @Column(name = "uploaded_at", nullable = false)
     private OffsetDateTime uploadedAt = OffsetDateTime.now();
 
+    /** Phase 7.1 -- opportunistic cache of a generated SESSION_FEEDBACK narrative. Null means
+     *  "never generated (or the session synced after the student already saw one built purely
+     *  from their device's own local cache)" -- never a required backfill. */
+    @Column(name = "feedback_narrative")
+    private String feedbackNarrative;
+
+    @Column(name = "feedback_generated_at")
+    private OffsetDateTime feedbackGeneratedAt;
+
     @OneToMany(mappedBy = "session", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("orderIndex ASC")
     private List<UserPracticeSessionResult> results = new ArrayList<>();
@@ -87,4 +96,10 @@ public class UserPracticeSession {
 
     public List<UserPracticeSessionResult> getResults() { return results; }
     public void setResults(List<UserPracticeSessionResult> results) { this.results = results; }
+
+    public String getFeedbackNarrative() { return feedbackNarrative; }
+    public void setFeedbackNarrative(String feedbackNarrative) { this.feedbackNarrative = feedbackNarrative; }
+
+    public OffsetDateTime getFeedbackGeneratedAt() { return feedbackGeneratedAt; }
+    public void setFeedbackGeneratedAt(OffsetDateTime feedbackGeneratedAt) { this.feedbackGeneratedAt = feedbackGeneratedAt; }
 }

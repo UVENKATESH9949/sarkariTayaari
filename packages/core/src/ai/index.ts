@@ -19,12 +19,16 @@ export type {
 } from "./tasks";
 
 export {
+  MAX_PROFILE_TOPICS,
   MAX_REASON_CODES,
   assembleContext,
   buildExamContext,
   buildLearnerContext,
+  buildLearnerProfileContext,
   buildQuestionContext,
+  buildSessionContext,
   buildTopicContext,
+  buildTopicSnapshot,
   contextGaps,
 } from "./context/build";
 export type { QuestionContextInput } from "./context/build";
@@ -33,8 +37,11 @@ export type {
   AiContextKind,
   ExamContext,
   LearnerContext,
+  LearnerProfileContext,
   QuestionContext,
+  SessionContext,
   TopicContext,
+  TopicSnapshot,
 } from "./context/types";
 
 export { MISTAKE_TYPES, isGenerativeTaskId } from "./schema/types";
@@ -45,15 +52,31 @@ export type {
   MistakeAnalysis,
   MistakeType,
   PersonalizedExplanation,
+  ProfileSummary,
   QuestionClassification,
   QuestionExplanation,
   QuestionHint,
   ResponseForTask,
+  SessionFeedback,
   WrongOptionNote,
 } from "./schema/types";
 
-export { answerMatches, hintRevealsAnswer, parseAiJson, validateAiResponse } from "./schema/validate";
-export type { Grounding, ValidationFailureCode, ValidationResult } from "./schema/validate";
+export {
+  answerMatches,
+  groundedNarrative,
+  hintRevealsAnswer,
+  parseAiJson,
+  validateAiResponse,
+} from "./schema/validate";
+export type {
+  Grounding,
+  NarrativeGrounding,
+  ValidationFailureCode,
+  ValidationResult,
+} from "./schema/validate";
+
+export { sessionFeedbackTemplate } from "./feedback/sessionFeedbackTemplate";
+export { profileSummaryTemplate } from "./feedback/profileSummaryTemplate";
 
 export { canAttemptTask, isAiLanguageSupportedForTask, routeAiTask } from "./router";
 export type {

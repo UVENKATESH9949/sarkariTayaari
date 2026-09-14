@@ -288,19 +288,34 @@ public class AiConfigurationService implements DynamicAiConfigSource {
     private String effectiveApiKey(String providerId) {
         return credentialOverride(providerId).map(ProviderCredential::apiKey)
                 .filter(AiConfigurationService::nonBlank)
-                .orElse(staticProperties.getApiKey());
+                .orElseGet(() -> staticFallbackFor(providerId, staticProperties.getApiKey()));
     }
 
     private String effectiveModel(String providerId) {
         return credentialOverride(providerId).map(ProviderCredential::model)
                 .filter(AiConfigurationService::nonBlank)
-                .orElse(staticProperties.getModel());
+                .orElseGet(() -> staticFallbackFor(providerId, staticProperties.getModel()));
     }
 
     private String effectiveBaseUrl(String providerId) {
         return credentialOverride(providerId).map(ProviderCredential::baseUrl)
                 .filter(AiConfigurationService::nonBlank)
-                .orElse(staticProperties.getBaseUrl());
+                .orElseGet(() -> staticFallbackFor(providerId, staticProperties.getBaseUrl()));
+    }
+
+    /**
+     * {@code app.ai.*} is one single-provider config slot — mirrors the identical, separately
+     * found and fixed bug in {@code ai.config.AiConfigResolver}'s own doc comment: with two real
+     * HTTP-calling providers registered (Claude, Groq), a static config naming one of them must
+     * not silently apply to the other just because neither has a DB row. This class can't
+     * depend on {@code AiConfigResolver} directly (see the class doc's circular-dependency
+     * note), so the same guard is duplicated here rather than shared.
+     */
+    private String staticFallbackFor(String providerId, String staticValue) {
+        if (providerId == null || !providerId.equalsIgnoreCase(staticProperties.getProvider())) {
+            return null;
+        }
+        return staticValue;
     }
 
     private void recordTestResult(String canonicalProvider, boolean success, long latencyMs, String message) {
@@ -349,18 +364,27 @@ public class AiConfigurationService implements DynamicAiConfigSource {
 
     private AiProviderConfigView unconfiguredProviderView(String canonicalProvider) {
         boolean isMock = "MOCK".equals(canonicalProvider);
-        boolean configured = isMock || nonBlank(staticProperties.getApiKey());
-        boolean baseUrlConfigured = nonBlank(staticProperties.getBaseUrl());
+        // Same bug as effectiveApiKey/Model/BaseUrl above, a third independent copy of it:
+        // the static app.ai.* slot must not be reported as "configured" for a provider it was
+        // never set for, just because no DB row exists for it either.
+        String staticApiKey = staticFallbackFor(canonicalProvider, staticProperties.getApiKey());
+        String staticModel = staticFallbackFor(canonicalProvider, staticProperties.getModel());
+        String staticBaseUrl = staticFallbackFor(canonicalProvider, staticProperties.getBaseUrl());
+        boolean configured = isMock || nonBlank(staticApiKey);
+        boolean baseUrlConfigured = nonBlank(staticBaseUrl);
         return new AiProviderConfigView(
-                canonicalProvider, configured, blankToNull(staticProperties.getModel()), baseUrlConfigured,
+                canonicalProvider, configured, blankToNull(staticModel), baseUrlConfigured,
                 null, null, "NOT_TESTED", null, null, null, 0L);
     }
 
     private AiProviderConfigView toProviderConfigView(AiProviderConfig config) {
         boolean isMock = "MOCK".equals(config.getProvider());
-        boolean configured = isMock || nonBlank(config.getEncryptedApiKey()) || nonBlank(staticProperties.getApiKey());
-        String effectiveModel = nonBlank(config.getModel()) ? config.getModel() : staticProperties.getModel();
-        boolean baseUrlConfigured = nonBlank(config.getBaseUrl()) || nonBlank(staticProperties.getBaseUrl());
+        String staticApiKey = staticFallbackFor(config.getProvider(), staticProperties.getApiKey());
+        String staticModel = staticFallbackFor(config.getProvider(), staticProperties.getModel());
+        String staticBaseUrl = staticFallbackFor(config.getProvider(), staticProperties.getBaseUrl());
+        boolean configured = isMock || nonBlank(config.getEncryptedApiKey()) || nonBlank(staticApiKey);
+        String effectiveModel = nonBlank(config.getModel()) ? config.getModel() : staticModel;
+        boolean baseUrlConfigured = nonBlank(config.getBaseUrl()) || nonBlank(staticBaseUrl);
         return new AiProviderConfigView(
                 config.getProvider(),
                 configured,

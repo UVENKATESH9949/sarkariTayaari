@@ -672,6 +672,13 @@ export const practiceSessions = sqliteTable(
     // false until this session has been accepted by the server. Written locally first
     // and uploaded afterwards, so finishing a session never waits on the network.
     isSynced: integer("is_synced", { mode: "boolean" }).notNull().default(false),
+    // TASK-2701 Phase 7.1 — the AI-phrased narrative shown on Session Summary, computed
+    // on demand (never at session-completion time, since it needs a network round trip)
+    // and cached here so reopening the same session from History doesn't regenerate it.
+    // Both nullable: most sessions never get one (flag off, generation failed, or nobody
+    // opened Summary while online) and that's a normal, silent state, not an error.
+    feedbackNarrative: text("feedback_narrative"),
+    feedbackGeneratedAt: integer("feedback_generated_at", { mode: "timestamp_ms" }),
   },
   (table) => [
     index("idx_practice_sessions_completed_at").on(table.completedAt),
@@ -757,6 +764,11 @@ export const mockTestAttempts = sqliteTable(
     unattemptedCount: integer("unattempted_count").notNull(),
     totalQuestions: integer("total_questions").notNull(),
     isSynced: integer("is_synced", { mode: "boolean" }).notNull().default(false),
+    // TASK-2701 Phase 7.2 — mirrors practiceSessions' identical pair of columns (0024). Both
+    // nullable: most attempts never get one (flag off, generation failed, or nobody opened
+    // Result while online) and that's a normal, silent state, not an error.
+    feedbackNarrative: text("feedback_narrative"),
+    feedbackGeneratedAt: integer("feedback_generated_at", { mode: "timestamp_ms" }),
   },
   (table) => [
     // getMockAttemptSummary() filters on exam_code and is called once per exam on the

@@ -758,3 +758,32 @@ export function getAiTaskFlags() {
 export function updateAiTaskFlag(taskId, payload) {
   return request(`/api/admin/ai-task-flags/${taskId}`, jsonBody("PUT", payload));
 }
+
+/* ---------------------------------------------------------- AI Content (TASK-2701 Phase 2) */
+
+export function generateAiContent(payload) {
+  return request(`/api/admin/ai-content/generate`, jsonBody("POST", payload));
+}
+
+export function listAiContent({ taskId, status = "REVIEW" } = {}) {
+  const params = new URLSearchParams();
+  if (taskId) params.set("taskId", taskId);
+  if (status) params.set("status", status);
+  return request(`/api/admin/ai-content?${params.toString()}`);
+}
+
+export function submitAiContentForReview(id, expectedVersion) {
+  return request(`/api/admin/ai-content/${id}/submit-for-review`, jsonBody("PUT", { expectedVersion }));
+}
+
+export function publishAiContent(id, expectedVersion) {
+  return request(`/api/admin/ai-content/${id}/publish`, jsonBody("PUT", { expectedVersion }));
+}
+
+export function rejectAiContent(id, reason, expectedVersion) {
+  return request(`/api/admin/ai-content/${id}/reject`, jsonBody("PUT", { reason, expectedVersion }));
+}
+
+export function unpublishAiContent(id, expectedVersion) {
+  return request(`/api/admin/ai-content/${id}/unpublish`, jsonBody("PUT", { expectedVersion }));
+}

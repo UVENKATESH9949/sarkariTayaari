@@ -235,6 +235,14 @@ export type MockTestAttemptRecord = {
   unattemptedCount: number;
   totalQuestions: number;
   results: MockTestResultItem[];
+  /**
+   * TASK-2701 Phase 7.2 — the AI-phrased feedback narrative, cached after first generation so
+   * reopening this attempt from history doesn't regenerate it. Null for every attempt before
+   * this feature and for any attempt that never had feedback generated (flag off, offline, or
+   * generation failed) — a normal, silent state.
+   */
+  feedbackNarrative?: string | null;
+  feedbackGeneratedAt?: number | null;
 };
 
 export async function insertMockTestAttempt(attempt: MockTestAttemptRecord): Promise<void> {
@@ -315,6 +323,8 @@ export async function getMockTestAttempt(attemptId: string): Promise<MockTestAtt
     wrongCount: attempt.wrongCount,
     unattemptedCount: attempt.unattemptedCount,
     totalQuestions: attempt.totalQuestions,
+    feedbackNarrative: attempt.feedbackNarrative,
+    feedbackGeneratedAt: attempt.feedbackGeneratedAt ? attempt.feedbackGeneratedAt.getTime() : null,
     results: resultRows.map((r) => ({
       questionId: r.questionId,
       subjectName: r.subjectName,
@@ -368,4 +378,18 @@ export async function getMockAttemptSummary(examCode: string): Promise<MockAttem
     bestScore: Math.max(...rows.map((r) => r.totalMarksScored)),
     avgTimeSeconds: Math.round(rows.reduce((sum, r) => sum + r.timeTakenSeconds, 0) / rows.length),
   };
+}
+
+/**
+ * TASK-2701 Phase 7.2 — caches an AI-phrased feedback narrative against an already-saved mock
+ * attempt, mirroring `db/practiceSessions.ts`'s `saveSessionFeedback`. A no-op (0 rows
+ * affected) if the attempt id doesn't exist locally, which should not happen in practice —
+ * `getOrBuildMockFeedback` always calls this against an attempt just written by
+ * `insertMockTestAttempt` in the same screen's lifecycle.
+ */
+export async function saveMockAttemptFeedback(attemptId: string, narrative: string): Promise<void> {
+  await db
+    .update(mockTestAttempts)
+    .set({ feedbackNarrative: narrative, feedbackGeneratedAt: new Date() })
+    .where(eq(mockTestAttempts.id, attemptId));
 }

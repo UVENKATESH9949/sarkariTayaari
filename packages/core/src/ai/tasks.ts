@@ -50,7 +50,9 @@ export type AiTaskId =
   | "STUDY_PLAN"
   | "TOPIC_ANALYSIS"
   | "PERSONALIZED_EXPLANATION"
-  | "QUESTION_CLASSIFICATION";
+  | "QUESTION_CLASSIFICATION"
+  | "SESSION_FEEDBACK"
+  | "PROFILE_SUMMARY";
 
 /**
  * The languages AI may answer in — **not** the languages the app's UI supports.
@@ -259,6 +261,46 @@ export const AI_TASKS: Readonly<Record<AiTaskId, AiTaskDefinition>> = {
     minDeviceTier: "HIGH",
     groundTruthFallback: null,
   },
+
+  /**
+   * Phase 7 — one short narrative paragraph over a just-finished session's already-computed
+   * facts (accuracy, per-topic health/trend). `DETERMINISTIC` is a canned-sentence template
+   * (see `sessionFeedbackTemplate.ts`), never "nothing" — every declared tier must be genuinely
+   * servable. `GENERATED` is strictly a phrasing upgrade over the identical facts, never a new
+   * source of facts: the model is handed numbers and topic names, and is asked only to write
+   * about them, the same grounding discipline `QUESTION_EXPLANATION` already established.
+   * `groundTruthFallback: null` because the session-summary screen's own stat blocks are
+   * already complete without a narrative — an AI outage is never an error state here either.
+   */
+  SESSION_FEEDBACK: {
+    id: "SESSION_FEEDBACK",
+    tiers: ["DETERMINISTIC", "GENERATED"],
+    personalized: true,
+    cacheable: false,
+    languages: AI_LANGUAGES,
+    requiredContext: ["session"],
+    maxOutputTokens: 300,
+    minDeviceTier: "MID",
+    groundTruthFallback: null,
+  },
+
+  /**
+   * Phase 7 — the narrative behind the Profile screen: strengths/weaknesses already ranked by
+   * `WeaknessRadar`, phrased as a coach's note rather than a to-do list (that framing is
+   * Preparation Radar's job, not this task's). Same DETERMINISTIC-first shape as
+   * `SESSION_FEEDBACK`.
+   */
+  PROFILE_SUMMARY: {
+    id: "PROFILE_SUMMARY",
+    tiers: ["DETERMINISTIC", "GENERATED"],
+    personalized: true,
+    cacheable: false,
+    languages: AI_LANGUAGES,
+    requiredContext: ["learnerProfile"],
+    maxOutputTokens: 300,
+    minDeviceTier: "MID",
+    groundTruthFallback: "DETERMINISTIC_RADAR",
+  },
 };
 
 export const AI_TASK_IDS = Object.keys(AI_TASKS) as AiTaskId[];
@@ -279,6 +321,16 @@ export function isAiTaskId(value: string): value is AiTaskId {
  * not known to work. A test feeds this a deliberately broken registry and asserts it complains —
  * the same discipline `scripts/check-topic-health-parity.js` was proven with.
  */
+/**
+ * Context kinds that carry one specific student's own state. A `personalized` task must ask
+ * for at least one of these — the check used to hard-code `"learner"` alone, but `"session"`
+ * and `"learnerProfile"` (Phase 7) are exactly as per-student as `"learner"` is, and the reason
+ * the check exists (a shared/cached answer must not leak one student's state) applies
+ * identically to both. Broadened here, deliberately and visibly, rather than having the new
+ * tasks quietly route around a check that no longer matched what it was meant to enforce.
+ */
+const LEARNER_SCOPED_CONTEXT: readonly AiContextKind[] = ["learner", "session", "learnerProfile"];
+
 export function registryViolations(
   registry: Readonly<Record<string, AiTaskDefinition>>,
 ): string[] {
@@ -311,12 +363,15 @@ export function registryViolations(
       violations.push(`${task.id}: has a CACHED tier but is not marked cacheable`);
     }
 
-    if (task.personalized && !task.requiredContext.includes("learner")) {
-      violations.push(`${task.id}: personalized but asks for no learner context`);
+    const hasLearnerScopedContext = task.requiredContext.some((kind) =>
+      LEARNER_SCOPED_CONTEXT.includes(kind),
+    );
+    if (task.personalized && !hasLearnerScopedContext) {
+      violations.push(`${task.id}: personalized but asks for no learner-scoped context`);
     }
-    if (!task.personalized && task.requiredContext.includes("learner")) {
+    if (!task.personalized && hasLearnerScopedContext) {
       violations.push(
-        `${task.id}: asks for learner context but is not marked personalized — it would leak one student's state into a shared answer`,
+        `${task.id}: asks for learner-scoped context but is not marked personalized — it would leak one student's state into a shared answer`,
       );
     }
 

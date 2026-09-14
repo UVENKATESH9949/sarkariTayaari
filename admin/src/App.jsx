@@ -19,6 +19,7 @@ import Languages from "./pages/Languages.jsx";
 import DifficultyLevels from "./pages/DifficultyLevels.jsx";
 import PaperTypes from "./pages/PaperTypes.jsx";
 import AiControlCenter from "./pages/AiControlCenter.jsx";
+import AiContentReview from "./pages/AiContentReview.jsx";
 import Login from "./pages/Login.jsx";
 import { useAuth } from "./auth/AuthContext.jsx";
 import {
@@ -111,6 +112,8 @@ export default function App() {
 
           <span className="nav-group-label">Settings</span>
           <NavLink to="/ai-control-center"><AiIcon /> AI Control Center</NavLink>
+          {/* TASK-2701 Phase 2 -- generate, review, and publish AI-authored explanations */}
+          <NavLink to="/ai-content-review"><AiIcon /> AI Content Review</NavLink>
         </nav>
 
         <div className="sidebar-account">
@@ -142,6 +145,7 @@ export default function App() {
           <Route path="/difficulty-levels" element={<DifficultyLevels />} />
           <Route path="/paper-types" element={<PaperTypes />} />
           <Route path="/ai-control-center" element={<AiControlCenter />} />
+          <Route path="/ai-content-review" element={<AiContentReview />} />
         </Routes>
       </div>
     </div>

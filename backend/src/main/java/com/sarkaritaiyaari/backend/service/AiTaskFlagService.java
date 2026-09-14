@@ -44,6 +44,16 @@ public class AiTaskFlagService {
                 .toList();
     }
 
+    /**
+     * Phase 7 -- a single-flag read for a service to check before spending a request on a model
+     * call, rather than fetching the whole list-shaped view {@link #listFlags()}/
+     * {@link #clientConfig()} exist for the admin/config screens.
+     */
+    @Transactional(readOnly = true)
+    public boolean isEnabled(AiTaskId taskId) {
+        return repository.findById(taskId).map(AiTaskFlag::isEnabled).orElse(false);
+    }
+
     @Transactional(readOnly = true)
     public ClientConfigResponse clientConfig() {
         Map<AiTaskId, AiTaskFlag> byId = new LinkedHashMap<>();

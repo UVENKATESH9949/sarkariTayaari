@@ -97,6 +97,24 @@ export type QuestionClassification = {
   confidence: number;
 };
 
+/**
+ * Phase 7. Deliberately narrative-only — every number, topic name or trend the student sees
+ * comes straight off the `SessionContext`/`LearnerProfileContext` already in hand; the model's
+ * entire job is prose over facts it did not compute. That is what makes grounding tractable the
+ * same way it is for `QUESTION_EXPLANATION`'s `answer` field: `validate.ts`'s `groundedNarrative`
+ * checks every number/topic name the narrative mentions is traceable back to the context it was
+ * given, and rejects anything that is not.
+ */
+export type SessionFeedback = {
+  taskId: "SESSION_FEEDBACK";
+  narrative: string;
+};
+
+export type ProfileSummary = {
+  taskId: "PROFILE_SUMMARY";
+  narrative: string;
+};
+
 /** Every shape a `GENERATED` or `CACHED` tier can produce. */
 export type AiTaskResponse =
   | QuestionExplanation
@@ -104,7 +122,9 @@ export type AiTaskResponse =
   | ConceptExplanation
   | MistakeAnalysis
   | PersonalizedExplanation
-  | QuestionClassification;
+  | QuestionClassification
+  | SessionFeedback
+  | ProfileSummary;
 
 /**
  * The tasks that actually return a model-shaped payload. The rest
@@ -123,6 +143,8 @@ export function isGenerativeTaskId(id: AiTaskId): id is GenerativeTaskId {
     id === "CONCEPT_EXPLANATION" ||
     id === "MISTAKE_ANALYSIS" ||
     id === "PERSONALIZED_EXPLANATION" ||
-    id === "QUESTION_CLASSIFICATION"
+    id === "QUESTION_CLASSIFICATION" ||
+    id === "SESSION_FEEDBACK" ||
+    id === "PROFILE_SUMMARY"
   );
 }

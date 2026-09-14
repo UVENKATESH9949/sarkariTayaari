@@ -119,16 +119,19 @@ app:
     # nothing until an operator flips this to true — the same "off unless explicitly
     # turned on" posture as the epic-l/exam-guide/question-pool flags above.
     enabled: false
-    # CLAUDE | OPENAI | GEMINI | MOCK. Only CLAUDE and MOCK are implemented — OPENAI/GEMINI
-    # resolve to AIUnknownProviderException until a provider bean exists for them.
+    # CLAUDE | GROQ | OPENAI | GEMINI | MOCK. Only CLAUDE, GROQ and MOCK are implemented —
+    # OPENAI/GEMINI resolve to AIUnknownProviderException until a provider bean exists for them.
     provider: MOCK
     # Never commit a real value here. Set via AI_API_KEY in application-local.yml
     # (gitignored) or a real environment variable — never returned to any client, never
     # logged (see AIProperties/ClaudeProvider).
     api-key:
     # Provider-specific default model id. Leave blank to use the provider's own built-in
-    # default (ClaudeProvider falls back to claude-sonnet-5). A request-level override
-    # (AIRequest.model) always wins over this.
+    # default (ClaudeProvider falls back to claude-sonnet-5; GroqProvider to
+    # openai/gpt-oss-120b — verified against a real GET /models call, unlike the
+    # llama-3.3-70b-versatile this comment first guessed, which does not exist on a current
+    # Groq account and failed with AIModelNotFoundException on the first real call).
+    # A request-level override (AIRequest.model) always wins.
     model:
     # Leave blank to use the provider's real endpoint. Only needed to point at a proxy or
     # a test double.

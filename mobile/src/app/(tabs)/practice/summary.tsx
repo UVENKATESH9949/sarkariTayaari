@@ -1,8 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import { FlatList, Text, View, StyleSheet } from "react-native";
 import { useSessionHistory } from "../../../practice/sessionHistory";
-import type { QuestionResult } from "../../../practice/sessionHistory";
+import type { QuestionResult, SessionRecord } from "../../../practice/sessionHistory";
+import { useAppLanguage } from "../../../practice/appLanguage";
+import { getOrBuildSessionFeedback } from "../../../ai/sessionFeedback";
 import { Button } from "../../../ui/Button";
 import { Card } from "../../../ui/Card";
 import { EmptyState } from "../../../ui/EmptyState";
@@ -14,6 +17,60 @@ import { MultiSelectOptionList } from "../../../questionRenderer/MultiSelectOpti
 import { FreeTextAnswerInput } from "../../../questionRenderer/FreeTextAnswerInput";
 import { revealLetterCompactStyles } from "../../../questionRenderer/optionListStyles";
 import { describeYourAnswer, describeCorrectAnswer } from "../../../questionRenderer/answerSummary";
+
+/**
+ * TASK-2701 Phase 7.1 — the AI-phrased feedback narrative, loaded after the screen's own
+ * (always-present) stat blocks render. Keyed on `sessionId` rather than a plain boolean, the
+ * same `PreparationPlanCard` pattern this codebase already uses to dodge the
+ * `react-hooks/set-state-in-effect` cascading-render violation: comparing the stored id
+ * against the current one (rather than clearing state synchronously) means a slow response
+ * for a previously-viewed session can never flash onto a different one.
+ */
+function SessionFeedbackNarrative({
+  session,
+  topicId,
+  examCode,
+}: {
+  session: SessionRecord;
+  topicId: string | null;
+  examCode: string | null;
+}) {
+  const styles = useThemedStyles(buildStyles);
+  const { colors } = useTheme();
+  const t = useT();
+  const { defaultLanguageCode } = useAppLanguage();
+  const [loaded, setLoaded] = useState<{ sessionId: string; narrative: string | null } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getOrBuildSessionFeedback({ session, topicId, examCode, languageCode: defaultLanguageCode })
+      .then((narrative) => {
+        if (!cancelled) setLoaded({ sessionId: session.id, narrative });
+      })
+      .catch((err) => {
+        // Additive only — a failure here must never take down a screen whose stat blocks are
+        // already complete and correct without it.
+        console.warn("Failed to load session feedback", err);
+        if (!cancelled) setLoaded({ sessionId: session.id, narrative: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session, topicId, examCode, defaultLanguageCode]);
+
+  const narrative = loaded && loaded.sessionId === session.id ? loaded.narrative : null;
+  if (!narrative) return null;
+
+  return (
+    <View style={styles.feedbackBox}>
+      <View style={styles.feedbackHeader}>
+        <Ionicons name="sparkles" size={16} color={colors.brand.primary} />
+        <Text style={styles.feedbackLabel}>{t("summary.feedbackLabel")}</Text>
+      </View>
+      <Text style={styles.feedbackText}>{narrative}</Text>
+    </View>
+  );
+}
 
 // Takes the palette: these are semantic colours, which differ between themes.
 function scoreTone(accuracyPercent: number, colors: Theme["colors"]): { text: string; bg: string } {
@@ -159,7 +216,11 @@ export default function Summary() {
   const styles = useThemedStyles(buildStyles);
   const t = useT();
   const router = useRouter();
-  const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
+  const { sessionId, topicId, examCode } = useLocalSearchParams<{
+    sessionId: string;
+    topicId?: string;
+    examCode?: string;
+  }>();
   const { getSession } = useSessionHistory();
   const session = getSession(sessionId ?? "");
 
@@ -223,6 +284,12 @@ export default function Summary() {
                 })}
               </Text>
             )}
+
+            <SessionFeedbackNarrative
+              session={session}
+              topicId={topicId ?? null}
+              examCode={examCode ?? session.examCode}
+            />
 
             <View style={styles.statsRow}>
               {/* "Answered", not "Total" — with early finishing the two are different, and
@@ -313,6 +380,34 @@ const buildStyles = ({ colors, typography }: Theme) =>
       marginTop: spacing.xs,
       fontSize: 12,
       color: colors.text.muted,
+    },
+    feedbackBox: {
+      width: "100%",
+      marginTop: spacing.lg,
+      backgroundColor: colors.surface,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: spacing.md,
+    },
+    feedbackHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.xs,
+      marginBottom: spacing.xs,
+    },
+    feedbackLabel: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.brand.primary,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+    },
+    feedbackText: {
+      fontSize: 14,
+      lineHeight: 20,
+      color: colors.text.primary,
+      textAlign: "left",
     },
     statsRow: {
       flexDirection: "row",

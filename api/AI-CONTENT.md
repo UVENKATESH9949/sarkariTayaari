@@ -219,10 +219,19 @@ not bump on the row's initial INSERT, only on a later UPDATE; `AiTaskFlagService
 **Errors:** `400` for an unknown `taskId`; `409` for a stale `expectedVersion`; `403` for a
 non-admin caller (including `REVIEWER`, which this endpoint does not accept).
 
+## Admin console
+
+`admin/src/pages/AiContentReview.jsx` (TASK-2701 Phase 2, built 2026-09-14) — a form to generate
+content for explicit question/topic ids, and a filterable review queue with Submit for review /
+Publish / Reject / Unpublish actions per row. Manually verified end to end against a real backend
+and a real Groq call: generate → DRAFT → submit-for-review → REVIEW → publish → PUBLISHED →
+unpublish → DRAFT, each transition correctly reflected in the filtered list. One real bug was
+found and fixed during that pass: switching the status filter shortly after a fetch could let an
+older, slower response resolve after a newer one and silently overwrite it with stale data — the
+page now discards any response that isn't the one it most recently requested.
+
 ## Not yet built
 
-- Any admin console page for the review queue — `admin/src/pages/AiContentReview.jsx` per
-  `tasks/TASK-2701-on-device-and-hybrid-ai.md`'s phase table.
 - A device-side dry-run/verification pass for Phase 4's cached-flag gating specifically (Phase
   3's on-device pass covered the sync+render path before this flag existed; Phase 4 is verified
   by the real integration test suite plus typecheck/lint, not by a fresh emulator run).

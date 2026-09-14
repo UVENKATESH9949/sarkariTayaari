@@ -2,7 +2,7 @@
 #
 # Every test case belonging to the WEB module. Run after any change confined to that module.
 #
-# 17 test case(s). Membership rule: module == WEB (mechanical filter).
+# 18 test case(s). Membership rule: module == WEB (mechanical filter).
 
 suite: Regression — WEB
 test_case_ids:
@@ -23,3 +23,4 @@ test_case_ids:
   - TC-WEB-015
   - TC-WEB-016
   - TC-WEB-017
+  - TC-WEB-018

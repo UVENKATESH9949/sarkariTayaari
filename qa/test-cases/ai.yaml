@@ -1218,3 +1218,448 @@
     creating save, since Hibernate's @Version does not bump on an initial INSERT).
   automation_status: Automated
   automation_reference: "AiTaskFlagTest.update_rejectsAStaleVersion"
+
+- id: TC-AI-035
+  requirement_ids: [REQ-AI-018]
+  scenario_id: SCN-AI-035
+  system: Backend
+  module: AI
+  feature: Live per-student SESSION_FEEDBACK generation
+  title: A grounded narrative is generated and opportunistically cached onto a synced session
+  objective: >
+    Confirm that with SESSION_FEEDBACK enabled and a provider returning a well-formed response,
+    the endpoint returns a narrative grounded in the given facts and persists it onto the
+    UserPracticeSession row once that session already exists (synced) on the backend.
+  preconditions:
+    - Student is signed in
+    - ai_task_flags row for SESSION_FEEDBACK set to enabled=true
+    - Active AI provider is a test fixture returning a grounded, well-formed JSON response
+    - "A UserPracticeSession row already exists for the target sessionId (correctCount=7, totalCount=10)"
+  test_data: "n/a (sampleRequestBody: PRACTICE, 10 answered, 7 correct, 70%, one Percentages topic)"
+  test_environment: "Backend (dev, real Neon database)"
+  priority: High
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST /api/practice-sessions/{sessionId}/feedback as a signed-in student, with the flag and fixture provider enabled and a matching UserPracticeSession row already saved"
+      expected: "200 OK; narrative is non-null and contains the given accuracy (70) and topic name (Percentages)"
+    - step: 2
+      action: "Reload the UserPracticeSession row from the database"
+      expected: "feedbackNarrative equals the returned narrative; feedbackGeneratedAt is set"
+  expected_result: >
+    A grounded narrative is generated and cached server-side so reopening the session does not
+    re-generate it. (REQ-AI-018 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "SessionFeedbackControllerTest.generatesAGroundedNarrativeWhenEnabled; SessionFeedbackControllerTest.persistsTheNarrativeOntoAnAlreadySyncedSession"
+
+- id: TC-AI-036
+  requirement_ids: [REQ-AI-018]
+  scenario_id: SCN-AI-036
+  system: Backend
+  module: AI
+  feature: Live per-student SESSION_FEEDBACK generation
+  title: Feedback generation requires auth, and a disabled flag or unsynced session never errors
+  objective: >
+    Confirm an unauthenticated request is rejected 401; with the flag off the response is still
+    200 with narrative: null (never an error); and a sessionId with no matching
+    UserPracticeSession row still generates successfully, since persistence is best-effort.
+  preconditions:
+    - "No ai_task_flags row exists for SESSION_FEEDBACK at the start of each case (deleted in resetState)"
+  test_data: "n/a (sampleRequestBody, as in TC-AI-035)"
+  test_environment: "Backend (dev, real Neon database)"
+  priority: High
+  severity: Medium
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "POST /api/practice-sessions/{sessionId}/feedback with no Authorization header"
+      expected: "401 Unauthorized"
+    - step: 2
+      action: "POST as a signed-in student with no ai_task_flags row for SESSION_FEEDBACK (flag off by default)"
+      expected: "200 OK; narrative is null"
+    - step: 3
+      action: "Enable the flag and fixture provider, then POST for a sessionId with no matching UserPracticeSession row"
+      expected: "200 OK; narrative is non-null (generation does not depend on the session already existing server-side)"
+  expected_result: >
+    Authentication is required, and a disabled flag or an unsynced session both degrade to "no
+    narrative" or "generate anyway," never an error response. (REQ-AI-018 error_conditions,
+    edge_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "SessionFeedbackControllerTest.requiresAuthentication; SessionFeedbackControllerTest.returnsNullNarrativeWhenTheFlagIsOff; SessionFeedbackControllerTest.doesNotFailWhenNoSessionHasSyncedForThatId"
+
+- id: TC-AI-037
+  requirement_ids: [REQ-AI-018]
+  scenario_id: SCN-AI-037
+  system: Backend
+  module: AI
+  feature: Live per-student SESSION_FEEDBACK generation
+  title: The Java narrative-grounding check agrees with the shared TypeScript check on every shared fixture case
+  objective: >
+    Confirm PersonalNarrativeGrounding.firstUngroundedNumber/mentionsAKnownTopic produce the same
+    verdict as packages/core's groundedNarrative on every case in
+    sample-data/personal-narrative-grounding-fixtures.json.
+  preconditions: []
+  test_data: "sample-data/personal-narrative-grounding-fixtures.json"
+  test_environment: "Developer machine (plain JUnit, no Spring, no database)"
+  priority: Critical
+  severity: Critical
+  test_type: DataIntegrity
+  steps:
+    - step: 1
+      action: "Run every fixture case through PersonalNarrativeGrounding and compare to expectedGrounded"
+      expected: "Every case matches its expected verdict"
+  expected_result: >
+    The Java and TypeScript narrative-grounding checks stay in parity by construction, the same
+    discipline already proven for answer grounding (TC-AI-027). (REQ-AI-018 business_rule)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "PersonalNarrativeGroundingTest.everyFixtureCaseHolds"
+
+- id: TC-AI-038
+  requirement_ids: [REQ-AI-019]
+  scenario_id: SCN-AI-038
+  system: Backend
+  module: AI
+  feature: Live per-student SESSION_FEEDBACK generation for Mock Test
+  title: A grounded narrative is generated and opportunistically cached onto a synced mock attempt
+  objective: >
+    Confirm that with SESSION_FEEDBACK enabled and a provider returning a well-formed response,
+    POST /api/mock-attempts/{attemptId}/feedback returns a narrative grounded in the given facts
+    and persists it onto the UserMockAttempt row once that attempt already exists (synced) on
+    the backend.
+  preconditions:
+    - Student is signed in
+    - ai_task_flags row for SESSION_FEEDBACK set to enabled=true
+    - Active AI provider is a test fixture returning a grounded, well-formed JSON response
+    - "A UserMockAttempt row already exists for the target attemptId (correctCount=62, totalQuestions=100)"
+  test_data: "n/a (sampleRequestBody: MOCK, 100 answered, 62 correct, 62%, topics: [])"
+  test_environment: "Backend (dev, real Neon database)"
+  priority: High
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST /api/mock-attempts/{attemptId}/feedback as a signed-in student, with the flag and fixture provider enabled and a matching UserMockAttempt row already saved"
+      expected: "200 OK; narrative is non-null and contains the given accuracy (62)"
+    - step: 2
+      action: "Reload the UserMockAttempt row from the database"
+      expected: "feedbackNarrative equals the returned narrative; feedbackGeneratedAt is set"
+  expected_result: >
+    A grounded narrative is generated and cached server-side so reopening the attempt does not
+    re-generate it. (REQ-AI-019 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "MockAttemptFeedbackControllerTest.generatesAGroundedNarrativeWhenEnabled; MockAttemptFeedbackControllerTest.persistsTheNarrativeOntoAnAlreadySyncedAttempt"
+
+- id: TC-AI-039
+  requirement_ids: [REQ-AI-019]
+  scenario_id: SCN-AI-039
+  system: Backend
+  module: AI
+  feature: Live per-student SESSION_FEEDBACK generation for Mock Test
+  title: Mock Test feedback generation requires auth, and a disabled flag or unsynced attempt never errors
+  objective: >
+    Confirm an unauthenticated request is rejected 401; with the flag off the response is still
+    200 with narrative: null (never an error); and an attemptId with no matching UserMockAttempt
+    row still generates successfully, since persistence is best-effort.
+  preconditions:
+    - "No ai_task_flags row exists for SESSION_FEEDBACK at the start of each case (deleted in resetState)"
+  test_data: "n/a (sampleRequestBody, as in TC-AI-038)"
+  test_environment: "Backend (dev, real Neon database)"
+  priority: High
+  severity: Medium
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "POST /api/mock-attempts/{attemptId}/feedback with no Authorization header"
+      expected: "401 Unauthorized"
+    - step: 2
+      action: "POST as a signed-in student with no ai_task_flags row for SESSION_FEEDBACK (flag off by default)"
+      expected: "200 OK; narrative is null"
+    - step: 3
+      action: "Enable the flag and fixture provider, then POST for an attemptId with no matching UserMockAttempt row"
+      expected: "200 OK; narrative is non-null (generation does not depend on the attempt already existing server-side)"
+  expected_result: >
+    Authentication is required, and a disabled flag or an unsynced attempt both degrade to "no
+    narrative" or "generate anyway," never an error response. (REQ-AI-019 error_conditions,
+    edge_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "MockAttemptFeedbackControllerTest.requiresAuthentication; MockAttemptFeedbackControllerTest.returnsNullNarrativeWhenTheFlagIsOff; MockAttemptFeedbackControllerTest.doesNotFailWhenNoAttemptHasSyncedForThatId"
+
+- id: TC-AI-040
+  requirement_ids: [REQ-AI-020]
+  scenario_id: SCN-AI-040
+  system: Backend
+  module: AI
+  feature: Live per-student PROFILE_SUMMARY generation
+  title: A grounded narrative is generated from a student's ranked strengths and weaknesses
+  objective: >
+    Confirm that with PROFILE_SUMMARY enabled and a provider returning a well-formed response,
+    POST /api/exams/{examCode}/profile-summary returns a narrative grounded in the given coverage
+    numbers (topicsInSyllabus/topicsWithEvidence) and at least one given strength/weakness topic
+    name.
+  preconditions:
+    - Student is signed in
+    - ai_task_flags row for PROFILE_SUMMARY set to enabled=true
+    - Active AI provider is a test fixture returning a grounded, well-formed JSON response
+  test_data: "n/a (sampleRequestBody: 61 in syllabus, 23 with evidence, one STRONG strength (Geometry), one NEEDS_ATTENTION weakness (Percentages))"
+  test_environment: "Backend (dev, real Neon database)"
+  priority: Medium
+  severity: Low
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST /api/exams/{examCode}/profile-summary as a signed-in student, with the flag and fixture provider enabled"
+      expected: "200 OK; narrative is non-null and contains the given topicsWithEvidence (23) and a given topic name"
+  expected_result: >
+    A grounded narrative is generated over the exam-wide profile, not a specific session/attempt.
+    (REQ-AI-020 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Doubles as the regression guard for a real defect found on 2026-09-14: with the wire-level
+    max_tokens set to 300, this exact 3-strength/3-weakness payload made the reasoning model spend
+    its whole output budget thinking and get cut off mid-JSON (finishReason=length), surfacing as
+    a silent null narrative on the most realistic payload shape there is. Keep this case at 3+3 or
+    larger -- a smaller profile would not have caught it.
+  automation_status: Automated
+  automation_reference: "ProfileSummaryControllerTest.generatesAGroundedNarrativeWhenEnabled"
+
+- id: TC-AI-041
+  requirement_ids: [REQ-AI-020]
+  scenario_id: SCN-AI-041
+  system: Backend
+  module: AI
+  feature: Live per-student PROFILE_SUMMARY generation
+  title: Profile summary generation requires auth, and a disabled flag never errors
+  objective: >
+    Confirm an unauthenticated request is rejected 401, and with no ai_task_flags row for
+    PROFILE_SUMMARY (flag off by default) the response is still 200 with narrative: null.
+  preconditions:
+    - "No ai_task_flags row exists for PROFILE_SUMMARY at the start of each case (deleted in resetState)"
+  test_data: "n/a (sampleRequestBody, as in TC-AI-040)"
+  test_environment: "Backend (dev, real Neon database)"
+  priority: Medium
+  severity: Low
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "POST /api/exams/{examCode}/profile-summary with no Authorization header"
+      expected: "401 Unauthorized"
+    - step: 2
+      action: "POST as a signed-in student with no ai_task_flags row for PROFILE_SUMMARY (flag off by default)"
+      expected: "200 OK; narrative is null"
+  expected_result: >
+    Authentication is required, and a disabled flag degrades to "no narrative," never an error
+    response. (REQ-AI-020 error_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "ProfileSummaryControllerTest.requiresAuthentication; ProfileSummaryControllerTest.returnsNullNarrativeWhenTheFlagIsOff"
+
+- id: TC-AI-043
+  requirement_ids: [REQ-AI-020]
+  scenario_id: SCN-AI-043
+  system: Backend
+  module: AI
+  feature: Profile summary cache
+  title: Identical facts are served from cache without a second provider call
+  objective: >
+    Confirm the content-hash cache prevents a second model call when nothing a narrative could
+    cite has changed.
+  preconditions:
+    - PROFILE_SUMMARY enabled; fixture provider active; no cached row for this (user, exam)
+  test_data: "n/a (3 strengths + 3 weaknesses, 61 in syllabus, 23 practised)"
+  test_environment: "Backend (dev, real Neon database)"
+  priority: Medium
+  severity: Medium
+  test_type: Performance
+  steps:
+    - step: 1
+      action: "POST /api/exams/{examCode}/profile-summary and note the provider's generation count"
+      expected: "200 OK, non-null narrative, generation count is 1"
+    - step: 2
+      action: "POST again with a byte-identical body"
+      expected: "Same narrative returned, generation count is STILL 1 -- the provider was not called again"
+  expected_result: >
+    An unchanged profile costs nothing after the first generation. (REQ-AI-020 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Asserted on a generation counter rather than on the returned text: the fixture provider is
+    deterministic, so a real regeneration would look identical to a cache hit.
+  automation_status: Automated
+  automation_reference: "ProfileSummaryControllerTest.identicalFactsAreServedFromCacheWithoutSpendingASecondModelCall"
+
+- id: TC-AI-044
+  requirement_ids: [REQ-AI-020]
+  scenario_id: SCN-AI-044
+  system: Backend
+  module: AI
+  feature: Profile summary cache
+  title: Changed facts regenerate rather than serving a stale narrative
+  objective: >
+    Confirm the cache misses when a fact a narrative may cite actually changes.
+  preconditions:
+    - PROFILE_SUMMARY enabled; fixture provider active; one cached row already generated
+  test_data: "n/a (same payload, topicsWithEvidence 23 -> 24)"
+  test_environment: "Backend (dev, real Neon database)"
+  priority: Medium
+  severity: High
+  test_type: StateTransition
+  steps:
+    - step: 1
+      action: "Generate once, then POST again with topicsWithEvidence changed from 23 to 24"
+      expected: "Generation count increments to 2 -- the narrative is rebuilt from the new facts"
+  expected_result: >
+    A cache that never misses would serve out-of-date advice; a real change must regenerate.
+    (REQ-AI-020 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "ProfileSummaryControllerTest.changedFactsRegenerateRatherThanServingAStaleNarrative"
+
+- id: TC-AI-045
+  requirement_ids: [REQ-AI-021]
+  scenario_id: SCN-AI-045
+  system: Backend
+  module: AI
+  feature: AI usage tracking
+  title: A real AI call is persisted and appears in the admin aggregate
+  objective: >
+    Confirm DatabaseAIUsageRecorder writes one row per call with consistent token counts, and that
+    the admin summary aggregates it under its feature.
+  preconditions:
+    - SESSION_FEEDBACK enabled; fixture provider active
+  test_data: "n/a (a single practice-session feedback call)"
+  test_environment: "Backend (dev, real Neon database)"
+  priority: Medium
+  severity: Medium
+  test_type: Integration
+  steps:
+    - step: 1
+      action: "Make one feedback call, then query ai_usage_events for rows since the test started"
+      expected: "Exactly one row, status success, totalTokens == inputTokens + outputTokens, > 0"
+    - step: 2
+      action: "GET /api/admin/ai-usage/summary?since=<ISO UTC> as admin"
+      expected: "200 OK; totals are internally consistent and byFeature includes session-feedback"
+  expected_result: >
+    AI spend is answerable from the database rather than by grepping stdout. (REQ-AI-021
+    acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "AiUsageTrackingTest.everyAiCallIsPersistedWithItsTokenCounts; AiUsageTrackingTest.theAdminSummaryAggregatesByFeature"
+
+- id: TC-AI-046
+  requirement_ids: [REQ-AI-021]
+  scenario_id: SCN-AI-046
+  system: Backend
+  module: AI
+  feature: AI usage tracking
+  title: The usage summary is admin-only and rejects a malformed time window
+  objective: >
+    Confirm authorization and input validation on the aggregate endpoint.
+  preconditions: []
+  test_data: "n/a"
+  test_environment: "Backend (dev, real Neon database)"
+  priority: Medium
+  severity: Medium
+  test_type: Authorization
+  steps:
+    - step: 1
+      action: "GET /api/admin/ai-usage/summary with no Authorization header"
+      expected: "401 Unauthorized"
+    - step: 2
+      action: "GET as a signed-in student"
+      expected: "403 Forbidden"
+    - step: 3
+      action: "GET as admin with since=not-a-timestamp"
+      expected: "400 Bad Request"
+  expected_result: >
+    Operational spend data is admin-only, and a bad time window fails loudly rather than silently
+    defaulting. (REQ-AI-021 error_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "AiUsageTrackingTest.theSummaryIsAdminOnly; AiUsageTrackingTest.aMalformedSinceIsRejected"
+
+- id: TC-AI-042
+  requirement_ids: [REQ-AI-010, REQ-AI-012, REQ-AI-013, REQ-AI-014]
+  scenario_id: SCN-AI-042
+  system: Admin
+  module: AI
+  feature: AI Content Review admin page
+  title: Generate, submit for review, publish, and unpublish a real explanation through the admin UI
+  objective: >
+    Confirm the full content lifecycle works correctly when driven entirely through the admin
+    console page, against a real backend and a real AI provider -- not just through direct API
+    calls (which REQ-AI-010/012/013/014's own backend integration tests already cover).
+  preconditions:
+    - Signed in as an admin (or a minted admin-fixture token)
+    - A real, non-deleted question id to generate an explanation for
+    - The active AI provider is configured and reachable (Groq, in this project's current setup)
+  test_data: "Any real question id from GET /api/questions/live; no fixture required"
+  test_environment: "Real dev backend + admin dev server (browser), real Groq API call"
+  priority: Medium
+  severity: Low
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "On AI Content Review, fill Task=QUESTION_EXPLANATION, Language=en, paste a real question id, click Generate"
+      expected: "A result summary shows Generated 1; no console errors"
+    - step: 2
+      action: "Switch the Status filter to DRAFT"
+      expected: "A card for that question appears with a DRAFT badge, the full payload table, and Submit for review / Publish buttons"
+    - step: 3
+      action: "Click Submit for review, then switch the Status filter to REVIEW"
+      expected: "The card now appears under REVIEW with Publish / Reject buttons; it no longer appears under DRAFT"
+    - step: 4
+      action: "Click Publish, then switch the Status filter to PUBLISHED"
+      expected: "The card now appears under PUBLISHED with an Unpublish button, and a Reviewed by/at line"
+    - step: 5
+      action: "Click Unpublish, then switch the Status filter to DRAFT"
+      expected: "The card is back under DRAFT with its Reviewed-by note preserved"
+  expected_result: >
+    Every transition (generate, submit-for-review, publish, unpublish) is reachable and correctly
+    reflected in the filtered list through the admin UI alone, matching what REQ-AI-010/012/013/
+    014's own backend tests already prove works at the API layer.
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Manually walked through this exact sequence on 2026-09-14 via a scripted (Playwright)
+    browser session against a real backend and a real Groq call -- not a substitute for a human
+    running this case, but real evidence the path is reachable and correct. Found and fixed one
+    real bug: a stale-response race in the review-queue filter (see SCN-AI-042's own notes).
+  automation_status: ManualOnly
+  automation_reference: null

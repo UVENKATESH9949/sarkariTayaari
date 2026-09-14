@@ -177,6 +177,7 @@ export const en = {
     notFound: "Session not found",
     notFoundBody: "This session may have been cleared from your history.",
     earlyFinish: "Finished early · {answered} of {available} answered, {skipped} left",
+    feedbackLabel: "AI Feedback",
   },
 
   history: {
@@ -225,6 +226,7 @@ export const en = {
     sectionBreakdown: "Section-wise breakdown",
     backToMock: "Back to Mock Test",
     loadingResult: "Preparing your performance report...",
+    feedbackLabel: "AI Feedback",
     searchExams: "Search exams...",
     fullTestOne: "full test",
     fullTestOther: "full tests",

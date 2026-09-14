@@ -169,6 +169,20 @@
       "when": 1788345606034,
       "tag": "0023_client_config",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1788345606035,
+      "tag": "0024_session_feedback",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1788345606036,
+      "tag": "0025_mock_attempt_feedback",
+      "breakpoints": true
     }
   ]
 }

@@ -25,6 +25,8 @@ import m0020 from './0020_wave_a_option_set_types.sql';
 import m0021 from './0021_question_groups_and_media.sql';
 import m0022 from './0022_ai_content.sql';
 import m0023 from './0023_client_config.sql';
+import m0024 from './0024_session_feedback.sql';
+import m0025 from './0025_mock_attempt_feedback.sql';
 
   export default {
     journal,
@@ -52,6 +54,8 @@ m0019,
 m0020,
 m0021,
 m0022,
-m0023
+m0023,
+m0024,
+m0025
     }
   }

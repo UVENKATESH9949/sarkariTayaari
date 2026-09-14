@@ -2,7 +2,26 @@ import { describe, expect, it } from "vitest";
 
 import { buildQuestionContext } from "../context/build";
 import type { QuestionContext } from "../context/types";
-import { answerMatches, hintRevealsAnswer, parseAiJson, validateAiResponse } from "./validate";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+import {
+  answerMatches,
+  groundedNarrative,
+  hintRevealsAnswer,
+  parseAiJson,
+  validateAiResponse,
+} from "./validate";
+
+/**
+ * Reads a JSON fixture from the repo-root `sample-data/` directory, shared with a Java-side
+ * test asserting the identical cases against that side's implementation — see
+ * `AiAnswerGroundingTest`/`PersonalNarrativeGroundingTest`.
+ */
+function readSharedFixture(name: string): { cases: Record<string, unknown>[] } {
+  const path = fileURLToPath(new URL(`../../../../../sample-data/${name}`, import.meta.url));
+  return JSON.parse(readFileSync(path, "utf8"));
+}
 
 const CAPITALS: QuestionContext = buildQuestionContext({
   questionId: "q-1",
@@ -85,6 +104,32 @@ describe("answerMatches", () => {
   it("rejects a different option", () => {
     expect(answerMatches("Chennai", "Kolkata", options)).toBe(false);
     expect(answerMatches("C", "Kolkata", options)).toBe(false);
+  });
+
+  /**
+   * `AiAnswerGrounding.java`'s own doc comment has long claimed both sides run this fixture —
+   * that was only ever true of the Java side; this file never actually read it. Fixed in place
+   * per this project's own standing rule about stale claims, found while adding the equivalent,
+   * genuinely-new-this-time parity test for `groundedNarrative` below.
+   */
+  it("shared fixture parity — every case in ai-answer-grounding-fixtures.json", () => {
+    const { cases } = readSharedFixture("ai-answer-grounding-fixtures.json");
+    const failures: string[] = [];
+
+    for (const c of cases) {
+      const claimed = c.claimedAnswer as string;
+      const correct = c.correctAnswer as string;
+      const opts = c.options as string[];
+      const expected = c.expectedMatch as boolean;
+      const actual = answerMatches(claimed, correct, opts);
+      if (actual !== expected) {
+        failures.push(
+          `claimed="${claimed}" correct="${correct}" options=${JSON.stringify(opts)} (${c.note}): expected ${expected}, got ${actual}`,
+        );
+      }
+    }
+
+    expect(failures).toEqual([]);
   });
 });
 
@@ -268,5 +313,121 @@ describe("closed enums and ranges", () => {
     });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.code).toBe("WRONG_TYPE");
+  });
+});
+
+describe("groundedNarrative — the check SESSION_FEEDBACK/PROFILE_SUMMARY exist for", () => {
+  it("accepts a narrative that cites only given numbers and a given topic", () => {
+    const result = groundedNarrative(
+      "You answered 7 of 10 correctly (70%). Percentages needs more attention right now.",
+      { allowedNumbers: [7, 10, 70], allowedTopicNames: ["Percentages"] },
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("rejects a narrative that invents a number it was not given", () => {
+    const result = groundedNarrative("You scored 95% today.", {
+      allowedNumbers: [70],
+      allowedTopicNames: [],
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("UNGROUNDED_NARRATIVE");
+  });
+
+  it("rejects a generic narrative that names none of the given topics", () => {
+    const result = groundedNarrative("You answered 7 of 10 correctly. Keep practicing!", {
+      allowedNumbers: [7, 10],
+      allowedTopicNames: ["Percentages"],
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("UNGROUNDED_NARRATIVE");
+  });
+
+  it("skips the topic-mention check when no topic names were supplied", () => {
+    const result = groundedNarrative("You answered 7 of 10 correctly.", {
+      allowedNumbers: [7, 10],
+      allowedTopicNames: [],
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it("rounds decimals before comparing, so a stated 69.6% matches an allowed 70", () => {
+    const result = groundedNarrative("You're at roughly 69.6% accuracy.", {
+      allowedNumbers: [70],
+      allowedTopicNames: [],
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it("shared fixture parity — every case in personal-narrative-grounding-fixtures.json", () => {
+    const { cases } = readSharedFixture("personal-narrative-grounding-fixtures.json");
+    const failures: string[] = [];
+
+    for (const c of cases) {
+      const narrative = c.narrative as string;
+      const allowedNumbers = c.allowedNumbers as number[];
+      const allowedTopicNames = c.allowedTopicNames as string[];
+      const expected = c.expectedGrounded as boolean;
+      const actual = groundedNarrative(narrative, { allowedNumbers, allowedTopicNames }).ok;
+      if (actual !== expected) {
+        failures.push(`narrative="${narrative}" (${c.note}): expected grounded=${expected}, got ${actual}`);
+      }
+    }
+
+    expect(failures).toEqual([]);
+  });
+});
+
+describe("validateAiResponse — SESSION_FEEDBACK / PROFILE_SUMMARY", () => {
+  const narrativeGrounding = {
+    allowedNumbers: [7, 10, 70],
+    allowedTopicNames: ["Percentages"],
+  };
+
+  it("accepts a grounded session narrative", () => {
+    const result = validateAiResponse(
+      "SESSION_FEEDBACK",
+      { taskId: "SESSION_FEEDBACK", narrative: "You answered 7 of 10 correctly (70%). Percentages needs work." },
+      { narrative: narrativeGrounding },
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.taskId).toBe("SESSION_FEEDBACK");
+  });
+
+  it("rejects an ungrounded session narrative", () => {
+    const result = validateAiResponse(
+      "SESSION_FEEDBACK",
+      { taskId: "SESSION_FEEDBACK", narrative: "You answered 9 of 10 correctly." },
+      { narrative: narrativeGrounding },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("UNGROUNDED_NARRATIVE");
+  });
+
+  it("accepts a grounded profile narrative", () => {
+    const result = validateAiResponse(
+      "PROFILE_SUMMARY",
+      { taskId: "PROFILE_SUMMARY", narrative: "Percentages is at 70% and coming along." },
+      { narrative: narrativeGrounding },
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("skips narrative grounding when the caller supplied none, same posture as answer grounding", () => {
+    const result = validateAiResponse("SESSION_FEEDBACK", {
+      taskId: "SESSION_FEEDBACK",
+      narrative: "Anything at all, 9999%.",
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it("rejects a blank narrative", () => {
+    const result = validateAiResponse(
+      "SESSION_FEEDBACK",
+      { taskId: "SESSION_FEEDBACK", narrative: "   " },
+      { narrative: narrativeGrounding },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("EMPTY_FIELD");
   });
 });

@@ -605,7 +605,15 @@ export default function Quiz() {
     }
 
     endSession();
-    router.replace({ pathname: "/practice/summary", params: { sessionId } });
+    // topicId/examCode ride along here (TASK-2701 Phase 7.1) rather than needing a new
+    // persisted column — a practice session is single-topic by construction, so this
+    // param only has to survive the few seconds until Summary builds the AI feedback
+    // context, exactly the reasoning in the comment above for why recordTopicPractice
+    // reads topicId here instead of from SessionRecord.
+    router.replace({
+      pathname: "/practice/summary",
+      params: { sessionId, ...(topicId ? { topicId } : {}), ...(examCode ? { examCode } : {}) },
+    });
   };
 
   if (questions === null) {

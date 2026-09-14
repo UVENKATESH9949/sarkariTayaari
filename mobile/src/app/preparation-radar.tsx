@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { RefreshControl, ScrollView, Text, View, StyleSheet } from "react-native";
+import { getOrBuildProfileSummary } from "../ai/profileSummary";
 import { getRadar } from "../data/weaknessRadarData";
+import { useAppLanguage } from "../practice/appLanguage";
 import { getFollowedExam } from "../db/followedExams";
 import type { RadarResult, RadarTopic } from "@sarkaritaiyaari/core/intelligence";
 import { useAuth } from "../practice/authContext";
@@ -175,6 +177,7 @@ export default function PreparationRadarScreen() {
         ) : (
           <>
             <OverviewCard radar={radar} result={result!} styles={styles} colors={colors} />
+            <ProfileSummaryNarrative radar={radar} examCode={examCode!} styles={styles} colors={colors} />
 
             {radar.overview.topicsWithEvidence === 0 ? (
               /*
@@ -226,6 +229,59 @@ export default function PreparationRadarScreen() {
         )}
       </ScrollView>
     </>
+  );
+}
+
+/**
+ * TASK-2701 Phase 7.3 — the AI-phrased "how you're doing overall" narrative, the Preparation
+ * Radar twin of Practice Summary's `SessionFeedbackNarrative`. Keyed on `radar` itself (a new
+ * object each time `PreparationRadarScreen`'s own effect refetches), the same
+ * `set-state-in-effect`-avoiding pattern used throughout this codebase.
+ */
+function ProfileSummaryNarrative({
+  radar,
+  examCode,
+  styles,
+  colors,
+}: {
+  radar: NonNullable<RadarResult["radar"]>;
+  examCode: string;
+  styles: ReturnType<typeof buildStyles>;
+  colors: Theme["colors"];
+}) {
+  const [loaded, setLoaded] = useState<{ radar: NonNullable<RadarResult["radar"]>; narrative: string | null } | null>(
+    null,
+  );
+  const { defaultLanguageCode } = useAppLanguage();
+
+  useEffect(() => {
+    let cancelled = false;
+    getOrBuildProfileSummary({ radar, examCode, languageCode: defaultLanguageCode })
+      .then((narrative) => {
+        if (!cancelled) setLoaded({ radar, narrative });
+      })
+      .catch((err) => {
+        // Additive only — a failure here must never take down a screen that is already
+        // complete and correct without it.
+        console.warn("Failed to load profile summary", err);
+        if (!cancelled) setLoaded({ radar, narrative: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [radar, examCode, defaultLanguageCode]);
+
+  const narrative = loaded && loaded.radar === radar ? loaded.narrative : null;
+  if (!narrative) return null;
+
+  return (
+    <View style={styles.summaryBox}>
+      <View style={styles.summaryHeader}>
+        <Ionicons name="sparkles" size={16} color={colors.brand.primary} />
+        <Text style={styles.summaryLabel}>AI SUMMARY</Text>
+      </View>
+      <Text style={styles.summaryText}>{narrative}</Text>
+    </View>
   );
 }
 
@@ -435,6 +491,31 @@ function buildStyles({ colors }: Theme) {
       color: colors.text.muted,
       marginTop: spacing.xs,
       fontStyle: "italic",
+    },
+    summaryBox: {
+      backgroundColor: colors.surface,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: spacing.md,
+      marginBottom: spacing.lg,
+    },
+    summaryHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.xs,
+      marginBottom: spacing.xs,
+    },
+    summaryLabel: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.brand.primary,
+      letterSpacing: 0.4,
+    },
+    summaryText: {
+      fontSize: 14,
+      lineHeight: 20,
+      color: colors.text.primary,
     },
     section: {
       marginBottom: spacing.lg,

@@ -3,6 +3,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { FlatList, Pressable, Text, View, StyleSheet } from "react-native";
 import { getMockTestAttempt, type MockTestAttemptRecord } from "../../../db/mockTest";
+import { getOrBuildMockFeedback } from "../../../ai/sessionFeedback";
+import { useAppLanguage } from "../../../practice/appLanguage";
 import { toSubjectMeta } from "../../../constants/subjects";
 import { getAllSubjects, type SubjectMetaRow } from "../../../db/subjectMeta";
 import { Button } from "../../../ui/Button";
@@ -148,6 +150,49 @@ function QuestionResultCard({
   );
 }
 
+/**
+ * TASK-2701 Phase 7.2 — the AI-phrased feedback narrative, the Mock Test twin of
+ * `practice/summary.tsx`'s `SessionFeedbackNarrative`. Same keyed-on-id pattern to dodge
+ * `react-hooks/set-state-in-effect`'s cascading-render violation.
+ */
+function MockFeedbackNarrative({ attempt }: { attempt: MockTestAttemptRecord }) {
+  const styles = useThemedStyles(buildStyles);
+  const { colors } = useTheme();
+  const t = useT();
+  const { defaultLanguageCode } = useAppLanguage();
+  const [loaded, setLoaded] = useState<{ attemptId: string; narrative: string | null } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getOrBuildMockFeedback({ attempt, examCode: attempt.examCode, languageCode: defaultLanguageCode })
+      .then((narrative) => {
+        if (!cancelled) setLoaded({ attemptId: attempt.id, narrative });
+      })
+      .catch((err) => {
+        // Additive only — a failure here must never take down a screen whose stat blocks are
+        // already complete and correct without it.
+        console.warn("Failed to load mock attempt feedback", err);
+        if (!cancelled) setLoaded({ attemptId: attempt.id, narrative: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [attempt, defaultLanguageCode]);
+
+  const narrative = loaded && loaded.attemptId === attempt.id ? loaded.narrative : null;
+  if (!narrative) return null;
+
+  return (
+    <View style={styles.feedbackBox}>
+      <View style={styles.feedbackHeader}>
+        <Ionicons name="sparkles" size={16} color={colors.brand.primary} />
+        <Text style={styles.feedbackLabel}>{t("mock.feedbackLabel")}</Text>
+      </View>
+      <Text style={styles.feedbackText}>{narrative}</Text>
+    </View>
+  );
+}
+
 export default function MockTestResult() {
   const { colors } = useTheme();
   const styles = useThemedStyles(buildStyles);
@@ -232,6 +277,8 @@ export default function MockTestResult() {
           <Text style={styles.statLabel}>{t("common.unattempted")}</Text>
         </View>
       </View>
+
+      <MockFeedbackNarrative attempt={attempt} />
 
       <View style={styles.timeRow}>
         <Ionicons name="time-outline" size={16} color={colors.text.muted} />
@@ -338,6 +385,34 @@ const buildStyles = ({ colors, typography }: Theme) =>
       fontSize: 11,
       color: colors.text.muted,
       marginTop: 2,
+    },
+    feedbackBox: {
+      width: "100%",
+      backgroundColor: colors.surface,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 14,
+      marginBottom: 16,
+    },
+    feedbackHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginBottom: 6,
+    },
+    feedbackLabel: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.brand.primary,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+    },
+    feedbackText: {
+      fontSize: 14,
+      lineHeight: 20,
+      color: colors.text.primary,
+      textAlign: "left",
     },
     timeRow: {
       flexDirection: "row",

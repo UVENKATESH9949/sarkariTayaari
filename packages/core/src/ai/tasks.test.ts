@@ -128,9 +128,36 @@ describe("registryViolations detects drift", () => {
     );
   });
 
-  it("catches a personalized task that asks for no learner context", () => {
+  it("catches a personalized task that asks for no learner-scoped context", () => {
     expect(violationsFor({ personalized: true, cacheable: false, tiers: ["GENERATED"] })).toContainEqual(
-      expect.stringContaining("personalized but asks for no learner context"),
+      expect.stringContaining("personalized but asks for no learner-scoped context"),
+    );
+  });
+
+  /**
+   * Phase 7: `"session"`/`"learnerProfile"` are exactly as per-student as `"learner"` is, so the
+   * personalized-context check must treat all three identically — not just the original kind.
+   */
+  it("accepts a personalized task scoped by session context instead of learner context", () => {
+    expect(
+      violationsFor({ personalized: true, cacheable: false, tiers: ["GENERATED"], requiredContext: ["session"] }),
+    ).toEqual([]);
+  });
+
+  it("accepts a personalized task scoped by learnerProfile context instead of learner context", () => {
+    expect(
+      violationsFor({
+        personalized: true,
+        cacheable: false,
+        tiers: ["GENERATED"],
+        requiredContext: ["learnerProfile"],
+      }),
+    ).toEqual([]);
+  });
+
+  it("catches a shared task asking for session context", () => {
+    expect(violationsFor({ requiredContext: ["question", "session"] })).toContainEqual(
+      expect.stringContaining("not marked personalized"),
     );
   });
 

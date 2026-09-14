@@ -414,3 +414,155 @@
     row's initial INSERT, only on a later UPDATE, so this case needed an explicit fix
     (AiTaskFlagService seeds version=1 on first creation) rather than being free from the
     @Version annotation alone.
+
+- id: SCN-AI-035
+  requirement_ids: [REQ-AI-018]
+  category: Positive
+  title: A signed-in student gets a grounded SESSION_FEEDBACK narrative, opportunistically cached
+  objective: >
+    Confirm that with the flag enabled and a provider returning a well-formed response, the
+    endpoint returns a grounded narrative and persists it onto the session row once that session
+    has already synced to this backend.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-036
+  requirement_ids: [REQ-AI-018]
+  category: Negative
+  title: Feedback generation requires auth and never errors when it has nothing to say
+  objective: >
+    Confirm an unauthenticated request is rejected, a disabled flag returns narrative: null
+    (never an error), and a sessionId that has not synced to this backend yet still generates
+    successfully -- persistence is best-effort, not a precondition.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-037
+  requirement_ids: [REQ-AI-018]
+  category: DataIntegrity
+  title: The Java and TypeScript narrative-grounding checks agree on every shared fixture case
+  objective: >
+    Confirm PersonalNarrativeGrounding (Java) and groundedNarrative (TypeScript) reach the same
+    verdict on every case in sample-data/personal-narrative-grounding-fixtures.json, the same
+    parity discipline already proven for answer grounding (SCN-AI-027).
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-038
+  requirement_ids: [REQ-AI-019]
+  category: Positive
+  title: A signed-in student gets a grounded SESSION_FEEDBACK narrative for a Mock Test attempt, opportunistically cached
+  objective: >
+    Confirm that with the flag enabled and a provider returning a well-formed response, the Mock
+    Test feedback endpoint returns a grounded narrative and persists it onto the mock attempt row
+    once that attempt has already synced to this backend.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-039
+  requirement_ids: [REQ-AI-019]
+  category: Negative
+  title: Mock Test feedback generation requires auth and never errors when it has nothing to say
+  objective: >
+    Confirm an unauthenticated request is rejected, a disabled flag returns narrative: null
+    (never an error), and an attemptId that has not synced to this backend yet still generates
+    successfully -- persistence is best-effort, not a precondition.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-040
+  requirement_ids: [REQ-AI-020]
+  category: Positive
+  title: A signed-in student gets a grounded PROFILE_SUMMARY narrative for an exam
+  objective: >
+    Confirm that with the flag enabled and a provider returning a well-formed response, the
+    profile-summary endpoint returns a narrative grounded in the given coverage numbers and
+    strength/weakness topic names.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-041
+  requirement_ids: [REQ-AI-020]
+  category: Negative
+  title: Profile summary generation requires auth and never errors when the flag is off
+  objective: >
+    Confirm an unauthenticated request is rejected and a disabled PROFILE_SUMMARY flag returns
+    narrative: null (never an error) -- the same "unknown means off" default every other AI task
+    flag in this project has.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-043
+  requirement_ids: [REQ-AI-020]
+  category: Performance
+  title: An unchanged profile is served from cache without spending a second model call
+  objective: >
+    Confirm a repeat request with identical facts does not reach the provider at all -- asserted on
+    a real generation counter, since the test fixture is deterministic and a genuine regeneration
+    would return byte-identical text and be indistinguishable from a cache hit.
+  systems: [Backend]
+  status: Ready
+  notes: >
+    Added after real measurement (2026-09-14) showed PROFILE_SUMMARY was ~48% of per-user AI calls
+    and ~57% of per-user cost purely from regenerating identical narratives on every radar screen
+    open, pull-to-refresh, or sync-counter change.
+
+- id: SCN-AI-044
+  requirement_ids: [REQ-AI-020]
+  category: StateTransition
+  title: A changed profile regenerates rather than serving a stale narrative
+  objective: >
+    Confirm the other half of the cache contract -- a cache that never misses would be quietly
+    serving out-of-date advice, so a real change in the facts must produce a new generation.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-045
+  requirement_ids: [REQ-AI-021]
+  category: Integration
+  title: Every AI call is persisted with its token counts and aggregated by feature
+  objective: >
+    Confirm a real call through AIService writes exactly one ai_usage_events row with consistent
+    token counts, and that the admin summary endpoint aggregates it under its feature name.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-046
+  requirement_ids: [REQ-AI-021]
+  category: Authorization
+  title: The usage summary is admin-only and validates its time window
+  objective: >
+    Confirm an unauthenticated caller gets 401, a signed-in student gets 403, and a malformed
+    since value is rejected 400 rather than silently defaulting.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-AI-042
+  requirement_ids: [REQ-AI-010, REQ-AI-012, REQ-AI-013, REQ-AI-014]
+  category: Integration
+  title: The AI Content Review admin page generates, reviews, and publishes real content end to end
+  objective: >
+    Confirm an admin can, entirely through admin/src/pages/AiContentReview.jsx (never a direct
+    API call): generate a real explanation for a real question against the live Groq provider,
+    see it appear under the DRAFT filter, submit it for review, publish it, and unpublish it
+    again -- each transition reflected correctly and immediately in the filtered list, with the
+    right status badge and action buttons at every step.
+  systems: [Admin]
+  status: Ready
+  notes: >
+    First built and manually verified this session (2026-09-14) via Playwright against a real
+    dev backend, a real admin token (AdminTokenMintRunner), and a real Groq API call -- not a
+    mock. Found and fixed one real bug in the process: switching the status filter shortly after
+    a fetch could let an older, slower response resolve after a newer one and silently overwrite
+    it with stale (wrong-filter) data -- a request-id guard now discards any response that isn't
+    the latest one this component issued.

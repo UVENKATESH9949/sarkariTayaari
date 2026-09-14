@@ -180,6 +180,7 @@ export const te: Catalogue = {
     notFound: "సెషన్ కనుగొనబడలేదు",
     notFoundBody: "ఈ సెషన్ మీ చరిత్ర నుండి తొలగించబడి ఉండవచ్చు.",
     earlyFinish: "ముందుగానే పూర్తి · {available}లో {answered} సమాధానమిచ్చారు, {skipped} మిగిలాయి",
+    feedbackLabel: "AI అభిప్రాయం",
   },
 
   history: {
@@ -228,6 +229,7 @@ export const te: Catalogue = {
     sectionBreakdown: "విభాగాల వారీగా విశ్లేషణ",
     backToMock: "మాక్ టెస్ట్‌కు తిరిగి వెళ్లు",
     loadingResult: "మీ పనితీరు నివేదిక సిద్ధమవుతోంది...",
+    feedbackLabel: "AI అభిప్రాయం",
     searchExams: "పరీక్షలను వెతకండి...",
     fullTestOne: "పూర్తి టెస్ట్",
     fullTestOther: "పూర్తి టెస్ట్‌లు",

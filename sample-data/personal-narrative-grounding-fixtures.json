@@ -1,0 +1,11 @@
+{
+  "//": "TASK-2701 Phase 7. The narrative-grounding check (packages/core/src/ai/schema/validate.ts's groundedNarrative, mirrored in backend PersonalNarrativeGrounding) exists in two languages because generation happens server-side (Java) but the same check must hold for any client-side re-validation and for the test suite that proves both sides agree — the same reason ai-answer-grounding-fixtures.json is shared between AiAnswerGroundingTest and validate.test.ts. Every case here is run by both PersonalNarrativeGroundingTest.java and validate.test.ts's 'groundedNarrative' shared-fixture block.",
+  "cases": [
+    { "narrative": "You answered 7 of 10 correctly (70%). Percentages needs more attention right now.", "allowedNumbers": [7, 10, 70], "allowedTopicNames": ["Percentages"], "expectedGrounded": true, "note": "every number and the one topic name are all given" },
+    { "narrative": "You scored 95% today.", "allowedNumbers": [70], "allowedTopicNames": [], "expectedGrounded": false, "note": "invented a number not given" },
+    { "narrative": "You answered 7 of 10 correctly. Keep practicing!", "allowedNumbers": [7, 10], "allowedTopicNames": ["Percentages"], "expectedGrounded": false, "note": "names no topic it was given" },
+    { "narrative": "You answered 7 of 10 correctly.", "allowedNumbers": [7, 10], "allowedTopicNames": [], "expectedGrounded": true, "note": "no topic names supplied, so the topic-mention check is skipped" },
+    { "narrative": "You're at roughly 69.6% accuracy.", "allowedNumbers": [70], "allowedTopicNames": [], "expectedGrounded": true, "note": "decimals round before comparing" },
+    { "narrative": "Ratios is coming along, and Percentages needs work.", "allowedNumbers": [], "allowedTopicNames": ["Percentages", "Ratios"], "expectedGrounded": true, "note": "mentions more than one known topic, both allowed" }
+  ]
+}

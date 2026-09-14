@@ -425,7 +425,7 @@
 - id: REQ-AI-010
   feature: Batch generation is explicitly scoped, never open-ended
   module: AI
-  system: [Backend]
+  system: [Backend, Admin]
   source_doc: api/AI-CONTENT.md
   source_section: "POST /api/admin/ai-content/generate"
   description: >
@@ -517,7 +517,7 @@
 - id: REQ-AI-012
   feature: Human review workflow — DRAFT to REVIEW to PUBLISHED
   module: AI
-  system: [Backend]
+  system: [Backend, Admin]
   source_doc: api/AI-CONTENT.md
   source_section: "submit-for-review / publish / reject / unpublish"
   description: >
@@ -564,7 +564,7 @@
 - id: REQ-AI-013
   feature: Optimistic concurrency on every review transition
   module: AI
-  system: [Backend]
+  system: [Backend, Admin]
   source_doc: api/AI-CONTENT.md
   source_section: "expectedVersion on every transition endpoint"
   description: >
@@ -602,7 +602,7 @@
 - id: REQ-AI-014
   feature: The review queue is filterable by task and status
   module: AI
-  system: [Backend]
+  system: [Backend, Admin]
   source_doc: api/AI-CONTENT.md
   source_section: "GET /api/admin/ai-content?taskId=&status="
   description: >
@@ -774,3 +774,243 @@
   ambiguity: null
   automation_status: Automated
   automation_hint: "AiTaskFlagTest.adminCanEnableATask_andItThenAppearsInClientConfig; AiTaskFlagTest.update_rejectsAStaleVersion"
+
+- id: REQ-AI-018
+  feature: Live per-student SESSION_FEEDBACK narrative generation
+  module: AI
+  system: [Backend, Mobile]
+  source_doc: tasks/TASK-2701-on-device-and-hybrid-ai.md
+  source_section: "Phase 7.1 -- live, per-student SESSION_FEEDBACK generation"
+  description: >
+    A signed-in student can request POST /api/practice-sessions/{sessionId}/feedback after
+    finishing a Practice session. Unlike AI-CONTENT.md's batch-generate-then-review pipeline
+    (REQ-AI-010 onward), this is the first endpoint that calls AIService directly per request --
+    the content (a 2-4 sentence narrative over that student's own just-finished session) cannot
+    be generated ahead of time or shared between students. Context (accuracy, per-topic
+    health/trend) is supplied by the client, already computed by the existing deterministic
+    Weakness Radar/intelligence layer -- this endpoint only asks a model to phrase it, never to
+    derive it (mirrors the trust posture QUESTION_EXPLANATION already takes toward a verified
+    correctAnswer).
+  business_rule: >
+    Checked in this order, each a hard gate before the next: (1) SESSION_FEEDBACK must be
+    enabled in ai_task_flags (AiTaskFlagService.isEnabled) before a request is even built --
+    never spend a call finding out a feature is off; (2) the generated narrative must pass
+    PersonalNarrativeGrounding -- every number it cites must be one it was given, and it must
+    name at least one topic it was actually given, when any were supplied. The Java check
+    (PersonalNarrativeGrounding) and the shared TypeScript check
+    (packages/core/src/ai/schema/validate.ts's groundedNarrative) must agree on every case in
+    sample-data/personal-narrative-grounding-fixtures.json, the same parity discipline
+    ai-answer-grounding-fixtures.json already established for REQ-AI-011. A disabled flag,
+    failed validation, or a provider error all resolve to narrative: null -- never a 4xx/5xx for
+    "the model declined."
+  actor: Signed-in student (any role)
+  preconditions:
+    - Student holds a valid bearer token
+    - sessionId in the path identifies which session the narrative is about (need not exist on
+      the backend yet -- a device can ask before its own sync has run)
+  inputs:
+    - "sessionKind, examCode, answeredCount, correctCount, accuracyPercent, preferredLanguage, topics[] (SessionFeedbackRequest)"
+  expected_outputs:
+    - "{ narrative: string | null }"
+  validations:
+    - Every number the narrative cites is traceable to a given fact
+    - The narrative names at least one topic it was actually given, when any were supplied
+    - A response that is not valid JSON, or missing/blank narrative, is treated as a failure (null), never an error
+  permissions: any signed-in student (requireUser)
+  dependencies:
+    - REQ-AI-017
+  error_conditions:
+    - "401 with no/invalid Authorization header"
+  edge_conditions:
+    - "sessionId does not correspond to any session synced to this backend yet -- generation still runs; only opportunistic persistence is skipped"
+    - "sessionId belongs to a different user -- same as above (findByIdAndUserId), never leaks or errors"
+    - "A student with no topics touched (topics: []) still gets a narrative built from accuracy alone"
+  offline_behavior: >
+    The mobile client (getOrBuildSessionFeedback) only calls the cloud tier -- SESSION_FEEDBACK's
+    DETERMINISTIC tier (sessionFeedbackTemplate, a canned-sentence template) is invoked directly
+    as the on-screen fallback when the router reports UNAVAILABLE (offline, signed out, or the
+    backend declined), never routed through routeAiTask itself, so the router's "cheapest tier
+    that fully answers" contract stays intact for any future caller that does want the template
+    tried first. A generated narrative is cached locally (practice_sessions.feedback_narrative)
+    and, when the session has synced, opportunistically cached server-side too
+    (user_practice_sessions.feedback_narrative) so reopening the same session never re-generates
+    (and re-bills) an unchanging result.
+  acceptance_criteria:
+    - POST with no Authorization header returns 401
+    - With the flag off, the response is 200 with narrative: null
+    - With the flag on and a provider that returns a grounded response, the response is 200 with a non-null narrative
+    - The narrative persists onto the session row when that session has already synced to this backend
+    - Calling with a sessionId that has not synced yet still succeeds and returns a narrative
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "SessionFeedbackControllerTest (requiresAuthentication, returnsNullNarrativeWhenTheFlagIsOff, generatesAGroundedNarrativeWhenEnabled, doesNotFailWhenNoSessionHasSyncedForThatId, persistsTheNarrativeOntoAnAlreadySyncedSession); PersonalNarrativeGroundingTest.everyFixtureCaseHolds"
+
+- id: REQ-AI-019
+  feature: Live per-student SESSION_FEEDBACK narrative generation for Mock Test attempts
+  module: AI
+  system: [Backend, Mobile]
+  source_doc: tasks/TASK-2701-on-device-and-hybrid-ai.md
+  source_section: "Phase 7.2 -- Mock Test session feedback"
+  description: >
+    The Mock Test twin of REQ-AI-018: a signed-in student can request POST
+    /api/mock-attempts/{attemptId}/feedback after finishing a Mock Test attempt. Same
+    SESSION_FEEDBACK task, same PersonalNarrativeService, same grounding/validation -- only the
+    table the result is opportunistically cached onto differs (user_mock_attempts instead of
+    user_practice_sessions), matching this backend's existing Practice/Mock Test table split.
+  business_rule: >
+    Identical to REQ-AI-018's business_rule (flag-gated before a request is built; grounding
+    enforced before a narrative is returned), applied against UserMockAttemptRepository instead
+    of UserPracticeSessionRepository. A mock attempt's stored results carry subjectName but no
+    topicId (a mock spans a whole exam's syllabus, not one topic), so the mobile client always
+    supplies topics: [] for this endpoint -- the narrative is accuracy-only, never a per-topic
+    diagnosis it has no grounded data to support.
+  actor: Signed-in student (any role)
+  preconditions:
+    - Student holds a valid bearer token
+    - attemptId in the path identifies which mock attempt the narrative is about (need not exist
+      on the backend yet -- a device can ask before its own sync has run)
+  inputs:
+    - "sessionKind: \"MOCK\", examCode, answeredCount, correctCount, accuracyPercent, preferredLanguage, topics: [] (SessionFeedbackRequest)"
+  expected_outputs:
+    - "{ narrative: string | null }"
+  validations:
+    - Every number the narrative cites is traceable to a given fact
+    - A response that is not valid JSON, or missing/blank narrative, is treated as a failure (null), never an error
+  permissions: any signed-in student (requireUser)
+  dependencies:
+    - REQ-AI-018
+  error_conditions:
+    - "401 with no/invalid Authorization header"
+  edge_conditions:
+    - "attemptId does not correspond to any attempt synced to this backend yet -- generation still runs; only opportunistic persistence is skipped"
+    - "attemptId belongs to a different user -- same as above (findByIdAndUserId), never leaks or errors"
+  offline_behavior: >
+    Same as REQ-AI-018: the mobile client only calls the cloud tier, falling back to
+    sessionFeedbackTemplate directly when the router reports UNAVAILABLE. A generated narrative
+    is cached locally (mock_test_attempts.feedback_narrative) and, when the attempt has synced,
+    opportunistically cached server-side too (user_mock_attempts.feedback_narrative).
+  acceptance_criteria:
+    - POST with no Authorization header returns 401
+    - With the flag off, the response is 200 with narrative: null
+    - With the flag on and a provider that returns a grounded response, the response is 200 with a non-null narrative
+    - The narrative persists onto the mock attempt row when that attempt has already synced to this backend
+    - Calling with an attemptId that has not synced yet still succeeds and returns a narrative
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "MockAttemptFeedbackControllerTest (requiresAuthentication, returnsNullNarrativeWhenTheFlagIsOff, generatesAGroundedNarrativeWhenEnabled, doesNotFailWhenNoAttemptHasSyncedForThatId, persistsTheNarrativeOntoAnAlreadySyncedAttempt)"
+
+- id: REQ-AI-020
+  feature: Live per-student PROFILE_SUMMARY narrative generation for the Preparation Radar screen
+  module: AI
+  system: [Backend, Mobile]
+  source_doc: tasks/TASK-2701-on-device-and-hybrid-ai.md
+  source_section: "Phase 7.3 -- PROFILE_SUMMARY"
+  description: >
+    A signed-in student can request POST /api/exams/{examCode}/profile-summary to get a short
+    "how you're doing overall" narrative over the Weakness Radar's already-ranked strengths and
+    weaknesses for that exam. A different AI task (PROFILE_SUMMARY, not SESSION_FEEDBACK) with a
+    different request shape (LearnerProfileContext, not SessionContext), but the same
+    PersonalNarrativeService and the same flag-gate/generate/validate/never-throw posture as
+    REQ-AI-018/019.
+  business_rule: >
+    Checked in the same order as REQ-AI-018: PROFILE_SUMMARY must be enabled in ai_task_flags
+    before a request is built; the generated narrative must cite only numbers/topic names it was
+    actually given (topicsInSyllabus, topicsWithEvidence, and every strength/weakness's
+    healthScore and topicName), enforced by the same PersonalNarrativeGrounding/
+    PersonalNarrativeValidation REQ-AI-018 already established. Cached server-side in
+    user_profile_summaries (V45), one row per (user, exam), keyed on a SHA-256 of exactly the
+    facts a narrative may cite -- NOT on the radar's computedAt, because the radar recomputes on a
+    schedule whether or not anything a narrative could mention actually moved. The cache is
+    checked before a prompt is built, for the same reason the flag is: never spend a request
+    discovering the answer is already known.
+  actor: Signed-in student (any role)
+  preconditions:
+    - Student holds a valid bearer token
+  inputs:
+    - "examCode, overviewStatus, topicsInSyllabus, topicsWithEvidence, strengths[], weaknesses[], preferredLanguage (ProfileSummaryRequest)"
+  expected_outputs:
+    - "{ narrative: string | null }"
+  validations:
+    - Every number the narrative cites is traceable to a given fact
+    - The narrative names at least one topic it was actually given, when any were supplied
+    - A response that is not valid JSON, or missing/blank narrative, is treated as a failure (null), never an error
+  permissions: any signed-in student (requireUser)
+  dependencies:
+    - REQ-AI-018
+  error_conditions:
+    - "401 with no/invalid Authorization header"
+  edge_conditions:
+    - "topicsWithEvidence is 0 (a student who has not practised) -- the mobile client does not even call this endpoint in that case, matching the screen's own 'invitation, not an empty radar' state"
+    - "strengths or weaknesses is empty -- the narrative still states coverage, naming only whichever list is non-empty"
+  offline_behavior: >
+    The mobile client only calls the cloud tier, falling back to profileSummaryTemplate directly
+    when the router reports UNAVAILABLE -- the same discipline as REQ-AI-018/019, minus any cache
+    to write through to (deliberately, see business_rule above).
+  acceptance_criteria:
+    - POST with no Authorization header returns 401
+    - With the flag off, the response is 200 with narrative: null
+    - With the flag on and a provider that returns a grounded response, the response is 200 with a non-null narrative
+    - A second request with identical facts is served from cache without a second provider call
+    - A request whose facts have changed regenerates rather than serving the cached narrative
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "ProfileSummaryControllerTest (requiresAuthentication, returnsNullNarrativeWhenTheFlagIsOff, generatesAGroundedNarrativeWhenEnabled, identicalFactsAreServedFromCacheWithoutSpendingASecondModelCall, changedFactsRegenerateRatherThanServingAStaleNarrative)"
+
+- id: REQ-AI-021
+  feature: Every AI call is persisted with its token counts, and aggregated for an admin
+  module: AI
+  system: [Backend]
+  source_doc: api/AI-ADMIN.md
+  source_section: "GET /api/admin/ai-usage/summary"
+  description: >
+    Every call through AIService -- success or failure -- is written to ai_usage_events (V46) by
+    DatabaseAIUsageRecorder, which replaces Phase 1's log-only LoggingAIUsageRecorder as the
+    @Primary AIUsageRecorder bean with no change to AIServiceImpl. An admin can read aggregates
+    (calls, input/output tokens, failures, grouped by feature and model) over a time window via
+    GET /api/admin/ai-usage/summary.
+  business_rule: >
+    Recording must never be able to break the feature it measures. Two protections: nothing
+    propagates out of the recorder (a failed usage write must not turn a good AI response into an
+    error for the student -- the call already happened and was already billed), and the write uses
+    REQUIRES_NEW so usage survives a caller's later rollback. REQUIRES_NEW is safe here
+    specifically because the insert references no uncommitted parent row -- the exact condition
+    that made it the wrong choice in DocumentStoreService. Failures are recorded, not just
+    successes: a burst of rate-limit or validation failures is the most useful thing to see and is
+    invisible if only successes are stored. No cost/pricing column is stored -- per-model pricing
+    changes on the vendor's schedule, so cost stays a calculation over (model, tokens).
+  actor: Admin (for the aggregate); the system itself (for recording)
+  preconditions:
+    - An AI provider is configured and at least one AI call has occurred
+  inputs:
+    - "since (optional ISO-8601 UTC instant; omitted/0 means the last 30 days)"
+  expected_outputs:
+    - "{ since, totalCalls, totalInputTokens, totalOutputTokens, totalTokens, totalFailures, byFeature[] }"
+  validations:
+    - totalTokens equals totalInputTokens + totalOutputTokens
+    - A malformed since is rejected 400
+  permissions: admin (requireAdmin)
+  dependencies:
+    - REQ-AI-018
+  error_conditions:
+    - "401 with no/invalid Authorization header; 403 for a signed-in non-admin"
+    - "400 for a malformed since value"
+  edge_conditions:
+    - "A since with a +05:30 offset decodes as a space in a query string unless percent-encoded -- the Z form is the documented input"
+    - "A failed usage write is logged and swallowed; the AI response is still returned to the caller"
+  offline_behavior: n/a (backend only)
+  acceptance_criteria:
+    - A successful AI call produces exactly one ai_usage_events row with matching token counts
+    - The summary endpoint aggregates that row under its feature name
+    - The summary endpoint is admin-only (401 unauthenticated, 403 for a student)
+    - A malformed since returns 400
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "AiUsageTrackingTest (everyAiCallIsPersistedWithItsTokenCounts, theAdminSummaryAggregatesByFeature, theSummaryIsAdminOnly, aMalformedSinceIsRejected)"

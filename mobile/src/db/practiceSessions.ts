@@ -1,4 +1,4 @@
-import { asc, desc, inArray, lt } from "drizzle-orm";
+import { asc, desc, eq, inArray, lt } from "drizzle-orm";
 import { db } from "./client";
 import { practiceSessionResults, practiceSessions } from "./schema";
 import { trackEvent } from "../telemetry/analytics";
@@ -57,6 +57,14 @@ export type SessionRecord = {
   /** Null for sessions recorded before this field existed. */
   durationMs: number | null;
   results: QuestionResult[];
+  /**
+   * TASK-2701 Phase 7.1 — the AI-phrased feedback narrative, cached after first
+   * generation so reopening this session from History doesn't regenerate it. Null for
+   * every session before this feature and for any session that never had feedback
+   * generated (flag off, offline, or generation failed) — a normal, silent state.
+   */
+  feedbackNarrative?: string | null;
+  feedbackGeneratedAt?: number | null;
 };
 
 const MAX_SESSIONS = 50;
@@ -128,6 +136,8 @@ export async function loadSessions(): Promise<SessionRecord[]> {
     availableCount: row.availableCount,
     durationMs: row.durationMs,
     results: resultsBySession.get(row.id) ?? [],
+    feedbackNarrative: row.feedbackNarrative,
+    feedbackGeneratedAt: row.feedbackGeneratedAt ? row.feedbackGeneratedAt.getTime() : null,
   }));
 }
 
@@ -205,4 +215,18 @@ export async function insertSession(session: SessionRecord): Promise<void> {
 export async function clearAllSessions(): Promise<void> {
   await db.delete(practiceSessionResults);
   await db.delete(practiceSessions);
+}
+
+/**
+ * TASK-2701 Phase 7.1 — caches an AI-phrased feedback narrative against an already-saved
+ * session, so Summary doesn't regenerate it every time the session is reopened from
+ * History. A no-op (0 rows affected) if the session id doesn't exist locally, which
+ * should not happen in practice — `getOrBuildSessionFeedback` always calls this against a
+ * session that was just written by `insertSession` in the same screen's lifecycle.
+ */
+export async function saveSessionFeedback(sessionId: string, narrative: string): Promise<void> {
+  await db
+    .update(practiceSessions)
+    .set({ feedbackNarrative: narrative, feedbackGeneratedAt: new Date() })
+    .where(eq(practiceSessions.id, sessionId));
 }

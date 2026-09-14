@@ -142,14 +142,46 @@ key") — never the value.
 
 ---
 
+### GET /api/admin/ai-usage/summary?since=
+**Purpose:** Aggregated AI usage — how many calls, how many tokens, how many failures, grouped
+by feature and model. Backed by `ai_usage_events` (migration V46) via `DatabaseAIUsageRecorder`,
+which took over from `LoggingAIUsageRecorder` as the `@Primary` `AIUsageRecorder` bean — exactly
+the swap Phase 1's own extension point was written for, with no change to `AIServiceImpl`.
+**Auth:** admin
+**Query:** `since` — ISO-8601 **UTC** instant (`2026-01-01T00:00:00Z`), or omitted/`0` for the
+last 30 days. Same parsing convention as `/api/questions/sync`. Use the `Z` form: a `+05:30`
+offset decodes as a space in a query string unless percent-encoded.
+**Response:** `200 OK`:
+```
+{
+  since: ISO-8601 timestamp,
+  totalCalls: number, totalInputTokens: number, totalOutputTokens: number,
+  totalTokens: number, totalFailures: number,
+  byFeature: [{ feature, model, calls, inputTokens, outputTokens, totalTokens, failures }]
+}
+```
+**Reports tokens, never money.** Per-model pricing changes on the vendor's schedule, so cost stays
+a calculation done by whoever reads this rather than a number frozen into each stored row — the
+separation `AIUsageEvent`'s own doc comment established before any of this was persisted.
+
+**Failures are recorded, not just successes** — a burst of rate-limit or validation failures is
+the most useful thing to be able to see here, and it is invisible if only successes are stored.
+This is not hypothetical: a `PROFILE_SUMMARY` truncation bug billed every call in full and
+returned `null`, and nothing aggregated it.
+**Errors:** `400` for a malformed `since`.
+**Consumers:** none yet in the admin console UI — the endpoint exists ahead of a screen for it.
+
+---
+
 ## Explicitly out of scope (this API surface, as built)
 
 - No `POST /api/ai/generate`-shaped passthrough anywhere — this controller is
   configuration only. A future AI-powered feature exposes its own narrow endpoint that
   calls `AIService` internally (see `system-design/06-ai-foundation.md`).
-- No queryable usage/cost dashboard — `GET /config` and this file carry no usage numbers;
-  Phase 1's `LoggingAIUsageRecorder` is log-only, disclosed as such in the admin UI itself
-  rather than showing invented figures.
+- No usage/cost *dashboard screen* — the aggregates endpoint above exists, but nothing in the
+  admin console renders it yet, and no cost figure is computed anywhere in the backend.
+  (This bullet previously said no queryable usage data existed at all; that stopped being true
+  when `DatabaseAIUsageRecorder` and V46 landed.)
 - No admin-facing "delete this provider's configuration" endpoint — only overwrite
   (`PUT /providers/{id}`). Disabling AI (`PUT /settings` with `enabled: false`) is the
   supported way to stop using a provider without losing its saved configuration.

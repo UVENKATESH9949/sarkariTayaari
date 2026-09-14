@@ -35,15 +35,19 @@ export type ValidationFailureCode =
   /** The model explained an answer other than the verified one. The check this file exists for. */
   | "UNGROUNDED_ANSWER"
   /** A hint that gives the answer away is not a hint. */
-  | "HINT_REVEALS_ANSWER";
+  | "HINT_REVEALS_ANSWER"
+  /** A session/profile narrative cited a number it was not given, or named no real topic. */
+  | "UNGROUNDED_NARRATIVE";
 
 export type ValidationResult<T> =
   | { ok: true; value: T }
   | { ok: false; code: ValidationFailureCode; detail: string };
 
-/** What a response is checked against. Only the question matters today; keep the seam. */
+/** What a response is checked against. */
 export type Grounding = {
   question?: QuestionContext;
+  /** Present only for `SESSION_FEEDBACK`/`PROFILE_SUMMARY` — see `groundedNarrative`. */
+  narrative?: NarrativeGrounding;
 };
 
 /* ------------------------------------------------------------------------------- JSON parsing */
@@ -147,6 +151,62 @@ export function hintRevealsAnswer(
   const haystack = normalise(hint);
   const escaped = answerText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}($|[^\\p{L}\\p{N}])`, "u").test(haystack);
+}
+
+/**
+ * What a `SESSION_FEEDBACK`/`PROFILE_SUMMARY` narrative is checked against — every number and
+ * topic name the model was actually handed in its context. The caller builds this from the same
+ * `SessionContext`/`LearnerProfileContext` the prompt itself was built from, so grounding checks
+ * the model against exactly what it was given, never a re-derived version of it.
+ */
+export type NarrativeGrounding = {
+  allowedNumbers: readonly number[];
+  allowedTopicNames: readonly string[];
+};
+
+/**
+ * Whether a session/profile narrative only cites numbers it was actually given.
+ *
+ * Extracts every standalone numeric token (whole numbers, decimals, percentages) from the
+ * narrative and checks each is traceable to `allowedNumbers` — the same "mechanical equality
+ * check, not a judgement call" posture `answerMatches` already established for question
+ * explanations.
+ *
+ * This does **not** attempt full topic-name hallucination-proofing — reliably detecting an
+ * invented multi-word topic name inside free-form prose needs more than a mechanical check can
+ * promise, the same honest scoping `hintRevealsAnswer`'s own doc comment already applies to
+ * itself. It instead asserts the narrative actually engages with the real data it was given: at
+ * least one of the supplied topic names must appear somewhere in it (when any were supplied), so
+ * a generic, content-free narrative fails the same way an empty explanation would.
+ */
+export function groundedNarrative(
+  narrative: string,
+  grounding: NarrativeGrounding,
+): ValidationResult<true> {
+  const allowed = new Set(grounding.allowedNumbers.map((n) => Math.round(n).toString()));
+
+  const tokens = narrative.match(/\d+(\.\d+)?/g) ?? [];
+  for (const token of tokens) {
+    const rounded = Math.round(parseFloat(token)).toString();
+    if (!allowed.has(rounded)) {
+      return fail(
+        "UNGROUNDED_NARRATIVE",
+        `narrative cites "${token}", which was not among the given facts`,
+      );
+    }
+  }
+
+  if (grounding.allowedTopicNames.length > 0) {
+    const normalisedNarrative = normalise(narrative);
+    const mentionsAKnownTopic = grounding.allowedTopicNames.some((name) =>
+      normalisedNarrative.includes(normalise(name)),
+    );
+    if (!mentionsAKnownTopic) {
+      return fail("UNGROUNDED_NARRATIVE", "narrative names none of the topics it was given");
+    }
+  }
+
+  return { ok: true, value: true };
 }
 
 /* --------------------------------------------------------------------------- field helpers */
@@ -350,6 +410,26 @@ function buildResponse(
         },
       };
     }
+
+    case "SESSION_FEEDBACK": {
+      const narrative = str(raw, "narrative");
+      if (!narrative.ok) return narrative;
+
+      const grounded = checkNarrativeGrounding(narrative.value, grounding);
+      if (!grounded.ok) return grounded;
+
+      return { ok: true, value: { taskId: "SESSION_FEEDBACK", narrative: narrative.value } };
+    }
+
+    case "PROFILE_SUMMARY": {
+      const narrative = str(raw, "narrative");
+      if (!narrative.ok) return narrative;
+
+      const grounded = checkNarrativeGrounding(narrative.value, grounding);
+      if (!grounded.ok) return grounded;
+
+      return { ok: true, value: { taskId: "PROFILE_SUMMARY", narrative: narrative.value } };
+    }
   }
 }
 
@@ -375,4 +455,15 @@ function checkAnswerGrounding(
     );
   }
   return { ok: true, value: true };
+}
+
+/**
+ * Same "skip rather than fail when the caller supplied nothing to check against" posture as
+ * `checkAnswerGrounding` above, and for the identical reason — this validator also runs in
+ * contexts with nothing to ground against (a unit test of shape alone). The router always
+ * supplies `narrative` grounding for these two tasks, so the check runs where it matters.
+ */
+function checkNarrativeGrounding(narrative: string, grounding: Grounding): ValidationResult<true> {
+  if (!grounding.narrative) return { ok: true, value: true };
+  return groundedNarrative(narrative, grounding.narrative);
 }

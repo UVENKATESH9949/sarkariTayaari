@@ -6,7 +6,7 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 
 ## AI
 
-17 requirements, 34 scenarios, 34 test cases.
+21 requirements, 46 scenarios, 46 test cases.
 
 | Requirement | Priority | Status | Scenario(s) | Test Case(s) | Execution | Defect |
 |---|---|---|---|---|---|---|
@@ -19,14 +19,18 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 | REQ-AI-007: Graceful degradation | Critical | Active | SCN-AI-018<br>SCN-AI-019 | TC-AI-018 (Not Executed)<br>TC-AI-019 (Not Executed) | |  |
 | REQ-AI-008: Per-task feature flags default off | High | Active | SCN-AI-020 | TC-AI-020 (Not Executed) | |  |
 | REQ-AI-009: Device-tier gating for the local model | High | Active | SCN-AI-021<br>SCN-AI-022 | TC-AI-021 (Not Executed)<br>TC-AI-022 (Not Executed) | |  |
-| REQ-AI-010: Batch generation is explicitly scoped, never open-ended | Critical | Active | SCN-AI-023<br>SCN-AI-024<br>SCN-AI-025<br>SCN-AI-026 | TC-AI-023 (Not Executed)<br>TC-AI-024 (Not Executed)<br>TC-AI-025 (Not Executed)<br>TC-AI-026 (Not Executed) | |  |
+| REQ-AI-010: Batch generation is explicitly scoped, never open-ended | Critical | Active | SCN-AI-023<br>SCN-AI-024<br>SCN-AI-025<br>SCN-AI-026<br>SCN-AI-042 | TC-AI-023 (Not Executed)<br>TC-AI-024 (Not Executed)<br>TC-AI-025 (Not Executed)<br>TC-AI-026 (Not Executed)<br>TC-AI-042 (Not Executed) | |  |
 | REQ-AI-011: Generated content is grounded against the verified answer before it is ever persisted | Critical | Active | SCN-AI-027 | TC-AI-027 (Not Executed) | |  |
-| REQ-AI-012: Human review workflow — DRAFT to REVIEW to PUBLISHED | Critical | Active | SCN-AI-028<br>SCN-AI-029 | TC-AI-028 (Not Executed)<br>TC-AI-029 (Not Executed) | |  |
-| REQ-AI-013: Optimistic concurrency on every review transition | High | Active | SCN-AI-030 | TC-AI-030 (Not Executed) | |  |
-| REQ-AI-014: The review queue is filterable by task and status | Medium | Active | SCN-AI-031 | TC-AI-031 (Not Executed) | |  |
+| REQ-AI-012: Human review workflow — DRAFT to REVIEW to PUBLISHED | Critical | Active | SCN-AI-028<br>SCN-AI-029<br>SCN-AI-042 | TC-AI-028 (Not Executed)<br>TC-AI-029 (Not Executed)<br>TC-AI-042 (Not Executed) | |  |
+| REQ-AI-013: Optimistic concurrency on every review transition | High | Active | SCN-AI-030<br>SCN-AI-042 | TC-AI-030 (Not Executed)<br>TC-AI-042 (Not Executed) | |  |
+| REQ-AI-014: The review queue is filterable by task and status | Medium | Active | SCN-AI-031<br>SCN-AI-042 | TC-AI-031 (Not Executed)<br>TC-AI-042 (Not Executed) | |  |
 | REQ-AI-015: Public sync feed withholds unpublished content | Critical | Active | SCN-AI-032 | TC-AI-032 (Not Executed) | |  |
 | REQ-AI-016: Public client-config feed reports every AI task's enable state | Critical | Active | SCN-AI-033 | TC-AI-033 (Not Executed) | |  |
 | REQ-AI-017: Admin per-task AI enable/disable control | High | Active | SCN-AI-034 | TC-AI-034 (Not Executed) | |  |
+| REQ-AI-018: Live per-student SESSION_FEEDBACK narrative generation | High | Active | SCN-AI-035<br>SCN-AI-036<br>SCN-AI-037 | TC-AI-035 (Not Executed)<br>TC-AI-036 (Not Executed)<br>TC-AI-037 (Not Executed) | |  |
+| REQ-AI-019: Live per-student SESSION_FEEDBACK narrative generation for Mock Test attempts | High | Active | SCN-AI-038<br>SCN-AI-039 | TC-AI-038 (Not Executed)<br>TC-AI-039 (Not Executed) | |  |
+| REQ-AI-020: Live per-student PROFILE_SUMMARY narrative generation for the Preparation Radar screen | Medium | Active | SCN-AI-040<br>SCN-AI-041<br>SCN-AI-043<br>SCN-AI-044 | TC-AI-040 (Not Executed)<br>TC-AI-041 (Not Executed)<br>TC-AI-043 (Not Executed)<br>TC-AI-044 (Not Executed) | |  |
+| REQ-AI-021: Every AI call is persisted with its token counts, and aggregated for an admin | Medium | Active | SCN-AI-045<br>SCN-AI-046 | TC-AI-045 (Not Executed)<br>TC-AI-046 (Not Executed) | |  |
 
 ## AUTH
 
@@ -125,13 +129,13 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 
 ## WEB
 
-10 requirements, 16 scenarios, 17 test cases.
+10 requirements, 17 scenarios, 18 test cases.
 
 | Requirement | Priority | Status | Scenario(s) | Test Case(s) | Execution | Defect |
 |---|---|---|---|---|---|---|
 | REQ-WEB-001: Shared logic has exactly one implementation | Critical | Active | SCN-WEB-001<br>SCN-WEB-002 | TC-WEB-001 (Not Executed)<br>TC-WEB-002 (Not Executed)<br>TC-WEB-004 (Not Executed) | |  |
 | REQ-WEB-002: Evaluator agreement between Java and TypeScript | Critical | Active | SCN-WEB-003 | TC-WEB-003 (Not Executed) | |  |
-| REQ-WEB-003: Responsive layout from phone browser to desktop | High | Active | SCN-WEB-004<br>SCN-WEB-005 | TC-WEB-005 (Not Executed) | |  |
+| REQ-WEB-003: Responsive layout from phone browser to desktop | High | Active | SCN-WEB-004<br>SCN-WEB-005<br>SCN-WEB-017 | TC-WEB-005 (Not Executed)<br>TC-WEB-018 (Not Executed) | |  |
 | REQ-WEB-004: Account and Settings reachable at every width | Critical | Active | SCN-WEB-005 | TC-WEB-006 (Not Executed) | |  |
 | REQ-WEB-005: Theme and text size | Medium | Active | SCN-WEB-006<br>SCN-WEB-007 | TC-WEB-007 (Not Executed)<br>TC-WEB-008 (Not Executed) | |  |
 | REQ-WEB-006: Interface language | Medium | Active | SCN-WEB-008 | TC-WEB-009 (Not Executed) | |  |
@@ -144,9 +148,9 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 
 | Metric | Value |
 |---|---|
-| Total requirements | 94 |
-| Total scenarios | 178 |
-| Total test cases | 195 |
+| Total requirements | 98 |
+| Total scenarios | 191 |
+| Total test cases | 208 |
 | Requirements with zero scenarios | 0  |
 | Real executions recorded | 0 |
 | Real defects logged | 0 |

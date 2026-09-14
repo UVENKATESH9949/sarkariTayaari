@@ -1,15 +1,263 @@
 # Project Status — Resume Point
 
-**Last updated:** 2026-09-12 (3) — TASK-2601 web Phase 2 (Mock Test) closed out. **Three
-sessions ran on 2026-09-12**, and this one found yet more evidence of concurrent/uncommitted
-work: `web/src/mocktest/` (8 files, a complete Mock Test feature) already existed on disk,
-wired into `App.tsx`, with no report, no task-doc entry, and no `qa/` coverage — read in full,
-verified end-to-end against the real backend, one real bug found and fixed, then documented.
-See **"Session of 2026-09-12 (3) — TASK-2601 web Phase 2: Mock Test"** immediately below.
-Read that, then **"Session of 2026-09-12 (2) — on-device & hybrid AI"**, then **"Session of
+**Last updated:** 2026-09-14 — TASK-2701 Phase 7 fully done (7.1/7.2 `SESSION_FEEDBACK` for
+Practice and Mock Test, 7.3 `PROFILE_SUMMARY` for Preparation Radar, all cloud-only via a new
+Groq provider) and Phase 2's admin review-queue UI now built and verified against a real backend
++ real Groq call; Phase 5/6 (on-device inference) explicitly paused. Working on branch
+`feature/on-device-llm-spike` (not `main`). See **"Session of 2026-09-14 — Phase 7.1 session
+feedback, Groq provider, Phase 5/6 paused"** immediately below — read that first, it also
+records a real doc-drift: a full day of work (2026-09-13, commits `d49d54e`/`9ae7a07`/`0507053`)
+landed on this branch — the whole AI backlog (Foundation, Admin Control Center, content
+generation/review, per-task client-config flags, an `llama.rn` on-device feasibility spike) plus
+the `packages/core` extraction and the QA register — **none of it was ever recorded in this file**,
+only discovered by reading git log directly. Then **"Session of 2026-09-12 (3) — TASK-2601 web
+Phase 2: Mock Test"**, **"Session of 2026-09-12 (2) — on-device & hybrid AI"**, then **"Session of
 2026-09-12 — TASK-2601 student web application"** (Phase 0/1). Everything past those (the QA
 register, AI Admin
 Control Center and AI Foundation Phase 1 entries) is earlier history, kept for context.
+
+## Session of 2026-09-14 — Phase 7.1 session feedback, Groq provider, Phase 5/6 paused
+
+**User asked, in their own words, to "hold" the on-device LLM spike work and use "cloude"
+only** — clarified via `AskUserQuestion` (the phrase turned out to mean "cloud provider only,"
+and specifically **Groq**, not Claude, because Groq has a free trial) — then to complete the
+remaining AI tasks. Scoped down to exactly one deliverable via the same question: finish **Phase
+7.1 (`SESSION_FEEDBACK`)**, not Phase 2's admin review-queue UI or Phase 4's cloud tier.
+
+**First, a real doc-drift was found and is recorded here per `AI_RULES.md` §6.** This file's own
+"Last updated" pointer said 2026-09-12, but `git log` showed three more commits
+(`d49d54e`/`9ae7a07`/`0507053`, dated 2026-09-13) on this branch that this file never mentioned —
+landing the accumulated AI Foundation/Admin Control Center/content-generation/client-config-flags
+backlog plus an `llama.rn` on-device feasibility spike (a "Developer" row in More →
+`llm-spike.tsx`), none of it previously recorded here. Separately, the working tree already
+contained substantial **uncommitted** Phase 7.1 work (dated 2026-09-14 by file mtime, same as this
+session) — a essentially complete `SESSION_FEEDBACK` implementation, front-to-back, that this
+session's job turned out to be *verifying and finishing off* rather than building from scratch.
+
+**What was already there, read and verified rather than rebuilt**: `ai/provider/groq/GroqProvider`
+(Groq's OpenAI-compatible chat-completions API, mirroring `ClaudeProvider`'s shape exactly,
+registered as bean `"groq"` — picked up by `AIProviderRegistry`/the AI Control Center with zero
+other code change); `ai/feedback/` (`PersonalNarrativePrompts`/`PersonalNarrativeGrounding`/
+`PersonalNarrativeValidation`/`PersonalNarrativeService`); `SessionFeedbackController`
+(`POST /api/practice-sessions/{sessionId}/feedback`); migration **V43**; a real fix (found by
+running `AiConfigurationTest` against a real Groq key during that prior work) for a genuine bug
+where the static `app.ai.*` fallback leaked one provider's key/model to *any* provider queried,
+not just the one `app.ai.provider` names — now guarded in both `AiConfigResolver` and
+`AiConfigurationService`. `packages/core` gained the `SESSION_FEEDBACK`/`PROFILE_SUMMARY` task
+registry entries, `SessionContext`/`TopicSnapshot` context types, a `sessionFeedbackTemplate`
+`DETERMINISTIC`-tier fallback, and `postSessionFeedback`. Mobile: `ai/sessionFeedback.ts`
+(`getOrBuildSessionFeedback`), local migration **0024**, and full UI wiring into
+`practice/quiz.tsx`/`practice/summary.tsx` (a new "AI Feedback" card, loaded after the screen's
+own always-correct stat blocks, keyed on `sessionId` per the `PreparationPlanCard` pattern this
+codebase already uses to dodge `set-state-in-effect`). `backend/application-local.yml` (gitignored,
+this machine only) already had a real Groq key configured (`provider: GROQ`,
+`model: openai/gpt-oss-120b` — confirmed against a real `GET /v1/models` call the day before).
+
+**This session's actual work was verification and closing the loop, not implementation**: ran the
+full backend compile/test-compile (clean), then the three relevant test classes against the real
+dev database — **`SessionFeedbackControllerTest` 5/5, `PersonalNarrativeGroundingTest` 2/2,
+`AiConfigResolverTest` 5/5, all 12/12 green**, including a real Groq usage-log line confirming the
+fixture-provider path (`ai.usage ... provider=narrativefixture ...`) exercises the same
+`AIService.generate()` codepath a real Groq call would. `packages/core`: **183/183 vitest tests
+pass**, `tsc --noEmit` clean. Mobile: `tsc --noEmit` clean. Nothing was found broken — every
+compile/test ran clean on the first attempt.
+
+**Then closed three real gaps this already-built feature was missing, per `AI_RULES.md` §3.5/§3.21**:
+1. **No API contract doc existed** for the new endpoint — added `api/AI-FEEDBACK.md` and an
+   `api/README.md` index row.
+2. **No QA coverage existed** — added `REQ-AI-018`, `SCN-AI-035/036/037`, `TC-AI-035/036/037` to
+   `qa/requirements|scenarios|test-cases/ai.yaml`, every automation reference citing a real,
+   already-passing test method (never speculative). Regenerated `qa/suites/`, `qa/traceability/
+   RTM.md`, `qa/reports/dashboard.md` — **RTM 94/178/195 → 95/181/198**.
+3. **The task doc's own phase table was stale** — `tasks/TASK-2701-on-device-and-hybrid-ai.md`
+   still showed Phase 7 as "Not started" despite Phase 7.1 being fully built. Updated the phase
+   table, added a new "Decisions taken (2026-09-14)" row recording the hold-on-device/Groq-only
+   choice, and appended a full Phase 7.1 implementation-status section.
+
+**The explicit decision this session made, for the record**: Phase 5/6 (on-device `llama.rn`
+inference) is **paused, not abandoned** — the spike code stays exactly as it is in this branch
+(reachable via More → Developer → "LLM Test (temporary)"), untouched, with no further work going
+into it unless the product direction changes again. Every AI feature ships **cloud-only**, and
+specifically through **Groq** (free tier) rather than Claude — `ClaudeProvider` is untouched and
+still fully wired, just not the currently-active provider on this machine's local config.
+
+**Not verified**: no on-device/emulator pass for the actual Summary-screen "AI Feedback" card —
+the whole stack is compiled, typechecked, and unit/integration-tested, but nobody has watched it
+render on a device yet. `expo lint`'s pre-existing baseline was not re-checked this session.
+`SESSION_FEEDBACK`'s `ai_task_flags` row does not exist by default (same "off unless explicitly
+turned on" posture every other AI flag in this project has) — an admin has to enable it via the
+existing generic "AI Tasks" table on `AiControlCenter.jsx` before any real student sees a
+narrative; that table was reasoned to include the two new task ids correctly (it iterates
+`AiTaskId.values()`) but not re-opened in a browser to confirm. `PROFILE_SUMMARY` (Phase 7.3) has
+prompts written but no service method/controller/mobile wiring — genuinely not built. Mock Test's
+session-feedback equivalent (Phase 7.2) not started. Nothing from this session has been committed
+— the working tree still has the same broad uncommitted diff described in the prior entry, now
+with the QA/doc additions layered on top.
+
+**Continued the same session: Phase 7.2 (Mock Test session feedback) — Done.** User asked "what's
+next in AI," was given the remaining-work list, picked Phase 7.2. Built as the Mock Test twin of
+7.1, reusing everything: migration **V44** (`user_mock_attempts.feedback_narrative`/
+`feedback_generated_at`, mirrors V43), new `MockAttemptFeedbackController`
+(`POST /api/mock-attempts/{attemptId}/feedback`, a separate controller from
+`SessionFeedbackController` since Practice/Mock Test already live in separate tables throughout
+this backend), reusing `PersonalNarrativeService` unchanged. **A real, honest data-gap found
+while planning**: a mock attempt's stored results carry `subjectName` but no `topicId` (Mock Test
+spans a whole exam, not one topic like Practice), so the mobile client always sends `topics: []`
+for this endpoint — the narrative is accuracy-only for Mock Test, not a fabricated per-topic
+diagnosis. `packages/core` gained `postMockAttemptFeedback`; mobile's `ai/sessionFeedback.ts` was
+refactored so `getOrBuildSessionFeedback` (Practice) and a new `getOrBuildMockFeedback` (Mock
+Test) both share one internal `getOrBuildNarrative`, avoiding duplicating the
+flag-check/router/grounding logic; wired into `mock-test/result.tsx` (new `MockFeedbackNarrative`
+component, same pattern as Practice Summary's). Local migration **0025** mirrors V44.
+
+**Verified**: backend compiles clean, migration V44 applied cleanly against the real dev
+database, **new `MockAttemptFeedbackControllerTest` 5/5 pass**; `packages/core` **183/183 tests
+still pass**, `tsc` clean; mobile `tsc` clean, `expo lint` at the **exact pre-existing 9-problem
+baseline** (confirmed none in any touched file). QA: `REQ-AI-019`, `SCN-AI-038/039`,
+`TC-AI-038/039` added, all citing the new passing tests — RTM 95/181/198 → **96/183/200**.
+`api/AI-FEEDBACK.md` extended with the second endpoint; task doc's phase table and
+implementation-status section updated.
+
+**Not verified**: same as 7.1 — no on-device/emulator pass for the new "AI Feedback" card on the
+Mock Test Result screen. Nothing committed yet.
+
+**Continued the same session again: Phase 7.3 (`PROFILE_SUMMARY`) — Done. This closes Phase 7's
+originally-scoped personalization narratives.** User said "continue with next task" again; built
+the narrative behind the Preparation Radar screen's strengths/weaknesses. A genuinely different
+AI task from `SESSION_FEEDBACK` (own `ai_task_flags` row, own `LearnerProfileContext` request
+shape) but sharing `PersonalNarrativeService`'s exact flag-gate/generate/validate/never-throw
+posture. New backend: `PersonalNarrativeService.profileSummary()`, `ProfileSummaryDtos`,
+`ProfileSummaryController` (`POST /api/exams/{examCode}/profile-summary`, mirroring the existing
+weakness-radar path convention) — no migration, nothing new to persist.
+
+**A deliberate scope decision, distinguishing this from 7.1/7.2: no server-side or client-side
+cache.** A profile summary is a live snapshot over the whole exam, not one completed session/
+attempt — there's no natural row to persist onto, and its underlying facts change far more often
+than a finished session's ever could. Building a cache would need its own invalidation story
+(tied to the radar's own algorithm version/computed-at); a v1 without one is simpler and more
+honest than one that might silently go stale. Documented explicitly, not left as a silent gap.
+
+**The shared test fixture (`FixturePersonalNarrativeProvider`) needed a real extension** — it
+only recognized `SESSION_FEEDBACK`'s `"Accuracy: N%"` prompt line, not `PROFILE_SUMMARY`'s
+`"Topics practised: N of M"`. Extended to detect either shape, confirmed by re-running all three
+Phase 7 test classes together: **13/13 still pass**, so the existing 7.1/7.2 tests were
+unaffected.
+
+`packages/core` gained `feedback/profileSummaryTemplate.ts` (the `DETERMINISTIC` tier, 3 tests)
+and `api/profileSummary.ts`. Mobile: new, deliberately **separate** `ai/profileSummary.ts` (not
+folded into `ai/sessionFeedback.ts` — `LearnerProfileContext` shares no fields with
+`SessionContext`, so there's no shared shape worth extracting further) wired into
+`preparation-radar.tsx` (new "AI SUMMARY" card, skips the backend call entirely when
+`topicsWithEvidence === 0` — nothing to summarise for a student who hasn't practised yet, matches
+the screen's own existing empty state). Respects the student's real content-language preference,
+not hardcoded English, even though this screen's own UI chrome is English-only by an earlier,
+unrelated decision.
+
+**Verified**: backend compiles clean, **new `ProfileSummaryControllerTest` 3/3 pass**, and all
+three Phase 7 test classes together **13/13 pass** (confirming the shared-fixture change didn't
+regress 7.1/7.2); `packages/core` **188/188 tests pass** (up from 183), `tsc` clean; mobile `tsc`
+clean, `expo lint` at the **exact pre-existing 9-problem baseline**. QA: `REQ-AI-020`,
+`SCN-AI-040/041`, `TC-AI-040/041` added — RTM 96/183/200 → **97/185/202**. `api/AI-FEEDBACK.md`
+extended with the third endpoint; task doc updated.
+
+**Not verified**: same as 7.1/7.2 — no on-device pass for the new "AI Summary" card. Nothing
+committed yet.
+
+**Continued the same session again: Phase 2's admin review-queue UI — Done. This closes the one
+gap Phase 2 had left open since it first shipped.** User asked what was next; offered a choice of
+four remaining tasks via `AskUserQuestion`, picked the admin UI. Built
+`admin/src/pages/AiContentReview.jsx` — a generate form plus a filterable (task/status) review
+queue with Submit-for-review/Publish/Reject/Unpublish, structured the same way TASK-2401's
+`IngestionReview.jsx` already reviews a different pipeline's candidates (one card per row,
+reload-after-mutation, never optimistic local state). New `admin/src/api.js` functions; a new
+sidebar entry beside AI Control Center.
+
+**Verified for real against a real backend and a real Groq call — not just built and assumed.**
+Minted a 45-minute admin token (`AdminTokenMintRunner`), started a real dev backend + admin dev
+server, drove the page with Playwright: generated a real explanation for a real live question,
+watched it move DRAFT → REVIEW → PUBLISHED → back to DRAFT correctly through the UI alone, with a
+`Reviewed by/at` line surviving the round trip. Zero console errors. Build/lint clean at the
+exact pre-existing baseline.
+
+**A real bug found by this pass, not by review**: switching the status filter shortly after
+generating could let an older, slower network response resolve *after* a newer one and silently
+overwrite it with stale (wrong-filter) data — confirmed by logging every response in arrival
+order and catching it happening. Fixed with a request-id ref so `load()` discards any response
+that isn't the one it most recently issued, regardless of resolution order. (`IngestionReview.jsx`
+has the identical latent shape, pre-existing, not touched — out of scope for this change.)
+
+**Disclosed, not hidden**: Phase 2 has no delete endpoint (only unpublish), so the two questions
+used for this verification pass now carry a harmless leftover `DRAFT` `ai_content` row each — both
+confirmed reset to `DRAFT` (not left live/`PUBLISHED`) before ending the session. Full cleanup
+otherwise: token revoked, both dev server processes stopped and confirmed down, all scratch
+Playwright scripts/screenshots deleted (none committed).
+
+QA: `REQ-AI-010/012/013/014` gained `Admin` to their `system` list (this page is the first UI
+consumer of behavior those requirements already specify, not a new capability); new
+`SCN-AI-042`/`TC-AI-042` (`ManualOnly`, since admin has no automated browser-test runner) — RTM
+97/185/202 → **97/186/203**. `api/AI-CONTENT.md` updated with a new "Admin console" section.
+
+**Then, same session: a cost-measurement pass that found a shipped bug, and the three follow-ups
+it forced.** The project owner asked — before more building — roughly how many AI calls/tokens/
+rupees one student generates per day. Answered by **measuring against live Groq**, not estimating,
+and the measurement immediately found a real defect.
+
+**Real per-call numbers** (`openai/gpt-oss-120b`, $0.15/M in, $0.60/M out — pricing fetched, not
+recalled): session feedback 328in/248out ($0.0002), mock feedback 301/125 ($0.00012), profile
+summary 475/378 ($0.0003). A typical student ≈ **6 calls/day ≈ $0.0013 ≈ $0.04/month**; 10k DAU ≈
+**$390/month**. Output is ~75% of spend. The free tier's 250K TPM (~357 calls/min) binds before
+cost does — fine on average at 10k DAU, reachable at an evening peak, and it degrades soft.
+**The number that validates the Tier-2 architecture**: all cached question explanations cost
+**~$0.08 one time, forever**, for unlimited students.
+
+**The bug: silent truncation on the most realistic payload.** `PROFILE_SUMMARY` returned null for
+an ordinary 3-strength/3-weakness profile. `status=success, outputTokens=300` — exactly the
+`maxTokens(300)` cap. `gpt-oss-120b` is a *reasoning* model: it spent the whole output budget
+thinking and was cut off mid-JSON. Proven, not assumed, by first closing an observability gap —
+the service computed a `Failed(code, detail)` then discarded it, so every failure looked identical
+to "nobody enabled this." With logging added: `NOT_JSON ... [finishReason=length, outputTokens=300]`.
+Fixed by raising the wire ceiling to 1000, deliberately *not* the registry's `maxOutputTokens: 300`
+(that's answer length; the wire cap must also cover reasoning). Costs nothing in expectation —
+a caller is billed for tokens generated, never for the cap — and **every truncated call had been
+billing in full and returning nothing.**
+
+**The cache the numbers justified.** Phase 7.3 shipped deliberately without one; measurement showed
+`PROFILE_SUMMARY` was **~48% of per-user calls and ~57% of per-user cost** purely from regenerating
+identical narratives. The original objection (no natural row to attach to) was right, but "have the
+facts changed" turned out to be answerable exactly: migration **V45** (`user_profile_summaries`)
+keys on a **SHA-256 of the facts a narrative may cite**, not the radar's `computedAt` — the radar
+recomputes on a schedule whether or not anything citable moved. Proven with a **generation counter**
+on the fixture, not by comparing text (the fixture is deterministic, so a real regeneration would
+look identical to a hit). Both halves tested: identical facts don't reach the provider; a single
+changed fact does.
+
+**Usage is now queryable.** Migration **V46** (`ai_usage_events`) + `DatabaseAIUsageRecorder`
+(`@Primary`) — exactly the swap Phase 1's `AIUsageRecorder` doc comment predicted, **zero change to
+`AIServiceImpl`**. Delegates to the logging recorder rather than replacing it (the tailable line is
+what made this session's measurements possible). Never propagates a failure, and uses
+`REQUIRES_NEW` — safe *here* because the insert references no uncommitted parent row, the exact
+condition that made it wrong in `DocumentStoreService`. Records failures alongside successes,
+deliberately: nothing aggregating failures is *why* the truncation bug stayed invisible. New
+admin-only `GET /api/admin/ai-usage/summary?since=`, aggregating in SQL, reporting **tokens never
+money**.
+
+**Verified**: **57 tests, 0 failures** across all 10 AI test classes (`AiContentIntegrationTest`
+13/13 included, which makes real AI calls now routed through the new recorder — no regression from
+`@Primary`, the changed service signature, the raised ceiling, or the prompt edit). Migrations V45
+and V46 both applied cleanly to the real dev database. QA: `REQ-AI-020`'s business rule corrected
+(it asserted "no cache" — now false), new `REQ-AI-021` + `SCN-AI-043/044/045/046` +
+`TC-AI-043/044/045/046`; `TC-AI-040`'s remarks now record that its 3+3 payload is the truncation
+regression guard — RTM 97/186/203 → **98/191/208**. `api/AI-FEEDBACK.md` and `api/AI-ADMIN.md`
+updated, including AI-ADMIN's now-false "no queryable usage data" bullet.
+
+**Not done**: no admin screen renders the usage aggregates (endpoint only); no retention/pruning
+for `ai_usage_events`; the mobile client still issues a profile-summary request per radar open
+(cheap, but a client cache would remove the round trip); the prompt-tone improvement was checked by
+reading generated narratives, not by any systematic quality measure.
+
+**Next**: on the user's direction — the on-device verification pass for all three Phase 7 cards
+(Practice Summary, Mock Test Result, Preparation Radar) is the biggest standing gap, then Phase 4's
+cloud tier or mistake-analysis phrasing. Phase 5/6 stay paused until told otherwise.
 
 ## Session of 2026-09-12 (3) — TASK-2601 web Phase 2: Mock Test
 

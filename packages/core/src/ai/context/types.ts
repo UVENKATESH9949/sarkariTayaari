@@ -22,6 +22,7 @@
  */
 
 import type {
+  RadarOverviewStatus,
   RadarReasonCode,
   RadarTopic,
   TopicHealthStateName,
@@ -29,7 +30,7 @@ import type {
 import type { AiLanguageCode } from "../tasks";
 
 /** The kinds a task can declare in `requiredContext`. An allowlist, not a hint. */
-export type AiContextKind = "question" | "learner" | "exam" | "topic";
+export type AiContextKind = "question" | "learner" | "exam" | "topic" | "session" | "learnerProfile";
 
 /**
  * One question, in one language, with its verified answer.
@@ -93,6 +94,57 @@ export type TopicContext = {
 };
 
 /**
+ * One topic's current diagnosis — compact enough that a model can reason over several of them
+ * at once, which is the whole reason this is a separate type from `LearnerContext` rather than
+ * a reuse of it: `LearnerContext` is deliberately single-topic-shaped (`topicState`/`healthScore`
+ * are singular fields), and `SESSION_FEEDBACK`/`PROFILE_SUMMARY` both need to talk about several
+ * topics in one prompt. A pure projection off an already-fetched `RadarTopic` — never a fresh
+ * computation — same "aggregates, never a fresh read" rule `LearnerContext` follows.
+ */
+export type TopicSnapshot = {
+  topicId: string;
+  topicName: string;
+  subjectName: string;
+  state: TopicHealthStateName;
+  healthScore: number | null;
+  trend: RadarTopic["trend"];
+  reasonCodes: readonly RadarReasonCode[];
+};
+
+/**
+ * One just-finished Practice session or Mock Test attempt, already reduced to the facts a
+ * post-session narrative needs — never raw per-question rows. `topics` is every distinct topic
+ * exercised, each carrying its CURRENT health/trend (not "how this session alone went" — the
+ * model is meant to place this session in context, which needs the standing diagnosis, not a
+ * recomputation of it).
+ */
+export type SessionContext = {
+  sessionKind: "PRACTICE" | "MOCK";
+  /** Null for a session with no fixed exam (matches `SessionRecord.examCode`'s own nullability). */
+  examCode: string | null;
+  answeredCount: number;
+  correctCount: number;
+  accuracyPercent: number;
+  preferredLanguage: AiLanguageCode;
+  topics: readonly TopicSnapshot[];
+};
+
+/**
+ * The whole-exam picture behind the Profile screen (§ personalization) — strengths and
+ * weaknesses already ranked by the radar (`WeaknessRadar.topics` is pre-ordered so grouping by
+ * `state` yields the right sections; slicing off each end needs no new ranking logic here).
+ */
+export type LearnerProfileContext = {
+  examCode: string;
+  overviewStatus: RadarOverviewStatus;
+  topicsInSyllabus: number;
+  topicsWithEvidence: number;
+  strengths: readonly TopicSnapshot[];
+  weaknesses: readonly TopicSnapshot[];
+  preferredLanguage: AiLanguageCode;
+};
+
+/**
  * Assembled context. Every part is optional at the type level because which parts are required
  * is a per-task decision the registry owns — `contextGaps()` is what turns that into an error.
  */
@@ -101,4 +153,6 @@ export type AiContext = {
   learner?: LearnerContext;
   exam?: ExamContext;
   topic?: TopicContext;
+  session?: SessionContext;
+  learnerProfile?: LearnerProfileContext;
 };

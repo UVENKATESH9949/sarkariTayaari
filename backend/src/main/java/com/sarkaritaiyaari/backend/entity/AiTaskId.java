@@ -19,5 +19,9 @@ public enum AiTaskId {
     STUDY_PLAN,
     TOPIC_ANALYSIS,
     PERSONALIZED_EXPLANATION,
-    QUESTION_CLASSIFICATION
+    QUESTION_CLASSIFICATION,
+    /** Phase 7 -- one short narrative over a just-finished Practice/Mock session's facts. */
+    SESSION_FEEDBACK,
+    /** Phase 7 -- the narrative behind the Profile screen's strengths/weaknesses. */
+    PROFILE_SUMMARY
 }
