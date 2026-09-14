@@ -2,7 +2,7 @@
 #
 # Every test case belonging to the AI module. Run after any change confined to that module.
 #
-# 46 test case(s). Membership rule: module == AI (mechanical filter).
+# 47 test case(s). Membership rule: module == AI (mechanical filter).
 
 suite: Regression — AI
 test_case_ids:
@@ -51,4 +51,5 @@ test_case_ids:
   - TC-AI-044
   - TC-AI-045
   - TC-AI-046
+  - TC-AI-047
   - TC-AI-042

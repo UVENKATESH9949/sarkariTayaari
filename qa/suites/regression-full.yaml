@@ -2,7 +2,7 @@
 #
 # Every test case across all three modules, including Ambiguous/blocked ones (their execution still records real observed behavior, even without a pre-asserted pass/fail). Run before a significant, cross-cutting change.
 #
-# 208 test case(s). Membership rule: All test cases in qa/test-cases/*.yaml.
+# 209 test case(s). Membership rule: All test cases in qa/test-cases/*.yaml.
 
 suite: Regression (Full)
 test_case_ids:
@@ -51,6 +51,7 @@ test_case_ids:
   - TC-AI-044
   - TC-AI-045
   - TC-AI-046
+  - TC-AI-047
   - TC-AI-042
   - TC-AUTH-001
   - TC-AUTH-002

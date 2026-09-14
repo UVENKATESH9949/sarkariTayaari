@@ -865,7 +865,10 @@
     of UserPracticeSessionRepository. A mock attempt's stored results carry subjectName but no
     topicId (a mock spans a whole exam's syllabus, not one topic), so the mobile client always
     supplies topics: [] for this endpoint -- the narrative is accuracy-only, never a per-topic
-    diagnosis it has no grounded data to support.
+    diagnosis it has no grounded data to support. answeredCount must be the number of questions
+    ATTEMPTED (correct + wrong), never the size of the paper: leaving a mock part-finished is
+    completely normal, and counting unattempted questions as answered reports a far lower
+    accuracy than the student actually achieved.
   actor: Signed-in student (any role)
   preconditions:
     - Student holds a valid bearer token

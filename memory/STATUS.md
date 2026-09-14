@@ -255,9 +255,40 @@ for `ai_usage_events`; the mobile client still issues a profile-summary request 
 (cheap, but a client cache would remove the round trip); the prompt-tone improvement was checked by
 reading generated narratives, not by any systematic quality measure.
 
-**Next**: on the user's direction — the on-device verification pass for all three Phase 7 cards
-(Practice Summary, Mock Test Result, Preparation Radar) is the biggest standing gap, then Phase 4's
-cloud tier or mistake-analysis phrasing. Phase 5/6 stay paused until told otherwise.
+**Then, same session: the on-device pass — all three cards verified, and a real bug found.** This
+closes the gap every Phase 7 entry above had disclosed. Emulator `emulator-5554` (no physical
+device was attached; every `adb` call pinned anyway), real dev backend, real Groq calls, signed in
+as the demo account so the cloud tier was genuinely reachable.
+
+**Checked before touching a screen**, by pulling the device's own SQLite (`adb exec-out run-as` —
+the binary-safe form; a plain shell redirect corrupts it): both flags present in
+`client_config_ai_tasks`, and **migrations 0024 + 0025 applied to a real populated database (356
+practice sessions, 88 mock attempts) with zero data loss** — the highest-risk item in the phase,
+now actually tested.
+
+All three rendered with grounded content: Practice Summary ("...a 33% accuracy. Your work on
+Problems on Trains is developing"), Preparation Radar ("...full syllabus covered... Ratio &
+Proportion and Direct & Indirect Speech need more focus as they are slipping" — and those are
+exactly the top two "Needs attention" cards below it, both marked "↓ slipping"), and Mock Test
+Result. The radar card also confirms the prompt-tone fix holds on real data — two strengths, two
+weaknesses, no raw `STRONG`/`RISING`/`health 82` labels.
+
+**The bug only a device could find**: the Mock Test card said *"You tackled 54 questions... an
+accuracy of 4%"* for an attempt with 2 correct, 1 wrong, **51 unattempted** — real accuracy 67%.
+`getOrBuildMockFeedback` passed `totalQuestions` as `answeredCount`, making accuracy
+correct-over-paper-size. Part-finishing a mock is completely normal, so this would have been wrong
+more often than right, and wrong in the discouraging direction. **No backend test could catch it**
+— the backend faithfully reported the accuracy handed to it, and every fixture describes a
+completed session. Fixed to `correctCount + wrongCount`, re-verified on a different attempt (1
+correct, 2 wrong, 47 unattempted): now reads **33%** where the old code said 2%. QA: `REQ-AI-019`
+updated, new `TC-AI-047` (`ManualOnly`) with step 2 as the explicit regression guard — RTM
+98/191/208 → **98/191/209**.
+
+**Pre-existing, observed not caused**: the duplicate-React-key LogBox warning already on record
+still appears in Practice and still swallows taps on the bottom button row until dismissed.
+
+**Next**: Phase 4's cloud tier, mistake-analysis phrasing, or an admin screen for the usage
+aggregates (the endpoint has no UI). Phase 5/6 stay paused until told otherwise.
 
 ## Session of 2026-09-12 (3) — TASK-2601 web Phase 2: Mock Test
 

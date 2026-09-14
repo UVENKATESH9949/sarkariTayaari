@@ -95,7 +95,13 @@ export async function getOrBuildMockFeedback(params: {
     cachedNarrative: attempt.feedbackNarrative ?? null,
     sessionKind: "MOCK",
     examCode,
-    answeredCount: attempt.totalQuestions,
+    // Answered means *attempted*, not the size of the paper. Found on a real device, not by
+    // review: passing totalQuestions here told a student who got 2 of 3 attempted right that
+    // they had "an accuracy of 4%" — correct-over-paper-size — on an attempt with 51
+    // unattempted questions. Leaving a mock test part-finished is completely normal, so that
+    // wording would be wrong far more often than right, and wrong in the discouraging
+    // direction, which is the one thing this feature must not be.
+    answeredCount: attempt.correctCount + attempt.wrongCount,
     correctCount: attempt.correctCount,
     languageCode,
     sessionTopics: [],

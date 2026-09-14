@@ -673,3 +673,48 @@ pruning for `ai_usage_events` (~22M rows/year at 10k DAU — comfortable for Pos
 prunes it); the client still issues a profile-summary request on every radar open (cheap, but a
 client-side cache would remove even that round trip); and the tone improvement was verified by
 reading one generated narrative, not by any systematic quality check.
+
+### On-device verification (2026-09-14) — all three cards, and a real bug only a device could find
+
+Closed the standing gap every Phase 7 entry above had disclosed. Emulator `emulator-5554` (no
+physical device was attached; every `adb` call pinned regardless), a real dev backend, real Groq
+calls, signed in as the demo account so the cloud tier was actually reachable.
+
+**Verified before touching a screen**, by pulling the device's own SQLite (`adb exec-out run-as`,
+the binary-safe form): both flags synced into `client_config_ai_tasks`, and **migrations 0024 and
+0025 applied to a genuinely populated database — 356 practice sessions and 88 mock attempts, zero
+data loss.** That was the single highest-risk item in this phase and it is now actually tested
+rather than assumed.
+
+All three surfaces rendered with grounded content, each cross-checked against the data visible on
+the same screen:
+
+| Surface | Narrative | Grounded against |
+|---|---|---|
+| Practice Summary | "Great effort on the practice session with a 33% accuracy. Your work on Problems on Trains is developing..." | the real 33%, the real topic |
+| Preparation Radar | "...staying on track with the full syllabus covered. Your grasp of Science & Technology and Syllogism is getting stronger... Ratio & Proportion and Direct & Indirect Speech need more focus as they are slipping." | "On track" status, 61 of 61 practised, and the top two "Needs attention" cards immediately below it — both genuinely marked "↓ slipping" |
+| Mock Test Result | "You scored 33% in this mock test..." | 1 correct of 3 attempted |
+
+The radar card also confirms the prompt-tone fix holding on real data: two strengths, two
+weaknesses, no raw `STRONG`/`RISING`/`health 82` labels.
+
+**The bug, found only because this ran against real data.** The Mock Test card first said *"You
+tackled 54 questions in this mock test and achieved an accuracy of 4%"* — for an attempt with 2
+correct, 1 wrong and **51 unattempted**. `getOrBuildMockFeedback` passed `attempt.totalQuestions`
+as `answeredCount`, so accuracy came out as correct-over-paper-size rather than
+correct-over-attempted: the student's real accuracy was 67%. Leaving a mock part-finished is
+completely normal, so this would have been wrong far more often than right — and wrong in the
+discouraging direction, which is the one direction this feature must never be wrong in. No backend
+test could have caught it: the backend faithfully reported the accuracy it was handed, and every
+unit fixture happens to describe a fully-completed session.
+
+Fixed to `correctCount + wrongCount` and re-verified on a *different* attempt (1 correct, 2 wrong,
+47 unattempted): the card now reads **33%**, where the old code would have said 2%. `tsc` clean.
+QA: `REQ-AI-019`'s business rule now states the attempted-not-paper-size requirement, and new
+`TC-AI-047` (`ManualOnly`) walks all three cards with step 2 written explicitly as this bug's
+regression guard, including the warning that a fully-completed mock would not reproduce it —
+RTM 98/191/208 → **98/191/209**.
+
+**A pre-existing issue observed, not caused by this work and not fixed**: the duplicate-React-key
+LogBox warning already recorded in `memory/STATUS.md` still appears during Practice, and still
+overlaps the bottom button row enough to swallow taps until dismissed.

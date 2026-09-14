@@ -1613,6 +1613,50 @@
   automation_status: Automated
   automation_reference: "AiUsageTrackingTest.theSummaryIsAdminOnly; AiUsageTrackingTest.aMalformedSinceIsRejected"
 
+- id: TC-AI-047
+  requirement_ids: [REQ-AI-018, REQ-AI-019, REQ-AI-020]
+  scenario_id: SCN-AI-035
+  system: Mobile
+  module: AI
+  feature: AI narrative cards on device
+  title: All three AI narrative cards render on a real device with grounded content
+  objective: >
+    Confirm the three student-facing narrative surfaces actually render on a device against a
+    real provider -- the backend integration tests prove the endpoints, not that a card appears.
+  preconditions:
+    - Signed in (the cloud tier needs a token; signed out falls back to the canned template)
+    - SESSION_FEEDBACK and PROFILE_SUMMARY enabled, and a reference sync has run so
+      client_config_ai_tasks reflects them locally
+    - Local migrations 0024 and 0025 applied
+  test_data: "A real account with practice/mock history (the demo account has both)"
+  test_environment: "Android emulator + real dev backend + real AI provider"
+  priority: High
+  severity: High
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Finish a Practice session and land on Session Summary"
+      expected: "An 'AI FEEDBACK' card appears between the finished-early line and the stat row, citing the real accuracy and topic"
+    - step: 2
+      action: "Open a Mock Test result that has no cached narrative"
+      expected: "An 'AI FEEDBACK' card appears below the stat row, citing accuracy over ATTEMPTED questions, not paper size"
+    - step: 3
+      action: "Open Preparation Radar for an exam with practice history"
+      expected: "An 'AI SUMMARY' card appears below the overview, naming at most two strengths and two weaknesses that match the radar sections below it, with no raw state/trend labels or health scores"
+  expected_result: >
+    Each card renders with content grounded in the data visible on the same screen.
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Walked through on emulator-5554 on 2026-09-14 against real Groq calls. Step 2 is an explicit
+    regression guard for a real bug found by exactly this pass: the Mock Test card passed
+    totalQuestions as answeredCount, so an attempt with 2 correct, 1 wrong and 51 unattempted was
+    described as "an accuracy of 4%" instead of 67%. Use an attempt with many unattempted
+    questions -- a fully-completed mock would not catch it.
+  automation_status: ManualOnly
+  automation_reference: null
+
 - id: TC-AI-042
   requirement_ids: [REQ-AI-010, REQ-AI-012, REQ-AI-013, REQ-AI-014]
   scenario_id: SCN-AI-042

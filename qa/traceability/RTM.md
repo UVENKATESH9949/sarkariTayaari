@@ -6,7 +6,7 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 
 ## AI
 
-21 requirements, 46 scenarios, 46 test cases.
+21 requirements, 46 scenarios, 47 test cases.
 
 | Requirement | Priority | Status | Scenario(s) | Test Case(s) | Execution | Defect |
 |---|---|---|---|---|---|---|
@@ -27,9 +27,9 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 | REQ-AI-015: Public sync feed withholds unpublished content | Critical | Active | SCN-AI-032 | TC-AI-032 (Not Executed) | |  |
 | REQ-AI-016: Public client-config feed reports every AI task's enable state | Critical | Active | SCN-AI-033 | TC-AI-033 (Not Executed) | |  |
 | REQ-AI-017: Admin per-task AI enable/disable control | High | Active | SCN-AI-034 | TC-AI-034 (Not Executed) | |  |
-| REQ-AI-018: Live per-student SESSION_FEEDBACK narrative generation | High | Active | SCN-AI-035<br>SCN-AI-036<br>SCN-AI-037 | TC-AI-035 (Not Executed)<br>TC-AI-036 (Not Executed)<br>TC-AI-037 (Not Executed) | |  |
-| REQ-AI-019: Live per-student SESSION_FEEDBACK narrative generation for Mock Test attempts | High | Active | SCN-AI-038<br>SCN-AI-039 | TC-AI-038 (Not Executed)<br>TC-AI-039 (Not Executed) | |  |
-| REQ-AI-020: Live per-student PROFILE_SUMMARY narrative generation for the Preparation Radar screen | Medium | Active | SCN-AI-040<br>SCN-AI-041<br>SCN-AI-043<br>SCN-AI-044 | TC-AI-040 (Not Executed)<br>TC-AI-041 (Not Executed)<br>TC-AI-043 (Not Executed)<br>TC-AI-044 (Not Executed) | |  |
+| REQ-AI-018: Live per-student SESSION_FEEDBACK narrative generation | High | Active | SCN-AI-035<br>SCN-AI-036<br>SCN-AI-037 | TC-AI-035 (Not Executed)<br>TC-AI-036 (Not Executed)<br>TC-AI-037 (Not Executed)<br>TC-AI-047 (Not Executed) | |  |
+| REQ-AI-019: Live per-student SESSION_FEEDBACK narrative generation for Mock Test attempts | High | Active | SCN-AI-038<br>SCN-AI-039 | TC-AI-038 (Not Executed)<br>TC-AI-039 (Not Executed)<br>TC-AI-047 (Not Executed) | |  |
+| REQ-AI-020: Live per-student PROFILE_SUMMARY narrative generation for the Preparation Radar screen | Medium | Active | SCN-AI-040<br>SCN-AI-041<br>SCN-AI-043<br>SCN-AI-044 | TC-AI-040 (Not Executed)<br>TC-AI-041 (Not Executed)<br>TC-AI-043 (Not Executed)<br>TC-AI-044 (Not Executed)<br>TC-AI-047 (Not Executed) | |  |
 | REQ-AI-021: Every AI call is persisted with its token counts, and aggregated for an admin | Medium | Active | SCN-AI-045<br>SCN-AI-046 | TC-AI-045 (Not Executed)<br>TC-AI-046 (Not Executed) | |  |
 
 ## AUTH
@@ -150,7 +150,7 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 |---|---|
 | Total requirements | 98 |
 | Total scenarios | 191 |
-| Total test cases | 208 |
+| Total test cases | 209 |
 | Requirements with zero scenarios | 0  |
 | Real executions recorded | 0 |
 | Real defects logged | 0 |
