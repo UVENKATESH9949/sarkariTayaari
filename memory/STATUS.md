@@ -2,10 +2,11 @@
 
 **Last updated:** 2026-09-15 — the web app (TASK-2601 Phase 0-2) is **committed and pushed at
 last** (`f7c924b` on `feature/on-device-llm-spike`, still not `main`); TASK-2701's AI Usage admin
-screen shipped; and **Phase 7 is now complete** with Phase 7.4 (`MISTAKE_ANALYSIS`). **The single
-most important finding this session: the AI features are not broken, they are switched off** —
-every `ai_task_flags` row on the deployed backend reads `false`, so all four AI cards correctly
-render nothing. See **"Session of 2026-09-15"** immediately below before touching anything
+screen shipped; **Phase 7 is now complete** with Phase 7.4 (`MISTAKE_ANALYSIS`); and **AI is now
+LIVE IN PRODUCTION** — `SESSION_FEEDBACK` and `PROFILE_SUMMARY` are enabled and answering real
+student requests through real Groq calls, after the one missing value (`APP_AI_ENCRYPTION_KEY`) was
+deployed to Cloud Run. The session opened by diagnosing why AI never appeared in a real build: the
+features were never broken, they were switched off, and production held no Groq key at all. See **"Session of 2026-09-15"** immediately below before touching anything
 AI-related. Then the 2026-09-14 entry below that.
 
 ## Session of 2026-09-15 — why the AI features never appeared in a real build; the AI Usage admin screen
@@ -141,9 +142,59 @@ on-device runtime, which is paused. Genuinely remaining: **`QUESTION_HINT`** and
 **`QUESTION_CLASSIFICATION`** (both unbuilt), retention/pruning for `ai_usage_events`, a durable
 client cache for profile summary, and Phase 4's cloud tier.
 
-**Next, in order:** (1) deploy `APP_AI_ENCRYPTION_KEY` to Cloud Run, save the Groq key + enable the
-task flags in the admin console, sync a device — that is the whole remaining path to AI features
-appearing for a real student, and needs no new APK. (2) An emulator pass covering all four Phase 7
+**Then, same session: AI WENT LIVE IN PRODUCTION.** The deployment gap this session opened with is
+closed. The project owner ran one `gcloud` step in Cloud Shell; everything else was done from here
+against the shared database.
+
+**What was actually missing turned out to be exactly one value.** Probing production first showed
+7.1/7.2/7.3 and the usage endpoint all already deployed (only Phase 7.4, built this same session, was
+404). Querying production's own `/admin/ai/config` showed `enabled: false`, `activeProvider: MOCK`,
+and **GROQ `configured: false`** — the shared DB held no key at all. The local backend had been working
+only because `application-local.yml` supplies one statically.
+
+**The DB half was done from this machine, with flags deliberately left off.** The Groq key was saved
+through the admin API (encrypted at rest into `ai_provider_configs`), AI enabled, `activeProvider`
+set to GROQ. Production picked all of that up immediately — shared database — but could not decrypt.
+**Proved rather than assumed:** the same Test Connection call returned `503 "No AI encryption key
+configured"` on production and `200 Credentials are valid` (417ms, a real Groq call) locally. Flags
+were held at `false` throughout so nothing student-facing could hit an undecryptable key.
+
+**The one `gcloud` step:** `APP_AI_ENCRYPTION_KEY` deployed as a Secret Manager secret and attached
+with `--update-secrets` (never `--set-secrets`, which would wipe `db-password`/`cloudinary-secret`).
+**A real trap was headed off in advance:** `AiCredentialCipher` calls `Base64.getDecoder().decode()`
+directly, and the strict decoder rejects a newline — a trailing `
+` from an interactive paste would
+throw during bean creation and the revision would fail to start. The instructions used
+`read -rsp` + `printf '%s'` (no echo, no shell history, no trailing newline) plus a `wc -c` check
+that the stored secret is exactly 44 bytes.
+
+**Verified end to end against real production, with the real demo student account and real Groq
+calls** — not a mock, not local:
+- Test Connection: `503` → **`200`**, 702ms.
+- `SESSION_FEEDBACK`: *"Great effort! You answered 10 questions with a 60% accuracy. Your work on
+  Percentages needs a bit more focus (health 48), but you're on the right track."*
+- `PROFILE_SUMMARY`: *"Your grasp of Geometry ... is solid and holding steady ... Ratio & Proportion
+  needs a focused review as your performance there has been slipping."*
+
+**`SESSION_FEEDBACK` and `PROFILE_SUMMARY` are now ON in production.** Every other flag stays off, for
+real reasons rather than caution: `MISTAKE_ANALYSIS`'s endpoint is not deployed yet (still 404 —
+the GitHub Actions run from `feature/on-device-llm-spike` had not been triggered when this was
+written), and `QUESTION_EXPLANATION` has no published content (its only two `ai_content` rows are
+DRAFT).
+
+**A real quality gap found by reading the live output, not by any test.** The `SESSION_FEEDBACK`
+narrative above leaks `(health 48)` — a raw internal label that means nothing to a student.
+`PROFILE_SUMMARY`'s prompt explicitly forbids exactly this ("Never repeat the raw labels ... say what
+they mean in plain language") and its live output is clean; `SESSION_FEEDBACK`'s prompt never got the
+same rule. One-line prompt fix, not yet applied — it needs a backend deploy to take effect, so it
+should ride along with the Phase 7.4 deploy.
+
+**Still outstanding:** trigger the backend deploy (GitHub → Actions → Deploy backend → Run workflow →
+branch `feature/on-device-llm-spike`) to land Phase 7.4 and any prompt fix; then enable
+`MISTAKE_ANALYSIS`. The admin token was revoked and all scratch files removed.
+
+**Next, in order:** (1) DONE — see the production entry above; AI is live. What remains of it is a
+device sync so the app picks up the two enabled flags, which needs no new APK. (2) An emulator pass covering all four Phase 7
 cards at once, including this new one. (3) Then `QUESTION_HINT`/`QUESTION_CLASSIFICATION` if wanted.
 Phase 5/6 stay paused. `QUESTION_EXPLANATION` additionally has no published content — its only two
 `ai_content` rows are DRAFT, a content problem rather than a config one.
