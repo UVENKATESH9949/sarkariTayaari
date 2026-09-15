@@ -77,6 +77,8 @@ export type {
 
 export { sessionFeedbackTemplate } from "./feedback/sessionFeedbackTemplate";
 export { profileSummaryTemplate } from "./feedback/profileSummaryTemplate";
+export { mistakeAnalysisTemplate } from "./feedback/mistakeAnalysisTemplate";
+export type { MistakeAttempt } from "./feedback/mistakeAnalysisTemplate";
 
 export { canAttemptTask, isAiLanguageSupportedForTask, routeAiTask } from "./router";
 export type {

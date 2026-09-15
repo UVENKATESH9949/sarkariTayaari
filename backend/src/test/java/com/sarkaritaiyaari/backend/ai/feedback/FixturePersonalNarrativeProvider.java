@@ -37,6 +37,13 @@ public class FixturePersonalNarrativeProvider implements AIProvider {
     private static final Pattern COVERAGE = Pattern.compile("Topics practised: (\\d+) of");
     private static final Pattern FIRST_TOPIC = Pattern.compile("^- (.+?) \\(subject:", Pattern.MULTILINE);
 
+    /** Phase 7.4 — MISTAKE_ANALYSIS's prompt shape, which shares no line with the other two. */
+    private static final Pattern MISTAKE_MARKER = Pattern.compile("^Verified correct answer: ", Pattern.MULTILINE);
+    private static final Pattern MISTAKE_TOPIC = Pattern.compile("^Topic: (.+)$", Pattern.MULTILINE);
+    private static final Pattern CORRECT_ANSWER = Pattern.compile("^Verified correct answer: (.+)$", Pattern.MULTILINE);
+    /** The qualitative repeat line — no count is sent, so this is what REPEATED_MISTAKE keys on. */
+    private static final Pattern REPEAT_LINE = Pattern.compile("They have missed this same question before");
+
     /**
      * How many times a real generation actually happened — the only deterministic way to prove a
      * cache prevented a model call. Comparing two returned narratives would not: this fixture is
@@ -68,6 +75,12 @@ public class FixturePersonalNarrativeProvider implements AIProvider {
                 .map(AIMessage::content)
                 .orElse("");
 
+        // Checked first because this task's payload is a different shape entirely (three fields,
+        // not a narrative) rather than a different wording of the same one.
+        if (MISTAKE_MARKER.matcher(prompt).find()) {
+            return response(mistakeAnalysisJson(prompt));
+        }
+
         Matcher topicMatcher = FIRST_TOPIC.matcher(prompt);
         Matcher accuracyMatcher = ACCURACY.matcher(prompt);
 
@@ -85,7 +98,45 @@ public class FixturePersonalNarrativeProvider implements AIProvider {
                     : "You've covered " + covered + " topics so far.";
         }
 
-        String content = "{\"narrative\":\"" + narrative.replace("\"", "\\\"") + "\"}";
+        return response("{\"narrative\":\"" + escape(narrative) + "\"}");
+    }
+
+    /**
+     * Phase 7.4. Builds a payload that genuinely has to pass
+     * {@link MistakeAnalysisValidation} — the topic name and the accuracy are read back out of the
+     * real prompt, so if {@code PersonalNarrativePrompts} ever stopped sending either, this
+     * fixture's output would stop being grounded and the test would fail rather than quietly
+     * asserting a canned string.
+     */
+    private static String mistakeAnalysisJson(String prompt) {
+        Matcher topicMatcher = MISTAKE_TOPIC.matcher(prompt);
+        String topic = topicMatcher.find() ? topicMatcher.group(1).trim() : "this topic";
+
+        // Quotes the verified answer back, which is what a real model does and what a real Groq
+        // call was initially rejected for — so this fixture now exercises the same grounding path
+        // that bug was found on, rather than sidestepping it by writing no numbers.
+        Matcher answerMatcher = CORRECT_ANSWER.matcher(prompt);
+        String answerClause = answerMatcher.find()
+                ? " The answer is " + answerMatcher.group(1).trim() + "."
+                : "";
+
+        // Mirrors the real classification rule the prompt states, off the same qualitative line
+        // production code sends — so a change to that wording fails here rather than silently
+        // producing a canned type.
+        boolean repeated = REPEAT_LINE.matcher(prompt).find();
+        String mistakeType = repeated ? "REPEATED_MISTAKE" : "MISREADING";
+        String explanation = (repeated ? "You have missed this one before." : "This one is easy to misread.")
+                + answerClause;
+
+        return "{\"mistakeType\":\"" + mistakeType + "\",\"explanation\":\"" + escape(explanation)
+                + "\",\"suggestedAction\":\"Go back over " + escape(topic) + " once more.\"}";
+    }
+
+    private static String escape(String value) {
+        return value.replace("\"", "\\\"");
+    }
+
+    private AIResponse response(String content) {
         return new AIResponse(content, "fixture-model", id(), AIUsage.of(10, 10), "stop",
                 UUID.randomUUID().toString(), 0L);
     }

@@ -5,6 +5,7 @@ import { FlatList, Pressable, Text, View, StyleSheet } from "react-native";
 import { useBookmarks } from "../practice/bookmarks";
 import { useSessionHistory } from "../practice/sessionHistory";
 import { getWrongAnswers, type WrongAnswerItem } from "../practice/wrongAnswers";
+import { MistakeAnalysisCard } from "../questionRenderer/MistakeAnalysisCard";
 import { Card } from "../ui/Card";
 import { EmptyState } from "../ui/EmptyState";
 import { radius, spacing } from "../ui/theme";
@@ -44,6 +45,9 @@ export default function Revise() {
     explanation: b.explanation,
     subjectName: b.subjectName,
     topicName: b.topicName,
+    // A bookmark is not a wrong answer — it may have been answered correctly or never answered
+    // at all. Zero is the honest value, and the Wrong Answers tab is the only consumer anyway.
+    timesAnsweredWrong: 0,
   }));
 
   const items = activeTab === "bookmarks" ? bookmarkItems : wrongAnswers;
@@ -171,6 +175,31 @@ export default function Revise() {
                       <Text style={styles.explanationText}>{item.explanation}</Text>
                     </View>
                     <AiExplanationCard key={item.id} questionId={item.id} languageCode={defaultLanguageCode} />
+                    {/*
+                      TASK-2701 Phase 7.4. Wrong Answers only — a bookmark may have been answered
+                      correctly or never answered at all, so there is no mistake to analyse. Also
+                      requires the correct answer to resolve to real text: MULTIPLE_CHOICE/
+                      TRUE_FALSE/MATCH/ORDERING carry no single correctIndex in a stored result
+                      (the same limitation answerSummary.ts already documents), and sending the
+                      model a blank answer to explain would invite it to invent one.
+                    */}
+                    {activeTab === "wrong" && item.correctIndex != null && item.options[item.correctIndex] && (
+                      <MistakeAnalysisCard
+                        key={`mistake-${item.id}`}
+                        input={{
+                          questionId: item.id,
+                          questionText: item.questionText,
+                          options: item.options,
+                          correctAnswerText: item.options[item.correctIndex],
+                          selectedAnswerText:
+                            item.selectedIndex != null ? (item.options[item.selectedIndex] ?? null) : null,
+                          subjectName: item.subjectName,
+                          topicName: item.topicName,
+                          timesAnsweredWrong: item.timesAnsweredWrong,
+                          languageCode: defaultLanguageCode,
+                        }}
+                      />
+                    )}
                     {activeTab === "bookmarks" && (
                       <Pressable
                         style={styles.removeButton}

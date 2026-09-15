@@ -8,6 +8,7 @@ export * from "./examGuide";
 export * from "./followedExams";
 export * from "./liveQuestions";
 export * from "./profileSummary";
+export * from "./mistakeAnalysis";
 export * from "./progress";
 export * from "./questionGroups";
 export * from "./questions";

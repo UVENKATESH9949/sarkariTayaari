@@ -1797,3 +1797,118 @@
     only. Injected data, disclosed as such.
   automation_status: ManualOnly
   automation_reference: null
+
+- id: TC-AI-050
+  requirement_ids: [REQ-AI-023]
+  scenario_id: SCN-AI-049
+  system: Backend
+  module: AI
+  feature: Mistake analysis
+  title: Classify a repeat miss and a first miss differently
+  objective: >
+    Confirm REPEATED_MISTAKE is chosen only when the student has genuinely missed the question
+    before, given that the supplied count includes the attempt being analysed.
+  preconditions:
+    - MISTAKE_ANALYSIS flag enabled, an AI provider configured
+    - Signed in as a student
+  test_data: "Any question with a resolvable correct answer; timesAnsweredWrong of 1 and of 2+"
+  test_environment: "Real dev backend; real provider or the narrative test fixture"
+  priority: Medium
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST a request with timesAnsweredWrong = 1"
+      expected: "mistakeType is NOT REPEATED_MISTAKE, and the explanation does not claim they have missed it before"
+    - step: 2
+      action: "POST an otherwise identical request with timesAnsweredWrong = 2"
+      expected: "mistakeType is REPEATED_MISTAKE"
+  expected_result: >
+    The repeat classification tracks real history rather than the raw count being off by one.
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Regression guard for a real bug found on 2026-09-15 by a live Groq call: a first-time miss was
+    classified REPEATED_MISTAKE because the prompt labelled the count "wrong before" while it
+    included the current attempt. Automated at both layers.
+  automation_status: Automated
+  automation_reference: "MistakeAnalysisControllerTest.doesNotCallAFirstTimeMissARepeatedMistake"
+
+- id: TC-AI-051
+  requirement_ids: [REQ-AI-023]
+  scenario_id: SCN-AI-049
+  system: Backend
+  module: AI
+  feature: Mistake analysis
+  title: An analysis may quote both answers and show its arithmetic
+  objective: >
+    Confirm validation does not reject the most useful sentence this task produces.
+  preconditions:
+    - MISTAKE_ANALYSIS flag enabled, an AI provider configured
+  test_data: "A quantitative question, e.g. 15% of 240, and a speed/distance question"
+  test_environment: "Real dev backend"
+  priority: Medium
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Request an analysis for a question the student answered wrongly"
+      expected: "An analysis naming both the chosen and the correct answer is accepted, not rejected as ungrounded"
+    - step: 2
+      action: "Request an analysis for a percentage question left unanswered"
+      expected: "An analysis showing intermediate working (e.g. 15% as 0.15) is accepted"
+  expected_result: >
+    Showing the working is treated as the explanation, not as an ungrounded citation.
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Regression guard for two real rejections seen against live Groq on 2026-09-15, both fixed by
+    removing the output-side grounding for this task and withholding learner statistics instead.
+  automation_status: Automated
+  automation_reference: "MistakeAnalysisValidationTest.acceptsAnAnalysisThatShowsItsWorking"
+
+- id: TC-AI-052
+  requirement_ids: [REQ-AI-023]
+  scenario_id: SCN-AI-050
+  system: Mobile
+  module: AI
+  feature: Mistake analysis
+  title: Nothing is generated until the student asks, and failure shows nothing extra
+  objective: >
+    Confirm the Revise -> Wrong Answers card costs nothing until tapped, and that every decline
+    path leaves the screen looking correct.
+  preconditions:
+    - At least one wrong answer in retained history
+  test_data: "Any wrong answer with a resolvable correct option"
+  test_environment: "Emulator emulator-5554, real dev backend"
+  priority: Medium
+  severity: Low
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Open Revise -> Wrong Answers and expand a card, without tapping the AI button"
+      expected: "The authored explanation renders; no AI call is made (no ai.usage line in the backend log)"
+    - step: 2
+      action: "Tap 'Why did I get this wrong?'"
+      expected: "A loading state, then a card with a plain-language mistake label, an explanation and one next step"
+    - step: 3
+      action: "Collapse the card and expand it again, then tap again"
+      expected: "The cached result appears without a second model call"
+    - step: 4
+      action: "Disable the MISTAKE_ANALYSIS flag, sync, and repeat step 2"
+      expected: "The card renders nothing at all -- no error, no empty state"
+    - step: 5
+      action: "Open the Bookmarks tab and expand a card"
+      expected: "No mistake-analysis button appears -- a bookmark may never have been answered wrongly"
+  expected_result: >
+    The feature costs nothing unasked and is invisible when unavailable.
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    ManualOnly: mobile has no automated test runner in this project. Not yet executed on a device --
+    the backend path is verified against real Groq, but no emulator pass has been done for this card.
+  automation_status: ManualOnly
+  automation_reference: null

@@ -182,3 +182,71 @@ number/topic name actually supplied). The mobile client (`mobile/src/ai/profileS
 `DETERMINISTIC` tier) whenever this returns null, and skips calling this endpoint at all when
 `topicsWithEvidence` is 0 — nothing to summarise yet, matching the screen's own "invitation, not
 an empty radar" state for a student who hasn't practised.
+
+---
+
+### POST /api/questions/{questionId}/mistake-analysis
+
+**Purpose:** Why *this* student got *this* question wrong — TASK-2701 Phase 7.4
+(`MISTAKE_ANALYSIS`). The fourth Phase 7 task and the only one whose payload is structured rather
+than a single narrative, because the classification is what makes it actionable: "you misread the
+question" and "you have never learned this" call for different next steps, and a free-text
+paragraph cannot be counted or filtered later.
+
+**Auth:** signed-in user (`requireUser`). Nothing is stored, but the request body carries that
+student's own history.
+
+**Request body**
+
+| Field | Notes |
+|---|---|
+| `questionText`, `options` | The question as shown. |
+| `correctAnswerText` | **Verified**, supplied to the model, never asked of it — the rule the whole `ai/` layer is built on. |
+| `selectedAnswerText` | What the student picked, or `null` when they left it unanswered (normal in Mock Test). |
+| `subjectName`, `topicName` | |
+| `topicState` | The **qualitative** topic-health label (`NEEDS_ATTENTION` …), never a score. |
+| `timesAnsweredWrong` | How often this question appears wrong in their retained history, **including the attempt being analysed** — so `1` is a first miss and `2+` a repeat. Rendered into the prompt in words, not as a count (see below). |
+
+**Response:** `{ mistakeType, explanation, suggestedAction }`, every field `null` together when the
+task is disabled, the provider fails, or validation rejects the output. A payload that fails
+validation is discarded whole — never shown with one salvaged field. `401` is the only failure
+status; nothing else is an error to the student.
+
+`mistakeType` is one of the nine values in `MISTAKE_TYPES`
+(`packages/core/src/ai/schema/types.ts`), and the Java copy in `MistakeAnalysisValidation` must
+stay in step with it.
+
+**Generated only on an explicit tap.** The Wrong Answers list can hold hundreds of rows, so
+generating as cards render would spend a model call each. The mobile client
+(`mobile/src/ai/mistakeAnalysis.ts`) caches per question **in memory** for the session: a finished
+wrong answer is immutable history, so it never needs asking twice within a session. Deliberately
+not a durable cache — unlike `PROFILE_SUMMARY`, which regenerated automatically on every screen
+open and needed one (V45).
+
+**No grounding check on the output, unlike the three endpoints above — and this is the one real
+design difference worth reading before changing anything here.** Both of that rule's halves were
+tried against real Groq output and both rejected *correct* analyses:
+
+- the topic-name rule rejected *"you picked 50 km/h, but 120 km over 2 hours is 60"* for never
+  naming the topic — but this task's subject is one question, not a topic;
+- the number rule rejected an analysis for citing `0.15` while correctly working 15% out as a
+  decimal. Showing the working **is** the explanation on a quantitative question, so a
+  literal-number allowlist fights the feature itself.
+
+The protection those rules give — no invented statistic about the student — is instead achieved
+on the **input** side: no numeric learner fact is sent at all (the topic state goes as a label,
+the repeat signal in words), and the prompt states that any such figure would be invented.
+*Residual risk, stated rather than hidden:* a model could still hallucinate a performance figure
+unprompted and nothing would catch it. Accepted because the verified answer is supplied and the
+authored explanation always renders above this card.
+
+**Why the repeat signal is qualitative.** A real Groq call read a bare `1` under a "wrong before"
+label as "once before" and returned `REPEATED_MISTAKE` for a first-time miss — telling the student
+they had "repeatedly confused" something they had got wrong once. The prompt now says it in words
+("This is the first time they have missed this question"), which removes the ambiguity and keeps a
+countable statistic out of the prompt at the same time.
+
+**Fallback:** `mistakeAnalysisTemplate` (`MISTAKE_ANALYSIS`'s `DETERMINISTIC` tier) whenever this
+returns null. It can only establish `REPEATED_MISTAKE` or `KNOWLEDGE_GAP` — every other type needs
+a model to actually read the question and its distractors, and guessing between them would produce
+a confident-sounding diagnosis with nothing behind it.

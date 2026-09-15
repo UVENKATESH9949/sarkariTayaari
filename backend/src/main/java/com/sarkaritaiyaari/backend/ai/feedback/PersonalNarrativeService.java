@@ -8,6 +8,7 @@ import com.sarkaritaiyaari.backend.ai.AIResponse;
 import com.sarkaritaiyaari.backend.ai.AIService;
 import com.sarkaritaiyaari.backend.ai.ResponseFormat;
 import com.sarkaritaiyaari.backend.ai.exception.AIException;
+import com.sarkaritaiyaari.backend.dto.MistakeAnalysisDtos.MistakeAnalysisRequest;
 import com.sarkaritaiyaari.backend.dto.ProfileSummaryDtos.ProfileSummaryRequest;
 import com.sarkaritaiyaari.backend.dto.SessionFeedbackDtos.SessionFeedbackRequest;
 import com.sarkaritaiyaari.backend.dto.SessionFeedbackDtos.TopicSnapshotDto;
@@ -124,6 +125,61 @@ public class PersonalNarrativeService {
             return narrativeOrNull(result, AiTaskId.SESSION_FEEDBACK, response);
         } catch (AIException e) {
             log.warn("SESSION_FEEDBACK generation failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Phase 7.4 -- {@code MISTAKE_ANALYSIS}. Same flag-gate/generate/validate/never-throw shape as
+     * its two siblings, with one structural difference: the payload is a three-field object rather
+     * than a narrative, so it validates through {@link MistakeAnalysisValidation} instead.
+     *
+     * <p><b>No server-side cache, deliberately, and for a different reason than Phase 7.3's.</b>
+     * {@code PROFILE_SUMMARY} needed one because it regenerated automatically on every screen
+     * open; this is generated only when a student explicitly taps for it on one question, so the
+     * same cost pressure does not exist. The caching that does pay off here is on the device --
+     * a finished wrong answer is immutable history, so the client stores the result against the
+     * question id and never asks twice. Doing it there also works before the owning session has
+     * synced to this backend, which a server-side row keyed on a result could not.
+     *
+     * @return {@code null} on disabled/failed-validation/provider error -- never throws for those.
+     */
+    public MistakeAnalysisValidation.Ok mistakeAnalysis(MistakeAnalysisRequest request) {
+        if (!flagService.isEnabled(AiTaskId.MISTAKE_ANALYSIS)) {
+            return null;
+        }
+
+        AIMessage userMessage = PersonalNarrativePrompts.mistakeAnalysisUserMessage(
+                request, languageName(request.preferredLanguage()));
+
+        AIRequest aiRequest = AIRequest.builder()
+                .systemPrompt(PersonalNarrativePrompts.mistakeAnalysisSystemPrompt())
+                .messages(List.of(userMessage))
+                .temperature(0.4)
+                .maxTokens(MAX_OUTPUT_TOKENS)
+                .responseFormat(ResponseFormat.JSON)
+                .metadata(Map.of("feature", "mistake-analysis"))
+                .build();
+
+        try {
+            AIResponse response = aiService.generate(aiRequest);
+            JsonNode raw = parseJson(response.content());
+            MistakeAnalysisValidation.Result result = raw == null
+                    ? new MistakeAnalysisValidation.Failed("NOT_JSON", "response was not valid JSON")
+                    : MistakeAnalysisValidation.validate(raw);
+
+            return switch (result) {
+                case MistakeAnalysisValidation.Ok ok -> ok;
+                case MistakeAnalysisValidation.Failed failed -> {
+                    log.warn("{} rejected a generated analysis: {} ({}) [finishReason={}, outputTokens={}]",
+                            AiTaskId.MISTAKE_ANALYSIS, failed.code(), failed.detail(),
+                            response.finishReason(),
+                            response.usage() != null ? response.usage().outputTokens() : null);
+                    yield null;
+                }
+            };
+        } catch (AIException e) {
+            log.warn("MISTAKE_ANALYSIS generation failed: {}", e.getMessage());
             return null;
         }
     }
@@ -275,6 +331,10 @@ public class PersonalNarrativeService {
         }
         return new PersonalNarrativeGrounding.Grounding(numbers, topicNames);
     }
+
+    // No grounding helper for MISTAKE_ANALYSIS, deliberately — see MistakeAnalysisValidation's
+    // own doc comment for why both grounding rules were removed after real Groq calls showed
+    // them rejecting correct analyses, and what replaces the protection they were giving.
 
     private static PersonalNarrativeGrounding.Grounding groundingFor(SessionFeedbackRequest request) {
         List<Integer> numbers = new java.util.ArrayList<>(List.of(

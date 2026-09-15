@@ -599,3 +599,36 @@
     every window the UI offers contains all 25 calls), so both were exercised on 2026-09-15 by
     intercepting the response in the browser and asserting the rendered result. Disclosed as
     injected data rather than presented as a real-data pass.
+
+- id: SCN-AI-049
+  requirement_ids: [REQ-AI-023]
+  category: Functional
+  title: A mistake analysis classifies the slip correctly and never invents a statistic
+  objective: >
+    Confirm a tap on "Why did I get this wrong?" returns a taxonomy value, an explanation and one
+    next step; that a repeat miss and a first miss are classified differently; and that the analysis
+    may quote both answers and show its arithmetic without being rejected.
+  systems: [Backend, Mobile]
+  status: Ready
+  notes: >
+    Verified on 2026-09-15 against real Groq (openai/gpt-oss-120b) calls, which is where two real
+    bugs were found that no fixture caught. First, timesAnsweredWrong counts the attempt being
+    analysed, so a bare "1" under a "wrong before" prompt label read as "once before" and a
+    first-time miss came back REPEATED_MISTAKE, telling the student they had "repeatedly confused"
+    something they had missed once. Second, the output grounding rejected correct analyses -- one
+    for citing the student's own answer, one for writing 0.15 while correctly working out 15%.
+    Both fixed, then all three scenarios re-run green against real Groq.
+
+- id: SCN-AI-050
+  requirement_ids: [REQ-AI-023]
+  category: Edge case
+  title: The analysis is never generated unasked, and degrades silently
+  objective: >
+    Confirm no model call happens until the student taps; that a disabled flag, a provider failure
+    or a failed validation all render nothing extra rather than an error; and that an unanswered
+    question is described as unanswered rather than as a wrong choice.
+  systems: [Backend, Mobile]
+  status: Ready
+  notes: >
+    The "never unasked" property is the cost control for this surface: the Wrong Answers list can
+    hold hundreds of rows, so generating per row as cards render would spend a model call each.

@@ -6,7 +6,7 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 
 ## AI
 
-22 requirements, 48 scenarios, 49 test cases.
+23 requirements, 50 scenarios, 52 test cases.
 
 | Requirement | Priority | Status | Scenario(s) | Test Case(s) | Execution | Defect |
 |---|---|---|---|---|---|---|
@@ -32,6 +32,7 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 | REQ-AI-020: Live per-student PROFILE_SUMMARY narrative generation for the Preparation Radar screen | Medium | Active | SCN-AI-040<br>SCN-AI-041<br>SCN-AI-043<br>SCN-AI-044 | TC-AI-040 (Not Executed)<br>TC-AI-041 (Not Executed)<br>TC-AI-043 (Not Executed)<br>TC-AI-044 (Not Executed)<br>TC-AI-047 (Not Executed) | |  |
 | REQ-AI-021: Every AI call is persisted with its token counts, and aggregated for an admin | Medium | Active | SCN-AI-045<br>SCN-AI-046 | TC-AI-045 (Not Executed)<br>TC-AI-046 (Not Executed) | |  |
 | REQ-AI-022: An admin can read AI usage aggregates in the console, without querying the database | Medium | Active | SCN-AI-047<br>SCN-AI-048 | TC-AI-048 (Not Executed)<br>TC-AI-049 (Not Executed) | |  |
+| REQ-AI-023: A student can ask why they got a specific question wrong, and get a classified answer | Medium | Active | SCN-AI-049<br>SCN-AI-050 | TC-AI-050 (Not Executed)<br>TC-AI-051 (Not Executed)<br>TC-AI-052 (Not Executed) | |  |
 
 ## AUTH
 
@@ -149,9 +150,9 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 
 | Metric | Value |
 |---|---|
-| Total requirements | 99 |
-| Total scenarios | 193 |
-| Total test cases | 211 |
+| Total requirements | 100 |
+| Total scenarios | 195 |
+| Total test cases | 214 |
 | Requirements with zero scenarios | 0  |
 | Real executions recorded | 0 |
 | Real defects logged | 0 |

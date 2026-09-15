@@ -1,11 +1,12 @@
 # Project Status — Resume Point
 
 **Last updated:** 2026-09-15 — the web app (TASK-2601 Phase 0-2) is **committed and pushed at
-last** (`f7c924b` on `feature/on-device-llm-spike`, still not `main`), and TASK-2701's AI Usage
-admin screen shipped. **The single most important finding this session: the AI features are not
-broken, they are switched off** — every `ai_task_flags` row on the deployed backend reads `false`,
-so all three AI cards correctly render nothing. See **"Session of 2026-09-15"** immediately below
-before touching anything AI-related. Then the 2026-09-14 entry below that.
+last** (`f7c924b` on `feature/on-device-llm-spike`, still not `main`); TASK-2701's AI Usage admin
+screen shipped; and **Phase 7 is now complete** with Phase 7.4 (`MISTAKE_ANALYSIS`). **The single
+most important finding this session: the AI features are not broken, they are switched off** —
+every `ai_task_flags` row on the deployed backend reads `false`, so all four AI cards correctly
+render nothing. See **"Session of 2026-09-15"** immediately below before touching anything
+AI-related. Then the 2026-09-14 entry below that.
 
 ## Session of 2026-09-15 — why the AI features never appeared in a real build; the AI Usage admin screen
 
@@ -81,13 +82,71 @@ is genuinely verified but the data was injected. Recorded as such, not presented
 pass. QA: `REQ-AI-022`, `SCN-AI-047/048`, `TC-AI-048/049` (all `ManualOnly` — no browser-test
 runner exists for `admin/`). RTM 98/191/209 → **99/193/211**.
 
-**Next, in order:** (1) deploy `APP_AI_ENCRYPTION_KEY` to Cloud Run, save the Groq key + enable
-`SESSION_FEEDBACK`/`PROFILE_SUMMARY` in the admin console, sync a device — that is the whole
-remaining path to AI features appearing for a real student, and needs no new APK. (2) Remaining AI
-work: mistake-analysis phrasing (the last unstarted Phase 7 item), Phase 4's cloud tier, retention/
-pruning for `ai_usage_events`, and a mobile client-side cache for profile summary. Phase 5/6 stay
-paused. `QUESTION_EXPLANATION` additionally has no published content — its only two `ai_content`
-rows are DRAFT, a content problem rather than a config one.
+**Then, same session: Phase 7.4 (`MISTAKE_ANALYSIS`) — Done. Phase 7 is now complete.** The last
+unstarted item in TASK-2701's phase table: why *this* student got *this* question wrong, classified
+into the nine-value taxonomy that had existed in `packages/core` since Phase 1 with nothing behind
+it. New `MistakeAnalysisDtos`/`MistakeAnalysisValidation`/`PersonalNarrativeService.mistakeAnalysis`/
+`MistakeAnalysisController` (`POST /api/questions/{questionId}/mistake-analysis`), a third prompt
+template, `mistakeAnalysisTemplate` + `postMistakeAnalysis` in `packages/core`, and mobile's
+`ai/mistakeAnalysis.ts` + `MistakeAnalysisCard` wired into Revise → Wrong Answers. **No migration on
+either side.**
+
+**The defining decision: it is never generated unasked** — a tap, not a screen open, unlike the
+other three Phase 7 surfaces. The Wrong Answers list can hold hundreds of rows, so generating per
+row would spend a model call each. Cached in memory for the session (a finished wrong answer is
+immutable), deliberately not a table.
+
+**Three real bugs, every one found by a real Groq call and none by any fixture — the clearest case
+yet for this project's "exercise it, don't trust a green build" rule.** (1) Output grounding
+rejected the single most useful sentence the task produces, "you chose 50 km/h rather than 60 km/h",
+for citing the student's own answer. (2) Widening it wasn't enough — next it rejected an analysis
+for never naming the topic (a rule that fits a narrative *about topics*, not one about a single
+question), then rejected `0.15` written while correctly working out 15% of 240, since showing the
+working *is* the explanation on a quantitative question. (3) A **first-time** miss came back
+`REPEATED_MISTAKE`: `timesAnsweredWrong` counts the attempt being analysed, so a bare `1` under a
+"wrong before" prompt label read as "once before", and the student was told they had "repeatedly
+confused" something they had missed once — wrong, and wrong in the discouraging direction.
+
+**The fix moved the protection from the output side to the input side**: no numeric learner fact is
+sent at all (topic state as a qualitative label, the repeat signal in words), and the prompt states
+that any performance figure would be invented. That fixes (3) and removes the need for (1) and (2)
+together. Validation now enforces only the closed taxonomy and non-blank fields — with the
+**residual risk** (a model could still hallucinate a figure unprompted; nothing would catch it)
+written into the code's own doc comment rather than left implicit.
+
+**Verified**: **35/35** across all Phase 7 + usage backend test classes (7.1/7.2/7.3 and
+`AiUsageTrackingTest` re-run to prove the shared-fixture change caused no regression);
+`packages/core` **195/195**; mobile `tsc` clean and `expo lint` at the exact 9-problem baseline.
+Then **all three scenarios re-run green against real Groq** after the redesign — repeat →
+`REPEATED_MISTAKE`, first miss → `KNOWLEDGE_GAP` (bug fixed), unanswered percentage →
+`KNOWLEDGE_GAP` including "convert 15% to 0.15 and multiply by 240", the arithmetic previously
+rejected. Response bytes decoded explicitly as UTF-8 and confirmed clean; the console mojibake was
+display only, the same trap already on record here. QA: `REQ-AI-023`, `SCN-AI-049/050`,
+`TC-AI-050/051/052` — RTM 99/193/211 → **100/195/214**.
+
+**Not verified**: no on-device pass for the new card — the backend path is proven against real Groq
+and the client typechecks/lints clean, but nobody has watched the button, its loading state or the
+in-memory cache behave on a device. `TC-AI-052` exists for exactly that, `Not Executed`.
+
+**All AI task flags were left `false`**, matching this project's standing "off unless explicitly
+turned on" posture — `MISTAKE_ANALYSIS` was enabled only for verification and switched back. The
+admin token was revoked and all scratch files removed.
+
+**What remains in AI, after this session — the list is now short.** Three registry tasks are
+deliberately **not** AI work and should never be built with a model: `PERSONALIZED_RECOMMENDATION`,
+`STUDY_PLAN` and `TOPIC_ANALYSIS` are declared `DETERMINISTIC`-only, with comments in `tasks.ts`
+saying `WeaknessRadarService`/`PreparePlanService`/`TopicIntelligenceService` already answer them
+("listed so nobody rebuilds it with a model"). `PERSONALIZED_EXPLANATION` is blocked on Phase 6's
+on-device runtime, which is paused. Genuinely remaining: **`QUESTION_HINT`** and
+**`QUESTION_CLASSIFICATION`** (both unbuilt), retention/pruning for `ai_usage_events`, a durable
+client cache for profile summary, and Phase 4's cloud tier.
+
+**Next, in order:** (1) deploy `APP_AI_ENCRYPTION_KEY` to Cloud Run, save the Groq key + enable the
+task flags in the admin console, sync a device — that is the whole remaining path to AI features
+appearing for a real student, and needs no new APK. (2) An emulator pass covering all four Phase 7
+cards at once, including this new one. (3) Then `QUESTION_HINT`/`QUESTION_CLASSIFICATION` if wanted.
+Phase 5/6 stay paused. `QUESTION_EXPLANATION` additionally has no published content — its only two
+`ai_content` rows are DRAFT, a content problem rather than a config one.
 
 **Earlier entries, in order, for anything older:** the 2026-09-14 entry immediately below (TASK-2701
 Phase 7 — `SESSION_FEEDBACK` for Practice and Mock Test, `PROFILE_SUMMARY`, the Groq provider,

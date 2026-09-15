@@ -149,7 +149,7 @@ and §13.
 | 4 | Client config + per-task flags; cloud tier for uncached/personalized tasks | all | **Client config + per-task flags done; cloud tier not started** |
 | 5 | Benchmark harness + real-device measurement. **Gate: does any task justify a local model?** | `mobile` | **Exploratory spike only (llama.rn feasibility screen, `feature/on-device-llm-spike`) — no benchmark conclusion reached. Paused 2026-09-14 by explicit project-owner decision: product direction is cloud-only for now (see Phase 7)** |
 | 6 | Only if Phase 5 says yes: runtime, model manager, device tiering, local provider | `mobile` | Not started (blocked on Phase 5, which is paused) |
-| 7 | Personalization depth, mistake-analysis phrasing, DB-backed usage recorder | all | **Phase 7.1/7.2/7.3 done — `SESSION_FEEDBACK` (Practice + Mock Test) and `PROFILE_SUMMARY` (Preparation Radar), cloud-only via Groq. The DB-backed usage recorder is also done (`DatabaseAIUsageRecorder` + V46, 2026-09-14), and its admin screen (`admin/src/pages/AiUsage.jsx`, 2026-09-15). Mistake-analysis phrasing remains unstarted** |
+| 7 | Personalization depth, mistake-analysis phrasing, DB-backed usage recorder | all | **Phase 7.1/7.2/7.3 done — `SESSION_FEEDBACK` (Practice + Mock Test) and `PROFILE_SUMMARY` (Preparation Radar), cloud-only via Groq. The DB-backed usage recorder is also done (`DatabaseAIUsageRecorder` + V46, 2026-09-14), and its admin screen (`admin/src/pages/AiUsage.jsx`, 2026-09-15). Mistake-analysis phrasing done too (Phase 7.4, `MISTAKE_ANALYSIS`, 2026-09-15) — Phase 7 is now complete** |
 
 ## Implementation status
 
@@ -773,3 +773,74 @@ rendering, injected data — recorded as such rather than presented as a real-da
 
 **QA per §3.21:** `REQ-AI-022`, `SCN-AI-047/048`, `TC-AI-048/049` — all `ManualOnly`, since this
 project has no automated browser-test runner for `admin/`. RTM 98/191/209 → **99/193/211**.
+
+**Phase 7.4 (`MISTAKE_ANALYSIS`) — Done (2026-09-15). This completes Phase 7.** The last unstarted
+item in the phase table: why *this* student got *this* question wrong, classified into the shared
+nine-value taxonomy that has existed in `packages/core` since Phase 1 with nothing behind it.
+
+New backend: `MistakeAnalysisDtos`, `MistakeAnalysisValidation`, `PersonalNarrativeService.
+mistakeAnalysis()`, `MistakeAnalysisController` (`POST /api/questions/{questionId}/mistake-analysis`),
+and a third prompt template. `packages/core` gained `mistakeAnalysisTemplate` (the `DETERMINISTIC`
+tier) and `postMistakeAnalysis`. Mobile gained `ai/mistakeAnalysis.ts` and
+`questionRenderer/MistakeAnalysisCard.tsx`, wired into Revise → Wrong Answers. **No migration on
+either side.**
+
+**The defining design decision: it is never generated unasked.** Unlike the other three Phase 7
+surfaces, which generate when a screen opens, this one waits for a tap. The Wrong Answers list can
+hold hundreds of rows, so generating per row as cards rendered would spend a model call each — and
+an unsolicited diagnosis under every wrong answer reads as nagging, while one the student asked for
+reads as help. The cache is in memory for the session rather than a table: a finished wrong answer
+is immutable, so the waste that actually happens (expand, collapse, expand again) is fixed with no
+schema change and none of the risk a mobile migration carries. Honest limitation: it does not
+survive an app restart.
+
+**Three real bugs, all found by real Groq calls and none by any fixture.** This phase is the
+clearest case yet of why this project insists on exercising a feature rather than trusting a green
+build — the fixture-backed tests passed throughout while all three were live.
+
+1. **Output grounding rejected the single most useful sentence the task can produce.** The first
+   real call returned "you chose 50 km/h rather than 60 km/h" and validation rejected it for citing
+   "50" — the student's own answer — because the allowlist held only the learner facts.
+2. **Widening it was not enough.** With the answers allowed, the next rejection was for an analysis
+   that never named the topic — a rule that fits a narrative *about topics* but not one about a
+   single question. Then a third: `0.15`, written while correctly working out 15% of 240. Showing
+   the working **is** the explanation on a quantitative question, so a literal-number allowlist
+   fights the feature itself.
+3. **A first-time miss was classified `REPEATED_MISTAKE`.** `timesAnsweredWrong` counts the attempt
+   being analysed, so a bare `1` under a "wrong before" prompt label read as "once before". The
+   student was told they had "repeatedly confused" something they had got wrong once — wrong, and
+   wrong in the discouraging direction.
+
+**The fix moved the protection from the output side to the input side.** Rather than policing what
+the model writes, no numeric learner fact is sent at all: the topic state goes as a qualitative
+label, the repeat signal in words ("This is the first time they have missed this question"), and
+the prompt states that any performance figure would be invented. That fixes (3) and removes the
+need for (1) and (2) at once. `MistakeAnalysisValidation` therefore enforces the closed taxonomy and
+non-blank fields only — deliberately, with the reasoning and the **residual risk** (a model could
+still hallucinate a figure unprompted; nothing would catch it) written into its own doc comment
+rather than left implicit.
+
+**Verified.** Backend `mvn compile` clean; **35/35 across all Phase 7 + usage test classes**
+(`MistakeAnalysisControllerTest` 6, `MistakeAnalysisValidationTest` 8, plus 7.1/7.2/7.3 and
+`AiUsageTrackingTest` re-run to prove the shared fixture change caused no regression).
+`packages/core` **195/195**, typecheck clean. Mobile `tsc` clean, `expo lint` at the exact
+pre-existing 9-problem baseline.
+
+**Then verified against real Groq, which is where it earned its keep** — all three scenarios
+re-run green after the redesign: a repeat miss → `REPEATED_MISTAKE` ("a slip that has happened
+before with this same problem"); a first miss → `KNOWLEDGE_GAP` ("mixing up his role as the first
+Prime Minister with the first President"), the bug fixed; and an unanswered percentage question →
+`KNOWLEDGE_GAP` with "convert 15% to 0.15 and multiply by 240", the exact arithmetic previously
+rejected. Response bytes were decoded explicitly as UTF-8 and confirmed clean (`÷`, U+2011,
+U+202F all correct) — the console's mojibake was display only, the same trap this project has hit
+before.
+
+**Not verified:** no on-device/emulator pass for the new card. The whole backend path is proven
+against real Groq and the mobile code typechecks and lints clean, but nobody has watched the button
+render, the loading state, or the in-memory cache behave on a device. `TC-AI-052` is written for
+exactly that and is `Not Executed`.
+
+**QA per §3.21:** `REQ-AI-023`, `SCN-AI-049/050`, `TC-AI-050/051/052` — the first two `Automated`
+against real passing test methods, the mobile one `ManualOnly`. RTM 99/193/211 → **100/195/214**.
+`api/AI-FEEDBACK.md` gained the fourth endpoint, including the grounding decision and its residual
+risk.

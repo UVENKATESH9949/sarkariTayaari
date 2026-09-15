@@ -1069,3 +1069,64 @@
   ambiguity: null
   automation_status: ManualOnly
   automation_hint: "No automated browser-test runner exists for admin/ in this project"
+
+- id: REQ-AI-023
+  feature: A student can ask why they got a specific question wrong, and get a classified answer
+  module: AI
+  system: [Backend, Mobile]
+  source_doc: api/AI-FEEDBACK.md
+  source_section: "POST /api/questions/{questionId}/mistake-analysis"
+  description: >
+    MISTAKE_ANALYSIS, the fourth Phase 7 task. On a question in Revise -> Wrong Answers, a student
+    can tap "Why did I get this wrong?" and receive a diagnosis classified into the shared nine-value
+    taxonomy (MISTAKE_TYPES in packages/core/src/ai/schema/types.ts), plus a short explanation and
+    one concrete next step. The model is given the verified correct answer and the answer the student
+    chose; it is never asked to work out which is right.
+  business_rule: >
+    Generated only on an explicit tap, never automatically when a screen or card opens -- the Wrong
+    Answers list can hold hundreds of entries and generating per row would spend a model call each.
+    No numeric statistic about the student (accuracy, attempt count) is sent to the model at all:
+    the topic state goes as a qualitative label and the repeat signal in words, so there is no
+    performance figure available for it to misquote. That replaced an output-side grounding check
+    which was found, against real model output, to reject correct analyses -- it blocked an analysis
+    for quoting the student's own answer, and blocked another for showing 15% as 0.15 while doing
+    the arithmetic that IS the explanation on a quantitative question.
+  actor: Signed-in student
+  preconditions:
+    - The MISTAKE_ANALYSIS task flag is enabled and an AI provider is configured
+    - The question has a resolvable correct answer in text form
+  inputs:
+    - "question text, options, verified correct answer, the answer chosen (or null if unanswered)"
+    - "subject and topic name; qualitative topic state; how many times this question appears wrong (including this attempt)"
+  expected_outputs:
+    - "{ mistakeType, explanation, suggestedAction } -- or all three null when declined"
+  validations:
+    - mistakeType must be one of the nine taxonomy values
+    - no field may be missing, blank, or a non-string
+    - a response that fails validation is discarded whole, never shown with one salvaged field
+  permissions: signed-in user (requireUser)
+  dependencies:
+    - REQ-AI-016
+  error_conditions:
+    - "401 with no/invalid Authorization header"
+    - "Flag off, provider failure, or failed validation all return all-null -- never an error to the student"
+  edge_conditions:
+    - "timesAnsweredWrong counts the attempt being analysed, so 1 is a first miss and 2+ is a repeat"
+    - "An unanswered question is normal input (Mock Test leaves questions blank) and must not be described as a wrong choice"
+    - "Nothing is persisted server-side; the client caches per question for the session"
+  offline_behavior: >
+    Falls back to mistakeAnalysisTemplate (the DETERMINISTIC tier), which can only establish
+    REPEATED_MISTAKE or KNOWLEDGE_GAP -- the rest of the taxonomy needs a model to read the question.
+  acceptance_criteria:
+    - A repeat miss is classified REPEATED_MISTAKE and a first miss is not
+    - An analysis may quote both answers and show intermediate arithmetic
+    - A disabled flag returns all-null without reaching the provider
+    - The taxonomy value survives validation and the round trip
+  priority: Medium
+  status: Active
+  ambiguity: >
+    Residual, stated rather than hidden: with the output-side number check removed, a model could
+    still hallucinate a performance statistic unprompted and nothing would catch it. Accepted
+    because the verified answer is supplied and the authored explanation always renders above.
+  automation_status: Automated
+  automation_hint: "MistakeAnalysisControllerTest (6), MistakeAnalysisValidationTest (8), mistakeAnalysisTemplate.test.ts (5)"
