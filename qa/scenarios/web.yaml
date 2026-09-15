@@ -200,3 +200,18 @@
     beforeunload cannot be driven end-to-end by an automated headless script — browsers
     intentionally suppress the native prompt under automation — so this scenario's
     beforeunload half is manual-only by nature, not by omission.
+
+- id: SCN-WEB-017
+  requirement_ids: [REQ-WEB-003]
+  category: Compatibility
+  title: The exam-card grid and footer adapt across tablet, laptop and desktop widths
+  objective: >
+    Verify the exam-card grid used by Home, Practice and Mock Test renders the documented
+    column count at each breakpoint, the footer switches between its compact and full
+    multi-column forms at the same point the sidebar appears, and none of it produces
+    horizontal overflow.
+  systems: [Web]
+  status: Ready
+  notes: >
+    Distinct from SCN-WEB-004, which covers the primary navigation's own switch — this
+    scenario covers page content (the grid and the footer) reflowing independently of that.

@@ -688,3 +688,47 @@
     manual-only by nature, not by omission.
   automation_status: ManualOnly
   automation_reference: ""
+
+- id: TC-WEB-018
+  requirement_ids: [REQ-WEB-003]
+  scenario_id: SCN-WEB-017
+  system: Web
+  module: WEB
+  feature: Responsive layout — content grid and footer
+  title: Exam-card grid columns and footer form change at the documented breakpoints
+  objective: >
+    Confirm the exam-card grid on Home, Practice and Mock Test renders 1/2/3/4 columns at the
+    documented widths, the footer switches from its compact phone form to its full
+    multi-column form at 1024px, and none of it overflows horizontally.
+  preconditions:
+    - "The app is served (dev server or a deployed build) with at least one active exam"
+  test_data: "n/a"
+  test_environment: "Desktop browser with device emulation"
+  priority: Medium
+  severity: Minor
+  test_type: Compatibility
+  steps:
+    - step: 1
+      action: "Load Home, Practice and Mock Test at 390px wide"
+      expected: "The exam-card grid is a single column; the footer shows only the brand line and copyright, positioned above the bottom nav bar"
+    - step: 2
+      action: "Resize to 768px wide"
+      expected: "The exam-card grid becomes 2 columns; the footer is still in its compact form (sidebar has not appeared yet)"
+    - step: 3
+      action: "Resize to 1024px wide"
+      expected: "The exam-card grid becomes 3 columns; the footer switches to its full form (Product/Account columns, brand blurb) at the same point the sidebar appears"
+    - step: 4
+      action: "Resize to 1600px wide"
+      expected: "The exam-card grid becomes 4 columns; page content grows wider but stays capped, not full-bleed"
+    - step: 5
+      action: "Check document.scrollWidth against the viewport width at all four sizes above"
+      expected: "No horizontal overflow at any of them"
+  expected_result: >
+    The grid and footer both reflow at the documented breakpoints with no horizontal
+    overflow. (REQ-WEB-003 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "A short page's footer should sit at the bottom of the viewport rather than floating mid-screen — worth a glance on Home, which has little content."
+  automation_status: ManualOnly
+  automation_reference: ""

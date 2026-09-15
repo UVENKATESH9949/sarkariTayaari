@@ -1,0 +1,98 @@
+# Builds and deploys the student web app (web/) to Firebase Hosting.
+#
+# WHY FIREBASE HOSTING
+#   It lives in the same Google Cloud project as the backend, so there is no new vendor and
+#   no new billing relationship, and it is a purpose-built static/SPA host — which Cloud Run
+#   is not. Serving a 300kB static bundle from a container would cost more and do less.
+#
+# WHAT TRIGGERS WHAT
+#   push to main touching web/** or packages/**  -> build + deploy
+#   manual dispatch                              -> build + deploy
+#
+#   packages/** is in the filter deliberately: web/ consumes @sarkaritaiyaari/core from
+#   source, so a change to the shared evaluator or the design tokens genuinely changes what
+#   this app ships, even when nothing under web/ was touched.
+#
+# THE THING THAT WILL BITE YOU FIRST
+#   The backend pins CORS to an exact origin allowlist. A freshly deployed web app whose
+#   origin is not in APP_CORS_ALLOWED_ORIGINS gets a flat 403 on every preflight, which the
+#   browser reports only as an opaque network failure — it looks exactly like the backend
+#   being down. This was verified deliberately during TASK-2601 Phase 0; see
+#   WEB-DEPLOY-SETUP.md step 4. Note that https://foo.web.app and https://foo.firebaseapp.com
+#   are two different origins and Firebase serves both by default.
+#
+# SETUP REQUIRED (once) — see WEB-DEPLOY-SETUP.md
+#   vars:    GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_DEPLOY_SERVICE_ACCOUNT, VITE_API_BASE_URL
+#   Keyless (Workload Identity Federation) rather than a service-account JSON key, for the
+#   same reason backend-deploy.yml uses it: THIS REPOSITORY IS PUBLIC, and a JSON key is a
+#   long-lived credential with rights to the whole project.
+
+name: Deploy web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - "packages/**"
+      - "package.json"
+      - ".github/workflows/web-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # Required for Workload Identity Federation to mint a token for this run.
+  id-token: write
+
+concurrency:
+  # A newer push supersedes an in-flight deploy rather than racing it to the CDN.
+  group: web-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fail fast if setup is incomplete
+        run: |
+          missing=""
+          [ -z "${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}" ] && missing="$missing GCP_WORKLOAD_IDENTITY_PROVIDER"
+          [ -z "${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}" ] && missing="$missing GCP_DEPLOY_SERVICE_ACCOUNT"
+          [ -z "${{ vars.VITE_API_BASE_URL }}" ] && missing="$missing VITE_API_BASE_URL"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository variables:$missing — see WEB-DEPLOY-SETUP.md"
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # Installs the whole workspace: web/ plus packages/core, which it consumes from source.
+      - run: npm ci
+
+      - name: Verify the shared package before shipping anything built on it
+        run: npm run test --workspace @sarkaritaiyaari/core
+
+      - name: Build
+        env:
+          # Baked in at build time — Vite inlines it, so this is what the deployed app will
+          # talk to. It must include the /api suffix.
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+        run: npm run build --workspace @sarkaritaiyaari/web
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Deploy to Firebase Hosting
+        # firebase-tools picks up the credentials the auth step wrote to
+        # GOOGLE_APPLICATION_CREDENTIALS; no token or key is handled here directly.
+        run: npx --yes firebase-tools@13 deploy --only hosting --non-interactive
+
+      - name: Where it went
+        run: echo "Deployed. Confirm the origin is in APP_CORS_ALLOWED_ORIGINS — see WEB-DEPLOY-SETUP.md step 4."

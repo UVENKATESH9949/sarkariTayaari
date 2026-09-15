@@ -101,29 +101,39 @@
   source_doc: tasks/TASK-2601-student-web-application.md
   source_section: "Decisions already taken — decision 3"
   description: >
-    The app is usable from roughly 360px wide up to desktop. Below 1024px navigation is a
-    bottom bar plus a compact top bar; from 1024px it is a sidebar. No layout produces
-    horizontal page scrolling.
+    The app is usable from roughly 360px wide up to a large desktop monitor. Below 1024px
+    navigation is a bottom bar plus a compact top bar; from 1024px it is a sidebar. Content
+    itself also adapts, not just navigation: the exam-card grid (Home, Practice, Mock Test)
+    renders 1 column below 768px, 2 from 768px, 3 from 1024px, and 4 from 1600px, and the
+    page content's max width grows in two further steps at 1280px and 1600px so a large
+    monitor gets more grid columns rather than one implausibly wide card. No layout produces
+    horizontal page scrolling at any of these widths.
   business_rule: >
     The web app exists partly to serve students who will not install an APK, so a phone
-    browser is a first-class target rather than a degraded one.
+    browser is a first-class target rather than a degraded one. A large desktop monitor
+    should show more of the catalogue at once, not a single column stretched to fill the
+    screen.
   actor: Student
   preconditions: []
   inputs:
     - "Viewport width"
   expected_outputs:
     - "Bottom bar + top bar below 1024px; sidebar at and above 1024px"
+    - "Exam-card grid column count: 1 (<768px), 2 (>=768px), 3 (>=1024px), 4 (>=1600px)"
   validations:
     - No horizontal overflow at any supported width
+    - The footer renders (compact, above the bottom nav) below 1024px and in its full multi-column form at and above 1024px
   permissions: n/a
   dependencies: []
   error_conditions: []
   edge_conditions:
     - "Exactly at the 1024px breakpoint, exactly one navigation treatment is visible"
+    - "A short page's footer sits at the bottom of the viewport rather than floating mid-screen; a tall page's footer simply follows the content"
   offline_behavior: n/a
   acceptance_criteria:
     - Every primary destination is reachable at both widths
     - document.scrollWidth never exceeds the viewport width
+    - The exam-card grid column count matches the table above at each documented breakpoint
   priority: High
   status: Active
   ambiguity: null
