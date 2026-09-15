@@ -189,9 +189,40 @@ they mean in plain language") and its live output is clean; `SESSION_FEEDBACK`'s
 same rule. One-line prompt fix, not yet applied — it needs a backend deploy to take effect, so it
 should ride along with the Phase 7.4 deploy.
 
-**Still outstanding:** trigger the backend deploy (GitHub → Actions → Deploy backend → Run workflow →
-branch `feature/on-device-llm-spike`) to land Phase 7.4 and any prompt fix; then enable
-`MISTAKE_ANALYSIS`. The admin token was revoked and all scratch files removed.
+**⚠️ A REAL OPERATIONAL HAZARD FOUND THE HARD WAY — read this before running `mvn test` again.**
+**Running the backend test suite silently disables AI in production.** Prod and dev share one Neon
+database, and the Phase 7 test classes' `resetState()` cleanup does two things to rows production
+depends on: it `deleteById`s the `ai_task_flags` row for the task under test (turning that feature
+off), and it sets `ai_settings.enabled = null` and `activeProvider = null` (which disables AI
+globally, since a null override falls back to the static `app.ai.*` config — `enabled: false`,
+`provider: MOCK`).
+
+Caught live this session, twice. The first time a test run deleted a `MISTAKE_ANALYSIS` flag
+mid-verification and the endpoint silently returned nulls. The second time was worse and would have
+been easy to blame on the deploy: after enabling `SESSION_FEEDBACK`/`PROFILE_SUMMARY` in production,
+a Phase 7 test run (to verify the prompt fix) wiped both flags *and* the global settings row, so the
+first post-deploy check returned `null` for everything and looked exactly like a broken release. The
+Groq key itself survives — tests only delete the *fixture* provider row, never GROQ.
+
+**Until this is fixed, after any `mvn test` run check `GET /api/client-config` and
+`GET /api/admin/ai/config` and re-enable what the tests cleared.** The proper fixes, neither done:
+give production its own database (already an open item in this file), or have the test cleanup
+snapshot and restore the prior values in `@AfterEach` instead of nulling them.
+
+**Final production state, verified end to end after restoring everything** — real demo student
+account, real Groq calls, all three live:
+- `SESSION_FEEDBACK`: *"You scored 60% in this practice session—great effort! Let's give a little
+  extra attention to Percentages..."* — **no raw-label leak**, confirming the prompt fix reached
+  production.
+- `MISTAKE_ANALYSIS` (new): `REPEATED_MISTAKE`, *"...arriving at 50 km/h instead of the correct
+  60 km/h (120 km ÷ 2 h)"* — quoting both answers and showing the working, exactly what the
+  grounding redesign was for.
+- `PROFILE_SUMMARY`: clean, no raw labels.
+
+`QUESTION_EXPLANATION` stays off — no published content (its two `ai_content` rows are DRAFT).
+
+**Backend deploy: DONE** (manual run from `feature/on-device-llm-spike`) — `/mistake-analysis`
+went 404 → 401 and the prompt fix is live. The admin token was revoked and all scratch files removed.
 
 **Next, in order:** (1) DONE — see the production entry above; AI is live. What remains of it is a
 device sync so the app picks up the two enabled flags, which needs no new APK. (2) An emulator pass covering all four Phase 7
