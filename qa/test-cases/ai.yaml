@@ -1707,3 +1707,93 @@
     real bug: a stale-response race in the review-queue filter (see SCN-AI-042's own notes).
   automation_status: ManualOnly
   automation_reference: null
+
+- id: TC-AI-048
+  requirement_ids: [REQ-AI-022]
+  scenario_id: SCN-AI-047
+  system: Admin
+  module: AI
+  feature: AI Usage admin page
+  title: Read AI usage aggregates and change the time window
+  objective: >
+    Confirm the AI Usage page reports the same figures the endpoint returns, breaks them down by
+    feature and model, and re-queries when the window changes.
+  preconditions:
+    - Signed in as an admin (or a minted admin-fixture token)
+    - At least one AI call has been recorded since the database-backed recorder shipped
+  test_data: "Whatever real usage exists; no fixture required"
+  test_environment: "Real dev backend + admin dev server (browser)"
+  priority: Medium
+  severity: Low
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Open AI Usage from the Settings group in the sidebar"
+      expected: "The page loads with the window set to Last 30 days and no console errors"
+    - step: 2
+      action: "Compare the five headline cards against GET /api/admin/ai-usage/summary for the same window"
+      expected: "Calls, input tokens, output tokens, total tokens and failures all match the endpoint exactly"
+    - step: 3
+      action: "Inspect the By feature and model table"
+      expected: "One row per (feature, model) pair, ordered by calls descending, each showing calls, input, output, total tokens and failures"
+    - step: 4
+      action: "Change the window to Last 24 hours, then to Last 90 days"
+      expected: "Each change issues a fresh request and re-renders; figures reflect the selected window"
+    - step: 5
+      action: "Enter an input rate and an output rate per 1M tokens"
+      expected: "An estimated cost appears, equal to (inputTokens/1e6 * inputRate) + (outputTokens/1e6 * outputRate), labelled as an estimate from the entered rate and not saved"
+  expected_result: >
+    AI spend is answerable from the console alone -- totals, per-feature breakdown, and an
+    operator-supplied cost estimate -- with no vendor price hardcoded in the app.
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Walked through on 2026-09-15 via a scripted (Playwright) browser session against a real dev
+    backend holding 25 real usage rows. Headline figures and all five table rows matched the
+    endpoint exactly; the cost estimate matched an independently computed 0.0015 for rates of
+    0.15/0.60. Not a substitute for a human running this case. The window's since parameter was
+    separately proved to filter (0 calls at 1h and 6h, 25 at 24h).
+  automation_status: ManualOnly
+  automation_reference: null
+
+- id: TC-AI-049
+  requirement_ids: [REQ-AI-022]
+  scenario_id: SCN-AI-048
+  system: Admin
+  module: AI
+  feature: AI Usage admin page
+  title: An empty window and a non-zero failure count are both displayed honestly
+  objective: >
+    Confirm the page does not present an empty window as a blank table, and that failures are
+    surfaced rather than blending into the other numbers.
+  preconditions:
+    - Signed in as an admin
+    - A window with no recorded calls, and separately a window containing at least one failure
+  test_data: >
+    Hard to arrange from real data -- failures are rare by design and every offered window
+    currently contains all recorded calls. Inject the response if necessary, and say so.
+  test_environment: "Real dev backend + admin dev server (browser)"
+  priority: Medium
+  severity: Low
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "View a window containing no AI calls"
+      expected: "An explicit note that no calls were recorded in this window, including that usage only exists from when recording shipped; no empty table is rendered"
+    - step: 2
+      action: "View a window containing at least one failed call"
+      expected: "The Failures headline card renders in the danger colour, and only the rows with a non-zero failure count carry a badge -- rows with zero failures stay plain"
+  expected_result: >
+    Neither an empty result nor a failure is silently absorbed into an ordinary-looking table.
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Both branches exercised on 2026-09-15 by intercepting the endpoint response in a scripted
+    browser session, because neither is reachable from current real data. Confirmed: the empty
+    window rendered the note with no table at all; a 3-failure payload rendered the headline in
+    rgb(220,38,38) (the project's own --color-danger) with exactly one badge, on the failing row
+    only. Injected data, disclosed as such.
+  automation_status: ManualOnly
+  automation_reference: null

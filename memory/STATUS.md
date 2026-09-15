@@ -1,20 +1,103 @@
 # Project Status — Resume Point
 
-**Last updated:** 2026-09-14 — TASK-2701 Phase 7 fully done (7.1/7.2 `SESSION_FEEDBACK` for
-Practice and Mock Test, 7.3 `PROFILE_SUMMARY` for Preparation Radar, all cloud-only via a new
-Groq provider) and Phase 2's admin review-queue UI now built and verified against a real backend
-+ real Groq call; Phase 5/6 (on-device inference) explicitly paused. Working on branch
-`feature/on-device-llm-spike` (not `main`). See **"Session of 2026-09-14 — Phase 7.1 session
-feedback, Groq provider, Phase 5/6 paused"** immediately below — read that first, it also
-records a real doc-drift: a full day of work (2026-09-13, commits `d49d54e`/`9ae7a07`/`0507053`)
-landed on this branch — the whole AI backlog (Foundation, Admin Control Center, content
-generation/review, per-task client-config flags, an `llama.rn` on-device feasibility spike) plus
-the `packages/core` extraction and the QA register — **none of it was ever recorded in this file**,
-only discovered by reading git log directly. Then **"Session of 2026-09-12 (3) — TASK-2601 web
-Phase 2: Mock Test"**, **"Session of 2026-09-12 (2) — on-device & hybrid AI"**, then **"Session of
-2026-09-12 — TASK-2601 student web application"** (Phase 0/1). Everything past those (the QA
-register, AI Admin
-Control Center and AI Foundation Phase 1 entries) is earlier history, kept for context.
+**Last updated:** 2026-09-15 — the web app (TASK-2601 Phase 0-2) is **committed and pushed at
+last** (`f7c924b` on `feature/on-device-llm-spike`, still not `main`), and TASK-2701's AI Usage
+admin screen shipped. **The single most important finding this session: the AI features are not
+broken, they are switched off** — every `ai_task_flags` row on the deployed backend reads `false`,
+so all three AI cards correctly render nothing. See **"Session of 2026-09-15"** immediately below
+before touching anything AI-related. Then the 2026-09-14 entry below that.
+
+## Session of 2026-09-15 — why the AI features never appeared in a real build; the AI Usage admin screen
+
+**The user reported that a manually-triggered GitHub Actions APK, built from
+`feature/on-device-llm-spike` (correctly, not `main`), showed none of the AI features. Diagnosed
+to a definite root cause, by measurement rather than inference — and it is not a bug.**
+
+**Every AI task flag on the deployed Cloud Run backend is `false`.** `GET /api/client-config`
+returns all 11 task ids, every one disabled. The mobile client gates on exactly that, in three
+places, each short-circuiting to render nothing: `ai/sessionFeedback.ts:135`
+(`SESSION_FEEDBACK !== true` — kills the AI Feedback card on **both** Practice Summary and Mock
+Test Result), `ai/profileSummary.ts:45` (`PROFILE_SUMMARY`), and
+`questionRenderer/AiExplanationCard.tsx:36` (`QUESTION_EXPLANATION`). This is the project's own
+"off unless explicitly turned on" posture working as designed; the prior session's own "Not
+verified" note already predicted it. **The APK is fine and needs no rebuild** — flags are read
+from local SQLite, written by `writeClientConfig()` at sync, so flipping them server-side plus one
+sync on the device is the whole fix.
+
+**Two things were ruled out by checking rather than assuming.** The branch choice was right (the
+APK does contain the mobile AI code). And although `backend-deploy.yml` only auto-deploys from
+`main`, the deployed backend is **not** stale: it already knows `SESSION_FEEDBACK`/
+`PROFILE_SUMMARY`, which exist only in Phase 7 code, so it was deployed (manual dispatch, most
+likely). `main` itself still has none of it — 118 backend files and migrations **V40-V46** live
+only on this branch.
+
+**A discovery that makes the remaining setup much smaller than it looks: prod and this machine's
+local backend share one Neon database** — proved by byte-identical `/api/ai-content/sync`
+responses, not by trusting `DEPLOYMENT.md`. Since `AiConfigResolver` takes DB overrides first and
+falls back to static env config, the Groq key itself **does not need deploying**: saved through the
+admin console it lands encrypted in the shared `ai_provider_configs` and production reads it.
+**Exactly one value must reach Cloud Run: `APP_AI_ENCRYPTION_KEY`**, deliberately never stored in
+the DB. The user deferred that step ("i will do deploy later").
+
+**A real trap found and worth remembering: the env var names in the code comments are wrong.**
+`AIProperties.java` and `AiCredentialCipher.java` both tell the reader to set `AI_API_KEY` /
+`AI_ENCRYPTION_KEY`, but `application.yml` contains **no `${AI_...}` placeholder**, so those bare
+names silently fail to bind. Spring relaxed binding requires **`APP_AI_API_KEY`** /
+**`APP_AI_ENCRYPTION_KEY`**. Not yet fixed in the comments — flagged, offer stands.
+Also: `backend-deploy.yml` passes only `--image`, so env vars/secrets set once on the service
+survive every future CI deploy (use `--update-secrets`, never `--set-secrets`, or the existing
+`db-password`/`cloudinary-secret` are wiped).
+
+**Then, the actual build work: the AI Usage admin screen (TASK-2701).** `GET /api/admin/ai-usage/
+summary` had shipped with **no UI at all** — AI spend was only answerable by calling the API by
+hand, which is precisely why the `PROFILE_SUMMARY` truncation bug stayed invisible. New
+`admin/src/pages/AiUsage.jsx` + `getAiUsageSummary()`, under the existing Settings group. No
+migration, no backend change, no new contract. Headline totals (calls, input/output/total tokens,
+failures) over a 24h/7d/30d/90d window, plus a per-`(feature, model)` table. **No vendor price is
+hardcoded** — the operator may type today's rate for a browser-side estimate, preserving the
+endpoint's own "tokens, never money" separation. Failures are shown beside successes with a
+non-zero count styled as a problem, which is the display property that would have caught the
+truncation bug unaided. The stale-response race already fixed once on `AiContentReview.jsx` was
+avoided here **by construction** (a request-id guard), not rediscovered.
+
+**Verified against a real backend, not a clean build.** Build clean; `oxlint` at the exact
+pre-existing baseline (1 warning, untouched file). Driven in a real browser (Playwright, token via
+`AdminTokenMintRunner`) against **25 real usage rows including genuine Groq `openai/gpt-oss-120b`
+calls**: headline figures and all five table rows matched the endpoint exactly, the cost estimate
+matched an independently computed `0.0015`, sidebar entry and cross-link both resolve, **zero
+console errors**. **The window parameter was proved to genuinely filter independently of the UI** —
+on screen 24h and 90d show identical figures, which looks exactly like a stuck request; querying
+directly (1h → 0, 6h → 0, 24h → 25, 720h → 25) confirmed all 25 rows landed 6-24h earlier, so the
+match is correct. Worth remembering before someone reports it as a bug.
+
+**Two stale docs fixed in place per §6:** `AiControlCenter.jsx` still said "a queryable usage
+dashboard isn't built yet" (false since V46) — corrected and cross-linked; and this task doc's own
+phase table still listed the DB-backed usage recorder as unstarted despite `DatabaseAIUsageRecorder`
+shipping the day before. `api/AI-ADMIN.md`'s "Consumers: none yet" line updated too.
+
+**Disclosed:** two render branches are unreachable from current real data (an empty window, and any
+failure count > 0) — both exercised by intercepting the response in the browser, so the rendering
+is genuinely verified but the data was injected. Recorded as such, not presented as a real-data
+pass. QA: `REQ-AI-022`, `SCN-AI-047/048`, `TC-AI-048/049` (all `ManualOnly` — no browser-test
+runner exists for `admin/`). RTM 98/191/209 → **99/193/211**.
+
+**Next, in order:** (1) deploy `APP_AI_ENCRYPTION_KEY` to Cloud Run, save the Groq key + enable
+`SESSION_FEEDBACK`/`PROFILE_SUMMARY` in the admin console, sync a device — that is the whole
+remaining path to AI features appearing for a real student, and needs no new APK. (2) Remaining AI
+work: mistake-analysis phrasing (the last unstarted Phase 7 item), Phase 4's cloud tier, retention/
+pruning for `ai_usage_events`, and a mobile client-side cache for profile summary. Phase 5/6 stay
+paused. `QUESTION_EXPLANATION` additionally has no published content — its only two `ai_content`
+rows are DRAFT, a content problem rather than a config one.
+
+**Earlier entries, in order, for anything older:** the 2026-09-14 entry immediately below (TASK-2701
+Phase 7 — `SESSION_FEEDBACK` for Practice and Mock Test, `PROFILE_SUMMARY`, the Groq provider,
+Phase 2's admin review queue, and the decision to pause Phase 5/6). It also records a real
+doc-drift worth knowing about: a full day of work (2026-09-13, commits `d49d54e`/`9ae7a07`/
+`0507053`) landed on this branch — the whole AI backlog plus the `packages/core` extraction and
+the QA register — and was **never recorded in this file**, only found by reading git log directly.
+Then **"Session of 2026-09-12 (3) — TASK-2601 web Phase 2: Mock Test"**, **"Session of 2026-09-12
+(2) — on-device & hybrid AI"**, then **"Session of 2026-09-12 — TASK-2601 student web
+application"** (Phase 0/1). Everything past those is earlier history, kept for context.
 
 ## Session of 2026-09-14 — Phase 7.1 session feedback, Groq provider, Phase 5/6 paused
 

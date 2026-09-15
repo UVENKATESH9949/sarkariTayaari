@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   getAiConfig,
   updateAiSettings,
@@ -395,8 +396,10 @@ export default function AiControlCenter() {
 
           <h2 style={{ marginTop: 32 }}>Usage</h2>
           <p className="page-intro">
-            Usage is currently logged to application logs only — a queryable usage
-            dashboard isn&apos;t built yet.
+            Every AI call is recorded to the database and aggregated by feature and model —
+            see <Link to="/ai-usage">AI Usage</Link> for token counts and failures. Calls are
+            still written to the application log as well, which is what makes a single call
+            traceable line by line.
           </p>
 
           <h2 style={{ marginTop: 32 }}>Audit Log</h2>

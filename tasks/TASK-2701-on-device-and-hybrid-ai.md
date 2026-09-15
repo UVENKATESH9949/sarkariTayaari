@@ -149,7 +149,7 @@ and §13.
 | 4 | Client config + per-task flags; cloud tier for uncached/personalized tasks | all | **Client config + per-task flags done; cloud tier not started** |
 | 5 | Benchmark harness + real-device measurement. **Gate: does any task justify a local model?** | `mobile` | **Exploratory spike only (llama.rn feasibility screen, `feature/on-device-llm-spike`) — no benchmark conclusion reached. Paused 2026-09-14 by explicit project-owner decision: product direction is cloud-only for now (see Phase 7)** |
 | 6 | Only if Phase 5 says yes: runtime, model manager, device tiering, local provider | `mobile` | Not started (blocked on Phase 5, which is paused) |
-| 7 | Personalization depth, mistake-analysis phrasing, DB-backed usage recorder | all | **Phase 7.1/7.2/7.3 done — `SESSION_FEEDBACK` (Practice + Mock Test) and `PROFILE_SUMMARY` (Preparation Radar), cloud-only via Groq. Mistake-analysis phrasing and a DB-backed usage recorder remain unstarted** |
+| 7 | Personalization depth, mistake-analysis phrasing, DB-backed usage recorder | all | **Phase 7.1/7.2/7.3 done — `SESSION_FEEDBACK` (Practice + Mock Test) and `PROFILE_SUMMARY` (Preparation Radar), cloud-only via Groq. The DB-backed usage recorder is also done (`DatabaseAIUsageRecorder` + V46, 2026-09-14), and its admin screen (`admin/src/pages/AiUsage.jsx`, 2026-09-15). Mistake-analysis phrasing remains unstarted** |
 
 ## Implementation status
 
@@ -718,3 +718,58 @@ RTM 98/191/208 → **98/191/209**.
 **A pre-existing issue observed, not caused by this work and not fixed**: the duplicate-React-key
 LogBox warning already recorded in `memory/STATUS.md` still appears during Practice, and still
 overlaps the bottom button row enough to swallow taps until dismissed.
+
+**AI Usage admin screen — Done (2026-09-15).** Closes the gap the cost-measurement pass left
+behind: `GET /api/admin/ai-usage/summary` had shipped with no UI at all, so AI spend was only
+answerable by calling the API by hand. New `admin/src/pages/AiUsage.jsx` plus
+`getAiUsageSummary()` in `admin/src/api.js`, registered under the existing Settings sidebar group.
+Headline totals (calls, input/output/total tokens, failures) over a selectable window
+(24h / 7d / 30d / 90d), and a per-`(feature, model)` table. No migration, no backend change, no
+new API contract — it consumes the endpoint exactly as already documented.
+
+**Two deliberate design decisions, both inherited from the endpoint's own stated constraints:**
+
+1. **No vendor price is hardcoded anywhere.** The backend reports tokens and never money, on the
+   recorded grounds that per-model pricing changes on the vendor's schedule and belongs to whoever
+   reads it. The page keeps that boundary: optional rate fields let the operator supply today's
+   rate, and the estimate is computed in the browser, labelled as derived from what they typed,
+   and never persisted. Nothing in the repo can therefore go stale and start asserting a wrong
+   cost as if it were authoritative.
+2. **Failures are shown beside successes, and a non-zero count is styled as a problem.** This is
+   the display property that would have surfaced the `PROFILE_SUMMARY` truncation bug (a task
+   exhausting its output budget, billing in full, returning nothing) without anyone going looking.
+
+**A stale-response race was avoided by construction, not rediscovered.** Changing the window
+issues a new request while an older one may still be in flight; the page discards any response
+that is not the most recent one it issued. This is the same bug already found and fixed on
+`AiContentReview.jsx` — applied here proactively rather than repeated.
+
+**Two pieces of stale documentation fixed in place, per `AI_RULES.md` §6.** `AiControlCenter.jsx`
+still told the reader "a queryable usage dashboard isn't built yet" — false since V46 — now
+corrected and cross-linked to the new page. This task doc's own phase table still listed the
+DB-backed usage recorder as unstarted, despite `DatabaseAIUsageRecorder` having shipped the day
+before; corrected above.
+
+**Verified against a real backend, not just a clean build.** `npm run build` clean; `oxlint` at
+the exact pre-existing baseline (1 warning, in an untouched file). Then driven in a real browser
+(Playwright, admin token minted via the existing `AdminTokenMintRunner` fixture) against a dev
+backend holding **25 real usage rows**, including genuine Groq `openai/gpt-oss-120b` calls:
+headline figures and all five `(feature, model)` rows matched the endpoint exactly; the cost
+estimate matched an independently computed `0.0015` for rates of 0.15/0.60; the sidebar entry and
+the AI Control Center cross-link both resolve; **zero console errors** on every screen.
+
+**The window parameter was proved to genuinely filter, independently of the UI** — on screen the
+24-hour and 90-day windows showed identical figures, which looks exactly like a stuck request.
+Querying the endpoint directly across four windows (1h → 0 calls, 6h → 0, 24h → 25, 720h → 25)
+confirmed all 25 rows were recorded 6–24 hours earlier, so the identical figures were correct.
+Worth remembering: on this data, matching numbers across windows is the expected result.
+
+**Disclosed:** two render branches are unreachable from current real data — an empty window (every
+window the UI offers contains all 25 calls) and a non-zero failure count (none recorded). Both
+were exercised by intercepting the response in the browser and asserting the rendered output: the
+empty window rendered its explicit note with no table, and a 3-failure payload rendered the
+headline in the project's own `--color-danger` with a badge on the failing row only. Real
+rendering, injected data — recorded as such rather than presented as a real-data pass.
+
+**QA per §3.21:** `REQ-AI-022`, `SCN-AI-047/048`, `TC-AI-048/049` — all `ManualOnly`, since this
+project has no automated browser-test runner for `admin/`. RTM 98/191/209 → **99/193/211**.

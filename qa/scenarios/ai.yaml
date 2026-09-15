@@ -566,3 +566,36 @@
     a fetch could let an older, slower response resolve after a newer one and silently overwrite
     it with stale (wrong-filter) data -- a request-id guard now discards any response that isn't
     the latest one this component issued.
+
+- id: SCN-AI-047
+  requirement_ids: [REQ-AI-022]
+  category: Functional
+  title: The AI Usage page renders real aggregates and re-queries when the window changes
+  objective: >
+    Confirm an admin can see, in the console alone, how many AI calls were made, how many tokens
+    they consumed split by input and output, and how that breaks down per feature and model -- and
+    that switching the time window genuinely re-queries rather than re-rendering stale data.
+  systems: [Admin]
+  status: Ready
+  notes: >
+    Verified on 2026-09-15 against a real dev backend holding 25 real usage rows (including real
+    Groq openai/gpt-oss-120b calls) via a scripted browser session. The since parameter was proved
+    to genuinely filter, independently of the UI: the same endpoint returned 0 calls for a 1-hour
+    and 6-hour window and 25 for 24 hours, so the identical 24h/90d figures on screen were correct
+    rather than a stuck request.
+
+- id: SCN-AI-048
+  requirement_ids: [REQ-AI-022]
+  category: Edge case
+  title: Empty windows and failed calls are both displayed honestly
+  objective: >
+    Confirm a window with no AI calls renders an explicit empty state rather than an empty table,
+    and that a non-zero failure count is visually flagged rather than shown as an ordinary number
+    -- the display property that would have made the PROFILE_SUMMARY truncation bug visible.
+  systems: [Admin]
+  status: Ready
+  notes: >
+    Neither branch is reachable from the current real data (there are no recorded failures, and
+    every window the UI offers contains all 25 calls), so both were exercised on 2026-09-15 by
+    intercepting the response in the browser and asserting the rendered result. Disclosed as
+    injected data rather than presented as a real-data pass.

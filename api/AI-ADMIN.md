@@ -169,7 +169,12 @@ the most useful thing to be able to see here, and it is invisible if only succes
 This is not hypothetical: a `PROFILE_SUMMARY` truncation bug billed every call in full and
 returned `null`, and nothing aggregated it.
 **Errors:** `400` for a malformed `since`.
-**Consumers:** none yet in the admin console UI — the endpoint exists ahead of a screen for it.
+**Consumers:** `admin/src/pages/AiUsage.jsx` (the **AI Usage** page, under Settings). It renders
+the headline totals and the `byFeature` breakdown over a selectable window (24 hours / 7 / 30 /
+90 days), sending the window as an ISO-8601 `Z` instant. The page deliberately hardcodes no
+vendor price: it reports tokens, and offers optional rate fields so the operator supplies
+today's pricing and gets an estimate computed in the browser — keeping the
+"pricing belongs to whoever reads this" separation this endpoint was built with.
 
 ---
 
@@ -178,10 +183,13 @@ returned `null`, and nothing aggregated it.
 - No `POST /api/ai/generate`-shaped passthrough anywhere — this controller is
   configuration only. A future AI-powered feature exposes its own narrow endpoint that
   calls `AIService` internally (see `system-design/06-ai-foundation.md`).
-- No usage/cost *dashboard screen* — the aggregates endpoint above exists, but nothing in the
-  admin console renders it yet, and no cost figure is computed anywhere in the backend.
-  (This bullet previously said no queryable usage data existed at all; that stopped being true
-  when `DatabaseAIUsageRecorder` and V46 landed.)
+- No cost figure computed anywhere in the **backend** — per-model pricing changes on the
+  vendor's schedule, so it stays a calculation over `(model, tokens)` made by the reader. The
+  admin console's AI Usage page will estimate one from a rate the operator types in, but nothing
+  in this repo stores or asserts a price.
+  (This bullet previously said no queryable usage data existed at all, and then that no screen
+  rendered it; both stopped being true — the first when `DatabaseAIUsageRecorder` and V46
+  landed, the second when `admin/src/pages/AiUsage.jsx` did.)
 - No admin-facing "delete this provider's configuration" endpoint — only overwrite
   (`PUT /providers/{id}`). Disabling AI (`PUT /settings` with `enabled: false`) is the
   supported way to stop using a provider without losing its saved configuration.

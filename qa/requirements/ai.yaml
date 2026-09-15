@@ -1017,3 +1017,55 @@
   ambiguity: null
   automation_status: Automated
   automation_hint: "AiUsageTrackingTest (everyAiCallIsPersistedWithItsTokenCounts, theAdminSummaryAggregatesByFeature, theSummaryIsAdminOnly, aMalformedSinceIsRejected)"
+
+- id: REQ-AI-022
+  feature: An admin can read AI usage aggregates in the console, without querying the database
+  module: AI
+  system: [Admin]
+  source_doc: api/AI-ADMIN.md
+  source_section: "GET /api/admin/ai-usage/summary"
+  description: >
+    The admin console renders the aggregates REQ-AI-021 exposes: headline totals (calls, input
+    tokens, output tokens, total tokens, failures) and a per-feature-and-model breakdown, over a
+    selectable time window. Until this page existed the endpoint had no UI at all, so AI spend was
+    only answerable by calling the API by hand -- which is why a real truncation bug (a task
+    exhausting its output budget, billing in full and returning nothing) stayed invisible until
+    someone went looking for it.
+  business_rule: >
+    The page reports tokens, never a money figure of its own. Per-model pricing changes on the
+    vendor's schedule, so freezing a rate into this app would eventually report a confidently
+    wrong number; instead the operator may enter today's rate and get an estimate computed in the
+    browser, clearly labelled as derived from what they typed and never persisted. Failures are
+    displayed beside successes and a non-zero count is styled as a problem, because an aggregate
+    that hides failures is what let the truncation bug above go unnoticed.
+  actor: Admin
+  preconditions:
+    - Signed in as an admin
+  inputs:
+    - "A time window (last 24 hours / 7 days / 30 days / 90 days), which maps to the endpoint's since parameter"
+    - "Optionally, an input rate and an output rate per 1M tokens, for a client-side cost estimate"
+  expected_outputs:
+    - Headline totals for the selected window
+    - A row per (feature, model) with calls, input/output/total tokens, and failures
+  validations:
+    - The selected window is sent as an ISO-8601 UTC ("Z") instant
+    - A superseded in-flight response is discarded rather than allowed to overwrite a newer one
+  permissions: admin (the endpoint enforces requireAdmin; the console is admin-only)
+  dependencies:
+    - REQ-AI-021
+  error_conditions:
+    - "A failed request surfaces the error message in a banner and clears stale data rather than showing it as current"
+  edge_conditions:
+    - "A window containing no calls renders an explicit empty state, not an empty table"
+    - "Usage only exists from the point the database-backed recorder shipped, so an older call never appears"
+  offline_behavior: n/a (admin console is online-only)
+  acceptance_criteria:
+    - Headline totals and the per-feature table match what the endpoint returns for the same window
+    - Changing the window re-queries and re-renders
+    - A non-zero failure count is visually distinguished
+    - No vendor price is hardcoded anywhere in the page
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "No automated browser-test runner exists for admin/ in this project"

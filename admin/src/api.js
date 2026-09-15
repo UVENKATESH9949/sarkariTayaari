@@ -751,6 +751,16 @@ export function getAiAuditLog() {
   return request(`/api/admin/ai/audit-log`);
 }
 
+// `since` is an ISO-8601 UTC instant ("...Z"). Omit it and the backend applies its own
+// 30-day window -- see AiUsageController.parseSince, which also explains why the Z form
+// matters: a "+05:30" offset decodes as a space in a query string unless percent-encoded.
+export function getAiUsageSummary(since) {
+  const params = new URLSearchParams();
+  if (since) params.set("since", since);
+  const query = params.toString();
+  return request(`/api/admin/ai-usage/summary${query ? `?${query}` : ""}`);
+}
+
 export function getAiTaskFlags() {
   return request(`/api/admin/ai-task-flags`);
 }
