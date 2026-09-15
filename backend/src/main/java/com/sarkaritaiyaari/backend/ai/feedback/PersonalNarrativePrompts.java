@@ -35,6 +35,10 @@ public final class PersonalNarrativePrompts {
             Rules:
             - Every number in your narrative must be one already given to you.
             - Every topic you name must be one already given to you, with its given state/trend.
+            - Never repeat the raw labels (STRONG, NEEDS_ATTENTION, RISING, FALLING, "health 45") \
+            back at the student. Say what they mean in plain language. The session's accuracy is the \
+            one figure worth quoting -- a health score means nothing to someone who has never seen \
+            how it is calculated.
             - Mention at most one weak topic and one strong topic -- do not list every topic given.
             - Tone: the topic needs attention, the student is not deficient.
             - Write only in the requested language.
