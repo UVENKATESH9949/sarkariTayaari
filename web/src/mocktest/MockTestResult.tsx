@@ -4,6 +4,7 @@ import { AlertIcon } from "../components/icons";
 import { CheckIcon as CheckBadge } from "../questions/renderers/renderIcons";
 import { loadCompletedAttempt } from "./attempt";
 import { describeYourAnswer, describeCorrectAnswer } from "../questions/describeAnswer";
+import { Breadcrumbs } from "../components/Breadcrumbs";
 
 export default function MockTestResult() {
   const [params] = useSearchParams();
@@ -38,6 +39,8 @@ export default function MockTestResult() {
 
   return (
     <>
+      <Breadcrumbs items={[{ label: "Mock Test", to: "/mock-test" }, { label: attempt.paperName ?? "Result" }]} />
+
       <div className="page-header">
         <h1>{attempt.paperName ?? "Mock test result"}</h1>
         <p className="subtle">
@@ -58,7 +61,7 @@ export default function MockTestResult() {
       </div>
 
       <div className="card">
-        <h2 style={{ marginBottom: "var(--space-sm)" }}>By subject</h2>
+        <h2 className="mb-sm">By subject</h2>
         {[...subjectGroups.entries()].map(([subject, b]) => (
           <div className="stat-row" key={subject}>
             <div className="stat-body">
@@ -71,7 +74,7 @@ export default function MockTestResult() {
         ))}
       </div>
 
-      <div className="stack" style={{ marginTop: "var(--space-md)" }}>
+      <div className="stack mt-md">
         {attempt.results.map((result, index) => {
           const languageCode = Object.keys(result.question.translations)[0] ?? "en";
           const translation = result.question.translations[languageCode];
@@ -100,14 +103,14 @@ export default function MockTestResult() {
                 </div>
               )}
               {translation?.explanation && (
-                <p className="subtle" style={{ marginTop: "var(--space-sm)" }}>{translation.explanation}</p>
+                <p className="subtle mt-sm">{translation.explanation}</p>
               )}
             </div>
           );
         })}
       </div>
 
-      <div style={{ marginTop: "var(--space-lg)" }}>
+      <div className="mt-lg">
         <Link to="/mock-test" className="btn">
           Back to Mock Test
         </Link>

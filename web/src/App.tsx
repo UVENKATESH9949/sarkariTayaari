@@ -72,6 +72,7 @@ export default function App() {
               title="Page not found"
               phase="—"
               summary="That address does not match anything in the app."
+              notFound
             />
           }
         />

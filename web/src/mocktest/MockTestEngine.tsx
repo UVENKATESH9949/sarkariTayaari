@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { AlertIcon } from "../components/icons";
+import { LoadingState } from "../components/LoadingState";
 import { useActiveSession } from "../practice/activeSession";
 import { getPaperById, buildMockTestQuestions, totalDurationMinutes } from "./mockTestApi";
 import { getQuestionGroups } from "../questions/questionGroups";
 import { QuestionBody } from "../questions/QuestionBody";
+import { useQuestionTimer } from "../questions/useQuestionTimer";
 import { initialDraftFor, draftToResponse, evaluateDraft, isDraftAttempted, type AnswerDraft } from "../questions/answerDraft";
 import { newAttemptId, saveCompletedAttempt, uploadCompletedAttempt, type MockResult } from "./attempt";
 import type { MockPaper } from "./types";
@@ -81,6 +83,10 @@ export default function MockTestEngine() {
   }, [paperId]);
 
   const currentQuestion = questions?.[currentIndex] ?? null;
+  // TASK-2801 Phase 1 — per-question display time, accumulated across revisits. A mock test is
+  // navigated back and forth far more than a practice quiz, which is exactly why it accumulates
+  // rather than timing from first view to answer.
+  const timer = useQuestionTimer(currentQuestion?.id ?? null);
   const currentDraft = currentQuestion ? drafts[currentQuestion.id] : undefined;
 
   const availableLanguages = useMemo(
@@ -142,11 +148,21 @@ export default function MockTestEngine() {
     submittedRef.current = true;
     setSubmitting(true);
 
+    // Banks the question still on screen at submit — including an auto-submit when the timer
+    // runs out, where nothing navigates away first.
+    timer.commitCurrent();
+
     const results: MockResult[] = questions.map((q) => {
       const draft = drafts[q.id];
       const response = draftToResponse(q.questionType, draft);
       const { outcome } = evaluateDraft(q.questionType, q.correctIndex, q.answerKey, q.contentStructure, draft);
-      return { question: q, response, outcome, markedForReview: marked.has(q.id) };
+      return {
+        question: q,
+        response,
+        outcome,
+        markedForReview: marked.has(q.id),
+        timeMs: timer.timeMsFor(q.id),
+      };
     });
 
     const correctCount = results.filter((r) => r.outcome === "CORRECT").length;
@@ -195,7 +211,7 @@ export default function MockTestEngine() {
   }
 
   if (!questions || !currentQuestion || !currentDraft || !paper) {
-    return <p className="muted">Preparing your test…</p>;
+    return <LoadingState variant="question" label="Preparing your test" />;
   }
 
   const total = questions.length;
@@ -204,105 +220,123 @@ export default function MockTestEngine() {
   const timeLow = remainingSeconds <= 5 * 60;
   const translation = currentQuestion.translations[languageCode] ?? Object.values(currentQuestion.translations)[0];
 
+  // Shared between the narrow-screen modal and the always-visible desktop sidebar (see
+  // `.quiz-sidebar` in styles/index.css) — the SAME state, just two places it can render,
+  // never both reachable for a given viewport width.
+  const navigatorContent = (
+    <>
+      <div className="navigator-legend">
+        <span><i className="navigator-dot navigator-dot-answered" /> Answered</span>
+        <span><i className="navigator-dot navigator-dot-marked" /> Marked</span>
+        <span><i className="navigator-dot navigator-dot-notanswered" /> Not answered</span>
+        <span><i className="navigator-dot navigator-dot-notvisited" /> Not visited</span>
+      </div>
+      <div className="navigator-scroll">
+        <div className="navigator-grid">
+          {questions.map((q, index) => {
+            const answered = isDraftAttempted(drafts[q.id]);
+            const isMarked = marked.has(q.id);
+            const wasVisited = visited.has(q.id);
+            let state = "navigator-notvisited";
+            if (isMarked) state = "navigator-marked";
+            else if (answered) state = "navigator-answered";
+            else if (wasVisited) state = "navigator-notanswered";
+            return (
+              <button
+                type="button"
+                key={q.id}
+                className={`navigator-cell ${state} ${index === currentIndex ? "navigator-current" : ""}`}
+                onClick={() => goTo(index)}
+              >
+                {index + 1}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </>
+  );
+
   return (
-    <div className="quiz mocktest-engine">
-      <div className="mocktest-header">
-        <span className="subtle">
-          {currentQuestion.sectionName} · Question {currentIndex + 1} of {total}
-        </span>
-        <span className={`mocktest-timer ${timeLow ? "mocktest-timer-low" : ""}`}>
-          {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
-        </span>
-        <button type="button" className="btn btn-secondary" onClick={() => setNavigatorOpen(true)}>
-          Questions
-        </button>
-      </div>
+    <div className="quiz-layout">
+      <div className="quiz mocktest-engine">
+        <div className="mocktest-header">
+          <span className="subtle">
+            {currentQuestion.sectionName} · Question {currentIndex + 1} of {total}
+          </span>
+          <span className={`mocktest-timer ${timeLow ? "mocktest-timer-low" : ""}`}>
+            {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
+          </span>
+          <button type="button" className="btn btn-secondary quiz-nav-trigger" onClick={() => setNavigatorOpen(true)}>
+            Questions
+          </button>
+        </div>
 
-      {availableLanguages.length > 1 && (
-        <div className="quiz-lang-row">
-          {availableLanguages.map((code) => (
-            <button
-              key={code}
-              type="button"
-              className={code === languageCode ? "chip chip-active" : "chip"}
-              onClick={() => setLanguageCode(code)}
-            >
-              {code.toUpperCase()}
+        {availableLanguages.length > 1 && (
+          <div className="quiz-lang-row">
+            {availableLanguages.map((code) => (
+              <button
+                key={code}
+                type="button"
+                className={code === languageCode ? "chip chip-active" : "chip"}
+                onClick={() => setLanguageCode(code)}
+              >
+                {code.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="card quiz-card">
+          {marked.has(currentQuestion.id) && <span className="pill mocktest-marked-pill">Marked for review</span>}
+          <p className="quiz-question-text">{translation?.questionText}</p>
+          <QuestionBody
+            question={currentQuestion}
+            group={currentQuestion.questionGroupId ? groups[currentQuestion.questionGroupId] : null}
+            languageCode={languageCode}
+            draft={currentDraft}
+            onChange={handleDraftChange}
+            revealed={false}
+          />
+        </div>
+
+        <div className="mocktest-action-row">
+          <button type="button" className="btn btn-secondary" onClick={clearResponse} disabled={!isDraftAttempted(currentDraft)}>
+            Clear response
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={toggleMarked}>
+            {marked.has(currentQuestion.id) ? "Unmark" : "Mark for review"}
+          </button>
+        </div>
+
+        <div className="quiz-nav-row">
+          <button type="button" className="btn btn-secondary" onClick={() => goTo(Math.max(0, currentIndex - 1))} disabled={currentIndex === 0}>
+            Previous
+          </button>
+          <div className="row">
+            <button type="button" className="btn btn-danger" onClick={() => setConfirmSubmitOpen(true)} disabled={submitting}>
+              Submit test
             </button>
-          ))}
-        </div>
-      )}
-
-      <div className="card quiz-card">
-        {marked.has(currentQuestion.id) && <span className="pill mocktest-marked-pill">Marked for review</span>}
-        <p className="quiz-question-text">{translation?.questionText}</p>
-        <QuestionBody
-          question={currentQuestion}
-          group={currentQuestion.questionGroupId ? groups[currentQuestion.questionGroupId] : null}
-          languageCode={languageCode}
-          draft={currentDraft}
-          onChange={handleDraftChange}
-          revealed={false}
-        />
-      </div>
-
-      <div className="mocktest-action-row">
-        <button type="button" className="btn btn-secondary" onClick={clearResponse} disabled={!isDraftAttempted(currentDraft)}>
-          Clear response
-        </button>
-        <button type="button" className="btn btn-secondary" onClick={toggleMarked}>
-          {marked.has(currentQuestion.id) ? "Unmark" : "Mark for review"}
-        </button>
-      </div>
-
-      <div className="quiz-nav-row">
-        <button type="button" className="btn btn-secondary" onClick={() => goTo(Math.max(0, currentIndex - 1))} disabled={currentIndex === 0}>
-          Previous
-        </button>
-        <div style={{ display: "flex", gap: "var(--space-sm)" }}>
-          <button type="button" className="btn btn-danger" onClick={() => setConfirmSubmitOpen(true)} disabled={submitting}>
-            Submit test
-          </button>
-          <button type="button" className="btn" onClick={() => goTo(Math.min(total - 1, currentIndex + 1))} disabled={currentIndex === total - 1}>
-            Save &amp; next
-          </button>
+            <button type="button" className="btn" onClick={() => goTo(Math.min(total - 1, currentIndex + 1))} disabled={currentIndex === total - 1}>
+              Save &amp; next
+            </button>
+          </div>
         </div>
       </div>
+
+      <aside className="quiz-sidebar">
+        <div className="card">
+          <h2 className="mb-sm">Question Navigator</h2>
+          {navigatorContent}
+        </div>
+      </aside>
 
       {navigatorOpen && (
         <div className="dialog-overlay" role="presentation" onClick={() => setNavigatorOpen(false)}>
           <div className="dialog-panel navigator-panel" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             <h2>Question Navigator</h2>
-            <div className="navigator-legend">
-              <span><i className="navigator-dot navigator-dot-answered" /> Answered</span>
-              <span><i className="navigator-dot navigator-dot-marked" /> Marked</span>
-              <span><i className="navigator-dot navigator-dot-notanswered" /> Not answered</span>
-              <span><i className="navigator-dot navigator-dot-notvisited" /> Not visited</span>
-            </div>
-            <div className="navigator-scroll">
-              <div className="navigator-grid">
-                {questions.map((q, index) => {
-                  const answered = isDraftAttempted(drafts[q.id]);
-                  const isMarked = marked.has(q.id);
-                  const wasVisited = visited.has(q.id);
-                  let state = "navigator-notvisited";
-                  if (isMarked) state = "navigator-marked";
-                  else if (answered) state = "navigator-answered";
-                  else if (wasVisited) state = "navigator-notanswered";
-                  return (
-                    <button
-                      type="button"
-                      key={q.id}
-                      className={`navigator-cell ${state} ${index === currentIndex ? "navigator-current" : ""}`}
-                      onClick={() => goTo(index)}
-                    >
-                      {index + 1}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <button type="button" className="btn btn-secondary btn-block" style={{ marginTop: "var(--space-md)" }} onClick={() => setNavigatorOpen(false)}>
+            {navigatorContent}
+            <button type="button" className="btn btn-secondary btn-block mt-md" onClick={() => setNavigatorOpen(false)}>
               Close
             </button>
           </div>
@@ -313,7 +347,7 @@ export default function MockTestEngine() {
         <div className="dialog-overlay" role="presentation" onClick={() => setConfirmSubmitOpen(false)}>
           <div className="dialog-panel" role="alertdialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             <h2>Submit this test?</h2>
-            <p className="subtle" style={{ marginTop: "var(--space-sm)" }}>
+            <p className="subtle mt-sm">
               You've answered {questions.filter((q) => isDraftAttempted(drafts[q.id])).length} of {total} questions. You
               cannot change any answers after submitting.
             </p>

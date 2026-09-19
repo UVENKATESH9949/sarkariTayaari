@@ -4,6 +4,8 @@ import { questionsLabel } from "@sarkaritaiyaari/core/i18n";
 import { useT } from "../i18n/I18nContext";
 import { AlertIcon, TimerIcon } from "../components/icons";
 import { getDifficultyCounts, getDifficultyLevels, type DifficultyLevel } from "./practiceApi";
+import { Breadcrumbs } from "../components/Breadcrumbs";
+import { LoadingState } from "../components/LoadingState";
 
 /**
  * The difficulty picker — the shared "start a quiz" funnel every entry point into Practice
@@ -56,8 +58,20 @@ export default function PracticeLevels() {
     navigate(`/practice/quiz?${q.toString()}`);
   }
 
+  const subjectsQuery = new URLSearchParams({ examCode: examCode ?? "", examLabel }).toString();
+  const topicsQuery = new URLSearchParams({ examCode: examCode ?? "", examLabel, subjectId, subjectName }).toString();
+
   return (
     <>
+      <Breadcrumbs
+        items={[
+          { label: "Practice", to: "/practice" },
+          { label: examLabel || "Exam", to: `/practice/subjects?${subjectsQuery}` },
+          { label: subjectName || "Subject", to: `/practice/topics?${topicsQuery}` },
+          { label: topicName || "Difficulty" },
+        ]}
+      />
+
       <div className="page-header">
         <h1>{topicName || "Difficulty"}</h1>
         <p className="subtle">{[examLabel, subjectName].filter(Boolean).join(" · ")}</p>
@@ -70,7 +84,7 @@ export default function PracticeLevels() {
         </div>
       )}
 
-      {!error && levels === null && <p className="muted">Loading…</p>}
+      {!error && levels === null && <LoadingState variant="rows" rows={4} label="Loading difficulty levels" />}
 
       {!error && levels !== null && (
         <div className="card">

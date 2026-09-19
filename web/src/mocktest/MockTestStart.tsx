@@ -3,6 +3,8 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { AlertIcon, TimerIcon } from "../components/icons";
 import { getPaperById, getSectionAvailability, totalDurationMinutes } from "./mockTestApi";
 import type { MockPaper, SectionAvailability } from "./types";
+import { Breadcrumbs } from "../components/Breadcrumbs";
+import { LoadingState } from "../components/LoadingState";
 
 /**
  * The pre-test briefing — honest per-section availability (flags a cap when the live question
@@ -51,7 +53,7 @@ export default function MockTestStart() {
   }
 
   if (paper === undefined || (paper && !availability)) {
-    return <p className="muted">Loading…</p>;
+    return <LoadingState variant="rows" rows={2} label="Loading paper" />;
   }
 
   if (paper === null) {
@@ -69,6 +71,8 @@ export default function MockTestStart() {
 
   return (
     <>
+      <Breadcrumbs items={[{ label: "Mock Test", to: "/mock-test" }, { label: examLabel || "Exam" }, { label: paper.name }]} />
+
       <div className="page-header">
         <h1>{paper.name}</h1>
         <p className="subtle">{examLabel} · {paper.stageName}</p>
@@ -92,7 +96,7 @@ export default function MockTestStart() {
       </div>
 
       <div className="card">
-        <h2 style={{ marginBottom: "var(--space-sm)" }}>Sections</h2>
+        <h2 className="mb-sm">Sections</h2>
         {availability!.map((s) => (
           <div className="stat-row" key={s.sectionName}>
             <div className="stat-body">
@@ -106,7 +110,7 @@ export default function MockTestStart() {
         ))}
       </div>
 
-      <button type="button" className="btn btn-block" style={{ marginTop: "var(--space-md)" }} onClick={start} disabled={totalAvailable === 0}>
+      <button type="button" className="btn btn-block mt-md" onClick={start} disabled={totalAvailable === 0}>
         Start test
       </button>
     </>

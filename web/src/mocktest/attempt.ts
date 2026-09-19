@@ -16,6 +16,14 @@ export type MockResult = {
   response: Record<string, unknown> | null;
   outcome: EvaluationOutcome;
   markedForReview: boolean;
+  /**
+   * How long this question was on screen, in milliseconds (TASK-2801 Phase 1), or null when it
+   * was not measured. Null, never 0 — the same rule the server column follows.
+   *
+   * Optional so an attempt already in this tab's `sessionStorage` from before this release
+   * still parses.
+   */
+  timeMs?: number | null;
 };
 
 export type CompletedMockAttempt = {
@@ -69,6 +77,7 @@ export async function uploadCompletedAttempt(token: string, attempt: CompletedMo
     selectedIndex: typeof r.response?.selectedOption === "number" ? r.response.selectedOption : null,
     correctIndex: r.question.correctIndex,
     markedForReview: r.markedForReview,
+    timeMs: r.timeMs ?? null,
     questionType: r.question.questionType,
     response: r.response,
     outcome: r.outcome,

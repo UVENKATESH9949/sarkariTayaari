@@ -3,6 +3,8 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { AlertIcon, InboxIcon, TimerIcon } from "../components/icons";
 import { getMockablePapers, totalDurationMinutes } from "./mockTestApi";
 import type { MockPaper } from "./types";
+import { Breadcrumbs } from "../components/Breadcrumbs";
+import { LoadingState } from "../components/LoadingState";
 
 export default function MockTestPapers() {
   const navigate = useNavigate();
@@ -34,6 +36,8 @@ export default function MockTestPapers() {
 
   return (
     <>
+      <Breadcrumbs items={[{ label: "Mock Test", to: "/mock-test" }, { label: examLabel || "Papers" }]} />
+
       <div className="page-header">
         <h1>{examLabel || "Mock papers"}</h1>
         <p className="subtle">Choose a paper to see its details before starting.</p>
@@ -46,7 +50,7 @@ export default function MockTestPapers() {
         </div>
       )}
 
-      {!error && papers === null && <p className="muted">Loading…</p>}
+      {!error && papers === null && <LoadingState variant="list" rows={4} label="Loading papers" />}
       {!error && papers !== null && papers.length === 0 && (
         <div className="notice">
           <InboxIcon aria-hidden="true" />

@@ -30,6 +30,15 @@ export type PracticeResult = {
   response: Record<string, unknown> | null;
   outcome: EvaluationOutcome;
   scoreFraction: number;
+  /**
+   * How long this question was on screen, in milliseconds (TASK-2801 Phase 1), or null when it
+   * was not measured. Null, never 0 — a zero would claim the student answered instantly, and
+   * every reader of `time_ms` treats absence as unknown.
+   *
+   * Optional so a session already sitting in this tab's `sessionStorage` from before this
+   * release still parses.
+   */
+  timeMs?: number | null;
 };
 
 export type CompletedPracticeSession = {
@@ -76,6 +85,7 @@ export async function uploadCompletedSession(token: string, session: CompletedPr
     selectedIndex: typeof r.response?.selectedOption === "number" ? r.response.selectedOption : null,
     correctIndex: r.question.correctIndex,
     correct: r.outcome === "CORRECT",
+    timeMs: r.timeMs ?? null,
     questionType: r.question.questionType,
     response: r.response,
     outcome: r.outcome,

@@ -4,6 +4,7 @@ import { AlertIcon } from "../components/icons";
 import { CheckIcon as CheckBadge } from "../questions/renderers/renderIcons";
 import { loadCompletedSession } from "./session";
 import { describeYourAnswer, describeCorrectAnswer } from "../questions/describeAnswer";
+import { Breadcrumbs } from "../components/Breadcrumbs";
 
 export default function PracticeSummary() {
   const [params] = useSearchParams();
@@ -29,6 +30,8 @@ export default function PracticeSummary() {
 
   return (
     <>
+      <Breadcrumbs items={[{ label: "Practice", to: "/practice" }, { label: "Session summary" }]} />
+
       <div className="page-header">
         <h1>Session summary</h1>
         <p className="subtle">
@@ -46,7 +49,7 @@ export default function PracticeSummary() {
         </div>
       </div>
 
-      <div className="stack" style={{ marginTop: "var(--space-md)" }}>
+      <div className="stack mt-md">
         {session.results.map((result, index) => {
           const languageCode = Object.keys(result.question.translations)[0] ?? "en";
           const translation = result.question.translations[languageCode];
@@ -71,13 +74,13 @@ export default function PracticeSummary() {
                   <span>{describeCorrectAnswer(result.question, languageCode)}</span>
                 </div>
               )}
-              {translation?.explanation && <p className="subtle" style={{ marginTop: "var(--space-sm)" }}>{translation.explanation}</p>}
+              {translation?.explanation && <p className="subtle mt-sm">{translation.explanation}</p>}
             </div>
           );
         })}
       </div>
 
-      <div style={{ marginTop: "var(--space-lg)" }}>
+      <div className="mt-lg">
         <Link to="/practice" className="btn">
           Back to Practice
         </Link>

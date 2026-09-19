@@ -4,6 +4,8 @@ import { questionsLabel } from "@sarkaritaiyaari/core/i18n";
 import { useT } from "../i18n/I18nContext";
 import { AlertIcon, ChartIcon, InboxIcon } from "../components/icons";
 import { getTopicStats, type TopicStat } from "./practiceApi";
+import { Breadcrumbs } from "../components/Breadcrumbs";
+import { LoadingState } from "../components/LoadingState";
 
 export default function PracticeTopics() {
   const navigate = useNavigate();
@@ -43,8 +45,18 @@ export default function PracticeTopics() {
     navigate(`/practice/levels?${q.toString()}`);
   }
 
+  const subjectsQuery = new URLSearchParams({ examCode: examCode ?? "", examLabel }).toString();
+
   return (
     <>
+      <Breadcrumbs
+        items={[
+          { label: "Practice", to: "/practice" },
+          { label: examLabel || "Exam", to: `/practice/subjects?${subjectsQuery}` },
+          { label: subjectName || "Topics" },
+        ]}
+      />
+
       <div className="page-header">
         <h1>{subjectName || "Topics"}</h1>
         <p className="subtle">{examLabel}</p>
@@ -57,7 +69,7 @@ export default function PracticeTopics() {
         </div>
       )}
 
-      {!error && topics === null && <p className="muted">Loading…</p>}
+      {!error && topics === null && <LoadingState variant="rows" rows={6} label="Loading topics" />}
       {!error && topics !== null && topics.length === 0 && (
         <div className="notice">
           <InboxIcon aria-hidden="true" />

@@ -76,7 +76,11 @@ const IDENTITY_LIGHT: { fg: string; bg: string }[] = [
   { fg: "#BE123C", bg: "rgba(190, 18, 60, 0.12)" },
   { fg: "#4338CA", bg: "rgba(67, 56, 202, 0.12)" },
 ];
-const IDENTITY_DARK: { fg: string; bg: string }[] = [
+/** Exported (unlike its light sibling above) because Home's spotlight cards are always
+ *  dark, regardless of site theme — the same "fixed regardless of theme" exception the
+ *  mobile design system already makes for hero/gradient cards — so they need these real
+ *  hex values for a glow effect, not the theme-reactive `--identity-N-fg` CSS vars. */
+export const IDENTITY_DARK: { fg: string; bg: string }[] = [
   { fg: "#60A5FA", bg: "rgba(96, 165, 250, 0.16)" },
   { fg: "#A78BFA", bg: "rgba(167, 139, 250, 0.16)" },
   { fg: "#2DD4BF", bg: "rgba(45, 212, 191, 0.16)" },
@@ -90,7 +94,9 @@ export const ZOOM_STEPS = [0.9, 1, 1.1, 1.2, 1.3] as const;
 
 export type Appearance = { mode: ThemeMode; zoom: number };
 
-export const DEFAULT_APPEARANCE: Appearance = { mode: "light", zoom: 1 };
+/** Dark (black + blue) is the default — matches the mobile app's own default and premium
+ *  visual identity; light is the opt-in toggle, not the other way around. */
+export const DEFAULT_APPEARANCE: Appearance = { mode: "dark", zoom: 1 };
 
 const STORAGE_KEY = "st_web_appearance";
 

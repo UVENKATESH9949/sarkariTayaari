@@ -1,20 +1,26 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { getExams, ApiError, type ExamResponse } from "@sarkaritaiyaari/core/api";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  discoverExams,
+  getExamBadges,
+  ApiError,
+  type ExamCard as ExamCardData,
+  type ExamBadgeResponse,
+} from "@sarkaritaiyaari/core/api";
 import { useAuth } from "../auth/AuthContext";
-import { InboxIcon } from "../components/icons";
-import { ExamCard } from "../components/ExamCard";
+import { InboxIcon, PlayIcon } from "../components/icons";
+import { ExamSpotlightCard } from "../components/ExamSpotlightCard";
 import { LoadingState } from "../components/LoadingState";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { groupExamsByCategory, categoryGlowHex, deriveCategory, posterWatermark } from "./homeCategories";
 
 /**
  * The dashboard — and, for now, the app's end-to-end proof.
  *
- * `GET /api/exams` is public, so this renders real backend data signed out. That makes it the
- * honest check that the whole chain works in a browser: the base URL is configured, the shared
- * API client runs unmodified outside React Native, and the backend's CORS allowlist actually
- * answers a real cross-origin request from this origin.
+ * `GET /api/exams/discover` is public, so this renders real backend data signed out. It's
+ * the same endpoint mobile's Exams tab already uses (category/image/badge/cycle data in one
+ * call) — Home previously called the plainer `GET /api/exams`, which carries none of that.
  *
  * A real per-student stats/"continue where you left off" section was attempted here and pulled
  * back out — see this file's own history note (recorded when it was removed). `GET /api/progress`
@@ -30,16 +36,18 @@ import { ErrorBanner } from "../components/ErrorBanner";
 export default function Home() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [exams, setExams] = useState<ExamResponse[] | null>(null);
+  const [exams, setExams] = useState<ExamCardData[] | null>(null);
+  const [badges, setBadges] = useState<ExamBadgeResponse[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    getExams()
-      .then((result) => {
+    Promise.all([discoverExams({ size: 50 }), getExamBadges()])
+      .then(([discovered, badgeList]) => {
         if (cancelled) return;
-        setExams(result);
+        setExams(discovered.content);
+        setBadges(badgeList);
         setError(null);
       })
       .catch((err: unknown) => {
@@ -59,6 +67,19 @@ export default function Home() {
     navigate(`/practice/subjects?examCode=${encodeURIComponent(examCode)}&examLabel=${encodeURIComponent(examLabel)}`);
   }
 
+  function startMockTest(exam: ExamCardData | null) {
+    if (!exam) {
+      navigate("/mock-test");
+      return;
+    }
+    navigate(`/mock-test/papers?examCode=${encodeURIComponent(exam.examCode)}&examLabel=${encodeURIComponent(exam.examName)}`);
+  }
+
+  const badgeByCode = new Map(badges.map((b) => [b.code, b]));
+  const featured = exams?.find((e) => e.badge) ?? null;
+  const featuredBadge = featured?.badge ? badgeByCode.get(featured.badge) : undefined;
+  const rows = exams ? groupExamsByCategory(exams) : [];
+
   return (
     <>
       <div className="page-header">
@@ -68,42 +89,92 @@ export default function Home() {
 
       {error && <ErrorBanner message={error} onRetry={() => setReloadToken((t) => t + 1)} />}
 
-      {!error && (
+      {!error && exams === null && <LoadingState rows={4} label="Loading active exams" />}
+
+      {!error && exams !== null && exams.length === 0 && (
+        <EmptyState icon={<InboxIcon />} message="No active exams yet." />
+      )}
+
+      {!error && exams !== null && exams.length > 0 && (
         <>
-          <div className="section-heading">
-            <h2>Explore exams</h2>
-          </div>
-
-          {exams === null && <LoadingState rows={4} label="Loading active exams" />}
-
-          {exams !== null && exams.length === 0 && (
-            <EmptyState icon={<InboxIcon />} message="No active exams yet." />
-          )}
-
-          {exams !== null && exams.length > 0 && (
-            <div className="exam-grid">
-              {exams.map((exam) => (
-                <ExamCard
-                  key={exam.code}
-                  identityKey={exam.code}
-                  imageUrl={exam.imageUrl}
-                  name={exam.name}
-                  subtitle={exam.code}
-                  onClick={() => openExam(exam.code, exam.name)}
-                />
-              ))}
+          <section className="home-hero">
+            <div className="home-hero-content">
+              <span className="home-hero-eyebrow">
+                <span className="home-hero-eyebrow-dot" aria-hidden="true" />
+                {featured ? `${featuredBadge?.label ?? "Featured"} · ${deriveCategory(featured)}` : "Start here"}
+              </span>
+              <h2 className="home-hero-title">{featured ? featured.examName : "Prepare with confidence"}</h2>
+              <p className="home-hero-subtitle">
+                Full-length mock tests, topic-wise practice sets and previous year questions —
+                timed exactly like the real exam.
+              </p>
+              <div className="row">
+                <button type="button" className="btn" onClick={() => startMockTest(featured)}>
+                  <PlayIcon className="home-hero-play" aria-hidden="true" />
+                  Start free mock test
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => (featured ? openExam(featured.examCode, featured.examName) : navigate("/practice"))}
+                >
+                  View syllabus
+                </button>
+              </div>
             </div>
-          )}
+          </section>
+
+          {rows.map(({ category, exams: rowExams }) => {
+            const accentHex = categoryGlowHex(category);
+            return (
+              <div className="exam-row" key={category}>
+                <div className="exam-row-heading">
+                  <span className="exam-row-dot" style={{ background: accentHex }} aria-hidden="true" />
+                  <h2>{category}</h2>
+                  <span className="exam-row-count">
+                    {rowExams.length} {rowExams.length === 1 ? "exam" : "exams"}
+                  </span>
+                </div>
+                <div className="exam-row-scroll">
+                  {rowExams.map((exam) => (
+                    <ExamSpotlightCard
+                      key={`${category}-${exam.examCode}`}
+                      name={exam.examName}
+                      examCode={exam.examCode}
+                      imageUrl={exam.imageUrl}
+                      watermark={posterWatermark(exam.examCode)}
+                      subtitle={exam.vacancyCount ? `${exam.vacancyCount.toLocaleString()} vacancies` : category}
+                      accentHex={accentHex}
+                      onClick={() => openExam(exam.examCode, exam.examName)}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+
+          <div className="mt-md">
+            <Link to="/practice" className="btn btn-secondary">
+              Explore all exams
+            </Link>
+          </div>
         </>
       )}
 
       {!user && !error && (
-        <div className="notice" style={{ marginTop: "var(--space-lg)" }}>
-          <span>Sign in from Account to track your practice history and mock test scores across devices.</span>
+        <div className="cta-banner mt-lg">
+          <p>
+            <strong>Sign in</strong> to keep your practice history and mock test scores across
+            devices.
+          </p>
+          <Link to="/account" className="btn btn-secondary">
+            Sign in
+          </Link>
         </div>
       )}
 
-      <div className="notice" style={{ marginTop: "var(--space-md)" }}>
+      <div className="notice mt-md">
+        <InboxIcon aria-hidden="true" />
         <span>Progress and the Exam Guide are still being built. Practice and Mock Test are ready above.</span>
       </div>
     </>

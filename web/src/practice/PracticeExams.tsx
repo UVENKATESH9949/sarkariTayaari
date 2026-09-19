@@ -60,8 +60,7 @@ export default function PracticeExams() {
       {!error && (
         <>
           <input
-            className="field-input"
-            style={{ marginBottom: "var(--space-lg)" }}
+            className="field-input mb-lg"
             placeholder="Search exams…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}

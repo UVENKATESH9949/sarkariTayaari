@@ -4,6 +4,8 @@ import { AlertIcon, BookIcon, InboxIcon } from "../components/icons";
 import { getSubjectStats, type SubjectStat } from "./practiceApi";
 import { questionsLabel } from "@sarkaritaiyaari/core/i18n";
 import { useT } from "../i18n/I18nContext";
+import { Breadcrumbs } from "../components/Breadcrumbs";
+import { LoadingState } from "../components/LoadingState";
 
 export default function PracticeSubjects() {
   const navigate = useNavigate();
@@ -41,6 +43,8 @@ export default function PracticeSubjects() {
 
   return (
     <>
+      <Breadcrumbs items={[{ label: "Practice", to: "/practice" }, { label: examLabel || "Subjects" }]} />
+
       <div className="page-header">
         <h1>{examLabel || "Subjects"}</h1>
         <p className="subtle">Choose a subject to see its topics.</p>
@@ -53,7 +57,7 @@ export default function PracticeSubjects() {
         </div>
       )}
 
-      {!error && subjects === null && <p className="muted">Loading…</p>}
+      {!error && subjects === null && <LoadingState variant="rows" rows={5} label="Loading subjects" />}
       {!error && subjects !== null && subjects.length === 0 && (
         <div className="notice">
           <InboxIcon aria-hidden="true" />

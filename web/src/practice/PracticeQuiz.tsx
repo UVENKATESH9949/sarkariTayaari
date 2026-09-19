@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQuestionTimer } from "../questions/useQuestionTimer";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { AlertIcon } from "../components/icons";
+import { LoadingState } from "../components/LoadingState";
 import { getPracticeQuestions } from "./practiceApi";
 import { getQuestionGroups } from "../questions/questionGroups";
 import { QuestionBody } from "../questions/QuestionBody";
@@ -63,6 +65,9 @@ export default function PracticeQuiz() {
   }, [topicId, difficulty, examCode]);
 
   const currentQuestion = questions?.[currentIndex] ?? null;
+  // TASK-2801 Phase 1 — per-question display time. Keyed on the question on screen, so moving
+  // back and forth accumulates rather than restarting. Mirrors mobile's hook exactly.
+  const timer = useQuestionTimer(currentQuestion?.id ?? null);
   const currentDraft = currentQuestion ? drafts[currentQuestion.id] : undefined;
   const revealed = currentQuestion ? confirmed.has(currentQuestion.id) : false;
 
@@ -97,7 +102,7 @@ export default function PracticeQuiz() {
   }
 
   if (!questions || !currentQuestion || !currentDraft) {
-    return <p className="muted">Loading questions…</p>;
+    return <LoadingState variant="question" label="Loading questions" />;
   }
 
   const translation = currentQuestion.translations[languageCode] ?? Object.values(currentQuestion.translations)[0];
@@ -125,13 +130,24 @@ export default function PracticeQuiz() {
     if (!questions) return;
     setFinishing(true);
 
+    // The session finishes while its last question is still on screen, and the effect that banks
+    // a period only runs on navigation or unmount — so without this the final question's time is
+    // always lost.
+    timer.commitCurrent();
+
     const results: PracticeResult[] = [];
     for (const q of questions) {
       if (!confirmed.has(q.id)) continue;
       const draft = drafts[q.id];
       const response = draftToResponse(q.questionType, draft);
       const result = evaluateDraft(q.questionType, q.correctIndex, q.answerKey, q.contentStructure, draft);
-      results.push({ question: q, response, outcome: result.outcome, scoreFraction: result.scoreFraction });
+      results.push({
+        question: q,
+        response,
+        outcome: result.outcome,
+        scoreFraction: result.scoreFraction,
+        timeMs: timer.timeMsFor(q.id),
+      });
     }
 
     const session = {
@@ -152,89 +168,114 @@ export default function PracticeQuiz() {
   }
 
   return (
-    <div className="quiz">
-      <div className="quiz-progress-row">
-        <div className="quiz-progress-track">
-          <div className="quiz-progress-fill" style={{ width: `${((currentIndex + 1) / total) * 100}%` }} />
-        </div>
-        <span className="subtle quiz-progress-label">
-          Question {currentIndex + 1} of {total}
-        </span>
-      </div>
-
-      {availableLanguages.length > 1 && (
-        <div className="quiz-lang-row">
-          {availableLanguages.map((code) => (
-            <button
-              key={code}
-              type="button"
-              className={code === languageCode ? "chip chip-active" : "chip"}
-              onClick={() => setLanguageCode(code)}
-            >
-              {code.toUpperCase()}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="card quiz-card">
-        {currentQuestion.isPyq && (
-          <span className="pyq-badge">
-            Asked in {currentQuestion.pyqYear ?? "a previous year"}
-            {currentQuestion.pyqShift ? ` · Shift ${currentQuestion.pyqShift}` : ""}
+    <div className="quiz-layout">
+      <div className="quiz">
+        <div className="quiz-progress-row">
+          <div className="quiz-progress-track">
+            <div className="quiz-progress-fill" style={{ width: `${((currentIndex + 1) / total) * 100}%` }} />
+          </div>
+          <span className="subtle quiz-progress-label">
+            Question {currentIndex + 1} of {total}
           </span>
-        )}
-        <p className="quiz-question-text">{translation?.questionText}</p>
+        </div>
 
-        <QuestionBody
-          question={currentQuestion}
-          group={currentQuestion.questionGroupId ? groups[currentQuestion.questionGroupId] : null}
-          languageCode={languageCode}
-          draft={currentDraft}
-          onChange={revealed ? undefined : handleDraftChange}
-          revealed={revealed}
-          outcome={outcome?.outcome}
-        />
-
-        {canCheck && (
-          <button type="button" className="btn" style={{ marginTop: "var(--space-md)" }} onClick={checkAnswer}>
-            Check answer
-          </button>
-        )}
-
-        {revealed && outcome && (
-          <div className={`quiz-reveal ${outcome.outcome === "CORRECT" ? "quiz-reveal-correct" : "quiz-reveal-incorrect"}`}>
-            <strong>{outcome.outcome === "CORRECT" ? "Correct" : outcome.outcome === "UNATTEMPTED" ? "Not attempted" : "Incorrect"}</strong>
-            {translation?.explanation && <p>{translation.explanation}</p>}
+        {availableLanguages.length > 1 && (
+          <div className="quiz-lang-row">
+            {availableLanguages.map((code) => (
+              <button
+                key={code}
+                type="button"
+                className={code === languageCode ? "chip chip-active" : "chip"}
+                onClick={() => setLanguageCode(code)}
+              >
+                {code.toUpperCase()}
+              </button>
+            ))}
           </div>
         )}
-      </div>
 
-      <div className="quiz-nav-row">
-        <button
-          type="button"
-          className="btn btn-secondary"
-          onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
-          disabled={currentIndex === 0}
-        >
-          Previous
-        </button>
-        <div style={{ display: "flex", gap: "var(--space-sm)" }}>
-          {canFinish && (
-            <button type="button" className="btn btn-secondary" onClick={() => void finish()} disabled={finishing}>
-              {finishing ? "Finishing…" : "Finish"}
+        <div className="card quiz-card">
+          {currentQuestion.isPyq && (
+            <span className="pyq-badge">
+              Asked in {currentQuestion.pyqYear ?? "a previous year"}
+              {currentQuestion.pyqShift ? ` · Shift ${currentQuestion.pyqShift}` : ""}
+            </span>
+          )}
+          <p className="quiz-question-text">{translation?.questionText}</p>
+
+          <QuestionBody
+            question={currentQuestion}
+            group={currentQuestion.questionGroupId ? groups[currentQuestion.questionGroupId] : null}
+            languageCode={languageCode}
+            draft={currentDraft}
+            onChange={revealed ? undefined : handleDraftChange}
+            revealed={revealed}
+            outcome={outcome?.outcome}
+          />
+
+          {canCheck && (
+            <button type="button" className="btn mt-md" onClick={checkAnswer}>
+              Check answer
             </button>
           )}
+
+          {revealed && outcome && (
+            <div className={`quiz-reveal ${outcome.outcome === "CORRECT" ? "quiz-reveal-correct" : "quiz-reveal-incorrect"}`}>
+              <strong>{outcome.outcome === "CORRECT" ? "Correct" : outcome.outcome === "UNATTEMPTED" ? "Not attempted" : "Incorrect"}</strong>
+              {translation?.explanation && <p>{translation.explanation}</p>}
+            </div>
+          )}
+        </div>
+
+        <div className="quiz-nav-row">
           <button
             type="button"
-            className="btn"
-            onClick={() => setCurrentIndex((i) => Math.min(total - 1, i + 1))}
-            disabled={currentIndex === total - 1}
+            className="btn btn-secondary"
+            onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
+            disabled={currentIndex === 0}
           >
-            Next
+            Previous
           </button>
+          <div className="row">
+            {canFinish && (
+              <button type="button" className="btn btn-secondary" onClick={() => void finish()} disabled={finishing}>
+                {finishing ? "Finishing…" : "Finish"}
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn"
+              onClick={() => setCurrentIndex((i) => Math.min(total - 1, i + 1))}
+              disabled={currentIndex === total - 1}
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
+
+      <aside className="quiz-sidebar">
+        <div className="card">
+          <h2>This session</h2>
+          <div className="stack mt-sm">
+            {examLabel && <div className="subtle">{examLabel}</div>}
+            {(subjectName || topicName) && (
+              <div className="subtle">{[subjectName, topicName].filter(Boolean).join(" · ")}</div>
+            )}
+            {levelLabel && <div className="subtle">{levelLabel}</div>}
+          </div>
+        </div>
+        <div className="card">
+          <h2>Progress</h2>
+          <div className="stat-headline mt-sm">
+            <span className="stat-headline-number">{currentIndex + 1}</span>
+            <span className="subtle">of {total}</span>
+          </div>
+          <div className="quiz-progress-track">
+            <div className="quiz-progress-fill" style={{ width: `${((currentIndex + 1) / total) * 100}%` }} />
+          </div>
+        </div>
+      </aside>
     </div>
   );
 }

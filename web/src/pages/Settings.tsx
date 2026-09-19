@@ -30,8 +30,8 @@ export default function Settings() {
 
         <div>
           <span className="field-label">Theme</span>
-          <div style={{ display: "flex", gap: "var(--space-sm)" }}>
-            {(["light", "dark"] as const).map((option) => (
+          <div className="row">
+            {(["dark", "light"] as const).map((option) => (
               <button
                 key={option}
                 type="button"
@@ -47,7 +47,7 @@ export default function Settings() {
 
         <div>
           <span className="field-label">Text size</span>
-          <div style={{ display: "flex", gap: "var(--space-sm)", flexWrap: "wrap" }}>
+          <div className="row">
             {ZOOM_STEPS.map((step) => (
               <button
                 key={step}
@@ -71,7 +71,7 @@ export default function Settings() {
             with the practice screens.
           </p>
         </div>
-        <div style={{ display: "flex", gap: "var(--space-sm)" }}>
+        <div className="row">
           {AVAILABLE_LANGUAGES.map((code) => (
             <button
               key={code}

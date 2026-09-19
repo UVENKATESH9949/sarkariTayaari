@@ -32,7 +32,7 @@ export function ConfirmDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <h2 id="confirm-dialog-title">{title}</h2>
-        <p className="subtle" style={{ marginTop: "var(--space-sm)" }}>{message}</p>
+        <p className="subtle mt-sm">{message}</p>
         <div className="dialog-actions">
           <button type="button" className="btn btn-secondary" onClick={onCancel}>
             {cancelLabel}
