@@ -103,13 +103,28 @@ keyed `"current"`, added by mobile migration `0013`, never synced and never clea
 sign-out — it describes the device, not the account). Two context providers mounted in
 `app/_layout.tsx` hand them out: `ThemeProvider` and `I18nProvider`.
 
+That same row also carries the active exam (migration `0026`, read through
+`examsModule/activeExamContext.tsx`) and the first-time onboarding profile (migration `0027`,
+`mobile/src/db/onboarding.ts`). Three modules therefore write one row, and they coexist because
+**each builds its upsert from only the fields it was given** — none ever writes a column it does
+not own. Note there is no `preferred_language` column: onboarding's language step writes
+`ui_language`, the same one Settings writes, so the two cannot drift.
+
+| I want to... | File |
+|---|---|
+| Change what onboarding asks, or add a step | `mobile/src/onboarding/OnboardingFlow.tsx` (the step list is a literal array at the top) |
+| Change a validation rule for an onboarding answer | `packages/core/src/onboarding/validation.ts` — and its test, which is where these rules are actually proven |
+| Change who gets shown onboarding at all | `packages/core/src/onboarding/status.ts` (`resolveOnboardingStatus`) plus `mobile/src/db/onboarding.ts` for the signal read |
+| Change what happens between the last answer and Home | `mobile/src/onboarding/PreparingProfile.tsx` — every checklist line must stay a real step |
+| Change which screen the app shows before the navigator mounts | `mobile/src/onboarding/AppStartGate.tsx` — the one gate; do not add a second |
+
 | I want to... | File |
 |---|---|
 | Change a screen's colours, spacing or typography | its own `buildStyles(theme)` factory passed to `useThemedStyles()` — never a bare `StyleSheet.create` |
 | Add or change a colour token | `mobile/src/ui/palettes.ts` (`darkPalette` / `lightPalette`) — `lightPalette`'s type is the dark one's shape, so add to both or it won't compile |
 | Change spacing/border-radius (identical in both themes) | `mobile/src/ui/theme.ts` |
 | Change how text zoom is applied | `applyZoom()` inside `mobile/src/ui/ThemeContext.tsx` — see `05-why-its-built-this-way.md` before touching this |
-| Add or edit a UI-language string | `mobile/src/i18n/en.ts` first, then the matching key in `mobile/src/i18n/te.ts` |
+| Add or edit a UI-language string | `packages/core/src/i18n/en.ts` first, then the matching key in `te.ts` — the catalogues moved into the shared package in TASK-2601 Phase 0, so web renders the same strings; `te.ts` is typed as `en`'s shape, so a missing key is a compile error |
 | Read the current translation in a component | `useT()` (or `useI18n()` for `language` + `t` together), from `mobile/src/i18n/I18nContext.tsx` |
 | Change what's stored as a device preference | `mobile/src/db/preferences.ts` (`AppPreferences`, `loadPreferences()` / `savePreferences()`) |
 | Change the theme/zoom/language settings screen | `mobile/src/app/settings.tsx` |

@@ -51,6 +51,32 @@ public class UserPracticeSession {
     @Column(name = "uploaded_at", nullable = false)
     private OffsetDateTime uploadedAt = OffsetDateTime.now();
 
+    /* ------------------------------------------------- Session timing/context (V47, TASK-2801)
+     * All four are recorded on the device today and, before V47, never left it -- so a practice
+     * session's real duration and exam were lost on a device change and no server-side study-time
+     * figure was possible. All nullable: absent from any client older than V47, and NULL means
+     * "not recorded", never zero. */
+
+    /** When the student started answering. Null for every session uploaded before V47. */
+    @Column(name = "started_at")
+    private OffsetDateTime startedAt;
+
+    /** Elapsed wall-clock time for the session. See {@link #startedAt} for the null rule. */
+    @Column(name = "duration_ms")
+    private Long durationMs;
+
+    /**
+     * How many questions the set OFFERED, which may exceed {@code totalCount} because a student
+     * may finish early. Never a denominator -- answering 15 of 17 attempted is 88% accuracy, not
+     * 30%. Display and coverage only.
+     */
+    @Column(name = "available_count")
+    private Integer availableCount;
+
+    /** The exam being practised for. Null for the "All Government Exams" shortcut, which spans every exam. */
+    @Column(name = "exam_code", length = 30)
+    private String examCode;
+
     /** Phase 7.1 -- opportunistic cache of a generated SESSION_FEEDBACK narrative. Null means
      *  "never generated (or the session synced after the student already saw one built purely
      *  from their device's own local cache)" -- never a required backfill. */
@@ -66,6 +92,18 @@ public class UserPracticeSession {
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
+
+    public OffsetDateTime getStartedAt() { return startedAt; }
+    public void setStartedAt(OffsetDateTime startedAt) { this.startedAt = startedAt; }
+
+    public Long getDurationMs() { return durationMs; }
+    public void setDurationMs(Long durationMs) { this.durationMs = durationMs; }
+
+    public Integer getAvailableCount() { return availableCount; }
+    public void setAvailableCount(Integer availableCount) { this.availableCount = availableCount; }
+
+    public String getExamCode() { return examCode; }
+    public void setExamCode(String examCode) { this.examCode = examCode; }
 
     public User getUser() { return user; }
     public void setUser(User user) { this.user = user; }

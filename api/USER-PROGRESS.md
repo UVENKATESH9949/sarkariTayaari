@@ -34,7 +34,7 @@ the `ProgressController` pattern; current mutable state per (user, X) wants the 
 ## Per-question time (`timeMs`) — optional, and `null` never means zero
 
 Both result shapes below carry an optional `timeMs` (milliseconds), added by migration
-`V24__weakness_radar.sql` for [Weakness Radar](WEAKNESS-RADAR.md). Three things about it:
+`V24__weakness_radar.sql` for [Weakness Radar](WEAKNESS-RADAR.md). Four things about it:
 
 1. **It is optional in both directions.** Any client build older than that release omits it, and
    the columns (`user_practice_session_results.time_ms`,
@@ -43,12 +43,22 @@ Both result shapes below carry an optional `timeMs` (milliseconds), added by mig
 2. **`null` means "not recorded", never "answered instantly".** Every row uploaded before the
    field existed has none. A reader that treated absence as a fast answer would manufacture a
    speed signal out of nothing.
-3. **Nothing consumes it yet.** The Weakness Radar's speed component is deliberately switched
-   off: computing it needs an expected-time benchmark, and none exists anywhere in this schema.
-   Capture starts now so a future version has history to derive one from — see
-   [`WEAKNESS-RADAR.md`](WEAKNESS-RADAR.md)'s "The absent speed signal" and
-   `mobile/src/practice/useQuestionTimer.ts` for the client side (including the two limitations
-   of measuring display time).
+3. **It now has one consumer, and one deliberate non-consumer.**
+   [`USER-ANALYTICS.md`](USER-ANALYTICS.md) reports `averageTimeMs` per topic, subject and
+   difficulty — **divided by the attempts that actually carry a time, never by all of them**,
+   precisely because of rule 2. The Weakness Radar's *speed* component is still switched off:
+   that one needs an expected-time benchmark to compare against, and none exists anywhere in this
+   schema — an average is not a benchmark. See [`WEAKNESS-RADAR.md`](WEAKNESS-RADAR.md)'s "The
+   absent speed signal".
+
+   *(This bullet said "nothing consumes it yet" until TASK-2801 made that false; corrected in
+   place per `AI_RULES.md` §6.)*
+4. **Both clients capture it, as of TASK-2801.** `mobile/src/practice/useQuestionTimer.ts` and
+   `web/src/questions/useQuestionTimer.ts` are deliberate mirrors — same cap, same accumulation
+   across revisits, same null rule — so a minute measured in a browser means the same thing as a
+   minute measured on a phone and the two can be averaged together. Each file records its own
+   limitations of measuring display time. **`web/` captured nothing at all before that**, so every
+   web answer given earlier is permanently unmeasured.
 
 ---
 
@@ -64,6 +74,18 @@ Both result shapes below carry an optional `timeMs` (milliseconds), added by mig
     {
       id: string,                    // required — device-generated, reused on retry
       completedAt: ISO-8601 timestamp,  // required
+
+      // Session timing and exam context, added by V47 (TASK-2801). All four optional and
+      // omitted by any client built before it; absent means "not recorded", never zero.
+      // The device has recorded all four since Doc 2 §7 and simply never sent them, so a
+      // practice session's real duration was lost on a device change and no server-side
+      // study-time figure was possible. Returned on restore as well as accepted here.
+      startedAt: ISO-8601 | null,
+      durationMs: number | null,
+      availableCount: number | null,  // questions OFFERED — may exceed totalCount when the
+                                      // student finished early. NEVER a denominator.
+      examCode: string | null,        // null for the "All Government Exams" shortcut
+
       examLabel: string | null,
       subjectName: string | null,
       topicName: string | null,
@@ -131,15 +153,35 @@ Both result shapes below carry an optional `timeMs` (milliseconds), added by mig
 }
 ```
 Both top-level arrays default to empty if omitted.
-**Response:** `{ "practiceSessionsStored": number, "mockAttemptsStored": number }` — counts of
-rows processed (created **or** overwritten), not just newly-created rows.
+**Response:**
+```
+{ "practiceSessionsStored": number, "mockAttemptsStored": number,
+  "rejectedPracticeSessionIds": [string], "rejectedMockAttemptIds": [string] }
+```
+The two counts are rows processed (created **or** overwritten), not just newly-created rows. The
+two arrays are almost always empty — see "Ownership" below.
 **Errors:** 401 not signed in, 400 validation (missing `id`/`completedAt`/`startedAt`, missing
 `questionId` on a result row).
-**Business rules:** Write-once / upload-and-forget (see table above) — no timestamp comparison,
-no rejection path. Re-sending the same `id` twice **replaces** that session/attempt and its
-result rows in place; it does not append a duplicate. Result-row ids are derived as
-`{sessionOrAttemptId}:{orderIndex}`, which is what makes a re-upload replace the same child rows
-rather than accumulate a second copy of every answer.
+**Business rules:** Write-once / upload-and-forget (see table above) — no timestamp comparison.
+Re-sending the same `id` twice **replaces** that session/attempt and its result rows in place; it
+does not append a duplicate. Result-row ids are derived as `{sessionOrAttemptId}:{orderIndex}`,
+which is what makes a re-upload replace the same child rows rather than accumulate a second copy
+of every answer.
+
+**Ownership (V47 / TASK-2801) — an id that already belongs to another account is refused.**
+Before this, the server checked only whether an id existed, not whose it was, and then set the
+row's user to the caller: so uploading somebody else's id overwrote their session *and reassigned
+it*. That was reachable by accident (mobile generated `session-<millis>` ids, which two students
+can collide on) and deliberately (those ids are trivially guessable). Such an id is now **skipped
+and named in `rejectedPracticeSessionIds` / `rejectedMockAttemptIds`**; the rest of the batch is
+stored regardless, so one bad id never strands a whole history. A client that ignores those
+fields simply keeps the row flagged unsynced and retries it. Mobile now generates UUIDs
+(`mobile/src/db/ids.ts`), as `web/` already did, so this should never fire in practice.
+
+**Classification snapshot.** On upload the server records, per answer, the topic/subject/
+difficulty/PYQ flag the question carried at that moment. It is not part of the request or the
+response — clients neither send nor receive it — but it is why a later retag of a question cannot
+change what [USER-ANALYTICS.md](USER-ANALYTICS.md) reports about history already recorded.
 **Consumers:** Mobile
 
 ### GET /api/progress
@@ -147,8 +189,11 @@ rather than accumulate a second copy of every answer.
 **Auth:** user
 **Request:** none
 **Response:** `{ practiceSessions: [...], mockAttempts: [...] }` — same per-item shapes as the
-sync request above, including `timeMs` where it was recorded, ordered by `completedAt`
-descending.
+sync request above, including `timeMs` where it was recorded and the four V47 practice-session
+fields (`startedAt`/`durationMs`/`availableCount`/`examCode`), ordered by `completedAt`
+descending. Those four travel back down as well as up deliberately: dropping them here would mean
+a restore silently reset a session's real duration and exam to "unknown" on the new device, which
+is the loss they were added to stop.
 **Errors:** 401.
 **Business rules:** Returns full history, unfiltered — there is no pagination or date-range
 param on this endpoint today.

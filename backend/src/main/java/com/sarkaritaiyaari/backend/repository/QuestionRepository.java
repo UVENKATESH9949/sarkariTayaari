@@ -98,4 +98,21 @@ public interface QuestionRepository extends JpaRepository<Question, UUID>, JpaSp
     long countByQuestionTypeNot(String questionType);
 
     long countByAnswerKeyIsNull();
+
+    /**
+     * The analytics classification of a batch of questions, for the snapshot written onto each
+     * attempt at upload time (V47, TASK-2801).
+     *
+     * <p>Columns, in order: {@code questionId, topicId, subjectId, difficultyCode, isPyq}.
+     * Subject comes through the topic because {@code questions} carries no subject of its own
+     * (V2 moved it onto {@code topics}).
+     *
+     * <p>Soft-deleted questions are <strong>included</strong>. A soft delete is an editorial
+     * decision about the question; it says nothing about whether the student answered it, and
+     * filtering here would silently drop a real attempt's classification -- the same rule
+     * {@link TopicEvidenceRepository} already states for its own reads.
+     */
+    @Query("select q.id, q.topic.id, q.topic.subject.id, q.difficulty, q.pyq "
+            + "from Question q where q.id in :ids")
+    List<Object[]> findClassifications(@Param("ids") java.util.Collection<UUID> ids);
 }

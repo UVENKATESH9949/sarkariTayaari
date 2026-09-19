@@ -6,11 +6,14 @@ import com.sarkaritaiyaari.backend.entity.UserMockAttempt;
 import com.sarkaritaiyaari.backend.entity.UserMockAttemptResult;
 import com.sarkaritaiyaari.backend.entity.UserPracticeSession;
 import com.sarkaritaiyaari.backend.entity.UserPracticeSessionResult;
+import com.sarkaritaiyaari.backend.repository.QuestionRepository;
 import com.sarkaritaiyaari.backend.repository.UserMockAttemptRepository;
 import com.sarkaritaiyaari.backend.repository.UserPracticeSessionRepository;
 import com.sarkaritaiyaari.backend.repository.UserPracticeSessionResultRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -19,6 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -37,21 +42,26 @@ import java.util.stream.Collectors;
 @Transactional
 public class ProgressService {
 
+    private static final Logger log = LoggerFactory.getLogger(ProgressService.class);
+
     private static final int MAX_HISTORY_PAGE_SIZE = 100;
 
     private final UserPracticeSessionRepository practiceSessions;
     private final UserMockAttemptRepository mockAttempts;
     private final UserPracticeSessionResultRepository practiceSessionResults;
+    private final QuestionRepository questions;
 
     @PersistenceContext
     private EntityManager entityManager;
 
     public ProgressService(UserPracticeSessionRepository practiceSessions,
                            UserMockAttemptRepository mockAttempts,
-                           UserPracticeSessionResultRepository practiceSessionResults) {
+                           UserPracticeSessionResultRepository practiceSessionResults,
+                           QuestionRepository questions) {
         this.practiceSessions = practiceSessions;
         this.mockAttempts = mockAttempts;
         this.practiceSessionResults = practiceSessionResults;
+        this.questions = questions;
     }
 
     /**
@@ -65,16 +75,38 @@ public class ProgressService {
      * ids already exist once, up front, and calling {@code persist()} directly for the
      * (usual) brand-new ones skips that lookup entirely; only genuine retries — the
      * actual reason this needs to be idempotent — pay for a {@code merge()}.
+     *
+     * <h2>Ownership is checked, not assumed (TASK-2801)</h2>
+     * That lookup used to ask only "does this id exist", not "whose is it" — and
+     * {@link #toEntity} sets the row's user to the caller. So an upload naming an id owned by
+     * somebody else {@code merge()}d over their row <em>and reassigned it to the caller</em>:
+     * silent data loss for one account and corrupted history for the other. Reachable both by
+     * accident (mobile generated {@code session-<millis>} ids, which two students can collide on)
+     * and deliberately (those ids are trivially guessable).
+     *
+     * <p>Such an id is now skipped rather than merged, and named in the response. Skipping one
+     * row rather than failing the batch is deliberate: the rest of a device's queue is
+     * blameless, and rejecting all of it would strand a student's whole history behind one bad
+     * id. The device keeps that row flagged unsynced and will retry it — honest, and strictly
+     * better than the previous behaviour of succeeding by overwriting someone else.
      */
     public ProgressDtos.SyncResponse upload(User user, ProgressDtos.SyncRequest request) {
+        Map<UUID, Classification> classifications = classifyIncomingQuestions(request);
+
         List<String> sessionIds = request.getPracticeSessions().stream().map(ProgressDtos.PracticeSession::getId).toList();
-        Set<String> existingSessionIds = practiceSessions.findAllById(sessionIds).stream()
-                .map(UserPracticeSession::getId).collect(Collectors.toSet());
+        Map<String, UUID> sessionOwners =
+                sessionIds.isEmpty() ? Map.of() : ownersOf(practiceSessions.findIdOwners(sessionIds));
 
         int sessions = 0;
+        List<String> rejectedSessionIds = new ArrayList<>();
         for (ProgressDtos.PracticeSession dto : request.getPracticeSessions()) {
-            UserPracticeSession entity = toEntity(user, dto);
-            if (existingSessionIds.contains(dto.getId())) {
+            UUID owner = sessionOwners.get(dto.getId());
+            if (owner != null && !owner.equals(user.getId())) {
+                rejectedSessionIds.add(dto.getId());
+                continue;
+            }
+            UserPracticeSession entity = toEntity(user, dto, classifications);
+            if (owner != null) {
                 entityManager.merge(entity);
             } else {
                 entityManager.persist(entity);
@@ -83,13 +115,19 @@ public class ProgressService {
         }
 
         List<String> attemptIds = request.getMockAttempts().stream().map(ProgressDtos.MockAttempt::getId).toList();
-        Set<String> existingAttemptIds = mockAttempts.findAllById(attemptIds).stream()
-                .map(UserMockAttempt::getId).collect(Collectors.toSet());
+        Map<String, UUID> attemptOwners =
+                attemptIds.isEmpty() ? Map.of() : ownersOf(mockAttempts.findIdOwners(attemptIds));
 
         int attempts = 0;
+        List<String> rejectedAttemptIds = new ArrayList<>();
         for (ProgressDtos.MockAttempt dto : request.getMockAttempts()) {
-            UserMockAttempt entity = toEntity(user, dto);
-            if (existingAttemptIds.contains(dto.getId())) {
+            UUID owner = attemptOwners.get(dto.getId());
+            if (owner != null && !owner.equals(user.getId())) {
+                rejectedAttemptIds.add(dto.getId());
+                continue;
+            }
+            UserMockAttempt entity = toEntity(user, dto, classifications);
+            if (owner != null) {
                 entityManager.merge(entity);
             } else {
                 entityManager.persist(entity);
@@ -97,7 +135,78 @@ public class ProgressService {
             attempts++;
         }
 
-        return new ProgressDtos.SyncResponse(sessions, attempts);
+        if (!rejectedSessionIds.isEmpty() || !rejectedAttemptIds.isEmpty()) {
+            log.warn("progress.sync rejected ids owned by another account user={} sessions={} attempts={}",
+                    user.getId(), rejectedSessionIds.size(), rejectedAttemptIds.size());
+        }
+
+        return new ProgressDtos.SyncResponse(sessions, attempts, rejectedSessionIds, rejectedAttemptIds);
+    }
+
+    /**
+     * How a question was classified at the moment an answer was recorded (V47, TASK-2801).
+     *
+     * @param pyq boxed on purpose -- {@code null} is "the question is no longer in the bank, so
+     *            we cannot say", which is a different fact from "not a previous-year question".
+     */
+    private record Classification(UUID topicId, UUID subjectId, String difficultyCode, Boolean pyq) {
+    }
+
+    /**
+     * One lookup for every question referenced anywhere in the upload.
+     *
+     * <p>Batched rather than per-result: a restoring device can send hundreds of sessions at
+     * once, and a query per answer is the 1+N shape this codebase has now fixed six times.
+     *
+     * <p>Classifying at upload time rather than at read time is the whole point -- it freezes
+     * the classification against later content edits. It is not quite classification at
+     * <em>answer</em> time: a device that practises offline for weeks while an admin re-tags a
+     * question records the newer tagging. That window is narrow and bounded by how long a device
+     * stays offline, whereas the case this fixes -- a retag months after everyone synced -- is
+     * unbounded and was silently rewriting all of history.
+     */
+    private Map<UUID, Classification> classifyIncomingQuestions(ProgressDtos.SyncRequest request) {
+        Set<UUID> ids = new HashSet<>();
+        for (ProgressDtos.PracticeSession session : request.getPracticeSessions()) {
+            for (ProgressDtos.PracticeResult r : session.getResults()) {
+                if (r.getQuestionId() != null) ids.add(r.getQuestionId());
+            }
+        }
+        for (ProgressDtos.MockAttempt attempt : request.getMockAttempts()) {
+            for (ProgressDtos.MockResult r : attempt.getResults()) {
+                if (r.getQuestionId() != null) ids.add(r.getQuestionId());
+            }
+        }
+        if (ids.isEmpty()) return Map.of();
+
+        Map<UUID, Classification> byId = new HashMap<>();
+        for (Object[] row : questions.findClassifications(ids)) {
+            byId.put((UUID) row[0],
+                    new Classification((UUID) row[1], (UUID) row[2], (String) row[3], (Boolean) row[4]));
+        }
+        return byId;
+    }
+
+    /**
+     * Writes the snapshot onto one attempt, leaving all four fields null when the question is no
+     * longer in the bank. Null is the honest answer there and every reader treats it as unknown --
+     * never as an "Other" bucket, which would invent a category the student never practised.
+     */
+    private static void applyClassification(Map<UUID, Classification> classifications, UUID questionId,
+                                            java.util.function.Consumer<Classification> target) {
+        Classification c = classifications.get(questionId);
+        if (c != null) target.accept(c);
+    }
+
+    /**
+     * Turns the repository's {@code [id, userId]} rows into a lookup.
+     *
+     * <p>Callers skip the query entirely for an empty id list rather than relying on a guard in
+     * here — an upload carrying only practice sessions (or only mock attempts) passes nothing for
+     * the other half, and that is the common case, not an edge case.
+     */
+    private static Map<String, UUID> ownersOf(List<Object[]> rows) {
+        return rows.stream().collect(Collectors.toMap(r -> (String) r[0], r -> (UUID) r[1]));
     }
 
     @Transactional(readOnly = true)
@@ -168,11 +277,18 @@ public class ProgressService {
 
     /* ------------------------------------------------------------------ mapping */
 
-    private static UserPracticeSession toEntity(User user, ProgressDtos.PracticeSession dto) {
+    private static UserPracticeSession toEntity(User user, ProgressDtos.PracticeSession dto,
+                                                Map<UUID, Classification> classifications) {
         UserPracticeSession session = new UserPracticeSession();
         session.setId(dto.getId());
         session.setUser(user);
         session.setCompletedAt(dto.getCompletedAt());
+        // V47 / TASK-2801 — null-safe by construction: an older client omits all four and the
+        // columns stay null, which every reader treats as "not recorded" rather than zero.
+        session.setStartedAt(dto.getStartedAt());
+        session.setDurationMs(dto.getDurationMs());
+        session.setAvailableCount(dto.getAvailableCount());
+        session.setExamCode(dto.getExamCode());
         session.setExamLabel(dto.getExamLabel());
         session.setSubjectName(dto.getSubjectName());
         session.setTopicName(dto.getTopicName());
@@ -203,13 +319,21 @@ public class ProgressService {
             entity.setOutcome(r.getOutcome() != null ? r.getOutcome() : (r.isCorrect() ? "CORRECT" : "INCORRECT"));
             entity.setScoreFraction(r.getScoreFraction() != null ? r.getScoreFraction()
                     : (r.isCorrect() ? BigDecimal.ONE : BigDecimal.ZERO));
+            // V47 / TASK-2801 — freeze the classification so a later retag cannot rewrite it.
+            applyClassification(classifications, r.getQuestionId(), c -> {
+                entity.setTopicId(c.topicId());
+                entity.setSubjectId(c.subjectId());
+                entity.setDifficultyCode(c.difficultyCode());
+                entity.setPyq(c.pyq());
+            });
             results.add(entity);
         }
         session.setResults(results);
         return session;
     }
 
-    private static UserMockAttempt toEntity(User user, ProgressDtos.MockAttempt dto) {
+    private static UserMockAttempt toEntity(User user, ProgressDtos.MockAttempt dto,
+                                            Map<UUID, Classification> classifications) {
         UserMockAttempt attempt = new UserMockAttempt();
         attempt.setId(dto.getId());
         attempt.setUser(user);
@@ -250,6 +374,13 @@ public class ProgressService {
             entity.setScoreFraction(r.getScoreFraction() != null ? r.getScoreFraction()
                     : r.getSelectedIndex() != null && r.getSelectedIndex().equals(r.getCorrectIndex())
                             ? BigDecimal.ONE : BigDecimal.ZERO);
+            // V47 / TASK-2801 — same snapshot as the practice path above.
+            applyClassification(classifications, r.getQuestionId(), c -> {
+                entity.setTopicId(c.topicId());
+                entity.setSubjectId(c.subjectId());
+                entity.setDifficultyCode(c.difficultyCode());
+                entity.setPyq(c.pyq());
+            });
             results.add(entity);
         }
         attempt.setResults(results);
@@ -290,6 +421,13 @@ public class ProgressService {
         ProgressDtos.PracticeSession dto = new ProgressDtos.PracticeSession();
         dto.setId(session.getId());
         dto.setCompletedAt(session.getCompletedAt());
+        // Returned on restore, not just accepted on upload — otherwise a new device would drop
+        // the session's real duration and exam the moment it rebuilt its history, which is the
+        // bug these four columns exist to stop.
+        dto.setStartedAt(session.getStartedAt());
+        dto.setDurationMs(session.getDurationMs());
+        dto.setAvailableCount(session.getAvailableCount());
+        dto.setExamCode(session.getExamCode());
         dto.setExamLabel(session.getExamLabel());
         dto.setSubjectName(session.getSubjectName());
         dto.setTopicName(session.getTopicName());

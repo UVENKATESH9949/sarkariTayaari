@@ -135,10 +135,17 @@ users                one row per signed-in student (email, password hash)
   +-- user_mock_attempts           + user_mock_attempt_results
   +-- user_bookmarks
   +-- followed_exams
+  +-- user_topic_progress          per-topic mastery (V14) — was missing from this map
 ```
 
 Accounts are optional — the app works fully signed out. Signing in only adds one
 thing: this activity now survives losing the phone, because it's also stored here.
+
+`user_topic_progress` (V14) is the coarse mastery ladder — NOT_STARTED through MASTERED, plus
+NEEDS_REVISION as a regression — and it syncs last-write-wins like `user_bookmarks` rather than
+being append-only. It was absent from the tree above until TASK-2801 noticed; the migration list
+at the bottom of this file had it all along, which is exactly the kind of drift `AI_RULES.md` §6
+asks to be fixed in place.
 
 One more table hangs off `users` as of V24: **`user_topic_health`** (Weakness Radar). It is
 unlike everything else in this group, and the difference matters — it holds no student
@@ -153,6 +160,18 @@ V24 also added a nullable `time_ms` to `user_practice_session_results` and
 deliberately: a speed signal needs an expected-time benchmark to compare against, and this
 database has none. Capture starts now so a later version has history to derive one from.
 `NULL` means "not recorded", never zero.
+
+**V47** (TASK-2801) closes two capture gaps on the same tables. `user_practice_sessions` gains
+`started_at`, `duration_ms`, `available_count` and `exam_code` — all four were recorded on the
+device and never uploaded, so a practice session's real duration was lost on a device change and
+no server-side study-time figure was possible (mock attempts have carried the equivalent since
+V6). And **both result tables gain a classification snapshot**: `topic_id`, `subject_id`,
+`difficulty_code`, `is_pyq`, frozen at upload. Before that, every reader joined `questions` live,
+so retagging a question silently rewrote history — a student who answered forty Percentage
+questions became one who answered forty Profit & Loss questions, retroactively. `question_id`
+stays the canonical reference to the question; these four describe how it was classified at the
+time. All nullable, all backfilled once from the current classification, and `NULL` means
+"unknown" (its question was hard-deleted) rather than an "Other" bucket.
 
 `user_practice_sessions`/`user_mock_attempts` only ever grow — a session is uploaded
 once, finished, never edited. `user_bookmarks` is different: it's the *current state* of
@@ -217,7 +236,7 @@ phone and are never uploaded:
 | `practice_sessions` + `practice_session_results` | past practice sessions, question by question |
 | `mock_test_attempts` + `mock_test_attempt_results` | past mock tests, with scores |
 | `bookmarks` | questions the student saved |
-| `app_preferences` | this device's theme/zoom/UI-language settings — a device setting, not account data, so it's deliberately never synced or cleared on sign-out (see `05-why-its-built-this-way.md`) |
+| `app_preferences` | one row, keyed `"current"`, holding everything that describes this *device* rather than the account: theme/zoom/UI language, which of the followed exams is the **active** one (migration 0026), and the **first-time onboarding profile** — display name, chosen exam, exam stage, target year, preparation level, daily study time, and the two onboarding timestamps (migration 0027). Deliberately never synced and never cleared on sign-out (see `05-why-its-built-this-way.md`). Being a single row is what makes "exactly one active exam" and "one profile per device" true by construction rather than by a constraint |
 | `radar_cache` | the last Weakness Radar the server sent, one JSON payload per exam, so the radar screens still work offline. Account data, not a device setting — it's cleared on sign-out, unlike `app_preferences` above |
 
 **If the student is signed out, all of this is local-only** — uninstalling the app loses
@@ -284,6 +303,20 @@ changed just now) — added here rather than left for the next session to redisc
     V37__question_raw_extractions.sql             question_raw_extractions — immutable PDF-to-question extraction output
     V38__question_candidates.sql                  question_candidates — staged, reviewable prospective questions
     V39__questions_content_status.sql             questions.content_status (DRAFT/REVIEW/PUBLISHED, reused from V18)
+```
+
+**V40-V46 were missing too** (found while adding V47 below — same kind of drift, fixed in place
+per `AI_RULES.md` §6):
+
+```
+    V40__ai_admin_configuration.sql               ai_settings, ai_provider_configs (encrypted key), ai_config_audit_log
+    V41__ai_content.sql                           ai_content — generated question/topic explanations + review workflow
+    V42__ai_task_flags.sql                        ai_task_flags — per-task on/off, read by the client-config endpoint
+    V43__session_feedback.sql                     practice-session AI narrative cache
+    V44__mock_attempt_feedback.sql                the same for mock attempts
+    V45__profile_summary_cache.sql                user_profile_summaries — keyed by a hash of the facts it may cite
+    V46__ai_usage_events.sql                      ai_usage_events — one row per AI call, the schema's only event log
+    V47__behavioral_capture.sql                   practice-session timing/exam + per-attempt classification snapshot (TASK-2801)
 ```
 
 V8–V24 add whole feature areas ("Epic L" topic intelligence, "Exam Guide", the Exams

@@ -79,6 +79,35 @@ public class UserPracticeSessionResult {
     @Column(name = "question_type", length = 40)
     private String questionType;
 
+    /* ------------------------------------------ Classification snapshot (V47, TASK-2801)
+     * What this question WAS classified as at the moment it was answered, frozen here rather
+     * than joined live from `questions` on every read.
+     *
+     * Without this, re-tagging a question retroactively rewrites every student's history: answers
+     * given under one topic silently become answers under another, and any trend computed across
+     * that edit moves for a reason that has nothing to do with the student. question_id below
+     * stays the canonical reference to the question itself -- these four are a snapshot of its
+     * classification, not a copy of its content.
+     *
+     * All nullable. NULL means "unknown" -- a row whose question was hard-deleted before the V47
+     * backfill ran has no classification to recover, and a reader must render that as absent
+     * rather than bucketing it as "Other".
+     */
+
+    @Column(name = "topic_id")
+    private UUID topicId;
+
+    @Column(name = "subject_id")
+    private UUID subjectId;
+
+    /** Matches {@code difficulty_levels.code} -- a stable code, never a display label. */
+    @Column(name = "difficulty_code", length = 20)
+    private String difficultyCode;
+
+    /** Whether this was a previous-year question when answered. Boxed: null is "unknown", not false. */
+    @Column(name = "is_pyq")
+    private Boolean pyq;
+
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
 
@@ -114,4 +143,16 @@ public class UserPracticeSessionResult {
 
     public String getQuestionType() { return questionType; }
     public void setQuestionType(String questionType) { this.questionType = questionType; }
+
+    public UUID getTopicId() { return topicId; }
+    public void setTopicId(UUID topicId) { this.topicId = topicId; }
+
+    public UUID getSubjectId() { return subjectId; }
+    public void setSubjectId(UUID subjectId) { this.subjectId = subjectId; }
+
+    public String getDifficultyCode() { return difficultyCode; }
+    public void setDifficultyCode(String difficultyCode) { this.difficultyCode = difficultyCode; }
+
+    public Boolean getPyq() { return pyq; }
+    public void setPyq(Boolean pyq) { this.pyq = pyq; }
 }

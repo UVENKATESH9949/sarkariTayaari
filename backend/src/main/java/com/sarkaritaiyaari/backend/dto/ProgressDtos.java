@@ -44,6 +44,19 @@ public final class ProgressDtos {
     public static class PracticeSession {
         @NotBlank private String id;
         @NotNull private OffsetDateTime completedAt;
+        /**
+         * Session timing and exam context (V47, TASK-2801). All four are optional: a client built
+         * before that release omits them, and absence means "not recorded", never zero — the same
+         * rule {@code timeMs} follows. The device has recorded all four since Doc 2 §7 and simply
+         * never sent them, so a practice session's real duration was lost on a device change and
+         * no server-side study-time figure was possible.
+         */
+        private OffsetDateTime startedAt;
+        private Long durationMs;
+        /** Questions OFFERED, which may exceed {@code totalCount} when the student finished early. Never a denominator. */
+        private Integer availableCount;
+        /** Null for the "All Government Exams" shortcut, which is not attributable to one exam. */
+        private String examCode;
         private String examLabel;
         private String subjectName;
         private String topicName;
@@ -56,6 +69,14 @@ public final class ProgressDtos {
         public void setId(String id) { this.id = id; }
         public OffsetDateTime getCompletedAt() { return completedAt; }
         public void setCompletedAt(OffsetDateTime completedAt) { this.completedAt = completedAt; }
+        public OffsetDateTime getStartedAt() { return startedAt; }
+        public void setStartedAt(OffsetDateTime startedAt) { this.startedAt = startedAt; }
+        public Long getDurationMs() { return durationMs; }
+        public void setDurationMs(Long durationMs) { this.durationMs = durationMs; }
+        public Integer getAvailableCount() { return availableCount; }
+        public void setAvailableCount(Integer availableCount) { this.availableCount = availableCount; }
+        public String getExamCode() { return examCode; }
+        public void setExamCode(String examCode) { this.examCode = examCode; }
         public String getExamLabel() { return examLabel; }
         public void setExamLabel(String examLabel) { this.examLabel = examLabel; }
         public String getSubjectName() { return subjectName; }
@@ -209,7 +230,16 @@ public final class ProgressDtos {
 
     /* ----------------------------------------------------------------- responses */
 
-    public record SyncResponse(int practiceSessionsStored, int mockAttemptsStored) {
+    /**
+     * @param rejectedPracticeSessionIds ids skipped because they already belong to a different
+     *                                   account. Almost always empty. A client that predates this
+     *                                   field simply ignores it; a newer one can surface or re-key
+     *                                   the affected rows rather than retrying them forever.
+     *                                   See {@code ProgressService.upload}.
+     */
+    public record SyncResponse(int practiceSessionsStored, int mockAttemptsStored,
+                               List<String> rejectedPracticeSessionIds,
+                               List<String> rejectedMockAttemptIds) {
     }
 
     /** Everything this user has, for rebuilding a fresh install. */
