@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { spacing, radius } from "../ui/theme";
-import { useTheme, useThemedStyles, type Theme } from "../ui/ThemeContext";
+import { StyleSheet } from "react-native";
+import { AiBulletList, AiCard, AiScoreSummary, AiTipStrip } from "../ui/AiCard";
+import { spacing } from "../ui/theme";
+import { useThemedStyles, type Theme } from "../ui/ThemeContext";
 import { useT } from "../i18n/I18nContext";
 import { getCachedQuestionExplanation } from "../db/aiContentLocal";
 import { getLocalAiTaskFlags } from "../db/clientConfigLocal";
@@ -23,7 +23,6 @@ import type { QuestionExplanation } from "@sarkaritaiyaari/core/ai";
  */
 export function AiExplanationCard({ questionId, languageCode }: { questionId: string; languageCode: string }) {
   const styles = useThemedStyles(buildStyles);
-  const { colors } = useTheme();
   const t = useT();
   const [explanation, setExplanation] = useState<QuestionExplanation | null>(null);
 
@@ -46,80 +45,30 @@ export function AiExplanationCard({ questionId, languageCode }: { questionId: st
   if (!explanation) return null;
 
   return (
-    <View style={styles.box}>
-      <View style={styles.header}>
-        <Ionicons name="sparkles" size={16} color={colors.brand.primary} />
-        <Text style={styles.label}>{t("common.aiExplanation")}</Text>
-      </View>
-      <Text style={styles.text}>{explanation.whyCorrect}</Text>
-      {explanation.whyOthersWrong.length > 0 && (
-        <View style={styles.wrongList}>
-          {explanation.whyOthersWrong.map((entry, index) => (
-            <Text key={index} style={styles.wrongItem}>
-              <Text style={styles.wrongOption}>{entry.option}: </Text>
-              {entry.why}
-            </Text>
-          ))}
-        </View>
-      )}
-      {explanation.examTip && (
-        <Text style={styles.tip}>
-          <Text style={styles.tipLabel}>{"\u{1F4A1} "}</Text>
-          {explanation.examTip}
-        </Text>
-      )}
-    </View>
+    <AiCard
+      title={t("common.aiExplanation")}
+      subtitle={t("ai.explanationSubtitle")}
+      style={styles.card}
+    >
+      <AiScoreSummary body={explanation.whyCorrect} />
+      <AiBulletList
+        heading={t("ai.whyOthersWrong")}
+        items={explanation.whyOthersWrong.map((entry) => ({
+          label: entry.option,
+          text: entry.why,
+          tone: "danger" as const,
+        }))}
+      />
+      {explanation.examTip ? <AiTipStrip label={t("ai.examTip")} text={explanation.examTip} icon="bulb" /> : null}
+    </AiCard>
   );
 }
 
-function buildStyles(theme: Theme) {
-  const { colors } = theme;
+function buildStyles(_theme: Theme) {
   return StyleSheet.create({
-    box: {
-      backgroundColor: colors.surface,
-      borderRadius: radius.md,
-      borderWidth: 1,
-      borderColor: colors.borderAccent,
-      padding: spacing.md,
+    /* Only placement — everything else about the card is owned by `ui/AiCard.tsx`. */
+    card: {
       marginTop: spacing.sm,
-      gap: spacing.xs,
-    },
-    header: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.xs,
-    },
-    label: {
-      fontSize: 13,
-      fontWeight: "700",
-      color: colors.brand.primary,
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
-    },
-    text: {
-      fontSize: 14,
-      color: colors.text.primary,
-      lineHeight: 20,
-    },
-    wrongList: {
-      gap: 4,
-    },
-    wrongItem: {
-      fontSize: 13,
-      color: colors.text.secondary,
-      lineHeight: 18,
-    },
-    wrongOption: {
-      fontWeight: "600",
-      color: colors.text.primary,
-    },
-    tip: {
-      fontSize: 13,
-      color: colors.text.secondary,
-      fontStyle: "italic",
-    },
-    tipLabel: {
-      fontStyle: "normal",
     },
   });
 }

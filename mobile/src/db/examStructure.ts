@@ -208,3 +208,26 @@ export async function getExamBadges(): Promise<ExamBadge[]> {
     .orderBy(asc(examBadges.displayOrder))
     .all();
 }
+
+export type ExamStage = {
+  id: string;
+  name: string;
+};
+
+/**
+ * The stages an exam actually has ("Tier 1", "Prelims", ...), in display order.
+ *
+ * Read straight from the synced structure rather than from any hardcoded ladder: not every
+ * exam has tiers, the ones that do do not agree on what they are called, and onboarding asks
+ * about a stage only when this returns more than one. An exam whose structure has not synced
+ * to this device yet returns an empty list, which is correctly indistinguishable from "this
+ * exam has no stages worth asking about" — in both cases there is nothing to ask.
+ */
+export async function getExamStages(examCode: string): Promise<ExamStage[]> {
+  return db
+    .select({ id: examStages.id, name: examStages.name })
+    .from(examStages)
+    .where(eq(examStages.examCode, examCode))
+    .orderBy(asc(examStages.displayOrder))
+    .all();
+}

@@ -1,6 +1,6 @@
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "./client";
-import { topicProgress } from "./schema";
+import { questions, topicProgress } from "./schema";
 import type { TopicProgressState } from "./topicIntelligence";
 
 /**
@@ -124,6 +124,77 @@ export async function recordTopicPractice(params: {
         updatedAt: sql`excluded.updated_at`,
       },
     });
+}
+
+/**
+ * Folds a completed MOCK attempt into per-topic mastery (TASK-2801).
+ *
+ * ## Why this did not exist before
+ *
+ * `recordTopicPractice` was called only from the practice quiz and the diagnostic test, so a
+ * student could sit twenty mock tests and have `topic_progress` show nothing for any of the
+ * topics they were tested on. Weakness Radar already read both sources
+ * (`TopicEvidenceRepository` server-side, `localEvidence.ts` here); mastery read one. Those two
+ * disagreeing about the same student is exactly the inconsistency a personalization layer would
+ * inherit and act on.
+ *
+ * ## Two rules that are easy to get wrong, both already established elsewhere in this codebase
+ *
+ * 1. **An unattempted question is excluded, not counted wrong.** A mock test is timed and
+ *    running out of time is normal; scoring skipped questions as mistakes manufactures
+ *    weaknesses out of the clock. `outcome === "UNATTEMPTED"` is the check, not a null
+ *    `selectedIndex` — that column has no meaning for MULTIPLE_CHOICE/TRUE_FALSE and is null for
+ *    those even when genuinely answered.
+ * 2. **Correctness comes from `outcome`**, never from `selectedIndex === correctIndex`, for the
+ *    same reason.
+ *
+ * The topic comes from the question, since no attempt row stores one — the same join
+ * `localEvidence.ts` documents. A question missing locally (content sync can lag) is skipped
+ * rather than attributed to nothing.
+ *
+ * Time is summed from the per-question `timeMs` where it was measured, rather than dividing the
+ * attempt's total: a 100-question paper spans many topics and splitting its duration evenly
+ * across them would invent per-topic figures nobody recorded.
+ *
+ * Sequential per topic, deliberately: `recordTopicPractice` is a read-modify-write whose input is
+ * the previous state, so two overlapping calls for the same topic would race. A mock spans maybe
+ * a dozen topics, and this runs fire-and-forget after submission.
+ */
+export async function recordMockTopicPractice(
+  results: { questionId: string; outcome?: string | null; timeMs?: number | null }[],
+): Promise<void> {
+  const attempted = results.filter((r) => r.outcome !== "UNATTEMPTED");
+  if (attempted.length === 0) return;
+
+  const questionIds = [...new Set(attempted.map((r) => r.questionId))];
+  const rows = await db
+    .select({ id: questions.id, topicId: questions.topicId })
+    .from(questions)
+    .where(inArray(questions.id, questionIds))
+    .all();
+
+  const topicByQuestion = new Map(rows.map((r) => [r.id, r.topicId]));
+
+  type Bucket = { correctCount: number; totalCount: number; durationMs: number };
+  const byTopic = new Map<string, Bucket>();
+  for (const result of attempted) {
+    const topicId = topicByQuestion.get(result.questionId);
+    if (!topicId) continue;
+    const bucket = byTopic.get(topicId) ?? { correctCount: 0, totalCount: 0, durationMs: 0 };
+    bucket.totalCount += 1;
+    if (result.outcome === "CORRECT") bucket.correctCount += 1;
+    bucket.durationMs += result.timeMs ?? 0;
+    byTopic.set(topicId, bucket);
+  }
+
+  for (const [topicId, bucket] of byTopic) {
+    await recordTopicPractice({
+      topicId,
+      correctCount: bucket.correctCount,
+      totalCount: bucket.totalCount,
+      durationMs: bucket.durationMs,
+    });
+  }
 }
 
 /** Rows waiting to be uploaded. */

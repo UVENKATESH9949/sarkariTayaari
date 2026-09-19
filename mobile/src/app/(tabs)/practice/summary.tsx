@@ -6,6 +6,8 @@ import { useSessionHistory } from "../../../practice/sessionHistory";
 import type { QuestionResult, SessionRecord } from "../../../practice/sessionHistory";
 import { useAppLanguage } from "../../../practice/appLanguage";
 import { getOrBuildSessionFeedback } from "../../../ai/sessionFeedback";
+import { accuracyBand, feedbackBadge, focusSubtitle, nextStepTiles } from "../../../ai/feedbackPresentation";
+import { AiCard, AiFocusRow, AiScoreSummary, AiTiles } from "../../../ui/AiCard";
 import { Button } from "../../../ui/Button";
 import { Card } from "../../../ui/Card";
 import { EmptyState } from "../../../ui/EmptyState";
@@ -25,6 +27,11 @@ import { describeYourAnswer, describeCorrectAnswer } from "../../../questionRend
  * `react-hooks/set-state-in-effect` cascading-render violation: comparing the stored id
  * against the current one (rather than clearing state synchronously) means a slow response
  * for a previously-viewed session can never flash onto a different one.
+ *
+ * Presented through the shared `AiCard` family so every AI surface in the app reads as one
+ * feature. The narrative is the only model-authored part; the ring, the focus topic and the
+ * counts all come from `session`, which this screen already renders correctly on its own, and
+ * the next-step tiles are fixed copy chosen by band (see `ai/feedbackPresentation.ts`).
  */
 function SessionFeedbackNarrative({
   session,
@@ -36,7 +43,7 @@ function SessionFeedbackNarrative({
   examCode: string | null;
 }) {
   const styles = useThemedStyles(buildStyles);
-  const { colors } = useTheme();
+  const router = useRouter();
   const t = useT();
   const { defaultLanguageCode } = useAppLanguage();
   const [loaded, setLoaded] = useState<{ sessionId: string; narrative: string | null } | null>(null);
@@ -61,14 +68,50 @@ function SessionFeedbackNarrative({
   const narrative = loaded && loaded.sessionId === session.id ? loaded.narrative : null;
   if (!narrative) return null;
 
+  const accuracyPercent = Math.round((session.correctCount / session.totalCount) * 100);
+  const incorrectCount = session.totalCount - session.correctCount;
+  const band = accuracyBand(accuracyPercent);
+
   return (
-    <View style={styles.feedbackBox}>
-      <View style={styles.feedbackHeader}>
-        <Ionicons name="sparkles" size={16} color={colors.brand.primary} />
-        <Text style={styles.feedbackLabel}>{t("summary.feedbackLabel")}</Text>
-      </View>
-      <Text style={styles.feedbackText}>{narrative}</Text>
-    </View>
+    <AiCard
+      title={t("summary.feedbackLabel")}
+      subtitle={t("summary.feedbackSubtitle")}
+      badge={feedbackBadge(band, t)}
+      footer={t("ai.footer")}
+      style={styles.aiCard}
+    >
+      <AiScoreSummary
+        percent={accuracyPercent}
+        ringCaption={t("ai.ringCaption")}
+        headline={t("summary.feedbackHeadline", { percent: accuracyPercent })}
+        body={narrative}
+      />
+      {/* The topic this session was scoped to — the screen's own data, not a diagnosis. Tappable
+          only when the route params carried a topic id, i.e. when there is somewhere real to go. */}
+      <AiFocusRow
+        label={t("ai.focusArea")}
+        title={session.topicName}
+        subtitle={focusSubtitle(band, t)}
+        icon="locate"
+        tone={band === "low" ? "warning" : "brand"}
+        onPress={
+          topicId
+            ? () =>
+                router.push({
+                  pathname: "/practice/levels",
+                  params: {
+                    examCode: examCode ?? session.examCode ?? "",
+                    examLabel: session.examLabel ?? "",
+                    subjectName: session.subjectName,
+                    topicId,
+                    topicName: session.topicName,
+                  },
+                })
+            : undefined
+        }
+      />
+      <AiTiles heading={t("ai.whatToFocusOn")} items={nextStepTiles(band, incorrectCount, t)} />
+    </AiCard>
   );
 }
 
@@ -381,33 +424,10 @@ const buildStyles = ({ colors, typography }: Theme) =>
       fontSize: 12,
       color: colors.text.muted,
     },
-    feedbackBox: {
+    /* Only placement — everything else about the card is owned by `ui/AiCard.tsx`. */
+    aiCard: {
       width: "100%",
       marginTop: spacing.lg,
-      backgroundColor: colors.surface,
-      borderRadius: radius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      padding: spacing.md,
-    },
-    feedbackHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.xs,
-      marginBottom: spacing.xs,
-    },
-    feedbackLabel: {
-      fontSize: 12,
-      fontWeight: "700",
-      color: colors.brand.primary,
-      textTransform: "uppercase",
-      letterSpacing: 0.4,
-    },
-    feedbackText: {
-      fontSize: 14,
-      lineHeight: 20,
-      color: colors.text.primary,
-      textAlign: "left",
     },
     statsRow: {
       flexDirection: "row",

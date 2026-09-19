@@ -21,7 +21,7 @@ import { getExamGuideHybrid } from "../data/examGuideData";
 import { getSyncedExams, getDifficultyLevels, getExamBadges, type ExamOption, type DifficultyLevel, type ExamBadge } from "../data/practiceData";
 import { useHybridMode } from "../data/hybridSource";
 import { loadSession } from "../db/authSession";
-import { followExam, unfollowExam, isExamFollowed } from "../db/followedExams";
+import { useActiveExam } from "../examsModule/activeExamContext";
 import { getMockAttemptSummary, type MockAttemptSummary } from "../db/mockTest";
 import { useSessionHistory } from "../practice/sessionHistory";
 import { daysUntil, formatDate, priorityTier } from "../examGuide/dates";
@@ -77,7 +77,11 @@ export default function ExamGuideScreen() {
   const [difficultyLevels, setDifficultyLevels] = useState<DifficultyLevel[]>([]);
   const [examBadges, setExamBadges] = useState<ExamBadge[]>([]);
   const [examOption, setExamOption] = useState<ExamOption | null>(null);
-  const [followed, setFollowed] = useState(false);
+  /* "Add to My Exams" (spec §5/§50) — derived from the app-wide provider rather than a
+     one-shot isExamFollowed() read on mount, so following here immediately updates Home and
+     My Exams, and a change made there is reflected here without a remount. */
+  const { myExams, addExam, removeExam } = useActiveExam();
+  const followed = myExams.some((e) => e.code === examCode);
   const [followPending, setFollowPending] = useState(false);
   const [mockSummary, setMockSummary] = useState<MockAttemptSummary | null>(null);
   const { sessions } = useSessionHistory();
@@ -139,13 +143,6 @@ export default function ExamGuideScreen() {
         // Silently degraded: the difficulty/badge pills just don't render.
       });
   }, [examCode, mode]);
-
-  // "Add to My Exams" (spec §5/§50) — reads/writes the same `followed_exams` rows
-  // my-exams.tsx does, so following here shows up there and vice versa.
-  useEffect(() => {
-    if (!examCode) return;
-    isExamFollowed(examCode).then(setFollowed);
-  }, [examCode]);
 
   useEffect(() => {
     if (!examCode) return;
@@ -230,13 +227,12 @@ export default function ExamGuideScreen() {
     setFollowPending(true);
     try {
       if (followed) {
-        await unfollowExam(examCode);
+        await removeExam(examCode);
         trackEvent("exam_unfollowed", { examCode });
       } else {
-        await followExam(examCode);
+        await addExam(examCode);
         trackEvent("exam_followed", { examCode });
       }
-      setFollowed(!followed);
     } finally {
       setFollowPending(false);
     }

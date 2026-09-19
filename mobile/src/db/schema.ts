@@ -617,8 +617,9 @@ export const authSession = sqliteTable("auth_session", {
   expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
 });
 
-// Which exam(s) the user is preparing for. Feeds Home's "Preparing for <exam>" card, My
-// Exams, and the Exams module's Follow star. Was local-only until the Exams module
+// Which exam(s) the user is preparing for — "My Exams". Feeds My Exams, the Exams module's
+// Follow star, and (through the active-exam resolver) Home's "Preparing for <exam>" card.
+// WHICH of these is active is not stored here: see app_preferences.active_exam_code. Was local-only until the Exams module
 // (spec's own real backend Follow sync decision) — is_deleted/is_synced/updated_at mirror
 // `bookmarks` exactly, added in the same migration, for the same last-write-wins reason.
 export const followedExams = sqliteTable(
@@ -642,6 +643,11 @@ export const practiceSessions = sqliteTable(
   {
     id: text("id").primaryKey(),
     completedAt: integer("completed_at", { mode: "timestamp_ms" }).notNull(),
+    // When the student started answering (migration 0029, TASK-2801). Nullable, and NULL means
+    // "not recorded" — every session written before this column has none. Recorded rather than
+    // derived from completedAt - durationMs, because durationMs is itself nullable on older rows
+    // and deriving would invent a start time for a session nobody timed.
+    startedAt: integer("started_at", { mode: "timestamp_ms" }),
     examLabel: text("exam_label").notNull(),
     // Nullable, same reasoning as durationMs below: sessions recorded before this column
     // existed (and the "All Government Exams" shortcut, which spans every exam at once)
@@ -899,6 +905,68 @@ export const appPreferences = sqliteTable("app_preferences", {
   zoomLevel: real("zoom_level"),
   /** Interface language code ("en" | "te"), NOT the quiz-content language. */
   uiLanguage: text("ui_language"),
+  /**
+   * The ONE exam currently driving Home and every exam-scoped screen, out of the several
+   * the user may follow in `followed_exams`.
+   *
+   * Deliberately here rather than as a flag on `followed_exams`: that table is synced and
+   * the server's contract has no active-exam concept, whereas this row is device-local and
+   * never synced. Being a single row also makes "exactly one active exam" structural.
+   *
+   * Nullable, and NOT a foreign key: it may legitimately name an exam that has since been
+   * unfollowed or not yet synced to this device. `activeExamContext` resolves it against
+   * the live followed list on every read and rewrites it when it no longer resolves.
+   */
+  activeExamCode: text("active_exam_code"),
+
+  /*
+   * The first-time onboarding profile (migration 0027).
+   *
+   * Here rather than in a table of its own for the same reason as `activeExamCode`: it is
+   * device-local, there is no server-side preparation profile to sync against, and a single
+   * row makes "one profile per device" structural. The language the student chooses during
+   * onboarding is deliberately NOT duplicated here — it is written to `uiLanguage` above.
+   */
+
+  /** What the student asked to be called. A personalisation name, not a verified identity. */
+  displayName: text("display_name"),
+  /** The exam chosen during onboarding. A record of the choice, not the active-exam pointer. */
+  primaryExamCode: text("primary_exam_code"),
+  /** An `exam_stages.id`, or null when the exam has no stages worth asking about. */
+  examStageId: text("exam_stage_id"),
+  /** Calendar year the student is aiming at; null means "not sure yet", a real answer. */
+  targetYear: integer("target_year"),
+  /** One of PREPARATION_LEVELS — validated on read against the shared enum. */
+  preparationLevel: text("preparation_level"),
+  /** One of DAILY_STUDY_TIMES — a band, never a number of minutes. */
+  dailyStudyTime: text("daily_study_time"),
+  /**
+   * ISO timestamp, written when onboarding is first decided to be owed. Survives the app being
+   * killed mid-flow, which is the only reason the decision is not re-derived every launch.
+   */
+  onboardingStartedAt: text("onboarding_started_at"),
+  /** ISO timestamp. The completion flag: set once, never cleared. */
+  onboardingCompletedAt: text("onboarding_completed_at"),
+});
+
+/**
+ * Which languages this student wants their QUESTIONS and explanations in (migration 0028).
+ *
+ * Separate from `app_preferences.ui_language`, and that separation is the point: the interface
+ * language and the content language are independent choices with different supported sets.
+ * Hindi has real question content and no UI catalogue; Telugu has both. Deriving one from the
+ * other would silently take a choice away from the student.
+ *
+ * One row per selected language, capped at two by validation (see
+ * `@sarkaritaiyaari/core/onboarding`) rather than by a constraint — SQLite cannot express
+ * "at most two rows", and a trigger would be a lot of machinery for a rule the one writer
+ * already enforces. Empty means "never chosen", which is every device that predates onboarding.
+ */
+export const contentLanguagePreferences = sqliteTable("content_language_preferences", {
+  /** A `languages.code`. Not a foreign key — see the migration for why. */
+  languageCode: text("language_code").primaryKey(),
+  /** The order chosen. The first is what screens default to, not a fluency ranking. */
+  displayOrder: integer("display_order").notNull().default(0),
 });
 
 /**

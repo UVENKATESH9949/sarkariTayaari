@@ -4,6 +4,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { FlatList, Pressable, Text, View, StyleSheet } from "react-native";
 import { getMockTestAttempt, type MockTestAttemptRecord } from "../../../db/mockTest";
 import { getOrBuildMockFeedback } from "../../../ai/sessionFeedback";
+import { accuracyBand, feedbackBadge, nextStepTiles } from "../../../ai/feedbackPresentation";
+import { AiCard, AiScoreSummary, AiTiles } from "../../../ui/AiCard";
 import { useAppLanguage } from "../../../practice/appLanguage";
 import { toSubjectMeta } from "../../../constants/subjects";
 import { getAllSubjects, type SubjectMetaRow } from "../../../db/subjectMeta";
@@ -157,7 +159,6 @@ function QuestionResultCard({
  */
 function MockFeedbackNarrative({ attempt }: { attempt: MockTestAttemptRecord }) {
   const styles = useThemedStyles(buildStyles);
-  const { colors } = useTheme();
   const t = useT();
   const { defaultLanguageCode } = useAppLanguage();
   const [loaded, setLoaded] = useState<{ attemptId: string; narrative: string | null } | null>(null);
@@ -182,14 +183,31 @@ function MockFeedbackNarrative({ attempt }: { attempt: MockTestAttemptRecord }) 
   const narrative = loaded && loaded.attemptId === attempt.id ? loaded.narrative : null;
   if (!narrative) return null;
 
+  // Attempted, not the size of the paper — the same denominator `getOrBuildMockFeedback` sends
+  // the model, so the ring and the sentence beside it can never disagree. Part-finishing a mock
+  // is normal; scoring correct-over-paper-size was a real bug once (see that function's note).
+  const attemptedCount = attempt.correctCount + attempt.wrongCount;
+  const accuracyPercent = attemptedCount === 0 ? 0 : Math.round((attempt.correctCount / attemptedCount) * 100);
+  const band = accuracyBand(accuracyPercent);
+
   return (
-    <View style={styles.feedbackBox}>
-      <View style={styles.feedbackHeader}>
-        <Ionicons name="sparkles" size={16} color={colors.brand.primary} />
-        <Text style={styles.feedbackLabel}>{t("mock.feedbackLabel")}</Text>
-      </View>
-      <Text style={styles.feedbackText}>{narrative}</Text>
-    </View>
+    <AiCard
+      title={t("mock.feedbackLabel")}
+      subtitle={t("mock.feedbackSubtitle")}
+      badge={feedbackBadge(band, t)}
+      footer={t("ai.footer")}
+      style={styles.aiCard}
+    >
+      <AiScoreSummary
+        percent={accuracyPercent}
+        ringCaption={t("ai.ringCaption")}
+        headline={t("mock.feedbackHeadline", { percent: accuracyPercent })}
+        body={narrative}
+      />
+      {/* No focus row here, deliberately: a mock attempt's stored results carry a subject but no
+          topic id, so there is no topic this card could name without inventing one. */}
+      <AiTiles heading={t("ai.whatToFocusOn")} items={nextStepTiles(band, attempt.wrongCount, t)} />
+    </AiCard>
   );
 }
 
@@ -386,33 +404,10 @@ const buildStyles = ({ colors, typography }: Theme) =>
       color: colors.text.muted,
       marginTop: 2,
     },
-    feedbackBox: {
+    /* Only placement — everything else about the card is owned by `ui/AiCard.tsx`. */
+    aiCard: {
       width: "100%",
-      backgroundColor: colors.surface,
-      borderRadius: 14,
-      borderWidth: 1,
-      borderColor: colors.border,
-      padding: 14,
-      marginBottom: 16,
-    },
-    feedbackHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      marginBottom: 6,
-    },
-    feedbackLabel: {
-      fontSize: 12,
-      fontWeight: "700",
-      color: colors.brand.primary,
-      textTransform: "uppercase",
-      letterSpacing: 0.4,
-    },
-    feedbackText: {
-      fontSize: 14,
-      lineHeight: 20,
-      color: colors.text.primary,
-      textAlign: "left",
+      marginBottom: spacing.base,
     },
     timeRow: {
       flexDirection: "row",

@@ -3,6 +3,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
 import { insertMockTestAttempt } from "../../../db/mockTest";
+import { newMockAttemptId } from "../../../db/ids";
+import { recordMockTopicPractice } from "../../../db/topicProgressStore";
 import {
   buildMockTestQuestions,
   getPaperById,
@@ -369,7 +371,7 @@ export default function MockTestTaking() {
       const totalMarksScored = correctCount * marksCorrect - wrongCount * marksWrong;
       const durationSeconds = totalDurationMinutes(paper) * 60;
       const timeTakenSeconds = auto ? durationSeconds : durationSeconds - remainingSeconds;
-      const attemptId = `mocktest-${Date.now()}`;
+      const attemptId = newMockAttemptId();
 
       try {
         await insertMockTestAttempt({
@@ -396,6 +398,20 @@ export default function MockTestTaking() {
         AppAlert.alert(t("mock.saveFailed"), t("mock.saveFailedBody"), undefined, "error");
         return;
       }
+
+      /*
+       * TASK-2801 — fold this attempt into per-topic mastery, which until now only practice and
+       * diagnostic sessions did. A student could sit twenty mocks and have topic_progress show
+       * nothing for the topics they were tested on, while Weakness Radar (which reads both
+       * sources) disagreed.
+       *
+       * After the attempt is safely stored, and fire-and-forget: a failure here costs a mastery
+       * update, not the attempt itself. Same placement and reasoning as practice/quiz.tsx's own
+       * recordTopicPractice call.
+       */
+      recordMockTopicPractice(results).catch((err) =>
+        console.warn("Failed to record mock topic mastery", err),
+      );
 
       endSession();
       router.replace({ pathname: "/mock-test/result", params: { attemptId } });

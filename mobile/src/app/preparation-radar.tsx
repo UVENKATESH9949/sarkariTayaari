@@ -5,10 +5,11 @@ import { RefreshControl, ScrollView, Text, View, StyleSheet } from "react-native
 import { getOrBuildProfileSummary } from "../ai/profileSummary";
 import { getRadar } from "../data/weaknessRadarData";
 import { useAppLanguage } from "../practice/appLanguage";
-import { getFollowedExam } from "../db/followedExams";
+import { useActiveExam } from "../examsModule/activeExamContext";
 import type { RadarResult, RadarTopic } from "@sarkaritaiyaari/core/intelligence";
 import { useAuth } from "../practice/authContext";
 import { useSyncStatus } from "../sync/SyncContext";
+import { AiCard, AiFocusRow, AiScoreSummary } from "../ui/AiCard";
 import { Card } from "../ui/Card";
 import { ContextualLoading } from "../ui/ContextualLoading";
 import { EmptyState } from "../ui/EmptyState";
@@ -56,24 +57,19 @@ export default function PreparationRadarScreen() {
    * Keyed loaded-state again, for the same reason as the radar below: a synchronous setState
    * at the top of an effect body is what `react-hooks/set-state-in-effect` rejects.
    */
-  const [resolvedExam, setResolvedExam] = useState<{ code: string; name: string } | null | undefined>(
-    params.examCode ? { code: params.examCode, name: params.examName ?? "" } : undefined,
-  );
-
-  useEffect(() => {
-    if (params.examCode) return;
-    let cancelled = false;
-    getFollowedExam()
-      .then((followed) => {
-        if (!cancelled) setResolvedExam(followed ? { code: followed.code, name: followed.name } : null);
-      })
-      .catch(() => {
-        if (!cancelled) setResolvedExam(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [params.examCode]);
+  /*
+   * Falls back to the ACTIVE exam, not to "some followed exam". It used to call
+   * getFollowedExam(), whose query had no ORDER BY — with several exams followed, which one
+   * the radar scored against was effectively arbitrary and could disagree with Home.
+   */
+  const { activeExam, loading: activeExamLoading } = useActiveExam();
+  const resolvedExam = params.examCode
+    ? { code: params.examCode, name: params.examName ?? "" }
+    : activeExamLoading
+      ? undefined
+      : activeExam
+        ? { code: activeExam.code, name: activeExam.name }
+        : null;
 
   const examCode = resolvedExam?.code;
   const examName = resolvedExam?.name ?? params.examName;
@@ -177,7 +173,7 @@ export default function PreparationRadarScreen() {
         ) : (
           <>
             <OverviewCard radar={radar} result={result!} styles={styles} colors={colors} />
-            <ProfileSummaryNarrative radar={radar} examCode={examCode!} styles={styles} colors={colors} />
+            <ProfileSummaryNarrative radar={radar} examCode={examCode!} styles={styles} onOpenTopic={openTopic} />
 
             {radar.overview.topicsWithEvidence === 0 ? (
               /*
@@ -242,12 +238,13 @@ function ProfileSummaryNarrative({
   radar,
   examCode,
   styles,
-  colors,
+  onOpenTopic,
 }: {
   radar: NonNullable<RadarResult["radar"]>;
   examCode: string;
   styles: ReturnType<typeof buildStyles>;
-  colors: Theme["colors"];
+  /** Opens the same per-topic detail screen the section lists below do. */
+  onOpenTopic: (topic: RadarTopic) => void;
 }) {
   const [loaded, setLoaded] = useState<{ radar: NonNullable<RadarResult["radar"]>; narrative: string | null } | null>(
     null,
@@ -274,14 +271,46 @@ function ProfileSummaryNarrative({
   const narrative = loaded && loaded.radar === radar ? loaded.narrative : null;
   if (!narrative) return null;
 
+  const o = radar.overview;
+  // Coverage, not a preparation score. §18 forbids an aggregate score over topics with wildly
+  // differing evidence, and this ring deliberately answers a question the data can answer:
+  // how much of the syllabus has been practised at all.
+  const coveragePercent =
+    o.topicsInSyllabus === 0 ? 0 : Math.round((o.topicsWithEvidence / o.topicsInSyllabus) * 100);
+  // The radar payload is already sorted by intervention value within each state, so the first
+  // match is the one the sections below also list first — never a second opinion.
+  const focus =
+    radar.topics.find((topic) => topic.state === "NEEDS_ATTENTION") ??
+    radar.topics.find((topic) => topic.state === "NEEDS_REVISION") ??
+    null;
+  const focusVisual = focus ? stateVisual(focus.state) : null;
+
   return (
-    <View style={styles.summaryBox}>
-      <View style={styles.summaryHeader}>
-        <Ionicons name="sparkles" size={16} color={colors.brand.primary} />
-        <Text style={styles.summaryLabel}>AI SUMMARY</Text>
-      </View>
-      <Text style={styles.summaryText}>{narrative}</Text>
-    </View>
+    <AiCard
+      title="AI Summary"
+      subtitle="Your preparation profile"
+      badge={{ label: OVERVIEW_COPY[o.status].title, icon: "pulse", tone: "brand" }}
+      style={styles.aiCard}
+    >
+      <AiScoreSummary
+        percent={coveragePercent}
+        ringCaption="Practised"
+        headline={`${o.topicsWithEvidence} of ${o.topicsInSyllabus} topics practised`}
+        body={narrative}
+      />
+      {/* Only when the radar actually has a weak topic to name. A student with nothing in either
+          state gets the narrative alone rather than an invented "focus area". */}
+      {focus && focusVisual ? (
+        <AiFocusRow
+          label={focusVisual.label}
+          title={focus.topicName}
+          subtitle={focus.subjectName}
+          icon={focusVisual.icon}
+          tone={focus.state === "NEEDS_ATTENTION" ? "danger" : "warning"}
+          onPress={() => onOpenTopic(focus)}
+        />
+      ) : null}
+    </AiCard>
   );
 }
 
@@ -492,30 +521,9 @@ function buildStyles({ colors }: Theme) {
       marginTop: spacing.xs,
       fontStyle: "italic",
     },
-    summaryBox: {
-      backgroundColor: colors.surface,
-      borderRadius: radius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      padding: spacing.md,
+    /* Only placement — everything else about the card is owned by `ui/AiCard.tsx`. */
+    aiCard: {
       marginBottom: spacing.lg,
-    },
-    summaryHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.xs,
-      marginBottom: spacing.xs,
-    },
-    summaryLabel: {
-      fontSize: 12,
-      fontWeight: "700",
-      color: colors.brand.primary,
-      letterSpacing: 0.4,
-    },
-    summaryText: {
-      fontSize: 14,
-      lineHeight: 20,
-      color: colors.text.primary,
     },
     section: {
       marginBottom: spacing.lg,

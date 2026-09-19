@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db } from "./client";
-import { exams, followedExams } from "./schema";
+import { appPreferences, exams, followedExams } from "./schema";
 
 export type FollowedExam = {
   code: string;
@@ -8,13 +8,17 @@ export type FollowedExam = {
 };
 
 /**
- * Returns the exam the user is currently preparing for, or null if none is followed yet.
+ * Whether ANY exam is followed, returning one arbitrarily.
  *
- * The table has always been keyed to support more than one followed exam (its primary
- * key is `examCode`, not a singleton row) — only this query narrowed it to one, for
- * Home's single exam card. {@link getFollowedExams} (Exam Guide spec §29 "My Exams") is
- * the plural counterpart added alongside it; this one is unchanged so every existing
- * caller (Home, PreparationPlanCard) keeps its current "one primary exam" behaviour.
+ * **Not the active exam, and not a substitute for it.** This query has no `ORDER BY`, so with
+ * several exams followed it returns whichever row SQLite hands back first — which is exactly
+ * how the app used to end up showing the wrong exam on Home. The active exam is a stored,
+ * resolved choice and lives in `examsModule/activeExamContext.tsx`; every screen reads it from
+ * there.
+ *
+ * The one legitimate remaining caller is {@link ensureExamFollowed}, which only needs the
+ * yes/no. Anything that needs to name an exam wants `useActiveExam()` or
+ * {@link getFollowedExams}.
  */
 export async function getFollowedExam(): Promise<FollowedExam | null> {
   const row = await db
@@ -96,18 +100,49 @@ export async function pruneSyncedFollowedExamTombstones(): Promise<void> {
 }
 
 /**
- * If the user isn't following any exam yet, auto-follows the first one
- * (lowest display order) from the locally-synced exam list. There's no
- * "choose your exam" onboarding screen yet — with only one real exam
- * (SSC_CGL) available today, following it automatically after the first
- * sync is a reasonable stand-in until that UI exists.
+ * If the user isn't following any exam yet, auto-follows the first one (lowest display order)
+ * from the locally-synced exam list, guaranteeing the app always has something to prepare for.
+ *
+ * Since first-time onboarding shipped this is the *fallback*, not the primary path — a new
+ * student chooses their own exam, and this covers the cases onboarding cannot: an install that
+ * predates onboarding, and a student who onboarded offline with no catalogue to choose from.
+ * It deliberately stands down while onboarding is in progress; see the check below.
+ *
+ * It is also what makes "no exams at all" a transient state rather than a supported one: a user
+ * who unfollows everything gets the first exam back on the next launch, and the active-exam
+ * resolver then promotes it. Worth knowing before treating an empty My Exams as a lasting
+ * condition to design for.
+ *
+ * Returns whether it actually followed something, so the caller can announce the change.
+ * Found on a device, not by review: this write happens outside any sync, so without a signal
+ * the active-exam provider had already read an empty followed list and never re-read it -- the
+ * app sat with an exam followed, no active exam, and a blank "Preparing for" card until
+ * something else happened to bump `syncVersion`.
  */
-export async function ensureExamFollowed(): Promise<void> {
+export async function ensureExamFollowed(): Promise<boolean> {
   const alreadyFollowed = await getFollowedExam();
-  if (alreadyFollowed) return;
+  if (alreadyFollowed) return false;
+
+  // Never pick for someone who is, at this very moment, being asked to pick.
+  //
+  // This is a real race, not a theoretical one: onboarding renders while the first sync runs
+  // behind it, and this function is called the instant that sync finishes. Without this check
+  // a student still on the exam step would silently acquire whichever exam happens to sort
+  // first, and would end up following two.
+  const stamps = await db
+    .select({
+      startedAt: appPreferences.onboardingStartedAt,
+      completedAt: appPreferences.onboardingCompletedAt,
+    })
+    .from(appPreferences)
+    .where(eq(appPreferences.key, "current"))
+    .get();
+  if (stamps?.startedAt && !stamps.completedAt) return false;
 
   const firstExam = await db.select().from(exams).orderBy(asc(exams.displayOrder)).get();
   if (firstExam) {
     await followExam(firstExam.code);
+    return true;
   }
+  return false;
 }

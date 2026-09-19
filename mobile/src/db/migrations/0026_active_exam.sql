@@ -1,0 +1,15 @@
+-- Multiple My Exams + one Active Exam. Hand-written: this is a device preference, so it
+-- has no backend migration to mirror.
+--
+-- Why app_preferences and not a column on followed_exams: followed_exams is a SYNCED
+-- table (uploadPendingFollowedExams/restoreFollowedExamsFromServer), and the server's
+-- contract carries no notion of an active exam, so an is_active column there would be
+-- local-only data riding on rows the server also writes. app_preferences is already the
+-- device-local, never-synced, never-cleared-on-sign-out row, and being a SINGLE row it
+-- makes "exactly one active exam" true by construction rather than by a constraint
+-- nothing enforces.
+--
+-- Nullable with no backfill: NULL is the correct value for every existing device. It
+-- means "not chosen yet", and the resolver treats it identically to "chosen but no
+-- longer followed" -- both fall back to the first followed exam.
+ALTER TABLE `app_preferences` ADD `active_exam_code` text;

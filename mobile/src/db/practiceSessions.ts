@@ -32,6 +32,12 @@ export type QuestionResult = {
 export type SessionRecord = {
   id: string;
   completedAt: number;
+  /**
+   * When the student started answering (migration 0029, TASK-2801). Null for sessions recorded
+   * before this field existed, and for any session restored from a server that never held one.
+   * Null means "not recorded", never the epoch.
+   */
+  startedAt: number | null;
   examLabel: string;
   /** Null for sessions recorded before this field existed, and for the "All Government
    * Exams" shortcut, which spans every exam at once. */
@@ -126,6 +132,7 @@ export async function loadSessions(): Promise<SessionRecord[]> {
   return sessionRows.map((row) => ({
     id: row.id,
     completedAt: row.completedAt.getTime(),
+    startedAt: row.startedAt ? row.startedAt.getTime() : null,
     examLabel: row.examLabel,
     examCode: row.examCode,
     subjectName: row.subjectName,
@@ -147,6 +154,7 @@ export async function insertSession(session: SessionRecord): Promise<void> {
     await tx.insert(practiceSessions).values({
       id: session.id,
       completedAt: new Date(session.completedAt),
+      startedAt: session.startedAt === null ? null : new Date(session.startedAt),
       examLabel: session.examLabel,
       examCode: session.examCode,
       subjectName: session.subjectName,

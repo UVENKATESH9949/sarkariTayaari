@@ -183,6 +183,34 @@
       "when": 1788345606036,
       "tag": "0025_mock_attempt_feedback",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1788345606037,
+      "tag": "0026_active_exam",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "6",
+      "when": 1788345606038,
+      "tag": "0027_onboarding_profile",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "6",
+      "when": 1788345606039,
+      "tag": "0028_content_languages",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1788345606040,
+      "tag": "0029_practice_session_started_at",
+      "breakpoints": true
     }
   ]
 }

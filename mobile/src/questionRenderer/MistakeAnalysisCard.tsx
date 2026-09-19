@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { spacing, radius } from "../ui/theme";
-import { useTheme, useThemedStyles, type Theme } from "../ui/ThemeContext";
+import { StyleSheet } from "react-native";
+import { AiAskButton, AiCard, AiScoreSummary, AiTipStrip } from "../ui/AiCard";
+import { spacing } from "../ui/theme";
+import { useThemedStyles, type Theme } from "../ui/ThemeContext";
 import {
   getOrBuildMistakeAnalysis,
   type MistakeAnalysisInput,
@@ -42,7 +42,6 @@ type State =
 
 export function MistakeAnalysisCard({ input }: { input: MistakeAnalysisInput }) {
   const styles = useThemedStyles(buildStyles);
-  const { colors } = useTheme();
   const [state, setState] = useState<State>({ phase: "idle" });
 
   async function handlePress() {
@@ -61,109 +60,35 @@ export function MistakeAnalysisCard({ input }: { input: MistakeAnalysisInput }) 
 
   if (state.phase === "idle" || state.phase === "loading") {
     return (
-      <Pressable
-        style={styles.askButton}
+      <AiAskButton
+        label={state.phase === "loading" ? "Thinking..." : "Why did I get this wrong?"}
+        loading={state.phase === "loading"}
         onPress={handlePress}
-        disabled={state.phase === "loading"}
-        accessibilityRole="button"
-      >
-        {state.phase === "loading" ? (
-          <ActivityIndicator size="small" color={colors.brand.primary} />
-        ) : (
-          <Ionicons name="sparkles" size={16} color={colors.brand.primary} />
-        )}
-        <Text style={styles.askButtonText}>
-          {state.phase === "loading" ? "Thinking..." : "Why did I get this wrong?"}
-        </Text>
-      </Pressable>
+      />
     );
   }
 
   const { analysis } = state;
   return (
-    <View style={styles.box}>
-      <View style={styles.header}>
-        <Ionicons name="sparkles" size={16} color={colors.brand.primary} />
-        <Text style={styles.label}>Mistake analysis</Text>
-      </View>
-      <View style={styles.typePill}>
-        <Text style={styles.typePillText}>{MISTAKE_LABELS[analysis.mistakeType]}</Text>
-      </View>
-      <Text style={styles.text}>{analysis.explanation}</Text>
-      <Text style={styles.action}>
-        <Text style={styles.actionLabel}>{"\u{1F3AF} "}</Text>
-        {analysis.suggestedAction}
-      </Text>
-    </View>
+    <AiCard
+      title="Mistake analysis"
+      subtitle="Why this one went wrong"
+      /* The taxonomy value the model returned, in plain words — a real classification, not a
+         mood. Warning rather than danger: the point is what to fix, not that it was wrong. */
+      badge={{ label: MISTAKE_LABELS[analysis.mistakeType], icon: "alert-circle", tone: "warning" }}
+      style={styles.card}
+    >
+      <AiScoreSummary body={analysis.explanation} />
+      <AiTipStrip label="What to do next" text={analysis.suggestedAction} icon="flag" tone="success" />
+    </AiCard>
   );
 }
 
-function buildStyles(theme: Theme) {
-  const { colors } = theme;
+function buildStyles(_theme: Theme) {
   return StyleSheet.create({
-    askButton: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: spacing.xs,
+    /* Only placement — everything else about the card is owned by `ui/AiCard.tsx`. */
+    card: {
       marginTop: spacing.sm,
-      paddingVertical: spacing.sm,
-      paddingHorizontal: spacing.md,
-      borderRadius: radius.md,
-      borderWidth: 1,
-      borderColor: colors.borderAccent,
-      backgroundColor: colors.surface,
-    },
-    askButtonText: {
-      fontSize: 13,
-      fontWeight: "600",
-      color: colors.brand.primary,
-    },
-    box: {
-      backgroundColor: colors.surface,
-      borderRadius: radius.md,
-      borderWidth: 1,
-      borderColor: colors.borderAccent,
-      padding: spacing.md,
-      marginTop: spacing.sm,
-      gap: spacing.xs,
-    },
-    header: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.xs,
-    },
-    label: {
-      fontSize: 13,
-      fontWeight: "700",
-      color: colors.brand.primary,
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
-    },
-    typePill: {
-      alignSelf: "flex-start",
-      paddingVertical: 2,
-      paddingHorizontal: spacing.sm,
-      borderRadius: radius.sm,
-      backgroundColor: colors.surfaceElevated2,
-    },
-    typePillText: {
-      fontSize: 12,
-      fontWeight: "600",
-      color: colors.text.secondary,
-    },
-    text: {
-      fontSize: 14,
-      color: colors.text.primary,
-      lineHeight: 20,
-    },
-    action: {
-      fontSize: 13,
-      color: colors.text.secondary,
-      lineHeight: 18,
-    },
-    actionLabel: {
-      fontStyle: "normal",
     },
   });
 }

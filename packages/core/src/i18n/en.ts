@@ -72,6 +72,9 @@ export const en = {
 
   home: {
     welcome: "Welcome back 👋",
+    greetingMorning: "Good morning, {name} 👋",
+    greetingAfternoon: "Good afternoon, {name} 👋",
+    greetingEvening: "Good evening, {name} 👋",
     preparingFor: "Preparing for",
     continuePractice: "Continue Practice",
     readiness: "Your readiness",
@@ -178,6 +181,8 @@ export const en = {
     notFoundBody: "This session may have been cleared from your history.",
     earlyFinish: "Finished early · {answered} of {available} answered, {skipped} left",
     feedbackLabel: "AI Feedback",
+    feedbackSubtitle: "Your practice session summary",
+    feedbackHeadline: "You scored {percent}% in this practice session.",
   },
 
   history: {
@@ -227,6 +232,8 @@ export const en = {
     backToMock: "Back to Mock Test",
     loadingResult: "Preparing your performance report...",
     feedbackLabel: "AI Feedback",
+    feedbackSubtitle: "Your mock test performance",
+    feedbackHeadline: "You scored {percent}% in this mock test.",
     searchExams: "Search exams...",
     fullTestOne: "full test",
     fullTestOther: "full tests",
@@ -351,10 +358,156 @@ export const en = {
       "You are moving to another module. Your current test state may be lost if you leave now.",
   },
 
+  /**
+   * My Exams / Active Exam. The exam-switching transition is app-wide, so it is translated;
+   * the My Exams and Exams screens themselves remain English-only by the earlier decision
+   * every screen added since the Exam Guide work follows.
+   */
+  exams: {
+    active: "Active",
+    changeExam: "Change exam",
+    selectActiveExam: "Select active exam",
+    switchingTitle: "Preparing your dashboard",
+    switchingTo: "Switching to {exam}...",
+  },
+
+  /**
+   * Chrome for the shared AI cards (`ui/AiCard.tsx`). Every string here is fixed UI copy
+   * chosen by a rule from numbers already on screen — the model's own words are never
+   * translated here, they arrive in the student's content language from the server.
+   */
+  ai: {
+    ringCaption: "Correct",
+    focusArea: "Focus area",
+    focusSubtitleLow: "This topic needs more attention.",
+    focusSubtitleMid: "Keep practising to lock this in.",
+    focusSubtitleHigh: "You are on top of this topic.",
+    whatToFocusOn: "What to focus on",
+    footer: "Small steps = big progress",
+    badgeKeepGoing: "Keep going",
+    badgeGoodPace: "Good pace",
+    badgeStrong: "Strong",
+    tilePracticeTitle: "Practice more",
+    tilePracticeBody: "Solve more questions to build confidence.",
+    tileReviewTitle: "Review concepts",
+    tileReviewBody: "Strengthen the basics and key formulas.",
+    tileAccuracyTitle: "Build accuracy",
+    tileAccuracyBody: "Slow down and re-read each question.",
+    tileSpeedTitle: "Build speed",
+    tileSpeedBody: "Keep the accuracy, shave the time.",
+    tileStretchTitle: "Go harder",
+    tileStretchBody: "Move up a difficulty level.",
+    tileRevisitTitle: "Revisit mistakes",
+    tileRevisitBody: "Work through the wrong answers below.",
+    explanationSubtitle: "Why this answer is right",
+    whyOthersWrong: "Why the others are wrong",
+    examTip: "Exam tip",
+  },
+
   languagePicker: {
     search: "Search languages...",
     selectLanguage: "Select language",
     quizLanguageTitle: "Default quiz language",
+  },
+
+  /**
+   * First-time onboarding (§3-§15 of the onboarding brief).
+   *
+   * The preparation-level and daily-study-time options are keyed by their stored enum value,
+   * so re-wording a label here can never change what is saved in anybody's profile — the
+   * screens look up `onboarding.level.<VALUE>.title`, never the other way round.
+   */
+  onboarding: {
+    stepOf: "Step {current} of {total}",
+    continue: "Continue",
+    back: "Back",
+    finish: "Start preparing",
+    exitTitle: "Leave setup?",
+    exitMessage: "We need a few quick answers before your dashboard can be personalised. Nothing you've entered will be lost.",
+    exitStay: "Keep going",
+    exitLeave: "Leave",
+
+    name: {
+      title: "What should we call you?",
+      hint: "This is used to personalise your SarkariTaiyaari experience.",
+      label: "Your name",
+      placeholder: "e.g. Venkatesh",
+      errorEmpty: "Please enter a name so we know what to call you.",
+      errorTooLong: "That's a little long — please keep it under {max} characters.",
+    },
+
+    language: {
+      title: "Choose your language",
+      hint: "This sets the language of the app. You can change it any time in Settings.",
+      note: "These are the languages the app is fully translated into today. Question content is available separately in English and Hindi.",
+    },
+
+    contentLanguages: {
+      title: "Which languages do you want to study in?",
+      hint: "Choose up to {max} languages for your questions and study content.",
+      limit: "You can select up to {max} languages. Deselect one to choose another.",
+      note: "This is separate from the app language you just picked — you can read the app in one language and study in another.",
+      offlineTitle: "We couldn't load the languages",
+      offlineHint: "You're offline, so the language list hasn't arrived yet. Continue — you can set this in Settings once you're connected.",
+    },
+
+    exam: {
+      title: "What are you preparing for?",
+      hint: "We'll set up your dashboard around this exam. You can follow more exams later.",
+      loading: "Loading exams...",
+      offlineTitle: "We couldn't load the exam list",
+      offlineHint: "You're offline, so there's nothing to choose from yet. Continue — you can pick your exam from the Exams tab as soon as you're connected.",
+      questionCount: "{count} questions",
+      continueWithout: "Continue without choosing",
+    },
+
+    plan: {
+      title: "When are you targeting?",
+      hint: "This helps us pace what we suggest. Both answers are easy to change later.",
+      stageLabel: "Which stage are you preparing for?",
+      stageAny: "All stages / not sure",
+      yearLabel: "Which year are you targeting?",
+      yearUnsure: "Not sure yet",
+    },
+
+    level: {
+      title: "Where are you in your preparation?",
+      hint: "There's no wrong answer — it just changes where we suggest you start.",
+      JUST_STARTING: { title: "Just starting", description: "I'm starting my preparation." },
+      LEARNING: { title: "Learning concepts", description: "I'm currently learning concepts." },
+      PRACTICING: { title: "Practising questions", description: "I'm mainly practising questions." },
+      REVISING: { title: "Revising", description: "I'm revising what I've already studied." },
+      EXAM_READY: { title: "Exam ready", description: "I'm doing final preparation and mock tests." },
+    },
+
+    time: {
+      title: "How much time can you study each day?",
+      hint: "An honest answer is more useful than an ambitious one.",
+      UNDER_1H: "Less than 1 hour",
+      ONE_TO_TWO: "1-2 hours",
+      TWO_TO_FOUR: "2-4 hours",
+      FOUR_TO_SIX: "4-6 hours",
+      SIX_PLUS: "6+ hours",
+    },
+
+    /**
+     * The post-onboarding preparation screen. Every line here corresponds to a real step that
+     * actually runs — nothing is listed to make the wait look busier than it is.
+     */
+    preparing: {
+      title: "Preparing your SarkariTaiyaari experience",
+      subtitle: "Setting things up around what you told us.",
+      savingProfile: "Saving your preferences",
+      settingUpExam: "Setting up your exam",
+      waitingForContent: "Preparing your subjects and practice content",
+      buildingDashboard: "Preparing your dashboard",
+    },
+
+    welcome: {
+      greeting: "Welcome to SarkariTaiyaari, {name}! 👋",
+      line1: "Your preparation journey starts here.",
+      line2: "Let's get you closer to your goal.",
+    },
   },
 } as const;
 

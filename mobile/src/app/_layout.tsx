@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { Text, View } from "react-native";
@@ -8,7 +7,7 @@ import { configureApi } from "@sarkaritaiyaari/core/api";
 import { API_BASE_URL } from "../api/config";
 import { db } from "../db/client";
 import migrations from "../db/migrations/migrations";
-import { SyncProvider, useSyncStatus } from "../sync/SyncContext";
+import { SyncProvider } from "../sync/SyncContext";
 import { NetworkStatusProvider } from "../sync/NetworkStatusContext";
 import { NetworkStatusToast } from "../sync/NetworkStatusToast";
 import { SessionHistoryProvider } from "../practice/sessionHistory";
@@ -16,8 +15,11 @@ import { BookmarksProvider } from "../practice/bookmarks";
 import { AppLanguageProvider } from "../practice/appLanguage";
 import { AuthProvider } from "../practice/authContext";
 import { ActiveSessionProvider } from "../practice/activeSessionContext";
+import { ActiveExamProvider } from "../examsModule/activeExamContext";
+import { ExamSwitchOverlay } from "../examsModule/ExamSwitchOverlay";
+import { OnboardingProvider } from "../onboarding/OnboardingContext";
+import { AppStartGate } from "../onboarding/AppStartGate";
 import { I18nProvider, useT } from "../i18n/I18nContext";
-import { PreparingApp } from "../ui/PreparingApp";
 import { AppDialogHost } from "../ui/AppDialog";
 import { stackScreenOptions } from "../ui/navigation";
 import { ThemeProvider, useTheme } from "../ui/ThemeContext";
@@ -78,13 +80,30 @@ function RootLayout() {
               <SessionHistoryProvider>
                 <BookmarksProvider>
                   <AppLanguageProvider>
-                    {/* Innermost: only the tab bar and the quiz/test screens need this, and
-                        neither depends on sync/auth/session-history state. */}
-                    <ActiveSessionProvider>
-                      <FirstLaunchGate>
-                        <RootNavigator />
-                      </FirstLaunchGate>
-                    </ActiveSessionProvider>
+                    {/* Below SyncProvider and AuthProvider because it reacts to both: a sync
+                        can auto-follow an exam and signing in can restore follows made on
+                        another device, and neither goes through this provider's mutators. */}
+                    <ActiveExamProvider>
+                      {/* Below ActiveExamProvider because finishing onboarding follows and
+                          activates the exam it just asked for, through that provider's own
+                          operation rather than a second copy of it. */}
+                      <OnboardingProvider>
+                        {/* Innermost: only the tab bar and the quiz/test screens need this, and
+                            neither depends on sync/auth/session-history state. */}
+                        <ActiveSessionProvider>
+                          <AppStartGate>
+                            <RootNavigator />
+                          </AppStartGate>
+                        </ActiveSessionProvider>
+                      </OnboardingProvider>
+                      {/* Beside the dialog host in spirit: mounted once, at the root, so the
+                          switching transition covers the tab bar as well as the screen. */}
+                      <ExamSwitchOverlay />
+                      {/* Above the gate, not inside the navigator: onboarding's "leave setup?"
+                          confirmation renders before any screen exists, and AppAlert routes
+                          through whichever host is mounted. There is still exactly one. */}
+                      <AppDialogHost />
+                    </ActiveExamProvider>
                   </AppLanguageProvider>
                 </BookmarksProvider>
               </SessionHistoryProvider>
@@ -94,15 +113,6 @@ function RootLayout() {
       </I18nProvider>
     </ThemeProvider>
   );
-}
-
-/** Shows the first-launch preparation screen instead of the app until a genuinely first-ever sync reaches a usable state — see SyncContext's firstLaunchSyncActive. */
-function FirstLaunchGate({ children }: { children: ReactNode }) {
-  const { firstLaunchSyncActive } = useSyncStatus();
-  if (firstLaunchSyncActive) {
-    return <PreparingApp />;
-  }
-  return <>{children}</>;
 }
 
 function RootNavigator() {
@@ -131,7 +141,6 @@ function RootNavigator() {
         <Stack.Screen name="diagnostic-result" options={{ title: "Diagnostic Results", headerBackVisible: false }} />
       </Stack>
       <NetworkStatusToast />
-      <AppDialogHost />
     </>
   );
 }

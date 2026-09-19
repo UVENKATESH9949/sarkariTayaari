@@ -53,6 +53,12 @@ export async function uploadPendingProgress(token: string): Promise<{ sessions: 
     practiceSessions: pendingSessions.map<PracticeSessionPayload>((session) => ({
       id: session.id,
       completedAt: session.completedAt.toISOString(),
+      // TASK-2801 — recorded on this device since Doc 2 §7 and, until V47, never sent. Without
+      // them the server could not compute study time at all, and a device change lost them.
+      startedAt: session.startedAt ? session.startedAt.toISOString() : null,
+      durationMs: session.durationMs,
+      availableCount: session.availableCount,
+      examCode: session.examCode,
       examLabel: session.examLabel,
       subjectName: session.subjectName,
       topicName: session.topicName,
@@ -148,6 +154,13 @@ export async function restoreProgressFromServer(token: string): Promise<{ sessio
       await tx.insert(practiceSessions).values({
         id: session.id,
         completedAt: new Date(session.completedAt),
+        // Carried back down as well as up (TASK-2801). Dropping these here would mean a restore
+        // silently reset a session's real duration and exam to "unknown" on the new device —
+        // exactly the loss these fields were added to stop.
+        startedAt: session.startedAt ? new Date(session.startedAt) : null,
+        durationMs: session.durationMs ?? null,
+        availableCount: session.availableCount ?? null,
+        examCode: session.examCode ?? null,
         examLabel: session.examLabel ?? "",
         subjectName: session.subjectName ?? "",
         topicName: session.topicName ?? "",

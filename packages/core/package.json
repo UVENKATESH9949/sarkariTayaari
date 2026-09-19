@@ -12,6 +12,7 @@
     "./evaluation": "./src/evaluation/index.ts",
     "./intelligence": "./src/intelligence/index.ts",
     "./i18n": "./src/i18n/index.ts",
+    "./onboarding": "./src/onboarding/index.ts",
     "./design": "./src/design/index.ts",
     "./api": "./src/api/index.ts"
   },

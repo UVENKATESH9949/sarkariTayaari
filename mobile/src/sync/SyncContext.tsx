@@ -28,7 +28,14 @@ const STALE_AFTER_MS = 15 * 60 * 1000;
  */
 const GATE_MAX_MS = 5 * 1000;
 
-type SyncContextValue = (SyncProgress | { status: "checking"; synced: 0; total: 0 }) & {
+/**
+ * `phase` is declared on the placeholder too (as always-undefined) purely so consumers can read
+ * `phase` off the union at all — TypeScript hides a property that only one branch has. It is the
+ * one signal that says "reference data has been written", which onboarding's content-language
+ * step needs: it opens while the first sync is still running, so a read taken at mount sees an
+ * empty `languages` table.
+ */
+type SyncContextValue = (SyncProgress | { status: "checking"; synced: 0; total: 0; phase?: undefined }) & {
   /** A delta sync running in the background — never blocks navigation. */
   isRefreshing: boolean;
   lastSyncedAt: Date | null;
@@ -113,7 +120,7 @@ export function useSyncStatus() {
  * it fails.
  */
 export function SyncProvider({ children }: { children: ReactNode }) {
-  const [progress, setProgress] = useState<SyncProgress | { status: "checking"; synced: 0; total: 0 }>({
+  const [progress, setProgress] = useState<SyncProgress | { status: "checking"; synced: 0; total: 0; phase?: undefined }>({
     status: "checking",
     synced: 0,
     total: 0,
@@ -183,10 +190,18 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         if (__DEV__) console.log("[cache] warm — already synced, checking for updates in background");
         setProgress({ status: "completed", synced: 0, total: 0 });
         setLastSyncedAt(last);
-        ensureExamFollowed().catch((err) => {
-          console.warn("Failed to auto-follow exam", err);
-          captureError(err, { context: "ensureExamFollowed (post-sync)" });
-        });
+        ensureExamFollowed()
+          .then((followed) => {
+            // Only when it genuinely followed something. This is a write to `followed_exams`
+            // that happens outside any sync, so it has to announce itself through the same
+            // channel a sync uses -- otherwise the active-exam provider, which has already
+            // read an empty list by now, never learns there is an exam to make active.
+            if (followed) setSyncVersion((v) => v + 1);
+          })
+          .catch((err) => {
+            console.warn("Failed to auto-follow exam", err);
+            captureError(err, { context: "ensureExamFollowed (post-sync)" });
+          });
         // Already synced before — check for anything new without blocking the UI.
         refresh().catch((err) => {
           console.warn("Delta sync on launch failed", err);

@@ -4,7 +4,7 @@ import { useRouter } from "expo-router";
 import { Pressable, RefreshControl, ScrollView, Text, TextInput, View, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { discoverExams, type ExamCard as ExamCardData, type ExamSortOption } from "@sarkaritaiyaari/core/api";
-import { followExam, getFollowedExams, unfollowExam } from "../../db/followedExams";
+import { useActiveExam } from "../../examsModule/activeExamContext";
 import { useHybridMode } from "../../data/hybridSource";
 import { getSubjectStats } from "../../data/practiceData";
 import { useSessionHistory } from "../../practice/sessionHistory";
@@ -95,21 +95,16 @@ export default function ExamsScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  const [followedCodes, setFollowedCodes] = useState<Set<string>>(new Set());
+  /* Follows come from the app-wide provider, so following an exam here is immediately
+     visible to Home (and can make this the active exam if nothing was active yet). */
+  const { myExams, addExam, removeExam } = useActiveExam();
+  const followedCodes = useMemo(() => new Set(myExams.map((e) => e.code)), [myExams]);
   const [pendingFollowCode, setPendingFollowCode] = useState<string | null>(null);
 
   const [loadedRecommended, setLoadedRecommended] = useState<{
     key: string;
     items: { exam: ExamCardData; reason: string }[];
   } | null>(null);
-
-  const loadFollowed = useCallback(() => {
-    getFollowedExams()
-      .then((rows) => setFollowedCodes(new Set(rows.map((r) => r.code))))
-      .catch(() => {});
-  }, []);
-
-  useEffect(loadFollowed, [loadFollowed]);
 
   const fetchPage = useCallback(
     async (targetPage: number, append: boolean) => {
@@ -155,7 +150,6 @@ export default function ExamsScreen() {
     setRefreshing(true);
     try {
       await fetchPage(0, false);
-      loadFollowed();
     } catch (err) {
       setLoadError({ key: fetchKey, message: (err as Error).message ?? String(err) });
     } finally {
@@ -180,14 +174,12 @@ export default function ExamsScreen() {
     setPendingFollowCode(examCode);
     try {
       if (isFollowed) {
-        await unfollowExam(examCode);
+        await removeExam(examCode);
         trackEvent("exam_unfollowed", { examCode });
       } else {
-        await followExam(examCode);
+        await addExam(examCode);
         trackEvent("exam_followed", { examCode });
       }
-      const rows = await getFollowedExams();
-      setFollowedCodes(new Set(rows.map((r) => r.code)));
     } finally {
       setPendingFollowCode(null);
     }

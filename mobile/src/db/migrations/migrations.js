@@ -27,6 +27,10 @@ import m0022 from './0022_ai_content.sql';
 import m0023 from './0023_client_config.sql';
 import m0024 from './0024_session_feedback.sql';
 import m0025 from './0025_mock_attempt_feedback.sql';
+import m0026 from './0026_active_exam.sql';
+import m0027 from './0027_onboarding_profile.sql';
+import m0028 from './0028_content_languages.sql';
+import m0029 from './0029_practice_session_started_at.sql';
 
   export default {
     journal,
@@ -56,6 +60,10 @@ m0021,
 m0022,
 m0023,
 m0024,
-m0025
+m0025,
+m0026,
+m0027,
+m0028,
+m0029
     }
   }

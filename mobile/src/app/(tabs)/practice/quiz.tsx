@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { recordTopicPractice } from "../../../db/topicProgressStore";
+import { newPracticeSessionId } from "../../../db/ids";
 import { useQuestionTimer } from "../../../practice/useQuestionTimer";
 import { PyqBadge } from "../../../ui/PyqBadge";
 import { Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
@@ -113,11 +114,11 @@ export default function Quiz() {
   const [languageCode, setLanguageCode] = useState(defaultLanguageCode);
   const [languagePickerVisible, setLanguagePickerVisible] = useState(false);
   const sessionStartRef = useRef<number | null>(null);
-  // A ref as well as state: `addSession` is fire-and-forget and the session id is
-  // `session-${Date.now()}`, so two taps a millisecond apart used to write two real
-  // sessions (and two taps inside the same millisecond collided on the primary key and
-  // lost one silently). State alone can't stop that — it hasn't re-rendered yet when the
-  // second tap lands. Same shape as mock-test/test.tsx's submittedRef.
+  // A ref as well as state: `addSession` is fire-and-forget, so two taps a millisecond
+  // apart used to write two real sessions. State alone can't stop that — it hasn't
+  // re-rendered yet when the second tap lands. Same shape as mock-test/test.tsx's
+  // submittedRef. (The id itself is now a UUID rather than a timestamp, so a double tap
+  // no longer also risks two rows colliding on the primary key — see db/ids.ts.)
   const finishedRef = useRef(false);
   const [finishing, setFinishing] = useState(false);
 
@@ -560,11 +561,14 @@ export default function Quiz() {
       .filter((r): r is QuestionResult => r !== null);
 
     const correctCount = results.filter((r) => r.isCorrect).length;
-    const sessionId = `session-${Date.now()}`;
+    const sessionId = newPracticeSessionId();
     const durationMs = sessionStartRef.current !== null ? Date.now() - sessionStartRef.current : null;
     addSession({
       id: sessionId,
       completedAt: Date.now(),
+      // The ref the duration above is already computed from — recorded rather than left implicit
+      // so the session's real start survives a restore onto another device (TASK-2801).
+      startedAt: sessionStartRef.current,
       examLabel: examLabel ?? "",
       // "ALL" is the sentinel for the "All Government Exams" shortcut — that session
       // isn't attributable to one exam, so it's excluded from per-exam progress.

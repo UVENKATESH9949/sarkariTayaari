@@ -17,15 +17,23 @@ export type AppPreferences = {
   /** Content scale multiplier. 1 = 100%. */
   zoomLevel: number;
   uiLanguage: UiLanguage;
+  /**
+   * The exam code currently driving Home and every exam-scoped screen. Null means "not
+   * chosen yet"; a code that is no longer followed is equally possible and equally fine.
+   * Neither case is resolved here -- `examsModule/activeExamContext.tsx` owns that, because
+   * only it can see the live followed-exam list.
+   */
+  activeExamCode: string | null;
 };
 
 /**
- * Light, 100%, English.
+ * Light, 100%, English, no active exam chosen.
  */
 export const DEFAULT_PREFERENCES: AppPreferences = {
   themeMode: "light",
   zoomLevel: 1,
   uiLanguage: "en",
+  activeExamCode: null,
 };
 
 /**
@@ -54,6 +62,7 @@ function coerce(row: {
   themeMode: string | null;
   zoomLevel: number | null;
   uiLanguage: string | null;
+  activeExamCode: string | null;
 }): AppPreferences {
   return {
     themeMode: THEME_MODES.includes(row.themeMode ?? "")
@@ -63,6 +72,10 @@ function coerce(row: {
     uiLanguage: UI_LANGUAGES.includes(row.uiLanguage ?? "")
       ? (row.uiLanguage as UiLanguage)
       : DEFAULT_PREFERENCES.uiLanguage,
+    // Not validated against a fixed set, unlike the three above: the valid values are
+    // whichever exams this device has synced and followed, which this module cannot see.
+    // An empty string is normalised to null so "" and NULL cannot mean two things.
+    activeExamCode: row.activeExamCode ? row.activeExamCode : null,
   };
 }
 
@@ -102,6 +115,7 @@ export async function savePreferences(patch: Partial<AppPreferences>): Promise<v
     ...(patch.themeMode !== undefined ? { themeMode: patch.themeMode } : {}),
     ...(patch.zoomLevel !== undefined ? { zoomLevel: patch.zoomLevel } : {}),
     ...(patch.uiLanguage !== undefined ? { uiLanguage: patch.uiLanguage } : {}),
+    ...(patch.activeExamCode !== undefined ? { activeExamCode: patch.activeExamCode } : {}),
   };
   await db
     .insert(appPreferences)

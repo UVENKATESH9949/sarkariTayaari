@@ -28,6 +28,21 @@ export type PracticeResultPayload = {
 export type PracticeSessionPayload = {
   id: string;
   completedAt: string;
+  /**
+   * Session timing and exam context (V47, TASK-2801).
+   *
+   * All four are optional in both directions: omitted by any client built before that release,
+   * and absent on every session recorded before it. Absent means "not recorded", never zero —
+   * the same rule `timeMs` follows. A mock attempt has carried the equivalent fields since the
+   * beginning; practice sessions recorded them on the device and never sent them, so a real
+   * duration was lost the moment a student moved to another phone.
+   */
+  startedAt?: string | null;
+  durationMs?: number | null;
+  /** Questions OFFERED, which may exceed `totalCount` when the student finished early. Never a denominator. */
+  availableCount?: number | null;
+  /** Null for the "All Government Exams" shortcut, which is not attributable to one exam. */
+  examCode?: string | null;
   examLabel: string | null;
   subjectName: string | null;
   topicName: string | null;
@@ -89,6 +104,13 @@ export type SyncPayload = {
 export type SyncResult = {
   practiceSessionsStored: number;
   mockAttemptsStored: number;
+  /**
+   * Ids the server refused because they already belong to a different account (TASK-2801).
+   * Almost always empty, and optional so a client can ignore it. The rest of the batch is stored
+   * regardless — one bad id never strands a whole history.
+   */
+  rejectedPracticeSessionIds?: string[];
+  rejectedMockAttemptIds?: string[];
 };
 
 export type RestoreResult = {

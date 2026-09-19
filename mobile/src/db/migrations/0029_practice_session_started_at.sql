@@ -1,0 +1,19 @@
+-- TASK-2801 — a practice session's start time, so its duration survives leaving this device.
+--
+-- `duration_ms`, `available_count` and `exam_code` already exist here and were never uploaded:
+-- the server's practice-session contract had no room for them (V47 adds it). `started_at` is the
+-- one piece neither side had at all — the quiz screen holds it in a ref for the life of the
+-- screen and then discards it.
+--
+-- Recorded rather than derived as `completed_at - duration_ms`: both of those are nullable on
+-- rows that predate their own columns, so deriving it would quietly invent a start time for a
+-- session whose duration was never measured.
+--
+-- Nullable, and NULL means "not recorded", never "started at the epoch" — the same rule
+-- `duration_ms` and `time_ms` already follow. Every existing row on every device keeps NULL and
+-- nothing reads it as a number.
+--
+-- SQLite has no `ADD COLUMN IF NOT EXISTS`, so this statement is unguardable — the same
+-- unavoidable shape as migrations 0012 and 0018, and the reason a failed migration is a hard
+-- startup gate in this app. It runs exactly once per device.
+ALTER TABLE `practice_sessions` ADD `started_at` integer;

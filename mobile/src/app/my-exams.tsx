@@ -3,7 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Stack, useRouter } from "expo-router";
 import { Pressable, ScrollView, Text, TextInput, View, StyleSheet } from "react-native";
 import { getExams, type ExamResponse } from "@sarkaritaiyaari/core/api";
-import { followExam, getFollowedExams, unfollowExam, type FollowedExam } from "../db/followedExams";
+import { useActiveExam } from "../examsModule/activeExamContext";
 import { getExamGuideHybrid } from "../data/examGuideData";
 import { useHybridMode } from "../data/hybridSource";
 import { getSubjectStats } from "../data/practiceData";
@@ -22,18 +22,23 @@ import { trackEvent } from "../telemetry/analytics";
  * genuinely new screen, not a Phase 1 gap-fill, so it stays English-only for now rather
  * than a half-translated addition; see the report.
  *
- * `followedExams` was never actually a single-exam table (its primary key is
- * `examCode`), so following a second exam here needs no schema change — only
- * `getFollowedExam()`'s callers (Home, PreparationPlanCard) keep assuming one, and this
- * screen deliberately doesn't touch that: it reads/writes the same rows through the new
- * plural functions instead.
+ * `followedExams` was never actually a single-exam table (its primary key is `examCode`), so
+ * following a second exam here needs no schema change. What WAS missing is the other half:
+ * which of them is the ACTIVE exam. That now lives in `examsModule/activeExamContext.tsx`, and
+ * this screen both reads it (the Active marker) and writes it (Set active) through that one
+ * provider — so an activation here reaches Home immediately.
  */
 export default function MyExamsScreen() {
   const { colors } = useTheme();
   const styles = useThemedStyles(buildStyles);
   const router = useRouter();
 
-  const [followed, setFollowed] = useState<FollowedExam[]>([]);
+  /*
+   * My Exams and the Active Exam both come from the provider now, rather than this screen
+   * keeping its own copy read straight from SQLite. That is what makes a follow/unfollow or an
+   * activation done here show up on Home without a sync or an app restart.
+   */
+  const { myExams: followed, activeExam, setActiveExam, addExam, removeExam } = useActiveExam();
   const [allExams, setAllExams] = useState<ExamResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -57,12 +62,10 @@ export default function MyExamsScreen() {
     items: { exam: ExamResponse; reason: string }[];
   } | null>(null);
 
+  // Only the discoverable catalogue is fetched here — the followed list is the provider's.
   const load = useCallback(() => {
-    Promise.all([getFollowedExams(), getExams()])
-      .then(([f, all]) => {
-        setFollowed(f);
-        setAllExams(all);
-      })
+    getExams()
+      .then(setAllExams)
       .catch((err) => setError(err.message ?? String(err)))
       .finally(() => setLoading(false));
   }, []);
@@ -134,16 +137,14 @@ export default function MyExamsScreen() {
     setPendingCode(examCode);
     try {
       if (isFollowed) {
-        await unfollowExam(examCode);
+        // Handles the active-exam case too (promoting the next exam when the active one is
+        // removed) — that rule lives in the provider so every unfollow anywhere gets it.
+        await removeExam(examCode);
         trackEvent("exam_unfollowed", { examCode });
       } else {
-        await followExam(examCode);
+        await addExam(examCode);
         trackEvent("exam_followed", { examCode });
       }
-      // Re-reads rather than patching state locally: `getFollowedExams` is the one
-      // source of truth this screen has, and it's cheap enough (a handful of rows).
-      const rows = await getFollowedExams();
-      setFollowed(rows);
     } finally {
       setPendingCode(null);
     }
@@ -208,17 +209,41 @@ export default function MyExamsScreen() {
           />
         ) : (
           <Card variant="container" style={styles.card}>
-            {followed.map((exam, i) => (
-              <View key={exam.code}>
-                {i > 0 && <CardDivider />}
-                <CardRow
-                  icon="school-outline"
-                  label={exam.name}
-                  onPress={() => openGuide(exam)}
-                  trailing={<StarButton examCode={exam.code} isFollowed />}
-                />
-              </View>
-            ))}
+            {followed.map((exam, i) => {
+              const isActive = exam.code === activeExam?.code;
+              return (
+                <View key={exam.code}>
+                  {i > 0 && <CardDivider />}
+                  <CardRow
+                    icon={isActive ? "radio-button-on" : "radio-button-off"}
+                    iconColor={isActive ? colors.brand.light : colors.text.muted}
+                    label={exam.name}
+                    value={isActive ? "Active" : undefined}
+                    /* Row tap still opens the Guide, exactly as before — activation is its own
+                       explicit control rather than a new meaning for an existing gesture. */
+                    onPress={() => openGuide(exam)}
+                    trailing={
+                      <View style={styles.rowActions}>
+                        {!isActive && (
+                          <Pressable
+                            style={styles.setActiveButton}
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              setActiveExam(exam.code);
+                            }}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Make ${exam.name} the active exam`}
+                          >
+                            <Text style={styles.setActiveText}>Set active</Text>
+                          </Pressable>
+                        )}
+                        <StarButton examCode={exam.code} isFollowed />
+                      </View>
+                    }
+                  />
+                </View>
+              );
+            })}
           </Card>
         )}
 
@@ -325,6 +350,24 @@ const buildStyles = ({ colors, spacing, radius }: Theme) =>
       paddingVertical: spacing.sm + 2,
       fontSize: 14,
       color: colors.text.primary,
+    },
+    rowActions: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.xs,
+    },
+    setActiveButton: {
+      paddingVertical: spacing.xs,
+      paddingHorizontal: spacing.sm,
+      borderRadius: radius.pill,
+      backgroundColor: colors.brand.glowSoft,
+      borderWidth: 1,
+      borderColor: colors.borderAccent,
+    },
+    setActiveText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.brand.light,
     },
     starButton: {
       padding: spacing.sm,
