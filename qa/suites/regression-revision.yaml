@@ -1,0 +1,18 @@
+# Regression — REVISION
+#
+# Every test case belonging to the REVISION module. Run after any change confined to that module.
+#
+# 10 test case(s). Membership rule: module == REVISION (mechanical filter).
+
+suite: Regression — REVISION
+test_case_ids:
+  - TC-REVISION-001
+  - TC-REVISION-002
+  - TC-REVISION-003
+  - TC-REVISION-004
+  - TC-REVISION-005
+  - TC-REVISION-006
+  - TC-REVISION-007
+  - TC-REVISION-008
+  - TC-REVISION-009
+  - TC-REVISION-010

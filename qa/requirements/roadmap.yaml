@@ -1,0 +1,239 @@
+# ROADMAP module — requirement repository
+#
+# Scope: StudyRoadmapController (GET /api/me/study-roadmap) — the personalized roadmap added by
+# TASK-3101 (Phase 4 of the personalization program). A new module rather than an extension of
+# LEARNING-STATE: that contract describes the student, this one orders and sizes work for them,
+# and keeping "describe" apart from "decide" is the program's own design.
+#
+# What this module deliberately does NOT cover: a daily schedule, a persisted assignment, or a
+# readiness score. None exists. Phase 5 adds the day; readiness is an open product question.
+#
+# automation_status is evidence-based, per qa/README.md's standing rule.
+
+- id: REQ-ROADMAP-001
+  feature: A student's roadmap is readable, scoped to them, and never plans the impossible
+  module: ROADMAP
+  system: [Backend]
+  source_doc: api/STUDY-ROADMAP.md
+  source_section: "GET /api/me/study-roadmap"
+  description: >
+    GET /api/me/study-roadmap?examCode=... returns the exam's topics as an ordered plan, each
+    with a workload estimate, plus a per-subject rollup and a timeline. The acting student comes
+    from the bearer token; there is no user-id path or query parameter anywhere.
+  business_rule: >
+    A topic with zero practicable questions for that exam is excluded outright rather than
+    listed. Curated priority is scored independently of question coverage, so a topic can rank
+    first and have nothing behind it — a plan item that opens an empty question screen is worse
+    than a shorter plan. Inherited from PreparePlanService, where it was found on a device.
+  actor: Signed-in student
+  preconditions:
+    - "A valid bearer token"
+    - "An exam with at least one mapped topic carrying questions"
+  inputs:
+    - "examCode query parameter; no body"
+  expected_outputs:
+    - "200 with timeline, totalEstimatedMinutes, topics[] and subjects[]"
+  validations:
+    - "401 without a token"
+    - "404 for an unknown examCode"
+    - "Topics with questionCount 0 are absent from topics[]"
+  permissions:
+    - "User token required; one account cannot address another's roadmap because no parameter names a user"
+  dependencies: [REQ-LEARNINGSTATE-001]
+  error_conditions:
+    - "An exam whose every topic lacks questions returns an empty plan, never an error"
+  edge_conditions:
+    - "Signed-out students are not covered — D3.2 made personalization a signed-in feature for V1"
+  offline_behavior: "None — server-computed, requires a network"
+  acceptance_criteria:
+    - "A signed-in student reads their own plan; an unauthenticated caller gets 401; an unknown exam gets 404"
+    - "A high-priority topic with no practicable questions never appears in the plan"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    StudyRoadmapTest.requiresASignedInUser, .unknownExamIs404 and
+    .aTopicWithNoPracticableQuestionsIsNeverPlanned.
+
+- id: REQ-ROADMAP-002
+  feature: The plan is ordered by exam priority, balanced across subjects, and the reordering is visible
+  module: ROADMAP
+  system: [Backend]
+  source_doc: api/STUDY-ROADMAP.md
+  source_section: "priorityRank vs. position in topics[]"
+  description: >
+    topics[] order is the roadmap. It is derived from Epic L's final_priority (descending, nulls
+    last, topic name as tie-break), then stabilised so no more than two consecutive topics come
+    from one subject. Each topic keeps priorityRank — its position by priority alone, before
+    balancing. Exactly one topic carries recommended: true.
+  business_rule: >
+    Priority ordering is per topic and knows nothing about balance, so a student whose weakest
+    topics all live in one subject would otherwise get a plan that is that subject for weeks. A
+    topic only ever moves later than one it outranks, and only to break a run; when the syllabus
+    has nothing else left the run continues, because reordering cannot invent variety.
+  actor: Signed-in student
+  preconditions:
+    - "Several mapped topics with distinct priorities, across more than one subject"
+  inputs:
+    - "examCode"
+  expected_outputs:
+    - "topics[] ordered, each carrying priorityRank and examPriority"
+    - "exactly one topic with recommended: true"
+  validations:
+    - "No more than MAX_CONSECUTIVE_PER_SUBJECT (2) consecutive topics share a subjectId"
+    - "Every rank 1..n appears exactly once — balancing reorders, never drops or renumbers"
+  permissions:
+    - "User token required"
+  dependencies: [REQ-ROADMAP-001]
+  error_conditions: []
+  edge_conditions:
+    - "A topic with no computed priority sorts last rather than being excluded"
+    - "A single-subject exam legitimately runs past the cap — there is nothing to interleave with"
+  offline_behavior: "None"
+  acceptance_criteria:
+    - "The highest-priority practicable topic leads the plan and is the recommended one"
+    - "A moved topic still reports where priority alone would have placed it"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    StudyRoadmapTest.theHigherPriorityTopicLeadsThePlanAndExactlyOneIsRecommended and
+    .noSubjectRunsLongerThanTheCapAndTheOriginalRankIsStillVisible.
+
+- id: REQ-ROADMAP-003
+  feature: Every workload estimate declares where it came from
+  module: ROADMAP
+  system: [Backend]
+  source_doc: api/STUDY-ROADMAP.md
+  source_section: "Every estimate says where it came from"
+  description: >
+    Each topic carries estimate {source, secondsPerQuestion, sampleSize}, resolved once per topic
+    down a four-tier ladder — PERSONAL_TOPIC (this student, >= 5 timed attempts), COHORT_TOPIC
+    (all students, >= 20), COHORT_DIFFICULTY (all students at that difficulty, >= 20), then
+    DEFAULT (a stated 75s constant, sampleSize 0).
+  business_rule: >
+    A measured average and a stated constant are different claims and must never be presented in
+    the same shape. The sample floors are judgements: below them an average is noise, and noise
+    presented as a measurement is worse than a declared default. COHORT_DIFFICULTY resolves
+    against the real difficulty_levels table so "harder takes longer" survives without hardcoding
+    a difficulty code.
+  actor: Signed-in student
+  preconditions:
+    - "A topic with, and a topic without, the student's own timed attempts"
+  inputs:
+    - "examCode"
+  expected_outputs:
+    - "estimate.source naming the tier actually used, with the sample size behind it"
+    - "estimatedMinutes per topic and per question-bearing step"
+  validations:
+    - "A student with >= 5 of their own timed attempts on a topic gets PERSONAL_TOPIC"
+    - "With nothing measured anywhere the source is DEFAULT and sampleSize is 0"
+    - "One student's measured time is never reported as another student's PERSONAL_TOPIC estimate"
+  permissions:
+    - "User token required. The cohort tiers are aggregates only — no query returns anything about an identifiable student"
+  dependencies: [REQ-ROADMAP-001, REQ-USERPROGRESS-001]
+  error_conditions: []
+  edge_conditions:
+    - "Practice and mock timings are pooled by re-deriving totals, not by averaging two averages"
+    - "Attempts with no recorded time are excluded from both numerator and denominator"
+  offline_behavior: "None"
+  acceptance_criteria:
+    - "The tier that produced a number always travels with the number"
+    - "A brand-new student still gets minutes, labelled as an assumption"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    StudyRoadmapTest.aStudentsOwnMeasuredTimeIsUsedWhenThereIsEnoughOfIt,
+    .withNothingMeasuredTheEstimateIsADeclaredDefault and
+    .oneStudentsMeasuredTimeIsNotUsedAsAnothersPersonalEstimate.
+
+- id: REQ-ROADMAP-004
+  feature: A step that is not a question set carries no invented duration
+  module: ROADMAP
+  system: [Backend]
+  source_doc: api/STUDY-ROADMAP.md
+  source_section: "Steps with no question count have no minutes"
+  description: >
+    Each topic's steps are the radar's own ordered action steps, unchanged, each with its own
+    estimatedMinutes. LEARN_CONCEPT, REVISION and TIMED_PRACTICE carry no question count, so they
+    carry estimatedMinutes null and contribute nothing to the topic total or the grand total.
+  business_rule: >
+    There is no concept-learning content in this product to put a duration against, and a timed
+    test's length belongs to the paper rather than to this plan. An invented number summed into a
+    total corrupts the total. The steps themselves are not re-derived here — a second "how much
+    practice" ladder could disagree with the radar about the same student.
+  actor: Signed-in student
+  preconditions:
+    - "A topic whose recommendation includes both question-bearing and non-question steps"
+  inputs:
+    - "examCode"
+  expected_outputs:
+    - "steps[] with estimatedMinutes null exactly where questionCount is null"
+  validations:
+    - "A topic's estimatedMinutes equals the sum of its steps' non-null minutes"
+    - "totalEstimatedMinutes is null only when nothing in the plan could be estimated at all"
+  permissions:
+    - "User token required"
+  dependencies: [REQ-ROADMAP-003]
+  error_conditions: []
+  edge_conditions:
+    - "Minutes round up: a plan that under-books its own time is worse than one that over-books it"
+  offline_behavior: "None"
+  acceptance_criteria:
+    - "No step without a question count reports a duration"
+    - "Topic totals are reconcilable from the steps shown"
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "StudyRoadmapTest.stepsWithNoQuestionCountCarryNoMinutesAndAreExcludedFromTheTotal."
+
+- id: REQ-ROADMAP-005
+  feature: The plan is dated only when the exam genuinely has a date
+  module: ROADMAP
+  system: [Backend]
+  source_doc: api/STUDY-ROADMAP.md
+  source_section: "Response shape — timeline"
+  description: >
+    timeline reports hasExamDate, examDate, daysRemaining, dailyMinutesRequired and a note. The
+    date is exam_start from the exam's current PUBLISHED recruitment cycle. With no such cycle,
+    hasExamDate is false and every other field is null.
+  business_rule: >
+    Ten of eleven exams have no published cycle, so an undated roadmap is the normal case, not an
+    error state — the plan degrades to an ordered backlog rather than inventing a deadline. The
+    application deadline is never used: it is a date for applying, not for preparing.
+    dailyMinutesRequired is total minutes over days remaining, rounded up — arithmetic over an
+    estimate, reported as arithmetic and never folded into a readiness percentage.
+  actor: Signed-in student
+  preconditions:
+    - "An exam with, and an exam without, a published cycle carrying exam_start"
+  inputs:
+    - "examCode"
+  expected_outputs:
+    - "A dated timeline with daysRemaining and dailyMinutesRequired, or an explicitly undated one"
+  validations:
+    - "No published cycle: hasExamDate false, all other fields null, plan still returned"
+    - "A past exam date: the date is reported, daysRemaining and dailyMinutesRequired are null"
+  permissions:
+    - "User token required"
+  dependencies: [REQ-ROADMAP-001]
+  error_conditions: []
+  edge_conditions:
+    - "A DRAFT cycle counts as no cycle, matching the public Exam Guide read"
+    - "A negative countdown is never shown"
+  offline_behavior: "None"
+  acceptance_criteria:
+    - "A dated exam yields days remaining and a daily figure consistent with the same response's total"
+    - "An undated exam yields a usable, explicitly undated plan"
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    StudyRoadmapTest.anExamWithNoPublishedCycleIsAnUndatedBacklog,
+    .aPublishedCycleWithAnExamDateGivesDaysRemainingAndADailyFigure and
+    .anExamDateInThePastIsReportedWithoutACountdown.

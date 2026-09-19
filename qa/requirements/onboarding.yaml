@@ -1,0 +1,662 @@
+# ONBOARDING module — requirement repository
+#
+# Scope: the first-time user onboarding flow and the preparation profile it collects —
+# first-launch detection, the six questions (name, language, exam, stage/year, preparation
+# level, daily study time), draft persistence, the personalised warm-up and welcome, and the
+# safe adoption of installs that predate the feature.
+#
+# Primary source: the supplied "First-Time User Onboarding & Personalized Profile" brief.
+# Secondary: reports/32-first-time-onboarding/first-time-onboarding.md,
+# mobile/src/db/migrations/0027_onboarding_profile.sql, packages/core/src/onboarding/.
+#
+# There is no api/*.md for this module, and that is not an omission: onboarding writes nothing
+# to the server. The backend's user model carries email/display_name/role only, there is no
+# preparation-profile endpoint, and onboarding runs before any sign-in on a fresh install
+# because accounts in this app are optional. The device is the source of truth. See
+# REQ-ONBOARDING-012 for the consequence that is deliberately accepted.
+#
+# Three places the brief and the codebase disagreed, resolved in favour of the codebase and
+# recorded on the requirements themselves rather than silently: the language list
+# (REQ-ONBOARDING-004), the ordering of onboarding vs. data preparation (REQ-ONBOARDING-005),
+# and the claim that Home needs a reload to reflect a changed exam (REQ-ONBOARDING-011).
+
+- id: REQ-ONBOARDING-001
+  feature: First-launch detection, persisted and decided once
+  module: ONBOARDING
+  system: [Mobile]
+  source_doc: Supplied onboarding brief
+  source_section: "§2 First-launch detection"
+  description: >
+    On a genuinely fresh install the onboarding flow is shown before the app's navigator
+    mounts. Completion is recorded in `app_preferences.onboarding_completed_at` (device-local
+    SQLite), so it survives an app restart, an app kill and a device restart, and is available
+    with no network. The moment onboarding is first decided to be owed,
+    `onboarding_started_at` is stamped, so the decision is never re-derived on a later launch.
+  business_rule: >
+    The "has this install been used before?" signals (has synced, has practice history,
+    follows an exam, has an account) all turn TRUE while the flow is on screen, because the
+    first sync is running behind it. Without the started stamp, a student who killed the app
+    mid-flow would be adopted as an existing user on the next launch and never asked again.
+  actor: "First-time student (no account required)"
+  preconditions:
+    - App installed with no prior local data
+  inputs:
+    - "app_preferences.onboarding_started_at / onboarding_completed_at"
+  expected_outputs:
+    - "Fresh install -> the flow is shown"
+    - "Any later launch after completion -> the flow is never shown"
+    - "Interrupted flow -> the flow is shown again, resumed"
+  validations:
+    - "A completion stamp always wins over every other signal"
+  permissions: "None — no account is required to onboard"
+  dependencies: []
+  error_conditions:
+    - "A failed read of the signals is treated as COMPLETED, so a database error can never interrogate an existing student"
+  edge_conditions:
+    - "App killed between the last answer and the warm-up finishing: completion is already stamped by then, so onboarding does not repeat"
+  offline_behavior: >
+    Entirely offline. Every read and write is local SQLite; no request is made.
+  acceptance_criteria:
+    - A fresh install shows onboarding before Home
+    - Completing onboarding, killing the app and reopening it does not show onboarding again
+    - Killing the app mid-flow and reopening shows the flow again, not Home
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    packages/core src/onboarding/status.test.ts — "a genuinely fresh install is asked to
+    onboard", "an install that has already onboarded is never asked again", "onboarding
+    interrupted halfway is still required after a restart, even though the first sync has
+    since completed". The decision logic is automated; the screen it drives is not.
+
+- id: REQ-ONBOARDING-002
+  feature: An install that predates onboarding is adopted silently, never re-onboarded
+  module: ONBOARDING
+  system: [Mobile]
+  source_doc: Supplied onboarding brief
+  source_section: "§19 Returning users"
+  description: >
+    A device with no onboarding stamps but any sign of prior use — it has synced before, has
+    practice or mock history, follows an exam, or has a stored account session — is marked
+    onboarded without being shown a single question, and keeps every piece of existing data:
+    selected exam, practice/mock progress, bookmarks, downloaded content, settings, account
+    and sync state.
+  business_rule: >
+    Any ONE signal is enough. The two mistakes are not symmetric: wrongly adopting a true
+    first-time user costs a personalised greeting, while wrongly re-onboarding an existing
+    user looks exactly like their data was lost.
+  actor: "Existing student upgrading to a build that has onboarding"
+  preconditions:
+    - Local data exists from a build that predates onboarding
+  inputs:
+    - "hasSyncedBefore, hasPracticeHistory, hasFollowedExams, hasAccount"
+  expected_outputs:
+    - "The app opens normally; onboarding_completed_at is stamped once"
+  validations:
+    - "No existing row is modified apart from the onboarding stamps"
+  permissions: "None"
+  dependencies:
+    - REQ-ONBOARDING-001
+  error_conditions:
+    - "None — a signal read failure also results in no onboarding being shown"
+  edge_conditions:
+    - "A device that has synced but has no history and follows nothing is still adopted, on the strength of the sync alone"
+  offline_behavior: >
+    Entirely offline.
+  acceptance_criteria:
+    - An upgraded install with existing practice history opens straight to Home
+    - No practice, mock, bookmark, settings or account data is altered by the upgrade
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    packages/core src/onboarding/status.test.ts — the "an install that predates onboarding"
+    block, which asserts adoption on each of the four signals independently and in
+    combination.
+
+- id: REQ-ONBOARDING-003
+  feature: Display name — required, normalised, bounded
+  module: ONBOARDING
+  system: [Mobile]
+  source_doc: Supplied onboarding brief
+  source_section: "§3 Step 1 Name; §21 Validation"
+  description: >
+    Step 1 asks what to call the student. The value is trimmed, stripped of invisible
+    characters, has internal whitespace runs collapsed to a single space, and must be non-empty
+    and at most 40 code points after that normalisation. It is a personalisation name, not a
+    legal name, and no identity check is implied. The normalised form is what is stored.
+  business_rule: >
+    Invisible characters (zero-width space, BOM, bidi marks, non-breaking and ideographic
+    spaces) are stripped rather than rejected — they arrive by accident from a paste or a
+    keyboard, and a name that "won't save" with nothing visibly wrong cannot be fixed by the
+    person typing it. Length is measured in code points so an emoji or a Devanagari cluster
+    counts as one.
+  actor: "First-time student"
+  preconditions:
+    - Onboarding step 1 is on screen
+  inputs:
+    - "Free text"
+  expected_outputs:
+    - "A normalised non-empty name stored in app_preferences.display_name"
+  validations:
+    - "Empty or whitespace-only rejected with a visible message; the student cannot continue"
+    - "Over 40 code points rejected with a message naming the limit"
+    - "A name made only of invisible characters is treated as empty"
+  permissions: "None"
+  dependencies: []
+  error_conditions:
+    - "EMPTY -> \"Please enter a name so we know what to call you.\""
+    - "TOO_LONG -> \"That's a little long — please keep it under 40 characters.\""
+  edge_conditions:
+    - "Non-Latin scripts accepted unchanged"
+    - "The input's own maxLength is deliberately above the validated limit, so typing is never hard-stopped mid-word"
+  offline_behavior: >
+    Entirely offline.
+  acceptance_criteria:
+    - An empty name blocks Continue and shows a validation message
+    - 'A name entered as "  Priya  " is stored as "Priya"'
+    - A name of only zero-width characters is rejected as empty
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    packages/core src/onboarding/validation.test.ts — the "display name" block (16 cases,
+    including each invisible-character class, code-point counting, and measuring after
+    normalisation rather than before).
+
+- id: REQ-ONBOARDING-004
+  feature: APP (interface) language, restricted to languages the app is actually translated into
+  module: ONBOARDING
+  system: [Mobile]
+  source_doc: Supplied onboarding brief
+  source_section: "§4 Language"
+  description: >
+    Step 2 chooses the language of the INTERFACE -- navigation, buttons, labels, onboarding
+    itself. It is a different question from the content languages in REQ-ONBOARDING-013 and is
+    never derived from them. It offers the languages derived from which catalogues exist in
+    `@sarkaritaiyaari/core/i18n` — English and Telugu today — and nothing else. The chosen
+    language is applied immediately, so the remainder of the flow renders in it, and is stored
+    in the existing `app_preferences.ui_language` column that Settings already writes. A short
+    note on the step states that question content is separately available in English and Hindi.
+  business_rule: >
+    The list is derived, not written down, so it grows the moment a catalogue is added and can
+    never offer a language that would render an English app.
+  actor: "First-time student"
+  preconditions:
+    - Onboarding step 2 is on screen
+  inputs:
+    - "One of the supported UI language codes"
+  expected_outputs:
+    - "app_preferences.ui_language updated; the app's own strings change immediately"
+  validations:
+    - "A code with no catalogue is rejected"
+  permissions: "None"
+  dependencies: []
+  error_conditions:
+    - "UNSUPPORTED for any non-catalogue code"
+  edge_conditions:
+    - "No second column is created for the language — onboarding and Settings write the same one"
+  offline_behavior: >
+    Entirely offline.
+  acceptance_criteria:
+    - Only languages with a real catalogue are offered
+    - Choosing Telugu re-renders the rest of the flow in Telugu
+    - The choice is visible in Settings afterwards, and Settings changing it is reflected in the profile
+  priority: High
+  status: Active
+  ambiguity: >
+    DOCUMENTED DEVIATION FROM THE BRIEF (not an open question). The brief's §4 lists eight
+    languages (English, हिंदी, తెలుగు, தமிழ், ಕನ್ನಡ, മലയാളം, मराठी, বাংলা). Only `en` and `te`
+    have UI catalogues; the eleven-entry list in mobile/src/practice/appLanguage.tsx is
+    commented in-source as a mock, and only `en`/`hi` have question content. The brief's own
+    instruction to "reuse the existing language constants" is followed over its example list.
+  automation_status: Automated
+  automation_hint: >
+    packages/core src/onboarding/validation.test.ts — the "language" block, which asserts the
+    offered set equals the catalogue keys and explicitly rejects hi/ta/kn/ml/mr/bn.
+
+- id: REQ-ONBOARDING-005
+  feature: Primary exam chosen from the real catalogue, with an honest offline path
+  module: ONBOARDING
+  system: [Mobile]
+  source_doc: Supplied onboarding brief
+  source_section: "§5 Primary target exam; §12 Offline-first"
+  description: >
+    Step 3 lists the exams from the app's existing catalogue — local SQLite once synced,
+    otherwise a live fetch — with each exam's real synced question count. No exam list is
+    hardcoded. When neither source can answer (a first launch with no network), the step says
+    so and the student continues without choosing; the existing auto-follow fallback then picks
+    an exam once content arrives, and the student can choose from the Exams tab.
+  business_rule: >
+    Onboarding renders while the first reference sync runs behind it, rather than after it —
+    the catalogue being chosen from is the very data that sync fetches. The name and language
+    steps need no data and take a few seconds, which is normally enough for the catalogue to
+    land before step 3 is reached.
+  actor: "First-time student"
+  preconditions:
+    - Onboarding step 3 is on screen
+  inputs:
+    - "An exam code from the catalogue, or none"
+  expected_outputs:
+    - "app_preferences.primary_exam_code set, or left null"
+  validations:
+    - "An exam code not in the available catalogue is rejected"
+    - "Null is accepted — unavailable is not the same as invalid"
+  permissions: "None"
+  dependencies:
+    - REQ-CATALOG-001
+  error_conditions:
+    - "A failed catalogue fetch is presented identically to an empty catalogue, because to the student it is the same thing"
+  edge_conditions:
+    - "Changing the exam clears any stage already chosen, since a stage belongs to one exam"
+  offline_behavior: >
+    The step is completable offline. The exam simply goes unchosen, and onboarding is never a
+    dead end because of the network.
+  acceptance_criteria:
+    - The list comes from the real catalogue, never a hardcoded one
+    - With no network and no synced data, the student can still finish onboarding
+    - The chosen exam is followed and becomes the active exam
+  priority: Critical
+  status: Active
+  ambiguity: >
+    DOCUMENTED DEVIATION FROM THE BRIEF (not an open question). The brief's §13 orders
+    onboarding strictly before data preparation. That is not achievable while also showing a
+    real exam list, since the catalogue is what the preparation fetches. Resolved by running
+    the two concurrently; the personalised preparation described in REQ-ONBOARDING-009 still
+    follows the last answer, as the brief intends.
+  automation_status: PartiallyAutomated
+  automation_hint: >
+    packages/core src/onboarding/validation.test.ts — the "exam" block covers the validation
+    rules, including that null passes and that any code fails against an empty catalogue. The
+    catalogue fetch, the rendered list and the offline state are mobile UI with no automated
+    runner in this project.
+
+- id: REQ-ONBOARDING-006
+  feature: Exam stage and target year, adapted to the selected exam
+  module: ONBOARDING
+  system: [Mobile]
+  source_doc: Supplied onboarding brief
+  source_section: "§6 Exam stage / attempt"
+  description: >
+    Step 4 asks which stage the student is preparing for, reading the real `exam_stages` rows
+    synced for the chosen exam, plus an "all stages / not sure" option. The stage question is
+    shown ONLY when that exam has more than one stage — no Tier 1/Tier 2 ladder is assumed. It
+    also asks the target year, offering the current year and the two following it plus "not
+    sure yet", derived from the clock rather than written down.
+  business_rule: >
+    An exam with one stage, or with no structure synced to this device yet, has nothing to ask
+    — those two cases are indistinguishable to the student and are treated identically.
+  actor: "First-time student"
+  preconditions:
+    - An exam has been chosen (or not)
+  inputs:
+    - "An exam_stages.id or null; a year or null"
+  expected_outputs:
+    - "app_preferences.exam_stage_id and target_year"
+  validations:
+    - "A stage id not belonging to the selected exam is rejected"
+    - "A year in the past, beyond the three-year horizon, or non-integer is rejected"
+    - "Null is accepted for both"
+  permissions: "None"
+  dependencies:
+    - REQ-ONBOARDING-005
+  error_conditions:
+    - "UNSUPPORTED for a foreign stage id; OUT_OF_RANGE for a bad year"
+  edge_conditions:
+    - "Exam with exactly one stage: the stage question is not rendered at all"
+    - "Exam with no stages synced: same, and the year question still appears"
+  offline_behavior: >
+    Reads only local structure. Offline, the stage question is simply not asked.
+  acceptance_criteria:
+    - A single-stage exam never shows the stage question
+    - A multi-stage exam lists that exam's real stage names
+    - The year options are derived from the current year, never hardcoded
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: PartiallyAutomated
+  automation_hint: >
+    packages/core src/onboarding/validation.test.ts — the "exam stage" and "target year"
+    blocks, including that the options list is derived from the year passed in. Whether the
+    question is rendered for a given exam is mobile UI, not automated.
+
+- id: REQ-ONBOARDING-007
+  feature: Preparation level and daily study time stored as closed enums
+  module: ONBOARDING
+  system: [Mobile]
+  source_doc: Supplied onboarding brief
+  source_section: "§7 Current preparation level; §8 Daily study time"
+  description: >
+    Steps 5 and 6 capture the preparation level (JUST_STARTING, LEARNING, PRACTICING,
+    REVISING, EXAM_READY) and the daily study time band (UNDER_1H, ONE_TO_TWO, TWO_TO_FOUR,
+    FOUR_TO_SIX, SIX_PLUS). Both are stored as the stable identifier, never as the label shown
+    on screen, and both are required — Continue stays disabled until one is selected.
+  business_rule: >
+    Closed sets, because the point of asking is to branch on the answer later. Study time is a
+    band rather than a number of minutes: a precise-looking figure here would be a guess that
+    everything downstream then treats as data.
+  actor: "First-time student"
+  preconditions:
+    - Steps 5/6 on screen
+  inputs:
+    - "One PreparationLevel; one DailyStudyTime"
+  expected_outputs:
+    - "app_preferences.preparation_level and daily_study_time"
+  validations:
+    - "Free text and null are both rejected by the validator"
+    - "A stored value no longer in the enum reads back as null, not as an unbranchable string"
+  permissions: "None"
+  dependencies: []
+  error_conditions:
+    - "UNSUPPORTED for anything outside the enum"
+  edge_conditions:
+    - "Re-wording a label cannot change what is stored, because options are keyed by value"
+  offline_behavior: >
+    Entirely offline.
+  acceptance_criteria:
+    - Continue is disabled until an option is selected on each of these two steps
+    - The stored value is the enum identifier, not the displayed label
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    packages/core src/onboarding/validation.test.ts — the "preparation level and daily study
+    time" block, plus the whole-draft block asserting both are required.
+
+- id: REQ-ONBOARDING-008
+  feature: Answers survive an app kill; the flow resumes rather than restarts
+  module: ONBOARDING
+  system: [Mobile]
+  source_doc: Supplied onboarding brief
+  source_section: "§12 Offline-first; §10 Back/skip behaviour"
+  description: >
+    Every answer is written to SQLite as it is given, not at the end. An app killed, crashed or
+    backgrounded-then-evicted mid-flow reopens with the answers already given still in place.
+    Back moves between steps; on step 1, leaving requires an explicit confirmation and exits
+    the app rather than skipping into an unconfigured Home.
+  business_rule: >
+    A student who takes a phone call on step 4 must not be made to start again. The flow holds
+    no state that exists only in memory.
+  actor: "First-time student"
+  preconditions:
+    - Onboarding in progress
+  inputs:
+    - "Partial answers"
+  expected_outputs:
+    - "Each answer persisted immediately; the flow resumes on relaunch"
+  validations:
+    - "A required answer cannot be skipped"
+  permissions: "None"
+  dependencies:
+    - REQ-ONBOARDING-001
+  error_conditions:
+    - "A failed write costs a resumed answer, never a broken flow — the in-memory value is what the screen renders"
+  edge_conditions:
+    - "Back on step 1 shows a confirmation; confirming exits the app"
+    - "One BackHandler subscription covers both the Back button and the Back gesture, because app.json disables predictive back"
+  offline_behavior: >
+    Entirely offline.
+  acceptance_criteria:
+    - Answers entered before a kill are present after relaunch
+    - Home is unreachable while onboarding is incomplete
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: >
+    Requires killing and relaunching a real app. No automated mobile runner exists in this
+    project.
+
+- id: REQ-ONBOARDING-009
+  feature: Personalised preparation showing only real steps, then a welcome using the entered name
+  module: ONBOARDING
+  system: [Mobile]
+  source_doc: Supplied onboarding brief
+  source_section: "§13 After onboarding; §14/§15 Welcome"
+  description: >
+    After the last answer the profile is persisted and onboarding stamped complete, then a
+    preparation screen runs four steps and ticks each as it genuinely finishes: the profile
+    save (already done), following and activating the chosen exam, waiting for reference data,
+    and warming the exam guide and priority topics Home reads. A step that cannot run is
+    omitted rather than ticked. The screen then shows "Welcome to SarkariTaiyaari, {name}! 👋"
+    using the name entered in step 1, and opens Home.
+  business_rule: >
+    No progress line claims something happened that did not. The exam step is omitted entirely
+    when onboarding finished with no exam, rather than shown as complete.
+  actor: "First-time student"
+  preconditions:
+    - The last onboarding answer has been given
+  inputs:
+    - "The completed profile"
+  expected_outputs:
+    - "Chosen exam followed and active; Home's first render has data; the welcome names the student"
+  validations:
+    - "The greeting never renders a hardcoded name"
+  permissions: "None"
+  dependencies:
+    - REQ-ONBOARDING-003
+    - REQ-ONBOARDING-005
+  error_conditions:
+    - "A failed warm-up still ticks and proceeds: each item is an enhancement whose own screen handles absence, and a prefetch must not strand the student"
+    - "A 12-second ceiling releases the screen regardless of sync state"
+  edge_conditions:
+    - "Offline completion: the exam step is omitted, the rest still runs"
+    - "The switching overlay is suppressed here — there is no previous dashboard to cover, and this screen is already the progress UI"
+  offline_behavior: >
+    Completes offline. The reference-data wait is bounded and the warm-up is best-effort.
+  acceptance_criteria:
+    - Each checklist line corresponds to work that actually ran
+    - The welcome shows the name the student typed
+    - Home opens with the chosen exam already set up
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: >
+    A visual/behavioural sequence on a real device. No automated mobile runner exists.
+
+- id: REQ-ONBOARDING-010
+  feature: Home greeting personalised by name and time of day
+  module: ONBOARDING
+  system: [Mobile]
+  source_doc: Supplied onboarding brief
+  source_section: "§16 Personalized Home"
+  description: >
+    Home's header greets the student by the name from onboarding, varying with the local hour
+    ("Good morning, Venkatesh 👋"). With no name — an adopted install, or a profile that never
+    got one — it falls back to the app's existing "Welcome back 👋" rather than rendering a
+    greeting with a gap in it. A signed-in account's display name is used only when the
+    onboarding name is absent.
+  business_rule: >
+    The onboarding name wins over the account name: it is what this person said to call them,
+    on this device, most recently.
+  actor: "Any student"
+  preconditions:
+    - Home is open
+  inputs:
+    - "app_preferences.display_name; the local hour"
+  expected_outputs:
+    - "A greeting naming the student, or the existing generic one"
+  validations:
+    - "Every greeting is a real catalogue key, so Telugu coverage is compiler-enforced"
+  permissions: "None"
+  dependencies:
+    - REQ-ONBOARDING-003
+  error_conditions: []
+  edge_conditions:
+    - "05:00-11:59 morning, 12:00-16:59 afternoon, otherwise evening"
+  offline_behavior: >
+    Entirely offline.
+  acceptance_criteria:
+    - A student who onboarded sees their own name on Home
+    - An adopted install sees the unchanged generic greeting
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: PartiallyAutomated
+  automation_hint: >
+    packages/core src/onboarding/status.test.ts — the "greeting period" block covers all 24
+    hours. The rendering and the fallback are mobile UI, not automated.
+
+- id: REQ-ONBOARDING-011
+  feature: One source of truth for the active exam, reflected on Home with no reload
+  module: ONBOARDING
+  system: [Mobile]
+  source_doc: Supplied onboarding brief
+  source_section: "§5 / §16 exam-state synchronisation"
+  description: >
+    The exam chosen during onboarding is set through the app's existing active-exam provider —
+    the same operation My Exams, the Exams tab and the Exam Guide use — so Home reflects it
+    immediately, with no reload, app kill or navigation away and back. Onboarding creates no
+    second exam-selection state.
+  business_rule: >
+    While onboarding is in progress the existing auto-follow fallback stands down, so a student
+    still on the exam step cannot silently acquire a different exam the moment the first sync
+    lands and end up following two.
+  actor: "Any student"
+  preconditions:
+    - Onboarding completed with an exam chosen
+  inputs:
+    - "The chosen exam code"
+  expected_outputs:
+    - "The exam is followed, is the active exam, and is on Home immediately"
+  validations:
+    - "Only one stored active exam exists (app_preferences.active_exam_code), enforced structurally by it being a single row"
+  permissions: "None"
+  dependencies:
+    - REQ-ONBOARDING-005
+    - REQ-CATALOG-025
+  error_conditions: []
+  edge_conditions:
+    - "Changing the exam later from any other module updates Home the same way, through the same provider"
+  offline_behavior: >
+    The switch is local and works offline.
+  acceptance_criteria:
+    - Selecting SSC CGL during onboarding shows SSC CGL on Home immediately after
+    - Changing the exam afterwards from My Exams updates Home without a reload
+    - A student who chose an exam during onboarding is following exactly that exam, not two
+  priority: Critical
+  status: Active
+  ambiguity: >
+    NOTE ON THE BRIEF'S PREMISE. §16 states that changing the prepared exam elsewhere does not
+    update Home until a reload. That was true and was fixed on 2026-09-16 by
+    examsModule/activeExamContext.tsx (see reports/31-active-exam-switching/), before this
+    work started. This requirement therefore records the behaviour to keep, and the new
+    obligation on onboarding to route through it rather than around it.
+  automation_status: ManualOnly
+  automation_hint: >
+    Behavioural, on a device. TC-CATALOG-053/054/055 already cover the switching mechanism
+    itself; this covers onboarding's use of it.
+
+- id: REQ-ONBOARDING-012
+  feature: The preparation profile is device-local, and a reinstall re-onboards
+  module: ONBOARDING
+  system: [Mobile]
+  source_doc: Supplied onboarding brief
+  source_section: "§11 Save data; §20 App reinstall behaviour"
+  description: >
+    The profile lives in the device-local `app_preferences` row and is never synced. There is
+    no server-side preparation profile to restore from, so a reinstall — which clears local
+    storage — results in onboarding being shown again, even if the student signs back into an
+    existing account. Signing in restores practice history, bookmarks, followed exams and
+    topic mastery exactly as before; only the onboarding answers are re-asked.
+  business_rule: >
+    Onboarding runs before any sign-in on a fresh install because accounts in this app are
+    optional and it works fully signed out, so the device is necessarily the source of truth at
+    the moment these values are written. The backend `users` table carries email, display_name
+    and role only.
+  actor: "Student reinstalling the app"
+  preconditions:
+    - App reinstalled, local storage cleared
+  inputs: []
+  expected_outputs:
+    - "Onboarding is shown again; all account-backed data still restores on sign-in"
+  validations: []
+  permissions: "None"
+  dependencies:
+    - REQ-ONBOARDING-001
+  error_conditions: []
+  edge_conditions:
+    - "A signed-in account's display_name is used for the Home greeting when the local profile has no name"
+  offline_behavior: >
+    Entirely offline.
+  acceptance_criteria:
+    - A reinstall shows onboarding
+    - Signing in after a reinstall restores history, bookmarks and followed exams unchanged
+  priority: Medium
+  status: Active
+  ambiguity: >
+    ACCEPTED TRADE-OFF, stated rather than hidden. Making the profile account-wide is an
+    additive backend table plus an endpoint plus a conflict rule for two devices disagreeing —
+    deliberately out of scope here, and nothing in the current design would have to move to add
+    it. This is the same trade-off already accepted for app_preferences.active_exam_code.
+  automation_status: ManualOnly
+  automation_hint: >
+    Requires a genuine uninstall/reinstall on a device.
+
+- id: REQ-ONBOARDING-013
+  feature: CONTENT languages -- one or two, chosen independently of the app language
+  module: ONBOARDING
+  system: [Mobile]
+  source_doc: Supplied onboarding brief (revised)
+  source_section: "§4-§7 Content/data languages; §13 content-language data model"
+  description: >
+    Step 3 asks which languages the student wants their QUESTIONS and study content in. The list
+    comes from the synced `languages` table -- the app's real supported-content-language
+    configuration -- and the student picks at least one and at most two, stored as an ordered
+    list in `content_language_preferences` (one row per language), never as a delimited string.
+    The first selection is the language screens default to. This is independent of the app
+    language chosen in REQ-ONBOARDING-004; neither is derived from the other.
+  business_rule: >
+    The cap is a data-volume decision, not a preference: ~1 lakh questions across ~10 languages
+    is ~10 lakh language-specific records, and every extra language a device opts into is another
+    full translation set to sync and store. Two covers the realistic cases (English plus a mother
+    tongue). The two language concepts must stay separate because their supported sets genuinely
+    differ -- Hindi has question content and no UI catalogue at all, so a Hindi-studying student
+    is unservable if the two are conflated.
+  actor: "First-time student"
+  preconditions:
+    - Onboarding step 3 is on screen
+  inputs:
+    - "One or two codes from the synced `languages` table"
+  expected_outputs:
+    - "content_language_preferences holds one row per chosen language, ordered by choice"
+    - "The first chosen language becomes the default question language"
+  validations:
+    - "Zero selected is rejected -- Continue stays disabled"
+    - "A third selection is REFUSED with a message; the existing two are left untouched"
+    - "An unsupported or duplicated code is rejected"
+  permissions: "None"
+  dependencies:
+    - REQ-ONBOARDING-004
+  error_conditions:
+    - "EMPTY when none selected; TOO_MANY when more than two; UNSUPPORTED for an unknown or duplicate code"
+  edge_conditions:
+    - "Nothing is auto-deselected at the cap -- the student chooses which one to give up"
+    - "Deselecting down to zero is allowed; Continue then blocks until one is chosen again"
+    - "A device whose `languages` table has not synced shows an honest empty state and can continue"
+  offline_behavior: >
+    The stored selection is device-local and never synced. The offered list needs the reference
+    sync; with no list the step says so rather than blocking onboarding.
+  acceptance_criteria:
+    - Selecting English alone is valid; English + Telugu is valid
+    - Attempting a third shows "You can select up to 2 languages." and changes nothing
+    - App language Telugu with content languages English + Telugu works, and so does app language English with content languages Hindi + Telugu
+    - The chosen languages survive an app restart
+  priority: Critical
+  status: Active
+  ambiguity: >
+    SCOPE BOUNDARY, stated rather than left implicit. This requirement covers CAPTURING and
+    STORING the preference only. The brief's §14 explicitly defers multilingual question sync,
+    filtering, fallback and rendering, so none of that is implemented and none of it is asserted
+    here. What is guaranteed is that the stored shape is directly queryable by that future system.
+  automation_status: Automated
+  automation_hint: >
+    packages/core src/onboarding/validation.test.ts -- the "content languages" block (8 cases,
+    including that a code with content but no interface catalogue is valid here and invalid for
+    the interface) and the "toggling a content language at the limit" block (7 cases, including
+    that a refused third tap changes nothing and that the input array is never mutated).

@@ -1,0 +1,16 @@
+# Regression — LEARNING-STATE
+#
+# Every test case belonging to the LEARNING-STATE module. Run after any change confined to that module.
+#
+# 8 test case(s). Membership rule: module == LEARNING-STATE (mechanical filter).
+
+suite: Regression — LEARNING-STATE
+test_case_ids:
+  - TC-LEARNINGSTATE-001
+  - TC-LEARNINGSTATE-002
+  - TC-LEARNINGSTATE-003
+  - TC-LEARNINGSTATE-004
+  - TC-LEARNINGSTATE-005
+  - TC-LEARNINGSTATE-006
+  - TC-LEARNINGSTATE-007
+  - TC-LEARNINGSTATE-008

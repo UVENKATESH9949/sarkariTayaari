@@ -632,3 +632,33 @@
   notes: >
     The "never unasked" property is the cost control for this surface: the Wrong Answers list can
     hold hundreds of rows, so generating per row as cards render would spend a model call each.
+
+- id: SCN-AI-051
+  requirement_ids: [REQ-AI-024]
+  category: Positive
+  title: All five AI surfaces render the shared card
+  objective: >
+    Confirm Practice Summary, Mock Test Result, Preparation Radar, the question explanation and the
+    mistake analysis all present as the same card, and that the score ring agrees with the accuracy
+    the rest of the screen states.
+  systems: [Mobile]
+  status: Ready
+  notes: >
+    The ring is the check worth doing carefully on Mock Test: it is scored over questions attempted,
+    not the size of the paper, matching what getOrBuildMockFeedback sends the model. Scoring
+    correct-over-paper-size was a real shipped bug once.
+
+- id: SCN-AI-052
+  requirement_ids: [REQ-AI-024]
+  category: Edge case
+  title: Empty slots are omitted, not filled, and both palettes stay legible
+  objective: >
+    Confirm the card degrades by leaving parts out -- no focus row on a mock attempt or on a radar
+    with no weak topic, no "revisit mistakes" tile on a clean sheet -- and that every surface is
+    readable in light mode as well as dark.
+  systems: [Mobile]
+  status: Ready
+  notes: >
+    The reference design was drawn light while this app shipped dark-first, so light mode is the
+    case most likely to reveal a hardcoded colour. Tiles are also checked at the largest zoom step,
+    where fixed-percentage widths would clip.

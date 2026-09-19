@@ -1,0 +1,233 @@
+# REVISION module — requirement repository
+#
+# Scope: RevisionPlanController (GET /api/me/revision-plan) — when to come back to a topic, added by
+# TASK-3201 (Phase 7 of the personalization program). A new module rather than an extension of
+# ROADMAP: the roadmap orders work not yet done, this orders work already done and fading.
+#
+# The load-bearing caveat, recorded here so it survives past this session: the 3/7/21/45-day
+# intervals are BORROWED from published spaced-repetition research on other learners. They are not
+# measured on this product's students, and no test in this module asserts they are correct for this
+# product — no test could.
+#
+# automation_status is evidence-based, per qa/README.md's standing rule.
+
+- id: REQ-REVISION-001
+  feature: A student's revision schedule is readable, scoped to them, and only covers testable topics
+  module: REVISION
+  system: [Backend]
+  source_doc: api/REVISION-PLAN.md
+  source_section: "GET /api/me/revision-plan"
+  description: >
+    GET /api/me/revision-plan?examCode=... returns every topic in that exam's syllabus that the bank
+    can actually test, each with its revision status, due date and re-test. The acting student comes
+    from the bearer token; there is no user-id parameter anywhere.
+  business_rule: >
+    A topic with zero practicable questions is excluded outright — the same rule the roadmap
+    applies, and for the same reason: the re-test has to open a screen with questions behind it.
+  actor: Signed-in student
+  preconditions:
+    - "A valid bearer token"
+    - "An exam with at least one mapped topic carrying questions"
+  inputs:
+    - "examCode query parameter; no body"
+  expected_outputs:
+    - "200 with intervalBasis, dueCount, totalDueMinutes and topics[]"
+  validations:
+    - "401 without a token"
+    - "404 for an unknown examCode"
+    - "Topics with questionCount 0 are absent from topics[]"
+  permissions:
+    - "User token required; one account cannot address another's schedule because no parameter names a user"
+  dependencies: [REQ-LEARNINGSTATE-001, REQ-ROADMAP-001]
+  error_conditions:
+    - "A student with no history gets every topic NOT_SCHEDULED, never an error"
+  edge_conditions:
+    - "Signed-out students are not covered — D3.2 made personalization a signed-in feature for V1"
+  offline_behavior: "None — server-computed, requires a network"
+  acceptance_criteria:
+    - "A signed-in student reads their own schedule; an unauthenticated caller gets 401; an unknown exam gets 404"
+    - "One student's practice history never produces another student's due dates"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    RevisionPlanTest.requiresASignedInUser, .unknownExamIs404,
+    .aTopicWithNoQuestionsIsNotInThePlanAtAll and .oneStudentsScheduleIsNotAnothers.
+
+- id: REQ-REVISION-002
+  feature: A due date comes from a versioned, declared interval model
+  module: REVISION
+  system: [Backend]
+  source_doc: api/REVISION-PLAN.md
+  source_section: "The intervals are borrowed, not measured"
+  description: >
+    Every response carries intervalBasis = SPACED_REPETITION_LADDER_V1, and each scheduled topic
+    carries rung (1-4), rungReason, intervalDays and dueAt = lastPracticedAt + intervalDays.
+  business_rule: >
+    The 3/7/21/45-day rungs are taken from published spaced-repetition research on other learners,
+    NOT measured on this app's students — reliable per-attempt history only began with V47. The
+    basis is therefore versioned and reported in the payload, so replacing the ladder with a
+    measured curve later is a visible version bump rather than a silent change in what "due" means.
+  actor: Signed-in student
+  preconditions:
+    - "A topic with a real practice attempt on record"
+  inputs:
+    - "examCode"
+  expected_outputs:
+    - "intervalBasis on the response; rung, rungReason, intervalDays and dueAt per scheduled topic"
+  validations:
+    - "intervalDays is always one of 3, 7, 21, 45"
+    - "rungReason names the state that selected the rung"
+  permissions:
+    - "User token required"
+  dependencies: [REQ-REVISION-001]
+  error_conditions: []
+  edge_conditions:
+    - "The basis string is asserted by test, so changing it silently would fail the suite"
+  offline_behavior: "None"
+  acceptance_criteria:
+    - "A due date is always explicable from the rung and reason reported beside it"
+    - "No response omits which interval model produced it"
+  priority: High
+  status: Active
+  ambiguity: >
+    Whether 3/7/21/45 are right for THIS product is unresolved and deliberately untested — it needs
+    a retention study against real history, which the data is currently too young to support.
+  automation_status: Automated
+  automation_hint: >
+    RevisionLadderTest (the full decision table, with constructed states) and
+    RevisionPlanTest.aTopicLastPractisedLongAgoIsDueAndLeadsThePlan.
+
+- id: REQ-REVISION-003
+  feature: The rung is scaled by how well the student currently knows the topic
+  module: REVISION
+  system: [Backend]
+  source_doc: api/REVISION-PLAN.md
+  source_section: "The ladder, and how a rung is chosen"
+  description: >
+    Rung 1 (3 days) for NEEDS_ATTENTION or NEEDS_REVISION; rung 2 (7 days) for DEVELOPING or
+    IMPROVING; rung 3 (21 days) for STRONG; rung 4 (45 days) for STRONG and MASTERED together.
+  business_rule: >
+    A deliberate deviation from textbook SM-2, which advances an item one rung per successful review
+    and so needs a stored counter. Reading the rung from current state instead means a topic that
+    keeps going well climbs on its own, a topic that slips drops straight back to 3 days without
+    waiting for a review to fail, and nothing is stored that could go stale. The cost is that this
+    is not a strict per-item progression: two students with identical review histories but different
+    current health get different intervals.
+  actor: Signed-in student
+  preconditions:
+    - "Topics across several performance states"
+  inputs:
+    - "The Phase 3 composite for a topic"
+  expected_outputs:
+    - "A rung, its interval, and the reason that selected it"
+  validations:
+    - "The ladder is monotonic — a weaker topic never waits longer than a stronger one"
+    - "STRONG and MASTERED waits longer than STRONG alone, since covering and performing differ"
+  permissions:
+    - "User token required"
+  dependencies: [REQ-REVISION-002, REQ-LEARNINGSTATE-002]
+  error_conditions: []
+  edge_conditions:
+    - "An unrecognised performance state is left unscheduled rather than defaulted onto a rung"
+  offline_behavior: "None"
+  acceptance_criteria:
+    - "Each of the four rungs is reachable from the state combination that defines it"
+    - "Monotonicity holds across the whole ladder"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    RevisionLadderTest.aShakyTopicComesBackInThreeDays,
+    .aTopicThatIsMovingButNotSettledComesBackInAWeek,
+    .strongClimbsHigherOnceTheCurriculumAgreesItIsMastered and .theLadderIsMonotonic.
+
+- id: REQ-REVISION-004
+  feature: A topic with nothing to revise is said to be unscheduled, not given a due date
+  module: REVISION
+  system: [Backend]
+  source_doc: api/REVISION-PLAN.md
+  source_section: "NOT_SCHEDULED is an answer, not a gap"
+  description: >
+    A topic never practised is NOT_SCHEDULED with reason NEVER_PRACTISED; one measured but not yet
+    judgeable (INSUFFICIENT_DATA) is NOT_SCHEDULED with reason NOT_ENOUGH_EVIDENCE. Both return
+    dueAt, rung, intervalDays and retest as null.
+  business_rule: >
+    Both belong to the roadmap's learning path rather than to revision — there is nothing to keep
+    fresh. Saying which of the two applies is more useful than a due date computed from no evidence,
+    and an unrecognised state is left unscheduled for the same reason.
+  actor: Signed-in student
+  preconditions:
+    - "A mapped topic with questions and no attempts"
+  inputs:
+    - "examCode"
+  expected_outputs:
+    - "status NOT_SCHEDULED with a reason, and every scheduling field null"
+  validations:
+    - "retest is null for an unscheduled topic — there is nothing to re-test"
+    - "The two reasons are distinguishable, not collapsed into one"
+  permissions:
+    - "User token required"
+  dependencies: [REQ-REVISION-001]
+  error_conditions: []
+  edge_conditions:
+    - "dueCount and totalDueMinutes ignore unscheduled topics entirely"
+  offline_behavior: "None"
+  acceptance_criteria:
+    - "An untouched topic is explicitly unscheduled with the reason stated"
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    RevisionPlanTest.anUntouchedTopicIsNotScheduledAndSaysWhy and
+    RevisionLadderTest.aTopicWithNothingMeasuredIsNotScheduledAtAll.
+
+- id: REQ-REVISION-005
+  feature: Due work leads the plan, and re-testing resolves to something the app can open
+  module: REVISION
+  system: [Backend]
+  source_doc: api/REVISION-PLAN.md
+  source_section: "The re-test / Ordering"
+  description: >
+    topics[] is ordered most-overdue first, then soonest due, then unscheduled, each group
+    tie-broken by exam priority. Each scheduled topic carries a retest of TIMED_PRACTICE with a
+    question count, its basis, an estimated duration and the estimate's tier.
+  business_rule: >
+    Urgency of forgetting outranks exam weight within this plan; how much of a day that deserves is
+    Phase 5's decision, not this endpoint's. The question count comes from the largest
+    question-bearing step the radar already recommends, so the revision plan and the roadmap ask for
+    the same amount of work, and is capped at the questions the bank actually holds. A full mock
+    paper was rejected as the instrument: it spans the syllabus and cannot be scheduled per topic.
+  actor: Signed-in student
+  preconditions:
+    - "One topic practised long ago and one practised today, the fresher one carrying higher exam priority"
+  inputs:
+    - "examCode"
+  expected_outputs:
+    - "The overdue topic first; dueCount and totalDueMinutes reflecting only due work"
+    - "retest.action TIMED_PRACTICE with questionCount, questionCountBasis, estimatedMinutes and estimate"
+  validations:
+    - "questionCount never exceeds the topic's available questions"
+    - "totalDueMinutes is null rather than zero when nothing is due"
+    - "The estimate tier is one of the four declared sources, shared with the roadmap"
+  permissions:
+    - "User token required"
+  dependencies: [REQ-REVISION-002, REQ-ROADMAP-003]
+  error_conditions: []
+  edge_conditions:
+    - "daysOverdue 0 means due today; daysUntilDue is null when due and vice versa"
+  offline_behavior: "None"
+  acceptance_criteria:
+    - "An overdue topic outranks a fresher, higher-priority one"
+    - "A re-test never asks for more questions than exist"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    RevisionPlanTest.aTopicLastPractisedLongAgoIsDueAndLeadsThePlan,
+    .whenNothingIsDueTheTotalIsNullRatherThanZero and
+    .theRetestIsTimedPracticeAndNeverExceedsTheQuestionsAvailable.

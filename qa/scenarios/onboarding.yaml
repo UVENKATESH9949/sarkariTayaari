@@ -1,0 +1,320 @@
+# ONBOARDING module — test scenarios
+#
+# Every scenario references one or more qa/requirements/onboarding.yaml requirement_ids.
+# The two `ambiguity` entries in that file are DOCUMENTED DEVIATIONS from the supplied brief,
+# not undetermined behaviour, so their scenarios assert a concrete expected result — unlike an
+# Ambiguous-status scenario, which deliberately does not.
+
+- id: SCN-ONBOARDING-001
+  requirement_ids: [REQ-ONBOARDING-001]
+  category: Positive
+  title: A fresh install shows onboarding before the app
+  objective: >
+    Verify that a device with no prior local data opens the onboarding flow, and that Home and
+    the tab bar are not reachable while it is on screen.
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-ONBOARDING-002
+  requirement_ids: [REQ-ONBOARDING-001, REQ-ONBOARDING-008]
+  category: Recovery
+  title: Onboarding interrupted by an app kill resumes with answers intact
+  objective: >
+    Verify that killing the app partway through the flow — after the first sync has completed
+    behind it, which is what makes the usage signals look like an existing install — reopens to
+    the flow, not Home, with the answers already given still present.
+  systems: [Mobile]
+  status: Ready
+  notes: >
+    This is the specific regression the onboarding_started_at stamp exists to prevent. Timing
+    matters: the kill must happen after the first sync finishes.
+
+- id: SCN-ONBOARDING-003
+  requirement_ids: [REQ-ONBOARDING-001]
+  category: StateTransition
+  title: Onboarding is never shown again after completion
+  objective: >
+    Verify that completing onboarding, killing the app, and reopening goes straight to the
+    normal startup path.
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-ONBOARDING-004
+  requirement_ids: [REQ-ONBOARDING-002]
+  category: Compatibility
+  title: An install that predates onboarding is adopted with no questions and no data loss
+  objective: >
+    Verify that upgrading a device that already has practice history, bookmarks, a followed
+    exam and settings opens straight to Home, and that every one of those is unchanged
+    afterwards.
+  systems: [Mobile]
+  status: Ready
+  notes: >
+    The highest-risk scenario in this module: the failure mode looks to a real user exactly
+    like their data was lost.
+
+- id: SCN-ONBOARDING-005
+  requirement_ids: [REQ-ONBOARDING-002]
+  category: DataIntegrity
+  title: Adoption is decided by any single prior-use signal
+  objective: >
+    Verify each of the four signals (prior sync, practice/mock history, a followed exam, a
+    stored account) independently results in adoption rather than onboarding.
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-ONBOARDING-006
+  requirement_ids: [REQ-ONBOARDING-003]
+  category: Validation
+  title: An empty or whitespace-only name blocks Continue with a message
+  objective: >
+    Verify that pressing Continue with no name shows a validation message and does not advance,
+    and that the message clears as soon as the student starts typing.
+  systems: [Mobile]
+  status: Ready
+  notes: >
+    Continue is deliberately enabled rather than disabled on this step, so the student gets a
+    reason rather than an inert button.
+
+- id: SCN-ONBOARDING-007
+  requirement_ids: [REQ-ONBOARDING-003]
+  category: Boundary
+  title: Name normalisation and length boundary
+  objective: >
+    Verify surrounding and internal whitespace is normalised, invisible characters are stripped,
+    a name of exactly 40 code points is accepted, 41 is rejected, and an emoji or Devanagari
+    cluster counts as one character.
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-ONBOARDING-008
+  requirement_ids: [REQ-ONBOARDING-004]
+  category: Positive
+  title: Language step offers only translated languages and applies immediately
+  objective: >
+    Verify the step lists exactly the languages with a real catalogue, that choosing Telugu
+    re-renders the remaining steps in Telugu, and that the choice is the same preference
+    Settings shows afterwards.
+  systems: [Mobile]
+  status: Ready
+  notes: >
+    Asserts the documented deviation from the brief's eight-language list — see
+    REQ-ONBOARDING-004's ambiguity field.
+
+- id: SCN-ONBOARDING-009
+  requirement_ids: [REQ-ONBOARDING-005]
+  category: Positive
+  title: Exam step lists the real catalogue and the choice reaches Home
+  objective: >
+    Verify the exam list comes from the app's own catalogue with real question counts, and that
+    the selected exam is followed, becomes the active exam, and is what Home shows.
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-ONBOARDING-010
+  requirement_ids: [REQ-ONBOARDING-005, REQ-ONBOARDING-009]
+  category: Offline
+  title: Onboarding completes with no network at all
+  objective: >
+    Verify a first launch in airplane mode can complete every step, presents an honest
+    "couldn't load the exam list" state rather than a dead end, saves the profile, and reaches
+    Home.
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-ONBOARDING-011
+  requirement_ids: [REQ-ONBOARDING-006]
+  category: Positive
+  title: The stage question adapts to the exam and is skipped when there is nothing to ask
+  objective: >
+    Verify a multi-stage exam shows its real stage names plus "all stages / not sure", and an
+    exam with one stage or no synced structure shows no stage question at all while still
+    asking the target year.
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-ONBOARDING-012
+  requirement_ids: [REQ-ONBOARDING-006]
+  category: Boundary
+  title: Target year options are derived from the current year
+  objective: >
+    Verify the offered years are the current year and the two following it plus "not sure yet",
+    and that a past year or one beyond the horizon is rejected by the validator.
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-ONBOARDING-013
+  requirement_ids: [REQ-ONBOARDING-007]
+  category: Validation
+  title: Preparation level and daily study time are required closed enums
+  objective: >
+    Verify Continue stays disabled until an option is chosen on each step, that the stored value
+    is the enum identifier rather than the label, and that free text and null are rejected by
+    the validator.
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-ONBOARDING-014
+  requirement_ids: [REQ-ONBOARDING-008]
+  category: StateTransition
+  title: Back navigates between steps and confirms before leaving the first
+  objective: >
+    Verify Back moves to the previous step from steps 2-7, and that on step 1 it raises a
+    confirmation whose "keep going" stays in the flow — never dropping the student into a
+    partially-configured Home.
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-ONBOARDING-015
+  requirement_ids: [REQ-ONBOARDING-009]
+  category: Positive
+  title: The preparation screen ticks only work that ran, then welcomes by name
+  objective: >
+    Verify each checklist line corresponds to work that actually happened, that the exam line is
+    omitted rather than ticked when no exam was chosen, and that the welcome names the student
+    from step 1 rather than a placeholder.
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-ONBOARDING-016
+  requirement_ids: [REQ-ONBOARDING-009]
+  category: Performance
+  title: Onboarding does not add a second preparation screen or a stalled wait
+  objective: >
+    Verify the personalised warm-up is the only preparation screen a first-time student sees —
+    the generic one does not appear after it — and that a student finishing the flow quickly is
+    not held longer than the work actually takes.
+  systems: [Mobile]
+  status: Ready
+  notes: >
+    The two screens are gated by one component precisely so they cannot stack; this checks that
+    holds on a real device.
+
+- id: SCN-ONBOARDING-017
+  requirement_ids: [REQ-ONBOARDING-010]
+  category: Positive
+  title: Home greets by name, and falls back cleanly when there is none
+  objective: >
+    Verify Home shows a time-appropriate greeting with the onboarding name, and that a device
+    adopted as an existing install still shows the original generic greeting rather than one
+    with an empty name in it.
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-ONBOARDING-018
+  requirement_ids: [REQ-ONBOARDING-011]
+  category: Integration
+  title: Onboarding's exam and a later change from another module share one source of truth
+  objective: >
+    Verify the onboarding exam is set through the existing active-exam provider — Home reflects
+    it with no reload — and that changing the exam afterwards from My Exams updates Home the
+    same way. Also verify the student ends up following exactly the exam they chose, not that
+    one plus an auto-followed default.
+  systems: [Mobile]
+  status: Ready
+  notes: >
+    The second half guards the auto-follow stand-down: without it the first sync completing
+    mid-flow silently follows the first exam by display order.
+
+- id: SCN-ONBOARDING-019
+  requirement_ids: [REQ-ONBOARDING-012]
+  category: Recovery
+  title: A reinstall re-onboards but restores everything the account holds
+  objective: >
+    Verify that uninstalling and reinstalling shows onboarding again, and that signing back into
+    the same account restores practice history, bookmarks, followed exams and topic mastery
+    unchanged.
+  systems: [Mobile]
+  status: Ready
+  notes: >
+    Establishes the accepted trade-off in practice: the onboarding answers are the only thing a
+    reinstall loses.
+
+- id: SCN-ONBOARDING-020
+  requirement_ids: [REQ-ONBOARDING-001, REQ-ONBOARDING-002]
+  category: DataIntegrity
+  title: Migration 0027 applies to a populated preferences row without loss
+  objective: >
+    Verify the eight added columns land on a device whose app_preferences row already holds a
+    theme, zoom level, language and active exam, leaving those four byte-identical and the new
+    columns NULL rather than empty strings.
+  systems: [Mobile]
+  status: Ready
+  notes: >
+    A failed migration is a hard startup gate in this app, so this is the highest-risk
+    mechanical item in the change.
+
+- id: SCN-ONBOARDING-021
+  requirement_ids: [REQ-ONBOARDING-013]
+  category: Positive
+  title: Content languages are chosen from the real synced list, one or two of them
+  objective: >
+    Verify the step lists the languages from the synced `languages` table, that one selection is
+    accepted and two are accepted, and that the first chosen becomes the default question
+    language.
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-ONBOARDING-022
+  requirement_ids: [REQ-ONBOARDING-013]
+  category: Boundary
+  title: A third content language is refused without disturbing the first two
+  objective: >
+    Verify that with two selected, tapping a third shows the "up to 2" message, leaves both
+    existing selections intact, and that swapping requires the student to deselect one first.
+  systems: [Mobile]
+  status: Ready
+  notes: >
+    The rule most likely to rot into "helpfully" evicting the oldest selection. The refusal must
+    change nothing.
+
+- id: SCN-ONBOARDING-023
+  requirement_ids: [REQ-ONBOARDING-013]
+  category: Validation
+  title: Zero content languages blocks Continue
+  objective: >
+    Verify Continue is unavailable with nothing selected, including after deselecting back down
+    to zero, and becomes available again as soon as one is chosen.
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-ONBOARDING-024
+  requirement_ids: [REQ-ONBOARDING-004, REQ-ONBOARDING-013]
+  category: DataIntegrity
+  title: App language and content languages are genuinely independent
+  objective: >
+    Verify that a Telugu interface with English + Telugu content, and an English interface with
+    Hindi + Telugu content, both work. Neither choice overwrites the other, and the interface
+    language does not pre-select anything in the content step.
+  systems: [Mobile]
+  status: Ready
+  notes: >
+    Hindi is the decisive case: it has question content but no UI catalogue, so it must be
+    offerable as a content language and not as an app language.
+
+- id: SCN-ONBOARDING-025
+  requirement_ids: [REQ-ONBOARDING-013]
+  category: DataIntegrity
+  title: The stored selection is directly queryable, ordered, and survives a restart
+  objective: >
+    Verify the selection is stored as one row per language in the chosen order, that "does this
+    device want Telugu" is answerable in SQL, and that it is still present after an app kill.
+  systems: [Mobile]
+  status: Ready
+  notes: >
+    Capture and storage only. The multilingual sync that will consume this is explicitly out of
+    scope per the brief's section 14.

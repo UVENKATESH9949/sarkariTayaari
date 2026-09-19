@@ -186,22 +186,22 @@
   steps:
     - step: 1
       action: "Load the app at 390px wide"
-      expected: "A bottom navigation bar and a compact top bar are visible; no sidebar"
+      expected: "A sticky top nav bar shows the brand and a menu button; no inline links, no sidebar, no bottom tab bar"
     - step: 2
       action: "Check whether the page scrolls horizontally at 390px"
       expected: "It does not"
     - step: 3
       action: "Resize to 1280px wide"
-      expected: "A sidebar is visible; the bottom bar and top bar are gone"
+      expected: "The same top nav bar now shows the five links inline plus a Sign in/account button; the menu button is gone"
     - step: 4
       action: "Check horizontal scrolling at 1280px, and at exactly 1024px"
-      expected: "No horizontal scrolling at either; exactly one navigation treatment at 1024px"
+      expected: "No horizontal scrolling at either; exactly one of (inline links, menu button) is visible at 1024px"
   expected_result: >
     Both layouts are usable and neither overflows. (REQ-WEB-003 acceptance_criteria)
   actual_result: ""
   status: Not Executed
   defect_id: ""
-  remarks: null
+  remarks: "Updated 2026-09-18 for the sidebar/bottom-bar -> single top-nav change; see REQ-WEB-003's own stale-doc correction."
   automation_status: ManualOnly
   automation_reference: ""
 
@@ -213,8 +213,8 @@
   feature: Account and Settings reachable at every width
   title: Account and Settings are reachable and operable on a phone-width screen
   objective: >
-    Confirm the two destinations excluded from the bottom bar remain reachable on a narrow
-    screen — the defect this case exists to prevent recurring.
+    Confirm the two destinations not among the top nav's five primary links remain reachable
+    on a narrow screen — the defect this case exists to prevent recurring.
   preconditions:
     - "The app is served"
   test_data: "n/a"
@@ -224,16 +224,16 @@
   test_type: Functional
   steps:
     - step: 1
-      action: "Load the app at 390px and look for a control leading to Account"
-      expected: "A visible, labelled control exists (top bar)"
+      action: "Load the app at 390px and look for a control leading to Settings"
+      expected: "A visible, labelled gear-icon button exists in the top nav"
     - step: 2
-      action: "Activate it"
+      action: "Activate the menu button, then activate 'Sign in' inside the opened dropdown"
       expected: "The Account screen renders at /account"
     - step: 3
-      action: "Return home and activate the Settings control"
+      action: "Return home and activate the Settings control from step 1"
       expected: "The Settings screen renders at /settings"
     - step: 4
-      action: "Inspect both controls' rendered size and accessible name"
+      action: "Inspect the Settings icon button's and menu button's rendered size and accessible name"
       expected: "At least 44x44px, each with an accessible name"
   expected_result: >
     Neither destination is stranded at narrow widths. (REQ-WEB-004 acceptance_criteria)
@@ -241,8 +241,10 @@
   status: Not Executed
   defect_id: ""
   remarks: >
-    Regression guard. Both were unreachable below 1024px when first built, and nothing else on
-    the screen looked wrong — the kind of defect only a width-specific check finds.
+    Regression guard. Both were unreachable below 1024px when first built under the old
+    sidebar/bottom-bar model, and nothing else on the screen looked wrong — the kind of
+    defect only a width-specific check finds. Steps updated 2026-09-18 for the new
+    top-nav-only model; re-verified reachable under it this session.
   automation_status: ManualOnly
   automation_reference: ""
 
@@ -668,7 +670,7 @@
   test_type: Functional
   steps:
     - step: 1
-      action: "While an attempt is in progress, click a sidebar/nav link (e.g. Home)"
+      action: "While an attempt is in progress, click a top-nav link (e.g. Home)"
       expected: "This app's own styled confirmation dialog appears; navigation does not happen until confirmed"
     - step: 2
       action: "While an attempt is in progress, attempt to close the tab or reload"
@@ -697,7 +699,7 @@
   feature: Responsive layout — content grid and footer
   title: Exam-card grid columns and footer form change at the documented breakpoints
   objective: >
-    Confirm the exam-card grid on Home, Practice and Mock Test renders 1/2/3/4 columns at the
+    Confirm the exam-card grid on Practice and Mock Test renders 1/2/3/4 columns at the
     documented widths, the footer switches from its compact phone form to its full
     multi-column form at 1024px, and none of it overflows horizontally.
   preconditions:
@@ -709,14 +711,14 @@
   test_type: Compatibility
   steps:
     - step: 1
-      action: "Load Home, Practice and Mock Test at 390px wide"
-      expected: "The exam-card grid is a single column; the footer shows only the brand line and copyright, positioned above the bottom nav bar"
+      action: "Load Practice and Mock Test at 390px wide"
+      expected: "The exam-card grid is a single column; the footer shows only the brand line and copyright"
     - step: 2
       action: "Resize to 768px wide"
-      expected: "The exam-card grid becomes 2 columns; the footer is still in its compact form (sidebar has not appeared yet)"
+      expected: "The exam-card grid becomes 2 columns; the footer is still in its compact form (the top nav's inline links have not appeared yet)"
     - step: 3
       action: "Resize to 1024px wide"
-      expected: "The exam-card grid becomes 3 columns; the footer switches to its full form (Product/Account columns, brand blurb) at the same point the sidebar appears"
+      expected: "The exam-card grid becomes 3 columns; the footer switches to its full form (Product/Account columns, brand blurb) at the same point the top nav's inline links appear"
     - step: 4
       action: "Resize to 1600px wide"
       expected: "The exam-card grid becomes 4 columns; page content grows wider but stays capped, not full-bleed"
@@ -730,5 +732,204 @@
   status: Not Executed
   defect_id: ""
   remarks: "A short page's footer should sit at the bottom of the viewport rather than floating mid-screen — worth a glance on Home, which has little content."
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-WEB-019
+  requirement_ids: [REQ-WEB-011]
+  scenario_id: SCN-WEB-018
+  system: Web
+  module: WEB
+  feature: Desktop side panels — Practice Quiz and Mock Test Engine
+  title: The desktop sidebar shows correct live state with no functional change
+  objective: >
+    Confirm the sidebar on both question-taking screens shows the session's real state and
+    that every existing interaction (answer, check, mark, clear, navigate, submit) works
+    identically to the pre-sidebar behaviour below 1024px.
+  preconditions:
+    - "Signed out or in, viewport at least 1024px wide"
+    - "A real topic with questions (Practice) and a real mockable paper (Mock Test)"
+  test_data: "Any exam/subject/topic with practice questions; any mockable paper"
+  test_environment: "Desktop browser, 1440px viewport"
+  priority: Medium
+  severity: Minor
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Start a Practice quiz at 1440px wide"
+      expected: "A sidebar to the right shows the exam/subject/topic/level and a 'N of Total' progress readout matching the progress bar above the question"
+    - step: 2
+      action: "Answer several questions, moving forward and back"
+      expected: "The sidebar's progress number updates to match the current question index each time"
+    - step: 3
+      action: "Start a Mock Test attempt at 1440px wide"
+      expected: "A 'Question Navigator' sidebar renders the full legend and grid; the header's 'Questions' button is not shown"
+    - step: 4
+      action: "Answer a question, mark another for review, then click a cell in the sidebar grid"
+      expected: "The clicked question becomes current; answered/marked cell colours in the sidebar match the student's actual actions"
+    - step: 5
+      action: "Submit the attempt"
+      expected: "The existing confirm dialog and scoring behave exactly as before this change"
+  expected_result: >
+    Both sidebars reflect real, live state and introduce no change to scoring or navigation
+    behaviour. (REQ-WEB-011 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Verified this session via a one-off Playwright script against real live data at 1440/1920px — a real 100-question SSC CGL paper's full navigator rendered correctly in the sidebar."
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-WEB-020
+  requirement_ids: [REQ-WEB-011]
+  scenario_id: SCN-WEB-019
+  system: Web
+  module: WEB
+  feature: Desktop side panels — boundary width
+  title: No overflow at exactly 1024px, the sidebar's narrowest width
+  objective: >
+    Confirm the question column and sidebar both fit without horizontal overflow at exactly
+    1024px, where the combined ideal width (42rem question column + 18rem sidebar + gap)
+    exceeds the available content width before --shell-max grows at 1280px.
+  preconditions:
+    - "A practice quiz or mock test attempt in progress"
+  test_data: "Any topic/paper"
+  test_environment: "Desktop browser resized to exactly 1024px"
+  priority: Low
+  severity: Minor
+  test_type: Compatibility
+  steps:
+    - step: 1
+      action: "Load Practice Quiz at exactly 1024px wide"
+      expected: "The question column visibly narrows (options no longer span the full ~42rem) rather than the layout overflowing; document.scrollWidth equals the viewport width"
+    - step: 2
+      action: "Open Mock Test's question-navigator modal at 820px, then resize the window to 1440px without closing it"
+      expected: "The sidebar appears at 1440px alongside the still-open modal; closing the modal (or resizing again) leaves the page in a normal, working state"
+  expected_result: >
+    The layout degrades gracefully at the narrowest sidebar width and survives a mid-session
+    resize across the breakpoint. (REQ-WEB-011 validations)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Confirmed via screenshot this session: the grid's minmax(0, 42rem) track shrinks correctly at 1024px with no overflow."
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-WEB-021
+  requirement_ids: [REQ-WEB-012]
+  scenario_id: SCN-WEB-020
+  system: Web
+  module: WEB
+  feature: Loading states — practice and mock-test drill-down
+  title: Every drill-down page shows a shaped skeleton, never bare "Loading…" text
+  objective: >
+    Confirm Subjects, Topics, Levels, Mock Test's paper list, Mock Test Start, Practice Quiz
+    and Mock Test Engine each show a content-shaped skeleton on first load.
+  preconditions:
+    - "An exam with real subjects/topics/questions; a real mockable paper"
+  test_data: "Any active exam"
+  test_environment: "Any browser; throttle the network to make the loading state observable if it resolves too fast normally"
+  priority: Low
+  severity: Minor
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Navigate Practice: exam -> Subjects -> Topics -> Levels, observing each page immediately after the click that opens it"
+      expected: "Each page briefly shows a row-shaped skeleton (icon circle + two text lines per row) inside a card, not a bare 'Loading…' line"
+    - step: 2
+      action: "Start a Practice quiz and observe the moment before the first question appears"
+      expected: "A skeleton progress bar and a question-card-shaped skeleton (title line + 4 option-shaped blocks) appear briefly"
+    - step: 3
+      action: "Navigate Mock Test: exam -> Papers -> a paper's Start page -> Start test, observing each transition"
+      expected: "Papers shows a stack of full-width card skeletons; Start shows row skeletons; the Engine's first load shows the same question-card skeleton as step 2"
+  expected_result: >
+    No page in this flow ever shows the old bare "Loading…" text. (REQ-WEB-012 validations)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    On light theme the skeleton's shimmer tones sit close to white and can look nearly blank
+    for a brief moment even though it's real, animated content — a pre-existing characteristic
+    of the shared skeleton-block tokens, not a defect introduced or claimed fixed here.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-WEB-022
+  requirement_ids: [REQ-WEB-013]
+  scenario_id: SCN-WEB-021
+  system: Web
+  module: WEB
+  feature: Empty states — ComingSoon
+  title: Progress, Exams and 404 each show their correct ComingSoon copy
+  objective: >
+    Confirm Progress and Exams show a phase pill naming the correct phase and "isn't built
+    yet" copy naming the feature, while an unknown URL shows 404-specific copy with no phase
+    pill and no false "arrives in a phase" claim.
+  preconditions: []
+  test_data: "n/a"
+  test_environment: "Any browser"
+  priority: Low
+  severity: Minor
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Visit /progress"
+      expected: "A centred icon, a pill reading 'Arrives in Phase 3', and copy naming 'Progress' as not built yet"
+    - step: 2
+      action: "Visit /exams"
+      expected: "The same treatment, pill reading 'Arrives in Phase 4', copy naming 'Exams'"
+    - step: 3
+      action: "Visit an unknown path, e.g. /this-does-not-exist"
+      expected: "The same icon and layout, but no phase pill, and copy directing the student to Practice/Mock Test or to check the address — never a claim that 'Page not found' arrives in some phase"
+  expected_result: >
+    Each of the three routes shows accurate, non-misleading copy for its own case. (REQ-WEB-013 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-WEB-023
+  requirement_ids: [REQ-WEB-014]
+  scenario_id: SCN-WEB-022
+  system: Web
+  module: WEB
+  feature: Home — hero + category browsing rows
+  title: Hero and category rows reflect real exam data with no fabrication
+  objective: >
+    Confirm the hero shows the real badged exam's own name/photo/cycle/vacancy/deadline with
+    no duplicated demo label, and every active exam appears once per relevant row (its
+    category, plus Popular if badged) with a real photo or monogram fallback.
+  preconditions:
+    - "At least one active exam carries an admin badge (currently SSC_CGL, 'popular')"
+  test_data: "The real active exam catalogue"
+  test_environment: "Any browser, light and dark theme"
+  priority: Medium
+  severity: Minor
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Load Home signed out"
+      expected: "The hero shows SSC CGL's real name, its uploaded emblem image, its real cycle name ('2027 (Demo)'), 4,500 vacancies, and a days-left figure — with 'Demo' appearing exactly once, not duplicated"
+    - step: 2
+      action: "Check the Popular row"
+      expected: "SSC CGL appears with a 'Popular' pill matching its real admin-set badge label"
+    - step: 3
+      action: "Check the SSC, Banking & Insurance, Railways and UPSC & Civil Services rows"
+      expected: "Every active exam appears in exactly the row matching its code prefix; SSC CGL also appears here (in addition to Popular), with the same real photo; every other tile shows a two-letter monogram, not a blank or broken image"
+    - step: 4
+      action: "Click a monogram tile (e.g. RRB NTPC)"
+      expected: "Navigates to Practice's Subjects screen for that exam"
+    - step: 5
+      action: "Switch to light theme and repeat steps 1-3"
+      expected: "All category dot colors, monogram tints and the hero gradient remain legible and correctly colored"
+  expected_result: >
+    Every figure shown is real backend data; nothing is invented, and no exam's demo status
+    is misrepresented. (REQ-WEB-014 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "A real bug (duplicated '(Demo) (Demo)' in the hero subtitle) was found and fixed this same session — step 1 is a regression guard for it."
   automation_status: ManualOnly
   automation_reference: ""

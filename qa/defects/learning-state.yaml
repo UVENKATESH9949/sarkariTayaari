@@ -1,0 +1,16 @@
+# LEARNING-STATE module — defects
+#
+# Empty by design. A defect here must trace to a real failed execution in qa/execution/, never
+# to a bug found while writing the code — those are fixed in the same change and written up in
+# the report. See qa/defects/auth.yaml for the schema.
+#
+# Worth stating explicitly for this module: the read-only-transaction bug found while building
+# it is NOT recorded here. LearningStateService was first annotated @Transactional(readOnly =
+# true), which blocked the health model's lazy recompute and returned 500 for any student with
+# real practice history. It was found by the very test suite written to cover this endpoint,
+# before any build anyone could run existed, and fixed in the same session — so it never became
+# a defect against a shipped behaviour. The account is in
+# reports/35-canonical-learning-state/ and in the service's own doc comment, and
+# qa/execution/2026-09-19-learning-state.yaml's header records that the first run failed.
+
+[]

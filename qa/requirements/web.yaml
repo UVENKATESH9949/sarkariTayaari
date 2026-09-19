@@ -101,33 +101,40 @@
   source_doc: tasks/TASK-2601-student-web-application.md
   source_section: "Decisions already taken — decision 3"
   description: >
-    The app is usable from roughly 360px wide up to a large desktop monitor. Below 1024px
-    navigation is a bottom bar plus a compact top bar; from 1024px it is a sidebar. Content
-    itself also adapts, not just navigation: the exam-card grid (Home, Practice, Mock Test)
-    renders 1 column below 768px, 2 from 768px, 3 from 1024px, and 4 from 1600px, and the
-    page content's max width grows in two further steps at 1280px and 1600px so a large
-    monitor gets more grid columns rather than one implausibly wide card. No layout produces
-    horizontal page scrolling at any of these widths.
+    The app is usable from roughly 360px wide up to a large desktop monitor. **Stale-doc
+    correction (2026-09-18, per AI_RULES.md §6):** this requirement previously described a
+    bottom-tab-bar + compact top bar below 1024px switching to a sidebar at 1024px. By
+    explicit later direction the whole app moved onto a single top navigation bar at every
+    width instead — see REQ-WEB-011's own "Nav scope" decision. Below 1024px the five
+    primary links collapse into a menu button rather than showing inline; there is no
+    bottom tab bar and no sidebar at any width any more. Content itself also adapts, not
+    just navigation: the exam-card grid (Practice, Mock Test) renders 1 column below
+    768px, 2 from 768px, 3 from 1024px, and 4 from 1600px, and the page content's max
+    width grows in two further steps at 1280px and 1600px so a large monitor gets more
+    grid columns rather than one implausibly wide card. No layout produces horizontal
+    page scrolling at any of these widths.
   business_rule: >
     The web app exists partly to serve students who will not install an APK, so a phone
     browser is a first-class target rather than a degraded one. A large desktop monitor
     should show more of the catalogue at once, not a single column stretched to fill the
-    screen.
+    screen. Moving off the bottom tab bar is a real, disclosed trade-off (a phone no longer
+    has an always-visible, thumb-reach primary nav) accepted in exchange for one navigation
+    idiom across the whole app instead of two.
   actor: Student
   preconditions: []
   inputs:
     - "Viewport width"
   expected_outputs:
-    - "Bottom bar + top bar below 1024px; sidebar at and above 1024px"
+    - "One sticky top nav bar at every width — inline links + account button >=1024px; brand + menu button <1024px"
     - "Exam-card grid column count: 1 (<768px), 2 (>=768px), 3 (>=1024px), 4 (>=1600px)"
   validations:
     - No horizontal overflow at any supported width
-    - The footer renders (compact, above the bottom nav) below 1024px and in its full multi-column form at and above 1024px
+    - The footer renders (compact, above the standard page padding) below 1024px and in its full multi-column form at and above 1024px
   permissions: n/a
   dependencies: []
   error_conditions: []
   edge_conditions:
-    - "Exactly at the 1024px breakpoint, exactly one navigation treatment is visible"
+    - "Exactly at the 1024px breakpoint, exactly one of (inline links, menu button) is visible"
     - "A short page's footer sits at the bottom of the viewport rather than floating mid-screen; a tall page's footer simply follows the content"
   offline_behavior: n/a
   acceptance_criteria:
@@ -138,7 +145,7 @@
   status: Active
   ambiguity: null
   automation_status: ManualOnly
-  automation_hint: "No browser-test runner is configured under web/"
+  automation_hint: "No browser-test runner is configured under web/; verified this session via a one-off Playwright script (not a committed suite)"
 
 - id: REQ-WEB-004
   feature: Account and Settings reachable at every width
@@ -147,12 +154,16 @@
   source_doc: tasks/TASK-2601-student-web-application.md
   source_section: "Phase 0 — two real bugs found by looking at browser screenshots"
   description: >
-    Account and Settings are reachable from the navigation at any supported viewport width —
-    from the sidebar footer on desktop, and from the top bar on narrow screens.
+    Account and Settings are reachable from the navigation at any supported viewport width.
+    **Stale-doc correction (2026-09-18):** previously via the sidebar footer (desktop) or
+    the compact top bar (phone) — now Settings is a small gear icon button in the top nav
+    at every width, and Account is a "Sign in"/name button in the top nav at >=1024px or a
+    row inside the menu-button dropdown below it.
   business_rule: >
-    The bottom bar holds five primary destinations and has no room for these two. A regression
-    here makes signing in impossible on a phone, which is silent — every other screen still
-    works.
+    Neither the inline top-nav links nor the collapsed menu button's five primary items
+    include Account/Settings — they need their own always-reachable control at every width.
+    A regression here makes signing in impossible on a phone, which is silent — every other
+    screen still works.
   actor: Student
   preconditions: []
   inputs:
@@ -166,7 +177,7 @@
   dependencies: [REQ-WEB-003]
   error_conditions: []
   edge_conditions:
-    - "Exactly one of the two treatments (top bar / sidebar footer) is visible at a given width, never both"
+    - "Below 1024px, Account moves into the menu-button dropdown rather than showing as its own top-nav button, to save header width"
   offline_behavior: n/a
   acceptance_criteria:
     - Activating the account control navigates to /account at phone width
@@ -416,3 +427,174 @@
   ambiguity: null
   automation_status: ManualOnly
   automation_hint: "Requires a served build; no runner configured"
+
+- id: REQ-WEB-011
+  feature: Desktop side panels for the two question-taking screens
+  module: WEB
+  system: [Web]
+  source_doc: "session instruction (premium web UI/UX pass)"
+  source_section: "Desktop side panels; Practice Quiz / Mock Test question navigator example"
+  description: >
+    From 1024px width up, Practice Quiz shows a sticky sidebar with the session's exam/
+    subject/topic/level context and progress, and Mock Test's question navigator (answered/
+    marked/not-answered/not-visited grid) becomes an always-visible sidebar instead of only a
+    modal reached through a "Questions" button. Below 1024px both screens are unchanged —
+    the sidebar is hidden and the navigator stays a modal, exactly as before this change.
+  business_rule: >
+    A desktop viewport has room the question column doesn't need; using it for the same
+    state a phone already tracks (progress, which question, the navigator) is the brief's own
+    explicit "use the larger screen intelligently" instruction. The navigator's underlying
+    state (answered/marked/visited, current index) is unchanged — only where it renders
+    differs, and the two renderings share one implementation (`navigatorContent` in
+    MockTestEngine.tsx) rather than being two copies that could drift apart.
+  actor: Student
+  preconditions:
+    - A practice quiz or mock test attempt is in progress
+  inputs:
+    - Viewport width
+  expected_outputs:
+    - "Below 1024px: no sidebar; Mock Test's Questions button opens the modal navigator, unchanged from before"
+    - "At/above 1024px: a sticky sidebar renders beside the question; Mock Test's Questions button is hidden (the sidebar already shows the same navigator)"
+  validations:
+    - "The sidebar's content (progress numbers, session context, navigator cell states) matches the main column's own state exactly, since both read the same component state"
+    - "The question column keeps a comfortable reading width (does not stretch to fill the sidebar's space) at any width, including 1024px where the combined layout is widest relative to available space"
+  permissions: n/a
+  dependencies: [REQ-WEB-008, REQ-WEB-010]
+  error_conditions: []
+  edge_conditions:
+    - "Resizing the window across 1024px while the modal navigator happens to be open on Mock Test — the modal and the newly-shown sidebar may both be visible momentarily; neither is broken, and closing the modal (or resizing again) resolves it"
+  offline_behavior: n/a
+  acceptance_criteria:
+    - "Mock Test's full navigator grid (all cells, correct legend) renders inline in the sidebar from 1024px up, with no functional change to answering, marking, or submitting"
+    - "No horizontal overflow at 1024px, the narrowest width the sidebar appears at"
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "No browser-test runner is configured under web/; verified this session via a one-off Playwright script across 390/820/1024/1440/1920px against real live data (not a committed suite)"
+
+- id: REQ-WEB-012
+  feature: Consistent, content-shaped loading states
+  module: WEB
+  system: [Web]
+  source_doc: "session instruction (premium web UI/UX pass)"
+  source_section: "Loading states"
+  description: >
+    Every screen that fetches data before rendering shows a skeleton shaped like its own
+    content (a stat-row list, a stack of full-width cards, or a single question card) while
+    waiting, rather than a bare "Loading…" line. Subjects, Topics, Levels, Mock Test's paper
+    list, Mock Test Start, Practice Quiz and Mock Test Engine's first load were the pages
+    still using the bare line before this change; Home, the two exam pickers and My Exams
+    already used the shimmer-grid skeleton.
+  business_rule: >
+    A bare text line during a real, sometimes multi-second wait against this project's shared
+    dev database (documented in memory/STATUS.md) reads as unfinished; a content-shaped
+    skeleton reads as a designed product waiting on real data.
+  actor: Student
+  preconditions:
+    - A page that fetches data before it can render its real content
+  inputs: []
+  expected_outputs:
+    - "A skeleton matching the eventual content's shape appears immediately, and is replaced by real content (or an error banner) once the fetch resolves — never left showing indefinitely"
+  validations:
+    - "No page under practice/ or mocktest/ renders a bare '<p className=\"muted\">Loading…</p>' during its initial data fetch"
+  permissions: n/a
+  dependencies: []
+  error_conditions:
+    - "A fetch that ultimately fails replaces the skeleton with the page's existing error banner, not an indefinite skeleton"
+  edge_conditions:
+    - "On light theme the shimmer's own tones sit close to white, so a very brief load can look nearly blank for a moment even though it is real motion, not empty content — a pre-existing characteristic of the shared skeleton-block tokens (shared with mobile's own skeleton convention), not something this change introduced or fixed"
+  offline_behavior: n/a
+  acceptance_criteria:
+    - "Every data-fetching screen listed above shows a shaped skeleton, not bare text, on its first load"
+  priority: Low
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "No browser-test runner is configured under web/; verified this session via a one-off Playwright script (not a committed suite)"
+
+- id: REQ-WEB-013
+  feature: Premium empty-state treatment for unbuilt routes
+  module: WEB
+  system: [Web]
+  source_doc: "session instruction (premium web UI/UX pass)"
+  source_section: "Empty states; ComingSoon"
+  description: >
+    Progress, Exams and the 404 route (all served by the same ComingSoon component) render a
+    centred hero treatment (icon, a phase pill naming when the real feature arrives, and
+    explanatory copy) instead of a plain dashed-border notice box. The 404 case shows no
+    phase pill and different copy, since "arrives in a phase" doesn't apply to a bad address.
+  business_rule: >
+    This is presentation only — per the brief's own explicit instruction, no functionality
+    was added for Progress or Exams (both remain honestly unbuilt, gated on backend work
+    tracked elsewhere in memory/STATUS.md), only how the "not built yet" state is presented.
+  actor: Student
+  preconditions: []
+  inputs: []
+  expected_outputs:
+    - "Progress and Exams show a phase pill and 'isn't built yet' copy naming the feature"
+    - "An unknown URL shows 404-appropriate copy with no phase pill"
+  validations:
+    - "The 404 route's copy never claims a future phase will build 'Page not found'"
+  permissions: n/a
+  dependencies: []
+  error_conditions: []
+  edge_conditions: []
+  offline_behavior: n/a
+  acceptance_criteria:
+    - "Visiting /progress or /exams shows the phase-pill treatment; visiting an unknown path shows the 404 treatment"
+  priority: Low
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "No browser-test runner is configured under web/; verified this session via a one-off Playwright script (not a committed suite)"
+
+- id: REQ-WEB-014
+  feature: Home — hero + category browsing rows
+  module: WEB
+  system: [Web]
+  source_doc: "session instruction (Hotstar-style Home redesign)"
+  source_section: "Home page layout — hero banner, horizontal category rows, exam poster cards"
+  description: >
+    Home shows one hero (a real admin-badged exam, e.g. carrying an editorial "Popular"
+    tag, with its real photo/emblem, cycle name and demo disclosure, vacancy count and
+    days-to-deadline when the backend has them — or a plain generic welcome hero when no
+    exam carries a badge) followed by horizontally-scrollable rows of exam tiles grouped
+    by category. Each tile shows the exam's real uploaded photo when one exists, or a
+    two-letter monogram on a category-tinted background when it doesn't.
+  business_rule: >
+    `ExamCard.category` (real admin data) is null on every currently-active exam — checked
+    directly against the live API — so category grouping falls back to reading the real
+    exam CODE's own prefix (SSC_CGL is an SSC exam) rather than collapsing every exam into
+    one row; the real field always wins once an admin sets it (see homeCategories.ts's own
+    comment). The "Popular" row and hero both come from the real, admin-curated `badge`
+    field — no popularity/attempt-count is invented. Category colors are fixed per category
+    (not hashed) using the shared identity-slot tokens already in the codebase; "Popular"
+    reuses the existing semantic "hot"/trending token rather than a new color.
+  actor: Student
+  preconditions:
+    - At least one active exam exists
+  inputs: []
+  expected_outputs:
+    - "A hero renders — featuring a real badged exam's own data if one exists, else generic welcome copy"
+    - "One row per category present among the active exams, in a fixed order, each with a distinct color-coded dot"
+    - "A tile shows the exam's real photo if uploaded, else a monogram, inside a padded/bordered frame — never edge-to-edge"
+  validations:
+    - "No fabricated popularity, attempt count, or category value is ever displayed as if it were real admin data"
+    - "A cycle already carrying '(Demo)' in its own name is never shown with the demo disclaimer duplicated"
+  permissions: n/a
+  dependencies: []
+  error_conditions:
+    - "discoverExams()/getExamBadges() failing shows the existing ErrorBanner with retry, same as before this redesign"
+  edge_conditions:
+    - "An exam with a badge appears in both the Popular row and its own category row — expected, not a duplicate-rendering bug"
+    - "No active exam carries a badge: the hero falls back to generic welcome copy and no Popular row renders"
+  offline_behavior: n/a
+  acceptance_criteria:
+    - "The real SSC_CGL exam (the only one currently carrying a badge and an uploaded image) renders correctly as the hero and in both the Popular and SSC rows, with its real vacancy/deadline figures and no duplicated demo label"
+    - "Every other active exam renders as a monogram tile in the correct category row"
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "No browser-test runner is configured under web/; verified this session via a one-off Playwright script against real live data, both themes, at 390/820/1440px (not a committed suite)"

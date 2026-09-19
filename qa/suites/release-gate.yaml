@@ -2,7 +2,7 @@
 #
 # Critical + High priority test cases, excluding Ambiguous cases (no determinate pass/fail to gate on) and a short, explicitly-listed set of cases that need a special/controlled environment to reproduce reliably on demand (see HARD_TO_REPRODUCE in the generator script) — a release gate must be reliably executable every time, not aspirational.
 #
-# 130 test case(s). Membership rule: priority in [Critical, High] AND test_type != Ambiguous AND id not in HARD_TO_REPRODUCE.
+# 183 test case(s). Membership rule: priority in [Critical, High] AND test_type != Ambiguous AND id not in HARD_TO_REPRODUCE.
 
 suite: Release Gate
 test_case_ids:
@@ -44,6 +44,10 @@ test_case_ids:
   - TC-AI-038
   - TC-AI-039
   - TC-AI-047
+  - TC-ANALYTICS-001
+  - TC-ANALYTICS-002
+  - TC-ANALYTICS-003
+  - TC-ANALYTICS-004
   - TC-AUTH-001
   - TC-AUTH-003
   - TC-AUTH-004
@@ -92,6 +96,36 @@ test_case_ids:
   - TC-CATALOG-044
   - TC-CATALOG-048
   - TC-CATALOG-049
+  - TC-CATALOG-053
+  - TC-CATALOG-054
+  - TC-CATALOG-055
+  - TC-LEARNINGSTATE-001
+  - TC-LEARNINGSTATE-003
+  - TC-LEARNINGSTATE-004
+  - TC-LEARNINGSTATE-005
+  - TC-LEARNINGSTATE-007
+  - TC-LEARNINGSTATE-008
+  - TC-ONBOARDING-001
+  - TC-ONBOARDING-002
+  - TC-ONBOARDING-003
+  - TC-ONBOARDING-004
+  - TC-ONBOARDING-005
+  - TC-ONBOARDING-006
+  - TC-ONBOARDING-007
+  - TC-ONBOARDING-008
+  - TC-ONBOARDING-009
+  - TC-ONBOARDING-010
+  - TC-ONBOARDING-013
+  - TC-ONBOARDING-014
+  - TC-ONBOARDING-015
+  - TC-ONBOARDING-016
+  - TC-ONBOARDING-018
+  - TC-ONBOARDING-020
+  - TC-ONBOARDING-021
+  - TC-ONBOARDING-022
+  - TC-ONBOARDING-023
+  - TC-ONBOARDING-024
+  - TC-ONBOARDING-025
   - TC-QUESTIONS-001
   - TC-QUESTIONS-002
   - TC-QUESTIONS-003
@@ -121,7 +155,26 @@ test_case_ids:
   - TC-QUESTIONS-061
   - TC-QUESTIONS-062
   - TC-QUESTIONS-063
+  - TC-REVISION-001
+  - TC-REVISION-003
+  - TC-REVISION-004
+  - TC-REVISION-005
+  - TC-REVISION-006
+  - TC-REVISION-009
+  - TC-ROADMAP-001
+  - TC-ROADMAP-003
+  - TC-ROADMAP-004
+  - TC-ROADMAP-005
+  - TC-ROADMAP-006
+  - TC-ROADMAP-007
+  - TC-ROADMAP-013
+  - TC-ROADMAP-008
   - TC-USERPROGRESS-001
+  - TC-USERPROGRESS-003
+  - TC-USERPROGRESS-004
+  - TC-USERPROGRESS-005
+  - TC-USERPROGRESS-006
+  - TC-USERPROGRESS-007
   - TC-WEB-001
   - TC-WEB-002
   - TC-WEB-003

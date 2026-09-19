@@ -1,0 +1,141 @@
+# ROADMAP module — test scenarios
+#
+# Scoped to GET /api/me/study-roadmap, the personalized roadmap added by TASK-3101 (Phase 4).
+# Nothing here covers a daily schedule or a readiness score: neither exists, by design.
+
+- id: SCN-ROADMAP-001
+  requirement_ids: [REQ-ROADMAP-001]
+  category: Security
+  title: The endpoint requires a token and takes no user id
+  objective: >
+    Verify an unauthenticated caller is rejected, and that nothing in the route would let one
+    account address another's plan.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-ROADMAP-002
+  requirement_ids: [REQ-ROADMAP-001]
+  category: Negative
+  title: An unknown exam code is a 404, not an empty plan
+  objective: >
+    Verify a typo in examCode fails loudly rather than returning an empty roadmap, which would
+    read as "there is nothing to study".
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-ROADMAP-003
+  requirement_ids: [REQ-ROADMAP-001]
+  category: Functional
+  title: A high-priority topic with no practicable questions is never planned
+  objective: >
+    Verify curated priority alone cannot put a topic in the plan when the bank has nothing tagged
+    for it on that exam.
+  systems: [Backend]
+  status: Ready
+  notes: "The same failure PreparePlanService already guards against, found on a device rather than by review."
+
+- id: SCN-ROADMAP-004
+  requirement_ids: [REQ-ROADMAP-002]
+  category: Functional
+  title: The highest-priority topic leads the plan and exactly one is recommended
+  objective: >
+    Verify ordering follows Epic L's final_priority descending, and that "next up" is a single
+    item rather than a set.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-ROADMAP-005
+  requirement_ids: [REQ-ROADMAP-002]
+  category: Functional
+  title: Subject balance breaks a run, and the original rank survives
+  objective: >
+    Verify that five consecutive topics from one subject cannot open a plan, that nothing is
+    dropped or renumbered by the reordering, and that a moved topic still reports where priority
+    alone would have placed it.
+  systems: [Backend]
+  status: Ready
+  notes: "The decisive scenario for the phase's second deliverable."
+
+- id: SCN-ROADMAP-006
+  requirement_ids: [REQ-ROADMAP-003]
+  category: Functional
+  title: A student's own measured time is used when there is enough of it
+  objective: >
+    Verify tier 1 of the estimate ladder — with the student's own timed attempts above the floor,
+    the estimate is theirs and is labelled PERSONAL_TOPIC with its real sample size.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-ROADMAP-007
+  requirement_ids: [REQ-ROADMAP-003]
+  category: Boundary
+  title: Every tier of the estimate ladder is selected exactly when its rule says so
+  objective: >
+    Verify each tier — including DEFAULT with sampleSize 0 — is chosen under its own conditions, and
+    that a fresh student always receives usable minutes whichever tier wins.
+  systems: [Backend]
+  status: Ready
+  notes: >
+    Split across two test cases on purpose. The tiers are asserted with constructed samples, because
+    the shared dev database genuinely holds cohort timings and a "fresh" topic there legitimately
+    resolves to COHORT_DIFFICULTY rather than DEFAULT — which is how the first version of this
+    scenario failed. What the round trip asserts instead is tier/sample-size consistency.
+
+- id: SCN-ROADMAP-008
+  requirement_ids: [REQ-ROADMAP-003]
+  category: Security
+  title: One student's measured time is not another's personal estimate
+  objective: >
+    Verify the personal tier is genuinely per student, so an account with no history cannot be
+    handed someone else's measured rate as its own.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-ROADMAP-009
+  requirement_ids: [REQ-ROADMAP-004]
+  category: Functional
+  title: Steps with no question count carry no minutes and are excluded from the total
+  objective: >
+    Verify LEARN_CONCEPT / REVISION / TIMED_PRACTICE report a null duration, and that a topic's
+    total reconciles exactly with the steps shown beneath it.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-ROADMAP-010
+  requirement_ids: [REQ-ROADMAP-005]
+  category: Functional
+  title: An exam with no published cycle gets a usable, explicitly undated plan
+  objective: >
+    Verify the normal case for ten of eleven exams — no date is invented, and the absence is
+    stated rather than left for a client to infer from nulls.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-ROADMAP-011
+  requirement_ids: [REQ-ROADMAP-005]
+  category: Functional
+  title: A published exam date yields days remaining and a consistent daily figure
+  objective: >
+    Verify daysRemaining is computed from the real cycle date, and dailyMinutesRequired is the
+    plan's own total over those days, rounded up.
+  systems: [Backend]
+  status: Ready
+  notes: "Asserted against the same response's total, so the two cannot drift apart unnoticed."
+
+- id: SCN-ROADMAP-012
+  requirement_ids: [REQ-ROADMAP-005]
+  category: Boundary
+  title: An exam date in the past is reported without a countdown
+  objective: >
+    Verify a passed date does not produce a negative countdown or a nonsensical daily figure, and
+    that the plan itself stays usable.
+  systems: [Backend]
+  status: Ready
+  notes: null

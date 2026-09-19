@@ -1,0 +1,218 @@
+# ANALYTICS module — requirement repository
+#
+# Scope: UserAnalyticsController (/api/me/analytics) — the derived read layer added by
+# TASK-2801. A new module because this is a new endpoint family with its own rules, not an
+# extension of the sync contract in USER-PROGRESS (which covers how the raw rows get there).
+#
+# What this module deliberately does NOT cover: any recommendation, verdict, readiness score
+# or study plan. None exists — TASK-2801 is the data foundation, and keeping measurement and
+# advice apart is a design decision, not an omission.
+#
+# automation_status is evidence-based, per qa/README.md's standing rule.
+
+- id: REQ-ANALYTICS-001
+  feature: A student's own analytics are readable, and only their own
+  module: ANALYTICS
+  system: [Backend]
+  source_doc: api/USER-ANALYTICS.md
+  source_section: "Auth and isolation"
+  description: >
+    GET /api/me/analytics/{overview,subjects,topics,difficulty,activity,trends} return
+    summarised figures derived from the calling student's practice and mock history. The
+    acting user comes from the bearer token; there is no user-id path or query parameter
+    anywhere in the family.
+  business_rule: >
+    Summaries only — raw attempt rows stay behind /api/progress, which already has a paged,
+    ownership-scoped contract for them. Exposing the event tables directly would make the
+    internal model a public one and freeze it.
+  actor: Signed-in student
+  preconditions:
+    - "A valid bearer token"
+  inputs:
+    - "No body; optional zone/window/weeks query parameters"
+  expected_outputs:
+    - "200 with the documented shape for each endpoint"
+  validations:
+    - "Every endpoint returns 401 without a token"
+  permissions:
+    - "User token required; one account cannot address another's analytics because no endpoint takes a user id"
+  dependencies: [REQ-USERPROGRESS-001]
+  error_conditions:
+    - "An account with no history returns zeroes and nulls, never an error"
+  edge_conditions:
+    - "Signed-out students are not covered at all — their history never reaches the server"
+  offline_behavior: "None — these are server-computed and require a network"
+  acceptance_criteria:
+    - "A signed-in student can read their own figures; an unauthenticated caller gets 401 on every endpoint"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    BehavioralAnalyticsTest.everyAnalyticsEndpointRequiresSigningIn and
+    .aBrandNewAccountGetsEmptyAnalyticsRatherThanAnError.
+
+- id: REQ-ANALYTICS-002
+  feature: Unattempted and unscored answers are excluded, never counted wrong
+  module: ANALYTICS
+  system: [Backend]
+  source_doc: api/USER-ANALYTICS.md
+  source_section: "Three rules that decide what the numbers mean"
+  description: >
+    Accuracy's denominator is questions ANSWERED, never questions offered. Answers with
+    outcome UNATTEMPTED are excluded from both numerator and denominator, as are
+    PENDING_REVIEW answers awaiting a human marker.
+  business_rule: >
+    A mock test is timed and running out of time is normal. Counting skipped questions as
+    mistakes manufactures weakness out of the clock — the single easiest way to get this
+    feature wrong, and a bug this project has already shipped once on the AI feedback path
+    (accuracy computed over paper size rather than answers).
+  actor: Signed-in student
+  preconditions:
+    - "A mock attempt with a mix of correct, wrong and unattempted answers"
+  inputs:
+    - "GET /api/me/analytics/overview"
+  expected_outputs:
+    - "totalQuestionsAttempted counts only answered questions; overallAccuracy is correct-over-answered"
+  validations:
+    - "Correctness is read from outcome, never from selectedIndex = correctIndex, which has no meaning for MULTIPLE_CHOICE/TRUE_FALSE"
+  permissions:
+    - "User token required"
+  dependencies: []
+  error_conditions: []
+  edge_conditions:
+    - "An attempt where every question was skipped contributes nothing and yields a null accuracy, not 0%"
+  offline_behavior: "Not applicable"
+  acceptance_criteria:
+    - "A 3-question attempt with 1 correct, 1 wrong and 1 skipped reports 2 attempted and 50% accuracy"
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "BehavioralAnalyticsTest.unattemptedMockQuestionsAreExcluded_notCountedWrong"
+
+- id: REQ-ANALYTICS-003
+  feature: A missing measurement is reported as missing, never as zero
+  module: ANALYTICS
+  system: [Backend]
+  source_doc: api/USER-ANALYTICS.md
+  source_section: "Three rules that decide what the numbers mean"
+  description: >
+    Accuracy, average time and trend are null (or INSUFFICIENT_DATA) whenever there is
+    nothing to compute them from. An average time divides by the attempts that actually
+    carry a measured time, not by all of them, because time_ms is nullable and absent means
+    unmeasured. Study time discloses how many practice sessions had no recorded duration.
+  business_rule: >
+    "Answered nothing yet" and "answered everything wrong" are different facts and a planner
+    acting on them would act differently. Likewise an average over the wrong denominator
+    invents a faster student than the data supports.
+  actor: Signed-in student
+  preconditions:
+    - "A session containing one timed answer and one untimed answer"
+  inputs:
+    - "GET /api/me/analytics/topics"
+  expected_outputs:
+    - "averageTimeMs equals the single timed answer's time, not half of it"
+  validations:
+    - "mockAccuracy is null (not 0) for a subject never answered in a mock"
+    - "practiceSessionsWithoutDuration is reported alongside totalStudyTimeMs"
+  permissions:
+    - "User token required"
+  dependencies: []
+  error_conditions: []
+  edge_conditions:
+    - "Attempts whose question was hard-deleted before V47's backfill have no classification and are excluded from grouped views rather than bucketed as Other"
+  offline_behavior: "Not applicable"
+  acceptance_criteria:
+    - "No figure in any response falls back to zero to stand in for an absent measurement"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    BehavioralAnalyticsTest.averageTimeDividesByTheAttemptsThatWereActuallyTimed,
+    .aSessionWithNoDurationIsCountedAsUnmeasured_notAsZeroTime and
+    .topicAndSubjectAnalyticsComeFromTheSnapshot (mockAccuracy null case).
+
+- id: REQ-ANALYTICS-004
+  feature: Trend is derived from time windows, never stored
+  module: ANALYTICS
+  system: [Backend]
+  source_doc: api/USER-ANALYTICS.md
+  source_section: "GET /api/me/analytics/topics"
+  description: >
+    A topic's trend (IMPROVING/DECLINING/STABLE/INSUFFICIENT_DATA) is computed on read by
+    comparing the most recent third of the window against the rest, and the weekly series on
+    /trends reports a direction the same way. No column anywhere stores a trend for a user.
+  business_rule: >
+    Requires at least 5 counted attempts on BOTH sides before asserting anything, and treats
+    a move under 5 percentage points as STABLE rather than reporting ordinary variance as a
+    change. Too thin returns INSUFFICIENT_DATA — an honest answer, unlike defaulting to
+    STABLE.
+  actor: Signed-in student
+  preconditions:
+    - "A student with history in both windows"
+  inputs:
+    - "GET /api/me/analytics/topics, GET /api/me/analytics/trends"
+  expected_outputs:
+    - "A trend per topic and a direction for the series"
+  validations:
+    - "A single session yields INSUFFICIENT_DATA, not STABLE"
+  permissions:
+    - "User token required"
+  dependencies: [REQ-ANALYTICS-002]
+  error_conditions: []
+  edge_conditions:
+    - "Weeks with no activity stay in the /trends series with zero counts and a null accuracy, so a client cannot draw a continuous line through a gap that was not there"
+  offline_behavior: "Not applicable"
+  acceptance_criteria:
+    - "Deleting and rebuilding nothing is required for a trend to change — it follows the attempts automatically"
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "BehavioralAnalyticsTest.topicAndSubjectAnalyticsComeFromTheSnapshot asserts the INSUFFICIENT_DATA floor."
+
+- id: REQ-ANALYTICS-005
+  feature: Day-boundary figures honour the caller's time zone
+  module: ANALYTICS
+  system: [Backend]
+  source_doc: api/USER-ANALYTICS.md
+  source_section: "Time zones"
+  description: >
+    Streaks, daysSinceLastActivity, the TODAY window and weekly buckets are computed in the
+    IANA zone the client passes, defaulting to UTC. An unknown zone or an unknown activity
+    window is a 400.
+  business_rule: >
+    A day boundary is a property of where the student is, and this app stores no time zone
+    on users — onboarding never asked and the profile is device-local. A silent fallback
+    would report figures computed against a different day boundary than the caller asked
+    for, which is worse than an error.
+  actor: Signed-in student
+  preconditions:
+    - "A student with at least one session today"
+  inputs:
+    - "zone=Asia/Kolkata; window=TODAY|7D|30D|90D"
+  expected_outputs:
+    - "currentStreakDays 1 and daysSinceLastActivity 0 for activity earlier the same local day"
+  validations:
+    - "An unknown window and an unknown zone both return 400"
+  permissions:
+    - "User token required"
+  dependencies: []
+  error_conditions:
+    - "window=LAST_FORTNIGHT returns 400, not a silent default"
+  edge_conditions:
+    - "A current streak survives nothing having happened yet today — it breaks only after a whole day with no activity"
+  offline_behavior: "Not applicable"
+  acceptance_criteria:
+    - "Day-bounded figures match the zone requested, and an invalid zone or window is rejected"
+  priority: Medium
+  status: Active
+  ambiguity: >
+    The client must supply its own zone on every call because nothing persists one. If a
+    server-side profile is ever added, this should read from it instead.
+  automation_status: Automated
+  automation_hint: >
+    BehavioralAnalyticsTest.streakCountsTodayInTheRequestedZone,
+    .activityRejectsAnUnknownWindowRatherThanSilentlyDefaulting and .anUnknownTimeZoneIsRejected.

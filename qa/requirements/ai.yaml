@@ -1130,3 +1130,65 @@
     because the verified answer is supplied and the authored explanation always renders above.
   automation_status: Automated
   automation_hint: "MistakeAnalysisControllerTest (6), MistakeAnalysisValidationTest (8), mistakeAnalysisTemplate.test.ts (5)"
+
+- id: REQ-AI-024
+  feature: Every AI surface in the app is presented as one consistent, premium card
+  module: AI
+  system: [Mobile]
+  source_doc: mobile/src/ui/AiCard.tsx
+  source_section: "AiCard / AiScoreSummary / AiFocusRow / AiTiles / AiBulletList / AiTipStrip / AiAskButton"
+  description: >
+    The five AI surfaces -- Practice Summary feedback, Mock Test Result feedback, the Preparation
+    Radar profile summary, the cached question explanation and the mistake analysis -- render
+    through one shared card family instead of five separately-written boxes. The card provides a
+    titled header with a sparkle mark and an optional status pill, an optional score ring, an
+    optional focus row, optional next-step tiles, an optional labelled list, an optional
+    highlighted tip strip and an optional footer line.
+  business_rule: >
+    The card never invents a fact. Every number, topic name and count it renders is passed in by
+    the screen from data that screen already displays correctly on its own; the only model-authored
+    text is the narrative, the explanation, the exam tip and the suggested action. Slots with
+    nothing real behind them are omitted rather than filled -- a mock attempt has no topic, so it
+    gets no focus row; a clean sheet is never told to revisit mistakes. Tier-2 behaviour is
+    unchanged: a surface with nothing to say still renders nothing at all.
+  actor: Student
+  preconditions:
+    - The relevant AI task flag is enabled and the surface has content to show
+  inputs:
+    - "title/subtitle, optional badge, optional percent + caption, optional focus row, optional tiles, optional tip, optional footer"
+  expected_outputs:
+    - "One visually consistent card on every AI surface, in both the light and dark palettes"
+  validations:
+    - Colours come from theme tokens only, never literals, so both palettes stay legible
+    - Every fontSize is declared in the style factory so the zoom preference applies to all of it
+    - A focus row with no destination renders flat, with no chevron and no tap affordance
+  permissions: none (presentation only)
+  dependencies:
+    - REQ-AI-018
+    - REQ-AI-019
+    - REQ-AI-020
+    - REQ-AI-023
+  error_conditions:
+    - "None -- this layer performs no I/O and can decline nothing; its callers keep their existing failure paths"
+  edge_conditions:
+    - "Long or translated tile copy reflows to two or one per row rather than clipping"
+    - "A mock attempt with zero questions attempted shows 0% rather than dividing by zero"
+    - "A radar with no NEEDS_ATTENTION or NEEDS_REVISION topic shows the narrative with no focus row"
+  offline_behavior: >
+    Unchanged from each caller. The card is presentation only; an offline session still shows the
+    deterministic template narrative in the same layout, which is the point of keeping the tiles
+    and badge out of the prompt.
+  acceptance_criteria:
+    - All five AI surfaces render the same card idiom
+    - The ring percentage always matches the accuracy the same screen states elsewhere
+    - No slot is filled with placeholder content when the real value is absent
+    - The card is legible in both light and dark mode
+  priority: Medium
+  status: Active
+  ambiguity: >
+    The badge, focus-row subtitle and next-step tiles are fixed copy chosen by accuracy band, not
+    model output. They are deliberately generic and make no claim the score line above them does
+    not already make, but they do sit inside a card headed "AI Feedback" -- recorded here rather
+    than left implicit.
+  automation_status: ManualOnly
+  automation_hint: "No automated UI test runner exists for mobile in this project"

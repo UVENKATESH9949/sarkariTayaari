@@ -1,0 +1,70 @@
+# ANALYTICS module — test scenarios
+#
+# Scoped to the /api/me/analytics read layer added by TASK-2801. Nothing here covers advice
+# or recommendations: none exists, by design.
+
+- id: SCN-ANALYTICS-001
+  requirement_ids: [REQ-ANALYTICS-001]
+  category: Security
+  title: Every analytics endpoint requires a token
+  objective: >
+    Verify all six endpoints reject an unauthenticated caller, and that none of them accepts
+    a user id that would let one account read another's figures.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-ANALYTICS-002
+  requirement_ids: [REQ-ANALYTICS-001, REQ-ANALYTICS-003]
+  category: EdgeCase
+  title: A brand-new account gets empty analytics, not an error and not fabricated zeroes
+  objective: >
+    Verify a student with no history receives zero counts with null accuracy, null
+    lastActiveAt and empty lists — never a 500 and never a 0% that reads as "tried and
+    failed".
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-ANALYTICS-003
+  requirement_ids: [REQ-ANALYTICS-002]
+  category: Functional
+  title: Skipped mock questions do not count against accuracy
+  objective: >
+    Verify a mock attempt with 1 correct, 1 wrong and 1 unattempted reports 2 attempted and
+    50% — not 3 attempted and 33%.
+  systems: [Backend]
+  status: Ready
+  notes: "Guards the 'accuracy over paper size' bug class this project has shipped once before."
+
+- id: SCN-ANALYTICS-004
+  requirement_ids: [REQ-ANALYTICS-003]
+  category: Functional
+  title: Average time divides by the attempts that were actually timed
+  objective: >
+    Verify a topic with one 40s timed answer and one untimed answer reports 40s, not 20s.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-ANALYTICS-005
+  requirement_ids: [REQ-ANALYTICS-004]
+  category: Functional
+  title: A trend is asserted only when both windows have evidence
+  objective: >
+    Verify a topic with a single session reports INSUFFICIENT_DATA rather than STABLE, and
+    that the weekly series keeps empty weeks rather than dropping them.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-ANALYTICS-006
+  requirement_ids: [REQ-ANALYTICS-005]
+  category: Functional
+  title: Day-bounded figures use the requested zone, and bad input is rejected
+  objective: >
+    Verify a streak and daysSinceLastActivity are computed in the supplied IANA zone, and
+    that an unknown zone or activity window returns 400 rather than silently defaulting.
+  systems: [Backend]
+  status: Ready
+  notes: null

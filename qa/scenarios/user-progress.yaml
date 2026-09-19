@@ -26,3 +26,76 @@
   systems: [Web]
   status: Ready
   notes: null
+
+# --------------------------------------------------------------------------------------
+# TASK-2801 — behavioural data foundation.
+
+- id: SCN-USERPROGRESS-003
+  requirement_ids: [REQ-USERPROGRESS-002]
+  category: Security
+  title: One account cannot overwrite another account's session by naming its id
+  objective: >
+    Verify that an upload naming a session id owned by a different account is refused and
+    named in the response, that the real owner's row is untouched, and that the caller does
+    not acquire it — the defect this milestone opened with.
+  systems: [Backend]
+  status: Ready
+  notes: "Device ids are client-generated and were, until this change, guessable timestamps."
+
+- id: SCN-USERPROGRESS-004
+  requirement_ids: [REQ-USERPROGRESS-002]
+  category: ErrorHandling
+  title: A rejected id does not strand the rest of a device's upload queue
+  objective: >
+    Verify a batch containing one contested id still stores every other row in it, so a
+    single bad id cannot block a student's whole history from ever syncing.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-USERPROGRESS-005
+  requirement_ids: [REQ-USERPROGRESS-003]
+  category: Integration
+  title: A practice session's duration and exam survive a device change
+  objective: >
+    Verify startedAt/durationMs/availableCount/examCode upload and come back on restore, and
+    that a session without a duration is reported as unmeasured rather than as zero study
+    time.
+  systems: [Backend, Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-USERPROGRESS-006
+  requirement_ids: [REQ-USERPROGRESS-004]
+  category: Integration
+  title: Retagging a question does not rewrite history already recorded
+  objective: >
+    Verify that answering a question tagged easy, then retagging it hard in the admin
+    console, leaves the student's per-difficulty and per-topic figures exactly as they were.
+  systems: [Backend]
+  status: Ready
+  notes: "The decisive check for the classification snapshot — the reason it exists at all."
+
+- id: SCN-USERPROGRESS-007
+  requirement_ids: [REQ-USERPROGRESS-005]
+  category: Functional
+  title: Finishing a mock test updates per-topic mastery
+  objective: >
+    Verify that completing a mock test updates user_topic_progress for the topics it
+    actually tested, that unattempted questions are excluded rather than counted wrong, and
+    that the attempt itself still saves if the mastery write fails.
+  systems: [Mobile]
+  status: Ready
+  notes: "Device-side; needs an emulator pass — mobile has no automated test runner."
+
+- id: SCN-USERPROGRESS-008
+  requirement_ids: [REQ-USERPROGRESS-006]
+  category: Functional
+  title: A browser-recorded session carries real per-question times
+  objective: >
+    Verify web Practice and Mock Test measure display time per question, accumulate it across
+    revisits, count the question still on screen at submit, and upload it as timeMs — closing
+    the gap where every web answer was permanently unmeasured.
+  systems: [Web]
+  status: Ready
+  notes: "No browser-test runner exists under web/, so this is manual by necessity, not by omission."

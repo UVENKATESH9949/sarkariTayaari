@@ -1,0 +1,203 @@
+# ANALYTICS module — manual test cases
+#
+# Every case below is Automated with a real, verified test method behind it. They are
+# recorded here as UNEXECUTED manual cases in the register's own convention; the automated
+# runs that actually happened are recorded in qa/execution/.
+
+- id: TC-ANALYTICS-001
+  requirement_ids: [REQ-ANALYTICS-001]
+  scenario_id: SCN-ANALYTICS-001
+  system: Backend
+  module: ANALYTICS
+  feature: A student's own analytics are readable, and only their own
+  title: All six analytics endpoints reject an unauthenticated caller
+  objective: "Confirm the family is uniformly token-gated — no endpoint was left open."
+  preconditions:
+    - "A running backend"
+  test_data: "None"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Critical
+  test_type: Security
+  steps:
+    - step: 1
+      action: "GET each of /overview, /subjects, /topics, /difficulty, /activity, /trends under /api/me/analytics with no Authorization header"
+      expected: "All six return 401"
+    - step: 2
+      action: "Inspect the controller's route definitions"
+      expected: "No endpoint accepts a user id in the path or query — the acting user comes only from the token"
+  expected_result: "No analytics endpoint is reachable unauthenticated. (REQ-ANALYTICS-001 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "BehavioralAnalyticsTest.everyAnalyticsEndpointRequiresSigningIn"
+
+- id: TC-ANALYTICS-002
+  requirement_ids: [REQ-ANALYTICS-001, REQ-ANALYTICS-003]
+  scenario_id: SCN-ANALYTICS-002
+  system: Backend
+  module: ANALYTICS
+  feature: A student's own analytics are readable, and only their own
+  title: A student with no history gets empty analytics rather than an error
+  objective: "Confirm the empty case is a real, honest response, not a crash and not a fabricated 0%."
+  preconditions:
+    - "A freshly registered account with no uploaded history"
+  test_data: "One disposable account"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Major
+  test_type: EdgeCase
+  steps:
+    - step: 1
+      action: "GET /api/me/analytics/overview"
+      expected: >
+        200 with totalQuestionsAttempted 0, overallAccuracy null, lastActiveAt null,
+        daysSinceLastActivity null, currentStreakDays 0
+    - step: 2
+      action: "GET /topics, /subjects and /difficulty"
+      expected: "All three return an empty array, not an error"
+  expected_result: "Nothing is invented for a student who has not started. (REQ-ANALYTICS-001 error_conditions)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "overallAccuracy must be null, NOT 0 — 0% reads as 'tried and failed'."
+  automation_status: Automated
+  automation_reference: "BehavioralAnalyticsTest.aBrandNewAccountGetsEmptyAnalyticsRatherThanAnError"
+
+- id: TC-ANALYTICS-003
+  requirement_ids: [REQ-ANALYTICS-002]
+  scenario_id: SCN-ANALYTICS-003
+  system: Backend
+  module: ANALYTICS
+  feature: Unattempted and unscored answers are excluded, never counted wrong
+  title: A mock attempt's skipped questions are excluded from accuracy
+  objective: >
+    Confirm accuracy is correct-over-answered, never correct-over-offered — the bug class
+    that once reported a student who answered 3 of 100 as 2%.
+  preconditions:
+    - "Three real questions and one disposable account"
+  test_data: "A mock attempt with outcomes CORRECT, INCORRECT, UNATTEMPTED"
+  test_environment: "Backend against the real dev database"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Upload a mock attempt with 1 CORRECT, 1 INCORRECT and 1 UNATTEMPTED result"
+      expected: "200"
+    - step: 2
+      action: "GET /api/me/analytics/overview"
+      expected: >
+        totalQuestionsAttempted = 2, totalCorrect = 1, overallAccuracy = 50.0 — NOT 3
+        attempted and NOT 33.3%
+  expected_result: "Skipped questions never become mistakes. (REQ-ANALYTICS-002 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Treat step 2 as the explicit regression guard for this whole rule."
+  automation_status: Automated
+  automation_reference: "BehavioralAnalyticsTest.unattemptedMockQuestionsAreExcluded_notCountedWrong"
+
+- id: TC-ANALYTICS-004
+  requirement_ids: [REQ-ANALYTICS-003]
+  scenario_id: SCN-ANALYTICS-004
+  system: Backend
+  module: ANALYTICS
+  feature: A missing measurement is reported as missing, never as zero
+  title: Average question time ignores attempts that carry no measured time
+  objective: "Confirm the average's denominator is the timed attempts, not every attempt."
+  preconditions:
+    - "Two real questions and one disposable account"
+  test_data: "One session: one answer with timeMs 40000, one with no timeMs"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Upload the session described above"
+      expected: "200"
+    - step: 2
+      action: "GET /api/me/analytics/topics"
+      expected: "attempts = 2 and averageTimeMs = 40000 — not 20000"
+  expected_result: >
+    An unmeasured answer does not drag an average toward a speed nobody recorded.
+    (REQ-ANALYTICS-003 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "BehavioralAnalyticsTest.averageTimeDividesByTheAttemptsThatWereActuallyTimed"
+
+- id: TC-ANALYTICS-005
+  requirement_ids: [REQ-ANALYTICS-004]
+  scenario_id: SCN-ANALYTICS-005
+  system: Backend
+  module: ANALYTICS
+  feature: Trend is derived from time windows, never stored
+  title: A topic with too little evidence reports INSUFFICIENT_DATA, not STABLE
+  objective: "Confirm a direction of travel is asserted only when both windows have real evidence."
+  preconditions:
+    - "One real question and one disposable account"
+  test_data: "A single one-question session"
+  test_environment: "Backend against the real dev database"
+  priority: Medium
+  severity: Minor
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Upload one session answering one question correctly"
+      expected: "200"
+    - step: 2
+      action: "GET /api/me/analytics/topics"
+      expected: "The topic appears with accuracy 100.0 and trend INSUFFICIENT_DATA"
+    - step: 3
+      action: "GET /api/me/analytics/trends?weeks=8"
+      expected: >
+        Eight weekly points are returned including the empty ones (zero counts, null
+        accuracy), and direction is INSUFFICIENT_DATA
+  expected_result: "A trend is never guessed at from one data point. (REQ-ANALYTICS-004)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Step 3's empty-week assertion is not covered by the automated test — check it by hand."
+  automation_status: PartiallyAutomated
+  automation_reference: "BehavioralAnalyticsTest.topicAndSubjectAnalyticsComeFromTheSnapshot (step 2 only)"
+
+- id: TC-ANALYTICS-006
+  requirement_ids: [REQ-ANALYTICS-005]
+  scenario_id: SCN-ANALYTICS-006
+  system: Backend
+  module: ANALYTICS
+  feature: Day-boundary figures honour the caller's time zone
+  title: Streaks use the requested zone, and a bad zone or window is rejected
+  objective: >
+    Confirm day-bounded figures follow the caller's zone and that invalid input fails loudly
+    rather than silently answering a different question.
+  preconditions:
+    - "A disposable account with one session completed today"
+  test_data: "zone=Asia/Kolkata; window=LAST_FORTNIGHT; zone=Mars/Olympus_Mons"
+  test_environment: "Backend against the real dev database"
+  priority: Medium
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "GET /api/me/analytics/overview?zone=Asia/Kolkata"
+      expected: "currentStreakDays 1, longestStreakDays 1, daysSinceLastActivity 0"
+    - step: 2
+      action: "GET /api/me/analytics/activity?window=LAST_FORTNIGHT"
+      expected: "400 — not a silent fall back to the 7D default"
+    - step: 3
+      action: "GET /api/me/analytics/overview?zone=Mars/Olympus_Mons"
+      expected: "400 — not a silent fall back to UTC"
+  expected_result: "Day boundaries follow the caller, and bad input is refused. (REQ-ANALYTICS-005)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "BehavioralAnalyticsTest.streakCountsTodayInTheRequestedZone, .activityRejectsAnUnknownWindowRatherThanSilentlyDefaulting, .anUnknownTimeZoneIsRejected"

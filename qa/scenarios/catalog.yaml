@@ -486,3 +486,31 @@
   notes: >
     Per REQ-CATALOG-020's ambiguity field — record the actual observed rendering rather than
     asserting a guessed expectation.
+
+- id: SCN-CATALOG-044
+  requirement_ids: [REQ-CATALOG-025]
+  category: Positive
+  title: Switching the active exam updates Home without a restart
+  objective: >
+    Confirm a switch made from any entry point persists, shows a blocking transition for only as
+    long as the work takes, and leaves Home showing the new exam with no stale data from the old.
+  systems: [Mobile]
+  status: Ready
+  notes: >
+    This is the regression guard for the two original bugs: Home never heard about a change made
+    on another screen, and the followed exam Home displayed was whichever row an unordered query
+    happened to return.
+
+- id: SCN-CATALOG-045
+  requirement_ids: [REQ-CATALOG-025]
+  category: Edge case
+  title: My Exams survives switching, and the active exam survives removal and restart
+  objective: >
+    Confirm switching never removes an exam from My Exams, that removing the active exam promotes
+    another deterministically, and that the choice is still in force after an app restart and
+    while offline.
+  systems: [Mobile]
+  status: Ready
+  notes: >
+    Removing the last exam leaves no active exam until the next sync, because ensureExamFollowed
+    auto-follows the first exam again -- existing behaviour, not a rule introduced here.

@@ -1,0 +1,76 @@
+# ONBOARDING module - execution records, 2026-09-17
+#
+# Only the three fully-automated test cases are recorded here, and only because their cited
+# tests were genuinely written and run in this session (`npx vitest run` in packages/core,
+# 263 passing). Nothing on a screen has been executed: no emulator pass was done for this
+# feature, so every UI and device case in qa/test-cases/onboarding.yaml correctly stays
+# `Not Executed` rather than being backfilled to make coverage look better.
+#
+# The PartiallyAutomated cases are deliberately absent too. Their automated half passed in the
+# same run, but the case as a whole is not Pass until its manual half has also been run, and
+# recording a partial as a Pass would be exactly the kind of rounding-up this register exists
+# to prevent.
+
+- execution_id: EXEC-ONBOARDING-0001
+  test_case_id: TC-ONBOARDING-005
+  test_case_version: 1
+  environment: "packages/core vitest (node), Windows dev machine"
+  build_version: "feature/on-device-llm-spike @ 3a89856 + uncommitted onboarding work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-17T12:35:40+05:30"
+  actual_result: >
+    All 3 steps passed. src/onboarding/status.test.ts ran 17 cases, all green. Each of the four
+    prior-use signals independently produced ADOPT_EXISTING_INSTALL (the parameterised "is
+    adopted silently when %s" cases: prior sync, practice history, followed exam, stored
+    account), as did the combined case. With no signals and no stamps, the resolver returned
+    REQUIRED. The completion stamp was also confirmed to win over every signal, and over a
+    started stamp.
+  status: Pass
+  defect_id: ""
+  evidence: "npx vitest run output: src/onboarding/status.test.ts (17 tests) passed; suite total 263 passed (11 files)"
+  remarks: >
+    This covers the decision logic only. Whether a real upgraded device with existing practice
+    history actually skips the flow and keeps its data is TC-ONBOARDING-004, still Not Executed
+    and the more important of the two.
+
+- execution_id: EXEC-ONBOARDING-0002
+  test_case_id: TC-ONBOARDING-007
+  test_case_version: 1
+  environment: "packages/core vitest (node), Windows dev machine"
+  build_version: "feature/on-device-llm-spike @ 3a89856 + uncommitted onboarding work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-17T12:35:40+05:30"
+  actual_result: >
+    All 5 steps passed. "  Priya  " normalised to "Priya" and "Rahul    Kumar" to "Rahul Kumar".
+    A value consisting only of a non-breaking space, an ideographic space, a zero-width space, a
+    BOM, a left-to-right mark, or a tab+newline was rejected as EMPTY in all six cases, and a
+    zero-width space embedded inside "Ve<ZWSP>nkatesh" was stripped rather than rejected. A
+    40-code-point name was accepted and 41 rejected as TOO_LONG; a 40-emoji name was accepted,
+    confirming code-point rather than UTF-16 counting; and a 40-character name padded with ten
+    leading and trailing spaces was accepted, confirming the length is measured after
+    normalisation rather than before. A Telugu name was accepted unchanged.
+  status: Pass
+  defect_id: ""
+  evidence: "npx vitest run output: src/onboarding/validation.test.ts (43 tests) passed"
+  remarks: >
+    The invisible-character cases were written as escape sequences rather than literal
+    characters in the test source, so the file stays readable and a future reader can see which
+    class each case covers.
+
+- execution_id: EXEC-ONBOARDING-0003
+  test_case_id: TC-ONBOARDING-012
+  test_case_version: 1
+  environment: "packages/core vitest (node), Windows dev machine"
+  build_version: "feature/on-device-llm-spike @ 3a89856 + uncommitted onboarding work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-17T12:35:40+05:30"
+  actual_result: >
+    All 4 steps passed. targetYearOptions(2026) returned [2026, 2027, 2028] and
+    targetYearOptions(2031) returned [2031, 2032, 2033], confirming the list is derived from the
+    year it is asked in rather than written down. 2025 was rejected OUT_OF_RANGE against a
+    current year of 2026, as was 2030 (one past the three-year horizon) and the non-integers
+    2026.5 and NaN. null was accepted as "not sure yet".
+  status: Pass
+  defect_id: ""
+  evidence: "npx vitest run output: src/onboarding/validation.test.ts, \"target year\" describe block (7 cases)"
+  remarks: null

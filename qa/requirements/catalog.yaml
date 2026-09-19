@@ -1201,3 +1201,58 @@
   automation_status: ManualOnly
   automation_hint: >
     none found (frontend-only; no admin automated test suite exists in this project).
+
+- id: REQ-CATALOG-025
+  feature: One active exam out of several followed, with every screen agreeing on which
+  module: CATALOG
+  system: [Mobile]
+  source_doc: mobile/src/examsModule/activeExamContext.tsx
+  source_section: "ActiveExamProvider / setActiveExam"
+  description: >
+    My Exams (the followed set, many) and the Active Exam (the one driving Home and every
+    exam-scoped screen) are separate concepts. My Exams stays in the synced `followed_exams`
+    table; the active exam is a device-local choice in `app_preferences.active_exam_code`,
+    resolved against the live followed list on every read. One provider owns both, and every
+    switching affordance in the app calls its single `setActiveExam` operation.
+  business_rule: >
+    Switching the active exam must never change My Exams. Changing it anywhere must be visible
+    everywhere immediately, with no sync, no navigation trick and no app restart. The stored code
+    is never trusted blindly: an exam that has been unfollowed, or has not synced to this device,
+    falls back to the most recently followed exam and that resolution is written back.
+  actor: Student (signed in or not)
+  preconditions:
+    - At least one exam is followed (a fresh install auto-follows one after its first sync)
+  inputs:
+    - "an exam code that is present in My Exams"
+  expected_outputs:
+    - "active_exam_code persisted; provider state updated; every exam-scoped screen re-rendered for the new exam"
+  validations:
+    - A code that is not in My Exams is refused and the active exam is unchanged
+    - Switching to the already-active exam is a no-op with no overlay
+    - Exactly one exam can be active, structurally (a single preferences row, not a flag per exam)
+  permissions: none (device-local; no request is made to change the active exam)
+  dependencies:
+    - REQ-CATALOG-021
+  error_conditions:
+    - "A failed prefetch does not fail or revert the switch -- the exam is already followed locally"
+  edge_conditions:
+    - "Offline: the switch completes from local data; no network call is required"
+    - "The active exam is unfollowed: the most recently followed remaining exam is promoted"
+    - "The last exam is unfollowed: no active exam until the next sync auto-follows one again"
+    - "An exam followed on another device arrives by sync: it joins My Exams and does not steal Active"
+  offline_behavior: >
+    Fully functional offline. The active exam is device-local, so changing it needs no request;
+    only the best-effort warm-up of the new exam guide/plan data is skipped or fails silently.
+  acceptance_criteria:
+    - Home shows the new exam immediately after the switching transition, with no restart
+    - My Exams is unchanged by a switch and marks exactly one exam Active
+    - The active exam survives an app restart
+    - Every switching entry point goes through the same operation
+  priority: High
+  status: Active
+  ambiguity: >
+    Deliberately device-local, so switching on one phone does not move the active exam on
+    another; My Exams still syncs across both. Making it account-wide would need a backend column
+    and an API change, which this work did not take on.
+  automation_status: ManualOnly
+  automation_hint: "No automated UI test runner exists for mobile in this project"

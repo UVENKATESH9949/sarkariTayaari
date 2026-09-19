@@ -1,0 +1,1056 @@
+# ONBOARDING module — manual test cases
+#
+# Every case links to one scenario and one or more requirements. A test case is a reusable
+# DEFINITION and is never edited by an execution. Every case below is freshly written:
+# actual_result empty, status Not Executed, defect_id empty — except where a real execution has
+# since been recorded in qa/execution/, which lives in that file and not here.
+#
+# `automation_status: Automated` appears only where a named test in
+# packages/core/src/onboarding/*.test.ts genuinely covers the assertion. Those tests were
+# written and run as part of this change (278 passing in packages/core). Everything that needs
+# a screen, a real database migration or an app kill is ManualOnly: this project has no
+# automated runner for mobile, which is a confirmed absence rather than an unused capability.
+
+- id: TC-ONBOARDING-001
+  requirement_ids: [REQ-ONBOARDING-001]
+  scenario_id: SCN-ONBOARDING-001
+  system: Mobile
+  module: ONBOARDING
+  feature: First-launch detection
+  title: A fresh install opens onboarding, and the app is unreachable behind it
+  objective: >
+    Confirm a device with no prior local data shows step 1 of the onboarding flow instead of the
+    app, and that neither Home nor the tab bar can be reached until the flow is finished.
+  preconditions:
+    - App uninstalled and reinstalled, or its data cleared, so no local SQLite exists
+  test_data: "None"
+  test_environment: "Android emulator-5554 (Pixel_7), dev client, real dev backend"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Install and launch the app on a device with no existing app data"
+      expected: "After the brief database-setup frame, step 1 of onboarding is shown: \"What should we call you?\" with a name field and Continue"
+    - step: 2
+      action: "Observe the screen for any tab bar or Home content"
+      expected: "No tab bar, no Home, no navigator chrome — only the flow's own header, body and footer"
+    - step: 3
+      action: "Press the Android Back button"
+      expected: "A \"Leave setup?\" confirmation appears; the app does not navigate into Home"
+  expected_result: >
+    Onboarding is shown before the navigator mounts on a genuinely first launch, and the app
+    proper cannot be reached while it is incomplete. (REQ-ONBOARDING-001 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-ONBOARDING-002
+  requirement_ids: [REQ-ONBOARDING-001, REQ-ONBOARDING-008]
+  scenario_id: SCN-ONBOARDING-002
+  system: Mobile
+  module: ONBOARDING
+  feature: Interrupted onboarding
+  title: Killing the app mid-flow, after the first sync has landed, resumes the flow with answers intact
+  objective: >
+    Confirm the started stamp survives a kill and that the usage signals — all of which turn
+    true while the flow is on screen — do not cause the student to be adopted as an existing
+    install and skipped past onboarding.
+  preconditions:
+    - A genuinely fresh install
+    - Network available, so the first reference sync completes while the flow is open
+  test_data: "A name, a language, and an exam"
+  test_environment: "Android emulator-5554, dev client, real dev backend"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Start onboarding, enter a name, choose a language, and reach the exam step"
+      expected: "The exam list renders from the catalogue that has synced behind the flow"
+    - step: 2
+      action: "Select an exam, then force-stop the app (adb shell am force-stop <pkg>)"
+      expected: "App closes"
+    - step: 3
+      action: "Relaunch the app"
+      expected: "Onboarding is shown again — NOT Home"
+    - step: 4
+      action: "Navigate to step 1 (or observe the resumed step) and inspect the name field"
+      expected: "The name entered in step 1 is still there, as is the chosen language and exam"
+  expected_result: >
+    An interrupted flow resumes rather than being skipped or restarted; the completed first sync
+    does not make the install look pre-existing. (REQ-ONBOARDING-001, REQ-ONBOARDING-008)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    The timing in step 2 is the point of the case — killing the app before the sync finishes
+    would not exercise the signal race this guards.
+  automation_status: PartiallyAutomated
+  automation_reference: >
+    packages/core src/onboarding/status.test.ts, "onboarding interrupted halfway > is still
+    required after a restart, even though the first sync has since completed" covers the
+    decision; the resume-with-answers half is manual.
+
+- id: TC-ONBOARDING-003
+  requirement_ids: [REQ-ONBOARDING-001]
+  scenario_id: SCN-ONBOARDING-003
+  system: Mobile
+  module: ONBOARDING
+  feature: First-launch detection
+  title: Onboarding is not shown again after it has been completed
+  objective: Confirm completion is persistent across an app kill and a device restart.
+  preconditions:
+    - Onboarding completed once on this device
+  test_data: "None"
+  test_environment: "Android emulator-5554, dev client"
+  priority: Critical
+  severity: High
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Complete onboarding and reach Home"
+      expected: "Home renders with the chosen exam"
+    - step: 2
+      action: "Force-stop the app and relaunch it"
+      expected: "The app opens on Home (or the normal startup path); onboarding is not shown"
+    - step: 3
+      action: "Reboot the device and launch the app"
+      expected: "Same — onboarding is not shown"
+  expected_result: >
+    Completion survives app kill and device restart and is available offline.
+    (REQ-ONBOARDING-001 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: PartiallyAutomated
+  automation_reference: >
+    packages/core src/onboarding/status.test.ts, "an install that has already onboarded > is
+    never asked again" and "stays complete even once every usage signal is true".
+
+- id: TC-ONBOARDING-004
+  requirement_ids: [REQ-ONBOARDING-002]
+  scenario_id: SCN-ONBOARDING-004
+  system: Mobile
+  module: ONBOARDING
+  feature: Existing-install adoption
+  title: An existing student upgrading to this build is never shown onboarding and loses nothing
+  objective: >
+    Confirm a device with real practice history, bookmarks, a followed exam and non-default
+    settings opens straight to the app, and that every one of those is unchanged afterwards.
+  preconditions:
+    - A device already carrying practice sessions, mock attempts, bookmarks, a followed exam and a changed theme/zoom/language
+    - That device upgraded to a build containing migration 0027
+  test_data: "The device's own existing data — never a fresh fixture"
+  test_environment: "Android emulator-5554 with a populated pre-0027 database"
+  priority: Critical
+  severity: Critical
+  test_type: Regression
+  steps:
+    - step: 1
+      action: "Note the existing state before upgrading: session count, bookmark count, followed exam(s), active exam, theme, zoom, language"
+      expected: "Values recorded"
+    - step: 2
+      action: "Install the new build over it and launch"
+      expected: "Migration 0027 applies; the app opens on the normal startup path with NO onboarding question"
+    - step: 3
+      action: "Re-check every value noted in step 1"
+      expected: "All identical — history, bookmarks, followed exams, active exam, theme, zoom and language unchanged"
+    - step: 4
+      action: "Open Home"
+      expected: "The greeting is the app's existing generic one, since no onboarding name exists"
+  expected_result: >
+    An install predating onboarding is adopted silently with zero data change.
+    (REQ-ONBOARDING-002 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    The single most important case in this module: its failure mode is indistinguishable, to a
+    real user, from the app having lost their data.
+  automation_status: PartiallyAutomated
+  automation_reference: >
+    packages/core src/onboarding/status.test.ts, the "an install that predates onboarding"
+    block. The data-preservation half needs a real populated device.
+
+- id: TC-ONBOARDING-005
+  requirement_ids: [REQ-ONBOARDING-002]
+  scenario_id: SCN-ONBOARDING-005
+  system: Mobile
+  module: ONBOARDING
+  feature: Existing-install adoption
+  title: Each prior-use signal independently prevents onboarding
+  objective: >
+    Confirm that a prior sync, practice or mock history, a followed exam, and a stored account
+    session each on their own result in adoption rather than the flow.
+  preconditions:
+    - The ability to construct each signal in isolation
+  test_data: "Four synthetic signal sets, one per signal"
+  test_environment: "packages/core vitest (logic); a device for a spot check"
+  priority: High
+  severity: High
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Resolve the status with only hasSyncedBefore true"
+      expected: "ADOPT_EXISTING_INSTALL"
+    - step: 2
+      action: "Repeat with only hasPracticeHistory, then only hasFollowedExams, then only hasAccount"
+      expected: "ADOPT_EXISTING_INSTALL in each case"
+    - step: 3
+      action: "Resolve with none of the four and no stamps"
+      expected: "REQUIRED"
+  expected_result: >
+    Any single signal is sufficient for adoption; their absence is what produces onboarding.
+    (REQ-ONBOARDING-002 business_rule)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: >
+    packages/core src/onboarding/status.test.ts — "an install that predates onboarding > is
+    adopted silently when %s" (four parameterised cases), "is adopted when several signals are
+    true at once", and "a genuinely fresh install > is asked to onboard".
+
+- id: TC-ONBOARDING-006
+  requirement_ids: [REQ-ONBOARDING-003]
+  scenario_id: SCN-ONBOARDING-006
+  system: Mobile
+  module: ONBOARDING
+  feature: Name validation
+  title: An empty name blocks Continue and shows a reason
+  objective: >
+    Confirm the student cannot advance past step 1 without a name, is told why, and that the
+    message clears as soon as they start correcting it.
+  preconditions:
+    - Onboarding step 1 on screen
+  test_data: "An empty field, then three spaces, then a real name"
+  test_environment: "Android emulator-5554, dev client"
+  priority: Critical
+  severity: High
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "With the field empty, press Continue"
+      expected: "The step does not advance; \"Please enter a name so we know what to call you.\" is shown under the field, which is outlined in the error colour"
+    - step: 2
+      action: "Type three spaces and press Continue"
+      expected: "Same message; still does not advance"
+    - step: 3
+      action: "Type a real name"
+      expected: "The error message disappears as soon as typing starts"
+    - step: 4
+      action: "Press Continue"
+      expected: "Step 2 (language) is shown"
+  expected_result: >
+    A name is genuinely required and the requirement is explained rather than merely enforced.
+    (REQ-ONBOARDING-003 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Continue is intentionally enabled rather than disabled here — a disabled button would leave
+    the student with nothing to act on.
+  automation_status: PartiallyAutomated
+  automation_reference: >
+    packages/core src/onboarding/validation.test.ts, "display name > rejects an empty name" and
+    "rejects a name that is only whitespace" cover the rule; the screen behaviour is manual.
+
+- id: TC-ONBOARDING-007
+  requirement_ids: [REQ-ONBOARDING-003]
+  scenario_id: SCN-ONBOARDING-007
+  system: Mobile
+  module: ONBOARDING
+  feature: Name normalisation
+  title: Names are normalised and bounded correctly, including invisible characters
+  objective: >
+    Confirm whitespace is trimmed and collapsed, invisible characters are stripped, the 40
+    code-point limit is enforced on the normalised value, and astral characters count as one.
+  preconditions:
+    - None (logic-level)
+  test_data: "\"  Priya  \"; \"Rahul    Kumar\"; a zero-width space alone; a non-breaking space between two words; 40 and 41 character names; an emoji name"
+  test_environment: "packages/core vitest"
+  priority: High
+  severity: Medium
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "Validate \"  Priya  \""
+      expected: "Accepted, stored as \"Priya\""
+    - step: 2
+      action: "Validate \"Rahul    Kumar\""
+      expected: "Accepted, stored as \"Rahul Kumar\""
+    - step: 3
+      action: "Validate a value consisting only of a zero-width space, a BOM, an LRM, a non-breaking space or an ideographic space"
+      expected: "Rejected as EMPTY in every case"
+    - step: 4
+      action: "Validate a 40-code-point name, then a 41-code-point name"
+      expected: "Accepted, then rejected as TOO_LONG"
+    - step: 5
+      action: "Validate a 40-emoji name, and a 40-character name padded with leading/trailing spaces"
+      expected: "Both accepted — counted in code points, measured after normalisation"
+  expected_result: >
+    Normalisation happens before measurement and invisible characters cannot produce a blank
+    stored name. (REQ-ONBOARDING-003 validations/edge_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: >
+    packages/core src/onboarding/validation.test.ts — the whole "display name" describe block
+    (16 cases), including "rejects a name made only of %s" across six whitespace/invisible
+    classes, "counts an astral character as one", and "measures after normalising, not before".
+
+- id: TC-ONBOARDING-008
+  requirement_ids: [REQ-ONBOARDING-004]
+  scenario_id: SCN-ONBOARDING-008
+  system: Mobile
+  module: ONBOARDING
+  feature: Language selection
+  title: Only translated languages are offered, and the choice applies immediately
+  objective: >
+    Confirm the language step lists exactly the languages with a real catalogue, that choosing
+    one re-renders the rest of the flow in it, and that it is the same preference Settings owns.
+  preconditions:
+    - Onboarding step 2 on screen
+  test_data: "None"
+  test_environment: "Android emulator-5554, dev client"
+  priority: High
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Observe the options listed"
+      expected: "English and తెలుగు, and nothing else; a note explains that question content is separately available in English and Hindi"
+    - step: 2
+      action: "Select తెలుగు"
+      expected: "The step heading, hint and the Continue button re-render in Telugu immediately"
+    - step: 3
+      action: "Continue through the remaining steps"
+      expected: "Every subsequent step renders in Telugu"
+    - step: 4
+      action: "After reaching Home, open Settings"
+      expected: "The language control shows Telugu selected — the same single preference, not a second copy"
+  expected_result: >
+    The offered set matches the app's real translation coverage and integrates with the existing
+    language preference. (REQ-ONBOARDING-004 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Documented deviation from the brief's eight-language example list — see REQ-ONBOARDING-004.
+    The Telugu strings themselves have not been reviewed by a native speaker.
+  automation_status: PartiallyAutomated
+  automation_reference: >
+    packages/core src/onboarding/validation.test.ts, "language > offers exactly the languages
+    that have a catalogue" and "rejects a language with no catalogue behind it".
+
+- id: TC-ONBOARDING-009
+  requirement_ids: [REQ-ONBOARDING-005, REQ-ONBOARDING-011]
+  scenario_id: SCN-ONBOARDING-009
+  system: Mobile
+  module: ONBOARDING
+  feature: Exam selection
+  title: The exam chosen during onboarding is the exam Home shows
+  objective: >
+    Confirm the list is the app's real catalogue, and that the selected exam ends up followed,
+    active and on Home with no reload.
+  preconditions:
+    - A fresh install with network, reaching the exam step
+  test_data: "SSC CGL (or any exam with real synced content)"
+  test_environment: "Android emulator-5554, dev client, real dev backend"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Observe the exam list"
+      expected: "Real exam names from the catalogue, each with its real synced question count; no hardcoded entries"
+    - step: 2
+      action: "Select SSC CGL and complete the remaining steps"
+      expected: "The flow finishes and the preparation screen appears"
+    - step: 3
+      action: "Wait for Home"
+      expected: "The \"Preparing for\" card reads SSC CGL, with no reload, kill or navigation needed"
+    - step: 4
+      action: "Open My Exams"
+      expected: "SSC CGL is followed and marked active — and is the ONLY followed exam"
+  expected_result: >
+    The onboarding choice flows through the app's one active-exam source of truth.
+    (REQ-ONBOARDING-005, REQ-ONBOARDING-011 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Step 4's "only followed exam" assertion is the real check on the auto-follow stand-down —
+    without it the first sync completing mid-flow would add a second exam.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-ONBOARDING-010
+  requirement_ids: [REQ-ONBOARDING-005, REQ-ONBOARDING-009]
+  scenario_id: SCN-ONBOARDING-010
+  system: Mobile
+  module: ONBOARDING
+  feature: Offline onboarding
+  title: A first launch with no network completes onboarding without a dead end
+  objective: >
+    Confirm every step can be answered offline, the exam step explains itself rather than
+    hanging or blocking, and the profile is saved and reaches Home.
+  preconditions:
+    - A genuinely fresh install
+    - Airplane mode enabled before first launch
+  test_data: "A name; the default language"
+  test_environment: "Android emulator-5554 in airplane mode, dev client"
+  priority: Critical
+  severity: High
+  test_type: Offline
+  steps:
+    - step: 1
+      action: "Launch the app with no network"
+      expected: "Onboarding step 1 appears — it is not blocked behind a sync"
+    - step: 2
+      action: "Enter a name, choose a language, reach the exam step"
+      expected: "\"We couldn't load the exam list\" with an explanation that the exam can be chosen from the Exams tab once connected; Continue is available"
+    - step: 3
+      action: "Continue through the plan, level and study-time steps and finish"
+      expected: "The preparation screen appears with NO \"Setting up your exam\" line, since no exam was chosen"
+    - step: 4
+      action: "Wait for Home"
+      expected: "Home opens, greeting the student by name"
+    - step: 5
+      action: "Re-enable the network and let a sync complete, then reopen the app"
+      expected: "An exam is present (the auto-follow fallback) and can be changed from the Exams tab; onboarding is not shown again"
+  expected_result: >
+    Onboarding never depends on a network operation, and the missing exam is stated rather than
+    faked. (REQ-ONBOARDING-005 offline_behavior, REQ-ONBOARDING-009 edge_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-ONBOARDING-011
+  requirement_ids: [REQ-ONBOARDING-006]
+  scenario_id: SCN-ONBOARDING-011
+  system: Mobile
+  module: ONBOARDING
+  feature: Exam stage
+  title: The stage question appears only when the exam has more than one stage
+  objective: >
+    Confirm a multi-stage exam lists its real stage names and a single-stage exam shows no stage
+    question at all, while the year question is asked in both cases.
+  preconditions:
+    - One exam with two or more synced stages and one with a single stage
+  test_data: "SSC CGL (multi-stage) and a single-stage exam from the same catalogue"
+  test_environment: "Android emulator-5554, dev client, real dev backend"
+  priority: Medium
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Choose the multi-stage exam and continue to the plan step"
+      expected: "The step lists that exam's real stage names plus \"All stages / not sure\", then the year question"
+    - step: 2
+      action: "Go back, choose the single-stage exam, and continue to the plan step"
+      expected: "No stage question is rendered; the year question is still shown"
+    - step: 3
+      action: "Go back and change the exam after having chosen a stage"
+      expected: "The previously-chosen stage is cleared rather than carried across to the new exam"
+  expected_result: >
+    The step adapts to the exam's real structure and assumes no fixed tier ladder.
+    (REQ-ONBOARDING-006 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-ONBOARDING-012
+  requirement_ids: [REQ-ONBOARDING-006]
+  scenario_id: SCN-ONBOARDING-012
+  system: Mobile
+  module: ONBOARDING
+  feature: Target year
+  title: Year options are derived from the current year and out-of-range years are rejected
+  objective: Confirm the offered years follow the clock and that the validator bounds them.
+  preconditions:
+    - None (logic-level)
+  test_data: "Current year 2026; also 2031 to prove derivation"
+  test_environment: "packages/core vitest"
+  priority: Medium
+  severity: Low
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "Request the options for 2026, then for 2031"
+      expected: "[2026, 2027, 2028] and [2031, 2032, 2033] — derived, not hardcoded"
+    - step: 2
+      action: "Validate 2025 against a current year of 2026"
+      expected: "Rejected, OUT_OF_RANGE"
+    - step: 3
+      action: "Validate 2030 against a current year of 2026"
+      expected: "Rejected, OUT_OF_RANGE (beyond the three-year horizon)"
+    - step: 4
+      action: "Validate null, and validate 2026.5"
+      expected: "null accepted (\"not sure yet\"); 2026.5 rejected"
+  expected_result: >
+    The year question cannot go stale and cannot store a value outside its own range.
+    (REQ-ONBOARDING-006 validations)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: >
+    packages/core src/onboarding/validation.test.ts — the "target year" describe block (7
+    cases), including "derives the options from the year it is asked in".
+
+- id: TC-ONBOARDING-013
+  requirement_ids: [REQ-ONBOARDING-007]
+  scenario_id: SCN-ONBOARDING-013
+  system: Mobile
+  module: ONBOARDING
+  feature: Preparation level and study time
+  title: Both are required, closed sets, stored by value
+  objective: >
+    Confirm Continue is unavailable until a choice is made on each step, and that the stored
+    value is the enum identifier rather than the on-screen label.
+  preconditions:
+    - Onboarding steps 5 and 6
+  test_data: "\"Practising questions\" / \"2-4 hours\""
+  test_environment: "Android emulator-5554 plus a SQLite read of the device's app_preferences row"
+  priority: High
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Arrive at the preparation-level step without selecting anything"
+      expected: "Continue is visibly disabled"
+    - step: 2
+      action: "Select \"Practising questions\""
+      expected: "The option shows as selected and Continue becomes available"
+    - step: 3
+      action: "Repeat on the study-time step with \"2-4 hours\""
+      expected: "Same behaviour"
+    - step: 4
+      action: "After finishing, read app_preferences from the device database"
+      expected: "preparation_level = PRACTICING and daily_study_time = TWO_TO_FOUR — the identifiers, not the labels"
+  expected_result: >
+    Both answers are mandatory and are persisted in a form downstream code can branch on.
+    (REQ-ONBOARDING-007 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Step 4 needs adb exec-out run-as to pull the database — a plain shell redirect corrupts it,
+    per this project's standing note.
+  automation_status: PartiallyAutomated
+  automation_reference: >
+    packages/core src/onboarding/validation.test.ts, "preparation level and daily study time"
+    (3 cases) and "the whole draft > reports every bad field at once, not just the first".
+
+- id: TC-ONBOARDING-014
+  requirement_ids: [REQ-ONBOARDING-008]
+  scenario_id: SCN-ONBOARDING-014
+  system: Mobile
+  module: ONBOARDING
+  feature: Navigation within the flow
+  title: Back moves between steps and confirms before leaving the first
+  objective: >
+    Confirm Back is a real step-level control and that leaving from step 1 is deliberate rather
+    than accidental, never dropping the student into a partly-configured app.
+  preconditions:
+    - Onboarding in progress
+  test_data: "None"
+  test_environment: "Android emulator-5554, dev client"
+  priority: High
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "From step 4, press the on-screen Back arrow"
+      expected: "Step 3 is shown, with its previous answer still selected"
+    - step: 2
+      action: "Step back to step 2, then press the Android hardware Back button"
+      expected: "Step 1 is shown — the same behaviour as the on-screen control"
+    - step: 3
+      action: "On step 1, press Back"
+      expected: "A \"Leave setup?\" confirmation appears with \"Keep going\" and \"Leave\""
+    - step: 4
+      action: "Choose \"Keep going\""
+      expected: "The confirmation closes and step 1 is still shown; the app has not navigated anywhere"
+    - step: 5
+      action: "Press Back again and choose \"Leave\""
+      expected: "The app exits. Relaunching resumes onboarding with the answers already given"
+  expected_result: >
+    Back is meaningful within the flow and cannot be used to skip it.
+    (REQ-ONBOARDING-008 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Step 2 also confirms the Back gesture and the Back button share one handler, which holds
+    only while app.json keeps predictive back disabled.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-ONBOARDING-015
+  requirement_ids: [REQ-ONBOARDING-009]
+  scenario_id: SCN-ONBOARDING-015
+  system: Mobile
+  module: ONBOARDING
+  feature: Personalised preparation and welcome
+  title: The preparation checklist reflects real work and the welcome uses the entered name
+  objective: >
+    Confirm each line ticks as its step genuinely completes, that a step which cannot run is
+    omitted rather than ticked, and that the welcome greets the student by the name they typed.
+  preconditions:
+    - Onboarding answered with a real name and an exam
+  test_data: "Name \"Venkatesh\"; any exam"
+  test_environment: "Android emulator-5554, dev client, real dev backend"
+  priority: Critical
+  severity: High
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Press \"Start preparing\" on the last step and watch the screen"
+      expected: "\"Saving your preferences\" is already ticked; \"Setting up your exam\", \"Preparing your subjects and practice content\" and \"Preparing your dashboard\" tick in order as each finishes"
+    - step: 2
+      action: "Observe the final frame before Home"
+      expected: "\"Welcome to SarkariTaiyaari, Venkatesh! 👋\" with the two supporting lines"
+    - step: 3
+      action: "Repeat the whole flow on a fresh install with no network, choosing no exam"
+      expected: "The \"Setting up your exam\" line is absent entirely — not shown ticked, and not shown stuck"
+  expected_result: >
+    Nothing on the screen claims work that did not happen, and the welcome is genuinely
+    personal. (REQ-ONBOARDING-009 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-ONBOARDING-016
+  requirement_ids: [REQ-ONBOARDING-009]
+  scenario_id: SCN-ONBOARDING-016
+  system: Mobile
+  module: ONBOARDING
+  feature: Startup performance
+  title: A first-time student sees one preparation screen, not two
+  objective: >
+    Confirm the generic first-launch preparation screen does not appear after the personalised
+    one, and that neither holds the student longer than the work takes.
+  preconditions:
+    - A genuinely fresh install with a working network
+  test_data: "None"
+  test_environment: "Android emulator-5554, dev client, real dev backend"
+  priority: High
+  severity: Medium
+  test_type: Performance
+  steps:
+    - step: 1
+      action: "Complete onboarding as fast as possible — well inside the first sync's 5-second window"
+      expected: "The personalised preparation screen appears"
+    - step: 2
+      action: "Watch the transition into Home"
+      expected: "Home follows the welcome directly; the generic \"We're preparing your SarkariTaiyaari experience\" screen does not appear at any point after it"
+    - step: 3
+      action: "Time the personalised screen from the last tap to Home"
+      expected: "A few seconds at most, consistent with the work being done, and it does not sit at a fixed duration when the work finishes sooner"
+  expected_result: >
+    The two preparation screens are mutually exclusive by construction, and the wait reflects
+    real work. (REQ-ONBOARDING-009, brief §23)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    The warm-up waits on the same signal the startup gate releases on, specifically so the two
+    cannot stack; this case is what proves that on a device.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-ONBOARDING-017
+  requirement_ids: [REQ-ONBOARDING-010]
+  scenario_id: SCN-ONBOARDING-017
+  system: Mobile
+  module: ONBOARDING
+  feature: Personalised Home
+  title: Home greets by name, and falls back cleanly without one
+  objective: >
+    Confirm the greeting names the student and varies with the time of day, and that a device
+    with no onboarding name shows the app's original greeting rather than one with a gap in it.
+  preconditions:
+    - One device that completed onboarding; one adopted existing install
+  test_data: "Name \"Venkatesh\""
+  test_environment: "Android emulator-5554, dev client"
+  priority: Medium
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Open Home on the onboarded device"
+      expected: "\"Good morning/afternoon/evening, Venkatesh 👋\", matching the device's current local hour"
+    - step: 2
+      action: "Change the device clock across a boundary (e.g. to 18:00) and reopen Home"
+      expected: "The greeting period changes accordingly"
+    - step: 3
+      action: "Open Home on the adopted existing install"
+      expected: "\"Welcome back 👋\" — the original greeting, with no empty name and no placeholder"
+  expected_result: >
+    The greeting is personal when there is a name and unchanged when there is not.
+    (REQ-ONBOARDING-010 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: PartiallyAutomated
+  automation_reference: >
+    packages/core src/onboarding/status.test.ts, "greeting period" — 9 boundary hours plus a
+    sweep of all 24. The rendering and fallback are manual.
+
+- id: TC-ONBOARDING-018
+  requirement_ids: [REQ-ONBOARDING-011]
+  scenario_id: SCN-ONBOARDING-018
+  system: Mobile
+  module: ONBOARDING
+  feature: One source of truth for the active exam
+  title: Onboarding and every other entry point change the same active exam
+  objective: >
+    Confirm onboarding routes through the existing active-exam provider rather than a second
+    state, by changing the exam elsewhere afterwards and seeing Home follow immediately.
+  preconditions:
+    - Onboarding completed with SSC CGL chosen
+  test_data: "SSC CGL, then a second exam"
+  test_environment: "Android emulator-5554, dev client, real dev backend"
+  priority: Critical
+  severity: High
+  test_type: Integration
+  steps:
+    - step: 1
+      action: "Confirm Home shows SSC CGL immediately after onboarding"
+      expected: "\"Preparing for SSC CGL\", with no reload"
+    - step: 2
+      action: "Open the Exams tab, follow a second exam, and set it active from My Exams"
+      expected: "The switching overlay appears and Home shows the second exam on return — still no reload"
+    - step: 3
+      action: "Force-stop and relaunch"
+      expected: "Home still shows the second exam, not the onboarding one — the stored active exam is a single resolved value"
+  expected_result: >
+    There is exactly one active-exam state, written by onboarding and by every other affordance
+    alike. (REQ-ONBOARDING-011 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    The switching mechanism itself is already covered by TC-CATALOG-053/054/055; this case is
+    specifically about onboarding using it rather than duplicating it.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-ONBOARDING-019
+  requirement_ids: [REQ-ONBOARDING-012]
+  scenario_id: SCN-ONBOARDING-019
+  system: Mobile
+  module: ONBOARDING
+  feature: Reinstall behaviour
+  title: A reinstall re-onboards, and the account restores everything it holds
+  objective: >
+    Establish and confirm the accepted trade-off: the onboarding answers are device-local and do
+    not survive a reinstall, while everything the account stores does.
+  preconditions:
+    - An account with real practice history, bookmarks and followed exams
+    - That account signed in on the device before the uninstall
+  test_data: "The demo account"
+  test_environment: "Android emulator-5554, dev client, real dev backend"
+  priority: Medium
+  severity: Medium
+  test_type: Recovery
+  steps:
+    - step: 1
+      action: "Note the account's session count, bookmark count and followed exams"
+      expected: "Values recorded"
+    - step: 2
+      action: "Uninstall the app, reinstall it and launch"
+      expected: "Onboarding is shown — this is the expected, documented consequence, not a defect"
+    - step: 3
+      action: "Complete onboarding and sign back into the same account"
+      expected: "Practice history, bookmarks, followed exams and topic mastery all restore to the values from step 1"
+    - step: 4
+      action: "Open Home"
+      expected: "The greeting uses the newly-entered onboarding name"
+  expected_result: >
+    Only the onboarding answers are lost by a reinstall; all account-backed data returns.
+    (REQ-ONBOARDING-012 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Step 2's outcome is the point of the case. If the product later wants the profile to
+    survive a reinstall, that is an additive backend table and endpoint, not a bug fix here.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-ONBOARDING-020
+  requirement_ids: [REQ-ONBOARDING-001, REQ-ONBOARDING-002]
+  scenario_id: SCN-ONBOARDING-020
+  system: Mobile
+  module: ONBOARDING
+  feature: Local migration 0027
+  title: Migration 0027 applies to a populated preferences row with no loss
+  objective: >
+    Confirm the eight added columns land on a real device whose app_preferences row already
+    holds a theme, zoom level, language and active exam, and that a failed migration — a hard
+    startup gate in this app — does not occur.
+  preconditions:
+    - A device on a pre-0027 build with non-default theme, zoom, language and an active exam
+  test_data: "The device's own preferences row"
+  test_environment: "Android emulator-5554 with a populated pre-0027 database"
+  priority: Critical
+  severity: Critical
+  test_type: DataIntegrity
+  steps:
+    - step: 1
+      action: "Record the device's theme, zoom, language and active exam before upgrading"
+      expected: "Values recorded"
+    - step: 2
+      action: "Install the build containing 0027 and launch"
+      expected: "The app starts normally — no \"Database migration failed\" screen"
+    - step: 3
+      action: "Pull the device database (adb exec-out run-as ... cat) and inspect app_preferences"
+      expected: "The four pre-existing values are unchanged, and all eight new columns are NULL — not empty strings"
+    - step: 4
+      action: "Change the theme in Settings, then re-read the row"
+      expected: "Only theme_mode changed; the onboarding columns are untouched, confirming the two writers do not clobber each other"
+  expected_result: >
+    0027 is purely additive and no preference is lost. (REQ-ONBOARDING-001, brief §19)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    The SQL itself was verified against a populated pre-0027 SQLite database off-device during
+    development (8 statements, existing row byte-identical, new columns NULL, partial upsert
+    non-clobbering). This case is the same check through the real drizzle migrator on a device,
+    which is the part that was not exercised.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-ONBOARDING-021
+  requirement_ids: [REQ-ONBOARDING-013]
+  scenario_id: SCN-ONBOARDING-021
+  system: Mobile
+  module: ONBOARDING
+  feature: Content languages
+  title: One or two content languages can be chosen from the real synced list
+  objective: >
+    Confirm the offered languages come from the synced `languages` table, that one and two
+    selections are both accepted, and that the first chosen is the one questions default to.
+  preconditions:
+    - Onboarding reached the content-language step with reference data synced
+  test_data: "English, Telugu"
+  test_environment: "Android emulator-5554, dev client, real dev backend"
+  priority: Critical
+  severity: High
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Observe the listed languages"
+      expected: "The languages from the synced catalogue, each with a checkbox rather than a radio button"
+    - step: 2
+      action: "Select English only, then press Continue"
+      expected: "Accepted; the flow advances"
+    - step: 3
+      action: "Go back and also select Telugu"
+      expected: "Both show as selected; Continue remains available"
+    - step: 4
+      action: "Finish onboarding, then open a practice quiz"
+      expected: "The question renders in English, the first language chosen, and Telugu is available as the alternative"
+  expected_result: >
+    One or two content languages are accepted, come from the real catalogue, and the first choice
+    drives the default question language. (REQ-ONBOARDING-013 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Step 4 is the real proof the preference reaches the quiz. Before this change the content
+    language existed only in memory and was never persisted at all.
+  automation_status: PartiallyAutomated
+  automation_reference: >
+    packages/core src/onboarding/validation.test.ts - "content languages > accepts one language",
+    "accepts two languages", "preserves the order chosen, so the first stays the default".
+
+- id: TC-ONBOARDING-022
+  requirement_ids: [REQ-ONBOARDING-013]
+  scenario_id: SCN-ONBOARDING-022
+  system: Mobile
+  module: ONBOARDING
+  feature: Content languages
+  title: A third content language is refused and nothing is auto-deselected
+  objective: >
+    Confirm the cap refuses rather than evicts, explains itself, and that swapping requires the
+    student to deselect first.
+  preconditions:
+    - The content-language step, with at least three languages available
+  test_data: "English, Telugu, Hindi"
+  test_environment: "Android emulator-5554, dev client"
+  priority: Critical
+  severity: High
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "Select English and Telugu"
+      expected: "Both selected; the remaining languages dim"
+    - step: 2
+      action: "Tap Hindi"
+      expected: "Hindi does NOT become selected, English and Telugu both remain selected, and the message 'You can select up to 2 languages. Deselect one to choose another.' appears"
+    - step: 3
+      action: "Deselect Telugu, then tap Hindi"
+      expected: "Hindi is now selected alongside English; the message clears"
+    - step: 4
+      action: "Deselect both"
+      expected: "Allowed; Continue becomes unavailable"
+  expected_result: >
+    The cap is enforced by refusal, never by silently dropping an earlier choice.
+    (REQ-ONBOARDING-013 validations and edge_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: PartiallyAutomated
+  automation_reference: >
+    packages/core src/onboarding/validation.test.ts - "toggling a content language at the limit":
+    "refuses a third and changes nothing", "lets a student swap the pair by deselecting first",
+    "never mutates the array it was given".
+
+- id: TC-ONBOARDING-023
+  requirement_ids: [REQ-ONBOARDING-013]
+  scenario_id: SCN-ONBOARDING-023
+  system: Mobile
+  module: ONBOARDING
+  feature: Content languages
+  title: At least one content language is required
+  objective: Confirm the step cannot be completed with nothing selected.
+  preconditions:
+    - The content-language step
+  test_data: "None"
+  test_environment: "Android emulator-5554, dev client"
+  priority: High
+  severity: Medium
+  test_type: Validation
+  steps:
+    - step: 1
+      action: "Arrive at the step with nothing selected"
+      expected: "Continue is visibly disabled"
+    - step: 2
+      action: "Select one language"
+      expected: "Continue becomes available"
+    - step: 3
+      action: "Deselect it again"
+      expected: "Continue is disabled again"
+  expected_result: >
+    Zero content languages is not a completable state. (REQ-ONBOARDING-013 validations)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: PartiallyAutomated
+  automation_reference: >
+    packages/core src/onboarding/validation.test.ts - "content languages > rejects none" and
+    "toggling a content language at the limit > allows deselecting down to none, which Continue
+    then blocks".
+
+- id: TC-ONBOARDING-024
+  requirement_ids: [REQ-ONBOARDING-004, REQ-ONBOARDING-013]
+  scenario_id: SCN-ONBOARDING-024
+  system: Mobile
+  module: ONBOARDING
+  feature: App vs content language independence
+  title: The interface language and the study languages do not overwrite each other
+  objective: >
+    Confirm the two are independent in both directions, and that Hindi, which has question
+    content but no UI catalogue, is offered as a content language and not as an app language.
+  preconditions:
+    - The app-language and content-language steps
+  test_data: "App language Telugu with content English + Telugu; then app English with content Hindi + Telugu"
+  test_environment: "Android emulator-5554, dev client, plus a SQLite read of the device database"
+  priority: Critical
+  severity: High
+  test_type: DataIntegrity
+  steps:
+    - step: 1
+      action: "On the app-language step, observe the offered languages"
+      expected: "Only English and Telugu. Hindi is NOT offered, because there is no Hindi UI catalogue"
+    - step: 2
+      action: "Choose Telugu, continue, and observe the offered content languages"
+      expected: "The full synced catalogue including Hindi. The Telugu app-language choice has not pre-selected anything here"
+    - step: 3
+      action: "Select English + Telugu and finish onboarding"
+      expected: "The interface is Telugu and questions default to English"
+    - step: 4
+      action: "Read app_preferences.ui_language and content_language_preferences from the device"
+      expected: "ui_language is te; content rows are en and te. Two separate stores, neither derived from the other"
+    - step: 5
+      action: "Repeat the flow with app language English and content languages Hindi + Telugu"
+      expected: "ui_language is en; content rows are hi and te. An English interface coexists with Hindi study content"
+  expected_result: >
+    The two language concepts are stored and honoured independently.
+    (REQ-ONBOARDING-004 and REQ-ONBOARDING-013 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Step 5 is the case that would be impossible if the two were conflated, which is the whole
+    reason they are separate fields.
+  automation_status: PartiallyAutomated
+  automation_reference: >
+    packages/core src/onboarding/validation.test.ts - "content languages > accepts a language that
+    has content but no interface catalogue" asserts both halves (hi valid as content, invalid as
+    interface). The storage and rendering halves are manual.
+
+- id: TC-ONBOARDING-025
+  requirement_ids: [REQ-ONBOARDING-013]
+  scenario_id: SCN-ONBOARDING-025
+  system: Mobile
+  module: ONBOARDING
+  feature: Content-language storage
+  title: The selection is stored queryably, in order, and survives a restart
+  objective: >
+    Confirm the shape the future multilingual sync will consume - one row per language, ordered
+    by choice, answerable in SQL, and persistent.
+  preconditions:
+    - Onboarding completed with two content languages
+  test_data: "English + Telugu"
+  test_environment: "Android emulator-5554 plus a SQLite read via adb exec-out run-as"
+  priority: High
+  severity: Medium
+  test_type: DataIntegrity
+  steps:
+    - step: 1
+      action: "Pull the device database and read content_language_preferences"
+      expected: "Two rows - language_code en and te with display_order 0 and 1. One row per language, not a delimited string in a single column"
+    - step: 2
+      action: "Run SELECT EXISTS(SELECT 1 FROM content_language_preferences WHERE language_code = 'te')"
+      expected: "1 - the question the future sync system needs is answerable directly in SQL"
+    - step: 3
+      action: "Force-stop the app, relaunch, and re-read"
+      expected: "The same two rows in the same order; the quiz still defaults to the first"
+  expected_result: >
+    The preference is persisted in a directly queryable, ordered form.
+    (REQ-ONBOARDING-013 description; brief sections 13 and 26)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Storage only. Multilingual question sync, filtering, fallback and rendering are explicitly out
+    of scope per the brief's section 14 and are not asserted anywhere in this module.
+  automation_status: ManualOnly
+  automation_reference: ""

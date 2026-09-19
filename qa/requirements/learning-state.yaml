@@ -1,0 +1,222 @@
+# LEARNING-STATE module — requirement repository
+#
+# Scope: LearningStateController (GET /api/me/learning-state) — the canonical per-topic
+# contract added by TASK-3001 (Phase 3 of the personalization program). A new module because
+# it is a new endpoint family with its own rules, the same justification ANALYTICS used: it
+# is not an extension of the sync contract in USER-PROGRESS, nor of the measurement layer in
+# ANALYTICS.
+#
+# What this module deliberately does NOT cover: any plan, schedule, assignment or readiness
+# score. None exists. Phase 3's whole deliverable is a contract over what the existing
+# producers already compute, and keeping "describe the student" apart from "decide what they
+# should do" is the design, not an omission.
+#
+# automation_status is evidence-based, per qa/README.md's standing rule.
+
+- id: REQ-LEARNINGSTATE-001
+  feature: One student's canonical learning state is readable, and only their own
+  module: LEARNING-STATE
+  system: [Backend]
+  source_doc: api/LEARNING-STATE.md
+  source_section: "GET /api/me/learning-state"
+  description: >
+    GET /api/me/learning-state?examCode=... returns one composite per topic in that exam's
+    syllabus, plus a per-subject rollup. The acting student comes from the bearer token;
+    there is no user-id path or query parameter anywhere on the endpoint.
+  business_rule: >
+    examCode scopes only the exam-dependent dimensions — priority, curated weightage,
+    question availability and the recommendation. Health and curriculum state are properties
+    of the student and the topic, so they are identical whichever exam is asked for.
+  actor: Signed-in student
+  preconditions:
+    - "A valid bearer token"
+    - "An exam with at least one mapped topic"
+  inputs:
+    - "examCode query parameter; no body"
+  expected_outputs:
+    - "200 with topics[] and subjects[]"
+  validations:
+    - "401 without a token"
+    - "404 for an unknown examCode"
+  permissions:
+    - "User token required; one account cannot address another's state because no parameter names a user"
+  dependencies: [REQ-USERPROGRESS-001, REQ-ANALYTICS-001]
+  error_conditions:
+    - "An account with no history returns every topic in NOT_STARTED, never an error"
+  edge_conditions:
+    - "Signed-out students are not covered — D3.2 made personalization a signed-in feature for V1"
+  offline_behavior: "None — server-computed, requires a network"
+  acceptance_criteria:
+    - "A signed-in student reads their own state; an unauthenticated caller gets 401; an unknown exam gets 404"
+    - "Two different students reading the same exam see their own figures, not each other's"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    LearningStateTest.requiresASignedInUser, .unknownExamIs404 and
+    .stateIsScopedToTheCallingStudent.
+
+- id: REQ-LEARNINGSTATE-002
+  feature: The two per-topic state dimensions are named separately and never collapsed
+  module: LEARNING-STATE
+  system: [Backend]
+  source_doc: api/LEARNING-STATE.md
+  source_section: "The rule this contract exists to enforce"
+  description: >
+    Every topic carries curriculumState (coverage — how far through the topic the student has
+    worked, from user_topic_progress) and performanceState (quality — how they are performing
+    lately, from user_topic_health) as two separate fields. No response field is named a bare
+    "state".
+  business_rule: >
+    Both enums contain a value spelled NEEDS_REVISION meaning different things — a regression
+    from MASTERED in the first, "was strong and has slipped" in the second. A student who has
+    barely started and one who was strong and is slipping want opposite treatment, so the two
+    are kept and named rather than flattened into one label or renamed across a synced table.
+  actor: Signed-in student
+  preconditions:
+    - "A topic with both a curriculum row and real recent attempts"
+  inputs:
+    - "examCode"
+  expected_outputs:
+    - "curriculumState and performanceState present as distinct fields, each forwarded unchanged from its own producer"
+  validations:
+    - "curriculumState is never null — no row means NOT_STARTED, which is a real answer"
+    - "performanceState is null when nothing was ever measured, which is distinct from INSUFFICIENT_DATA"
+  permissions:
+    - "User token required"
+  dependencies: [REQ-LEARNINGSTATE-001]
+  error_conditions: []
+  edge_conditions:
+    - "The two dimensions may legitimately disagree; that is the information being preserved, not a defect"
+  offline_behavior: "None"
+  acceptance_criteria:
+    - "A topic whose curriculumState is NEEDS_REVISION and whose recent performance is good returns both values, unmixed"
+    - "An untouched topic returns curriculumState NOT_STARTED with a null performanceState"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    LearningStateTest.theTwoStateDimensionsAreSeparatelyReadableEvenWhenBothCouldSayNeedsRevision
+    and .anUntouchedTopicIsNotStartedWithNoPerformanceVerdict.
+
+- id: REQ-LEARNINGSTATE-003
+  feature: Per-topic direction has exactly one producer
+  module: LEARNING-STATE
+  system: [Backend]
+  source_doc: api/LEARNING-STATE.md
+  source_section: "Related"
+  description: >
+    trend on this endpoint is forwarded from user_topic_health.trend_direction, and
+    GET /api/me/analytics/topics no longer reports a trend of its own.
+  business_rule: >
+    The analytics endpoint shipped with a duplicate in TASK-2801 — same question, different
+    window, different evidence floor, and a fourth value spelled INSUFFICIENT_DATA where the
+    health model says NOT_ENOUGH_DATA — so the two could disagree about the same student and
+    topic. Resolved in the health model's favour because its version has a flagged
+    stale-window fallback that lowers confidence rather than fabricating a direction.
+    Analytics reports facts; direction is a judgement.
+  actor: Signed-in student
+  preconditions:
+    - "A topic with at least one uploaded attempt"
+  inputs:
+    - "examCode"
+  expected_outputs:
+    - "trend using the health model's vocabulary (IMPROVING / STABLE / DECLINING / NOT_ENOUGH_DATA)"
+  validations:
+    - "The /api/me/analytics/topics payload contains no trend field at all"
+  permissions:
+    - "User token required"
+  dependencies: [REQ-LEARNINGSTATE-001, REQ-ANALYTICS-001]
+  error_conditions: []
+  edge_conditions:
+    - "Epic L's TopicTrend.Direction (RISING/STABLE/FALLING) is a separate, correct third vocabulary — it describes the exam's PYQ frequency, not the student"
+  offline_behavior: "None"
+  acceptance_criteria:
+    - "A topic with one session returns NOT_ENOUGH_DATA here, and the analytics topics payload carries no trend key"
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "LearningStateTest.trendComesFromTheHealthModelAndAnalyticsNoLongerReportsOne"
+
+- id: REQ-LEARNINGSTATE-004
+  feature: Practice and mock evidence stay separately readable
+  module: LEARNING-STATE
+  system: [Backend]
+  source_doc: api/LEARNING-STATE.md
+  source_section: "Practice and mock"
+  description: >
+    Each topic reports practiceAccuracy and mockAccuracy alongside the pooled accuracy, so a
+    consumer can distinguish untimed practice from timed papers.
+  business_rule: >
+    The health model pools the two into one verdict and this phase deliberately did not change
+    that — EvidenceEvent carries no source field, and separating them there would be a retune
+    of a shipped scorer with its own algorithm-version bump. Exposing the split as facts lets
+    a later planner treat them differently without redefining what health means.
+  actor: Signed-in student
+  preconditions:
+    - "A topic answered both in practice and in a mock attempt"
+  inputs:
+    - "examCode"
+  expected_outputs:
+    - "practiceAccuracy and mockAccuracy populated independently; accuracy is the pooled figure"
+  validations:
+    - "A source with nothing recorded returns null, never 0%"
+  permissions:
+    - "User token required"
+  dependencies: [REQ-LEARNINGSTATE-001, REQ-ANALYTICS-002]
+  error_conditions: []
+  edge_conditions:
+    - "A student who knows the material but runs out of time shows high practice and low mock accuracy — the case the pooled number hides"
+  offline_behavior: "None"
+  acceptance_criteria:
+    - "All-correct practice and all-wrong mock on the same topic returns 100 / 0 separately and 50 pooled"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "LearningStateTest.practiceAndMockAccuracyAreReadableSeparately"
+
+- id: REQ-LEARNINGSTATE-005
+  feature: A subject rolls up as a distribution and coverage, never a single score
+  module: LEARNING-STATE
+  system: [Backend]
+  source_doc: api/LEARNING-STATE.md
+  source_section: "Why a subject has no single score"
+  description: >
+    subjects[] reports topicsInSyllabus, topicsStarted, topicsWithEvidence, a count per
+    curriculum state, a count per performance state, and the pair
+    weightagePercentTotal / weightagePercentStarted.
+  business_rule: >
+    A weighted mean of topic health per subject IS a readiness score, and readiness is still
+    an open product decision (reports/open-questions.md; Home's card is a hardcoded 62%).
+    Shipping one here would have answered that question by accident under another name. The
+    radar's own RadarOverview already set the precedent of reporting a distribution instead.
+  actor: Signed-in student
+  preconditions:
+    - "An exam whose subject has at least two mapped topics, one started"
+  inputs:
+    - "examCode"
+  expected_outputs:
+    - "Counts and the weightage pair; no aggregate score field exists in the shape"
+  validations:
+    - "Topics with no health row are absent from performanceCounts rather than bucketed as anything"
+    - "weightagePercentTotal is null when no topic carries a curated weightage — never 0, which would read as 'worth no marks'"
+  permissions:
+    - "User token required"
+  dependencies: [REQ-LEARNINGSTATE-001]
+  error_conditions: []
+  edge_conditions:
+    - "A topic with no subject is omitted from the rollup but still appears in topics[] — inventing an 'Unknown' subject would put a fabricated fact in front of a student"
+  offline_behavior: "None"
+  acceptance_criteria:
+    - "Two mapped topics at 10% each with one started returns topicsStarted 1, total 20.00, started 10.00"
+  priority: High
+  status: Active
+  ambiguity: >
+    The weightage pair is only as good as the admin-curated exam_topics data behind it; an
+    exam whose topic map is uncurated reports nulls, which is honest but not useful.
+  automation_status: Automated
+  automation_hint: "LearningStateTest.subjectRollupReportsDistributionAndWeightageCoverage"

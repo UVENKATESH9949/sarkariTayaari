@@ -58,13 +58,16 @@
   category: Positive
   title: Account and Settings are reachable at phone width
   objective: >
-    Verify the two destinations that do not fit in the bottom bar remain reachable on a narrow
-    screen, and that activating them navigates.
+    Verify the two destinations not among the top nav's five primary links remain reachable
+    on a narrow screen (Settings as an icon button, Account inside the menu dropdown), and
+    that activating them navigates.
   systems: [Web]
   status: Ready
   notes: >
-    Regression guard for a real Phase 0 defect — both were unreachable below 1024px, which is
-    invisible unless specifically checked because every other screen still worked.
+    Regression guard for a real Phase 0 defect — both were unreachable below 1024px under
+    the earlier sidebar/bottom-bar model, which is invisible unless specifically checked
+    because every other screen still worked. Re-verified this session under the new
+    top-nav-only model (2026-09-18) — both remain reachable.
 
 - id: SCN-WEB-006
   requirement_ids: [REQ-WEB-005]
@@ -206,12 +209,74 @@
   category: Compatibility
   title: The exam-card grid and footer adapt across tablet, laptop and desktop widths
   objective: >
-    Verify the exam-card grid used by Home, Practice and Mock Test renders the documented
-    column count at each breakpoint, the footer switches between its compact and full
-    multi-column forms at the same point the sidebar appears, and none of it produces
+    Verify the exam-card grid used by Practice and Mock Test renders the documented
+    column count at each breakpoint (Home itself moved to its own hero+rows layout — see
+    REQ-WEB-014), the footer switches between its compact and full multi-column forms at
+    the same 1024px point the top nav's inline links appear, and none of it produces
     horizontal overflow.
   systems: [Web]
   status: Ready
   notes: >
     Distinct from SCN-WEB-004, which covers the primary navigation's own switch — this
     scenario covers page content (the grid and the footer) reflowing independently of that.
+
+- id: SCN-WEB-018
+  requirement_ids: [REQ-WEB-011]
+  category: Positive
+  title: Practice Quiz and Mock Test Engine show a desktop sidebar with no functional change
+  objective: >
+    Verify that at 1024px and above, Practice Quiz shows a session-context/progress sidebar
+    and Mock Test's question navigator renders inline in a sidebar instead of only behind a
+    modal button, while answering, marking, submitting and scoring all behave exactly as they
+    do below 1024px.
+  systems: [Web]
+  status: Ready
+  notes: "Verified this session against a real 100-question SSC CGL Tier 1 paper and a real 140-question practice topic, at 1024/1440/1920px."
+
+- id: SCN-WEB-019
+  requirement_ids: [REQ-WEB-011]
+  category: Compatibility
+  title: The sidebar layout holds up at the 1024px boundary and on a resize
+  objective: >
+    Verify the question column keeps a comfortable width (does not overflow or force
+    horizontal scrolling) at exactly 1024px, the narrowest width the sidebar appears at, and
+    that resizing across the 1024px boundary while the modal navigator is open doesn't break
+    either the modal or the sidebar.
+  systems: [Web]
+  status: Ready
+  notes: "The question column uses a CSS grid minmax(0, 42rem) track, so it shrinks below its 42rem cap rather than overflowing when the combined layout is wider than the available content area."
+
+- id: SCN-WEB-020
+  requirement_ids: [REQ-WEB-012]
+  category: Positive
+  title: Every practice/mock-test data fetch shows a content-shaped skeleton
+  objective: >
+    Verify Subjects, Topics, Levels, Mock Test's paper list, Mock Test Start, Practice Quiz
+    and Mock Test Engine each show a skeleton shaped like their own content (rows, a card
+    list, or a question card) during their first load, never a bare "Loading…" line.
+  systems: [Web]
+  status: Ready
+  notes: "This project's shared dev database can genuinely take several real seconds for some of these fetches (documented in memory/STATUS.md) — the skeleton needs to hold up over a real, not simulated, delay."
+
+- id: SCN-WEB-021
+  requirement_ids: [REQ-WEB-013]
+  category: Positive
+  title: Progress, Exams and 404 each show the correct ComingSoon treatment
+  objective: >
+    Verify Progress and Exams show the phase-pill "arrives in Phase N" treatment naming the
+    right phase, and an unknown URL shows the 404-specific copy with no phase pill.
+  systems: [Web]
+  status: Ready
+  notes: null
+
+- id: SCN-WEB-022
+  requirement_ids: [REQ-WEB-014]
+  category: Positive
+  title: Home shows a real hero and correctly category-grouped rows
+  objective: >
+    Verify Home's hero reflects a real badged exam's own data (name, photo, cycle, vacancy,
+    deadline, no duplicated demo label) and that every active exam appears in the correct
+    horizontally-scrollable category row with a real photo or a monogram fallback.
+  systems: [Web]
+  status: Ready
+  notes: "Verified this session against the real 11-exam active catalogue, both themes, at 390/820/1440px — zero console errors."

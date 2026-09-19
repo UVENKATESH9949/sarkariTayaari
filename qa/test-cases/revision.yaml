@@ -1,0 +1,323 @@
+# REVISION module — manual test cases
+#
+# Every case below has a real test method behind it (RevisionPlanTest for the round trip,
+# RevisionLadderTest for the decision table). They are recorded here as UNEXECUTED manual cases in
+# the register's own convention; the automated runs that actually happened are in qa/execution/.
+
+- id: TC-REVISION-001
+  requirement_ids: [REQ-REVISION-001]
+  scenario_id: SCN-REVISION-001
+  system: Backend
+  module: REVISION
+  feature: A student's revision schedule is readable, scoped to them, and only covers testable topics
+  title: The revision-plan endpoint rejects an unauthenticated caller
+  objective: "Confirm the endpoint is token-gated, like the two personalization endpoints before it."
+  preconditions:
+    - "A running backend"
+    - "An exam with at least one mapped topic"
+  test_data: "One disposable exam"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Critical
+  test_type: Security
+  steps:
+    - step: 1
+      action: "GET /api/me/revision-plan?examCode={code} with no Authorization header"
+      expected: "401"
+    - step: 2
+      action: "Inspect the controller's route definition"
+      expected: "examCode is the only parameter — nothing names a user"
+  expected_result: "Unreachable unauthenticated, and cannot be pointed at another account. (REQ-REVISION-001 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "RevisionPlanTest.requiresASignedInUser"
+
+- id: TC-REVISION-002
+  requirement_ids: [REQ-REVISION-001]
+  scenario_id: SCN-REVISION-002
+  system: Backend
+  module: REVISION
+  feature: A student's revision schedule is readable, scoped to them, and only covers testable topics
+  title: An unknown exam code returns 404
+  objective: "Confirm a typo fails loudly instead of reading as 'nothing to revise'."
+  preconditions:
+    - "A signed-in student"
+  test_data: "An exam code that does not exist"
+  test_environment: "Backend against the real dev database"
+  priority: Medium
+  severity: Major
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "GET /api/me/revision-plan?examCode=NO_SUCH_EXAM with a valid token"
+      expected: "404, not 200 with an empty topics array"
+  expected_result: "An unknown exam is an error, never an empty success. (REQ-REVISION-001 validations)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "RevisionPlanTest.unknownExamIs404"
+
+- id: TC-REVISION-003
+  requirement_ids: [REQ-REVISION-001]
+  scenario_id: SCN-REVISION-003
+  system: Backend
+  module: REVISION
+  feature: A student's revision schedule is readable, scoped to them, and only covers testable topics
+  title: A topic with no questions is absent from the plan entirely
+  objective: "Confirm a re-test can never be scheduled for a topic the bank cannot fill."
+  preconditions:
+    - "Two mapped topics, only one carrying questions"
+  test_data: "One disposable exam, two topics"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "GET the revision plan and list the topic ids returned"
+      expected: "The practicable topic is present"
+    - step: 2
+      action: "Look for the topic with no questions"
+      expected: "Absent — not merely unscheduled"
+  expected_result: "Question availability gates the plan. (REQ-REVISION-001 validations)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "RevisionPlanTest.aTopicWithNoQuestionsIsNotInThePlanAtAll"
+
+- id: TC-REVISION-004
+  requirement_ids: [REQ-REVISION-001]
+  scenario_id: SCN-REVISION-004
+  system: Backend
+  module: REVISION
+  feature: A student's revision schedule is readable, scoped to them, and only covers testable topics
+  title: One student's history does not schedule another student's revision
+  objective: "Confirm due dates are genuinely per student."
+  preconditions:
+    - "Two registered students; only the first has practised the topic"
+  test_data: "One practice session dated 90 days ago, owned by the first student"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Critical
+  test_type: Security
+  steps:
+    - step: 1
+      action: "GET the plan as the student who practised"
+      expected: "The topic is DUE"
+    - step: 2
+      action: "GET the plan as the second student"
+      expected: "The same topic is NOT_SCHEDULED with reason NEVER_PRACTISED"
+  expected_result: "A schedule reflects only its own owner's history. (REQ-REVISION-001 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "RevisionPlanTest.oneStudentsScheduleIsNotAnothers"
+
+- id: TC-REVISION-005
+  requirement_ids: [REQ-REVISION-002, REQ-REVISION-005]
+  scenario_id: SCN-REVISION-005
+  system: Backend
+  module: REVISION
+  feature: A due date comes from a versioned, declared interval model
+  title: A topic practised 90 days ago is due, and leads the plan over a fresher higher-priority topic
+  objective: >
+    Confirm a real attempt timestamp produces a real due date, and that urgency of forgetting
+    outranks exam weight in this plan's ordering.
+  preconditions:
+    - "Two topics with questions; one practised 90 days ago at priority 40, one practised today at priority 90"
+  test_data: "Two practice sessions, dated 90 days ago and today"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Read the stale topic's status, daysOverdue, daysUntilDue and intervalDays"
+      expected: "DUE; daysOverdue positive; daysUntilDue null; intervalDays one of 3, 7, 21, 45"
+    - step: 2
+      action: "Read the fresh topic's status"
+      expected: "NOT_DUE with daysUntilDue populated and daysOverdue null"
+    - step: 3
+      action: "Read topics[0]"
+      expected: "The stale topic, despite the fresh one carrying more than twice the exam priority"
+    - step: 4
+      action: "Read dueCount and totalDueMinutes"
+      expected: "1 and a positive figure"
+  expected_result: "Due dates derive from real recency, and due work leads. (REQ-REVISION-005 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Step 1 asserts the interval is one of the four rungs rather than a specific one — which rung
+    applies depends on the health model's verdict, which is that service's business, not this one's.
+  automation_status: Automated
+  automation_reference: "RevisionPlanTest.aTopicLastPractisedLongAgoIsDueAndLeadsThePlan"
+
+- id: TC-REVISION-006
+  requirement_ids: [REQ-REVISION-003]
+  scenario_id: SCN-REVISION-006
+  system: Backend
+  module: REVISION
+  feature: The rung is scaled by how well the student currently knows the topic
+  title: All four rungs are reachable and the ladder is monotonic
+  objective: >
+    Confirm the decision table behaves as decided — 3 days for shaky, 7 for moving, 21 for strong,
+    45 for strong and mastered — and that a weaker topic never waits longer than a stronger one.
+  preconditions:
+    - "None — constructed states, no database"
+  test_data: "Composites covering NEEDS_ATTENTION, NEEDS_REVISION, DEVELOPING, IMPROVING, STRONG, STRONG+MASTERED"
+  test_environment: "Plain JUnit, no Spring context"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Resolve the rung for each state combination"
+      expected: "3 / 3 / 7 / 7 / 21 / 45 days respectively, each with a rungReason naming its state"
+    - step: 2
+      action: "Compare intervals across increasing strength"
+      expected: "Strictly increasing — rung 1 < 2 < 3 < 4"
+  expected_result: "The ladder is complete and ordered. (REQ-REVISION-003 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Asserts the ladder behaves as DECIDED, not that 3/7/21/45 are correct for this product — those
+    intervals are borrowed from published research and are not measured here.
+  automation_status: Automated
+  automation_reference: "RevisionLadderTest.aShakyTopicComesBackInThreeDays, .aTopicThatIsMovingButNotSettledComesBackInAWeek, .strongClimbsHigherOnceTheCurriculumAgreesItIsMastered, .theLadderIsMonotonic"
+
+- id: TC-REVISION-007
+  requirement_ids: [REQ-REVISION-004]
+  scenario_id: SCN-REVISION-007
+  system: Backend
+  module: REVISION
+  feature: A topic with nothing to revise is said to be unscheduled, not given a due date
+  title: An untouched topic is unscheduled, with the reason stated and no re-test
+  objective: "Confirm the absence of evidence is reported rather than filled with a computed date."
+  preconditions:
+    - "A mapped topic with questions and no attempts"
+  test_data: "One disposable exam and topic"
+  test_environment: "Backend against the real dev database"
+  priority: Medium
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Read the topic's status and notScheduledReason"
+      expected: "NOT_SCHEDULED and NEVER_PRACTISED"
+    - step: 2
+      action: "Read dueAt, intervalDays and retest"
+      expected: "All null — there is nothing to schedule and nothing to re-test"
+  expected_result: "Unscheduled is an answer, not a gap. (REQ-REVISION-004 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "RevisionPlanTest.anUntouchedTopicIsNotScheduledAndSaysWhy"
+
+- id: TC-REVISION-008
+  requirement_ids: [REQ-REVISION-003, REQ-REVISION-004]
+  scenario_id: SCN-REVISION-008
+  system: Backend
+  module: REVISION
+  feature: The rung is scaled by how well the student currently knows the topic
+  title: An unrecognised or unmeasured state produces no rung at all
+  objective: >
+    Confirm INSUFFICIENT_DATA, a null verdict, and a state this service does not recognise all
+    yield no due date rather than silently defaulting onto one.
+  preconditions:
+    - "None — constructed states, no database"
+  test_data: "Composites with null, INSUFFICIENT_DATA and an unknown performance state"
+  test_environment: "Plain JUnit, no Spring context"
+  priority: Medium
+  severity: Major
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "Resolve the rung for a null and an INSUFFICIENT_DATA performance state"
+      expected: "No rung in both cases"
+    - step: 2
+      action: "Resolve the rung for a state string the service does not know"
+      expected: "No rung — not the shortest or longest interval"
+  expected_result: "A verdict the service cannot interpret never acquires a due date. (REQ-REVISION-003 edge_conditions)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Guards a future health-model state from silently inheriting someone else's spacing."
+  automation_status: Automated
+  automation_reference: "RevisionLadderTest.aTopicWithNothingMeasuredIsNotScheduledAtAll, .anUnrecognisedStateIsLeftUnscheduledRatherThanDefaulted"
+
+- id: TC-REVISION-009
+  requirement_ids: [REQ-REVISION-005]
+  scenario_id: SCN-REVISION-009
+  system: Backend
+  module: REVISION
+  feature: Due work leads the plan, and re-testing resolves to something the app can open
+  title: The re-test is timed practice, capped at the questions that exist
+  objective: "Confirm the instrument and its sizing, and that minutes use the shared estimate ladder."
+  preconditions:
+    - "A practised topic carrying only two questions — fewer than any recommended step would ask for"
+    - "Enough attempts for the health model to assert a verdict at all"
+  test_data: "Three practice sessions over the same two questions, 62/61/60 days ago"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Read retest.action"
+      expected: "TIMED_PRACTICE"
+    - step: 2
+      action: "Read retest.questionCount"
+      expected: "Positive and no greater than 2 — capped by what the bank holds"
+    - step: 3
+      action: "Read retest.questionCountBasis and retest.estimate.source"
+      expected: "RECOMMENDED_STEP or DEFAULT; the estimate source one of the four declared tiers"
+  expected_result: "A re-test opens a screen the app can actually fill. (REQ-REVISION-005 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Step 2 is the regression guard: an uncapped count would send a student to a screen it cannot fill."
+  automation_status: Automated
+  automation_reference: "RevisionPlanTest.theRetestIsTimedPracticeAndNeverExceedsTheQuestionsAvailable"
+
+- id: TC-REVISION-010
+  requirement_ids: [REQ-REVISION-005]
+  scenario_id: SCN-REVISION-010
+  system: Backend
+  module: REVISION
+  feature: Due work leads the plan, and re-testing resolves to something the app can open
+  title: Nothing due reports null minutes rather than zero
+  objective: "Confirm 'no revision outstanding' is distinguishable from 'zero minutes of work'."
+  preconditions:
+    - "One topic practised today, so nothing can be due"
+  test_data: "One practice session dated today"
+  test_environment: "Backend against the real dev database"
+  priority: Low
+  severity: Minor
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "Read dueCount and totalDueMinutes"
+      expected: "0 and null"
+    - step: 2
+      action: "Read intervalBasis"
+      expected: "SPACED_REPETITION_LADDER_V1 — every response declares its interval model"
+  expected_result: "Null means nothing due. (REQ-REVISION-005 validations)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "RevisionPlanTest.whenNothingIsDueTheTotalIsNullRatherThanZero"

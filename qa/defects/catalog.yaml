@@ -3,4 +3,23 @@
 # Empty by design. See qa/defects/auth.yaml's header comment for the schema and the rule:
 # a defect is created only from a real failed execution, never fabricated in advance.
 
-[]
+- id: DEF-CATALOG-001
+  title: Auto-followed exam after unfollowing everything left no active exam until something else forced a re-read
+  severity: Medium
+  status: Fixed
+  found_in_execution: EXEC-CATALOG-0003
+  test_case_id: TC-CATALOG-055
+  requirement_ids: [REQ-CATALOG-025]
+  description: >
+    A user who unfollows every exam and relaunches the app got an exam back (SyncContext's warm
+    start calls ensureExamFollowed) but no ACTIVE exam: Home rendered a blank "Preparing for" card
+    with no exam name, no Focus next card and no deadline, and stayed that way.
+    Root cause: ensureExamFollowed writes a followed_exams row outside any sync and announced the
+    change to nobody. The active-exam provider had already read an empty followed list by then,
+    and the delta sync that would otherwise have bumped syncVersion was suppressed by the
+    15-minute staleness window, so nothing ever triggered a re-read.
+    Fix: ensureExamFollowed now returns whether it actually followed something, and SyncContext's
+    warm-start path bumps syncVersion when it did - reusing the existing "underlying data changed"
+    channel rather than adding a second one. Only reachable when there is no active exam but exams
+    exist, which is why it survived every other scenario.
+  external_ref: null

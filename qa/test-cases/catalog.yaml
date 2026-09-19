@@ -1773,3 +1773,140 @@
   remarks: null
   automation_status: ManualOnly
   automation_reference: "None — no admin automated test suite exists in this project."
+
+- id: TC-CATALOG-053
+  requirement_ids: [REQ-CATALOG-025]
+  scenario_id: SCN-CATALOG-044
+  system: Mobile
+  module: CATALOG
+  feature: Active exam switching
+  title: Switching from Home updates Home immediately
+  objective: >
+    Confirm the core flow: pick a different exam, see a transition, land on Home showing the new
+    exam and its data.
+  preconditions:
+    - Three exams followed, one of them active
+  test_data: "SSC CGL, RRB NTPC, IBPS PO"
+  test_environment: "Emulator emulator-5554"
+  priority: High
+  severity: High
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "On Home, tap Change exam on the Preparing-for card"
+      expected: "A picker lists all three followed exams with the current one marked Active"
+    - step: 2
+      action: "Tap a different exam"
+      expected: "A full-screen Preparing your dashboard / Switching to <exam> transition appears and the app underneath is not interactive"
+    - step: 3
+      action: "Wait for the transition to end"
+      expected: "It ends as soon as the switch completes (well under a second on cached data), not after a fixed multi-second wait"
+    - step: 4
+      action: "Read the Home card, the deadline line and the Focus-next card"
+      expected: "All three show the NEW exam; no value from the previous exam remains visible"
+    - step: 5
+      action: "Switch again, twice more, cycling back to the original exam"
+      expected: "Every transition behaves identically; no screen is left on a previous exam"
+  expected_result: >
+    The active exam changes immediately and completely, with no restart and no manual refresh.
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    ManualOnly: mobile has no automated UI test runner in this project. Step 4 is the direct
+    regression guard for the original report.
+  automation_status: ManualOnly
+  automation_reference: null
+
+- id: TC-CATALOG-054
+  requirement_ids: [REQ-CATALOG-025]
+  scenario_id: SCN-CATALOG-044
+  system: Mobile
+  module: CATALOG
+  feature: Active exam switching
+  title: Every entry point switches through the same operation
+  objective: >
+    Confirm a change made anywhere reaches Home, which is exactly what failed before.
+  preconditions:
+    - At least two exams followed
+  test_data: "Any two followed exams"
+  test_environment: "Emulator emulator-5554"
+  priority: High
+  severity: High
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Open My Exams, tap Set active on a non-active exam, then go to Home"
+      expected: "The transition runs and Home shows that exam; My Exams still lists every followed exam"
+    - step: 2
+      action: "From the Exams tab, follow a new exam, then open My Exams"
+      expected: "It appears in the followed list; the active exam is unchanged"
+    - step: 3
+      action: "Open an Exam Guide for a followed exam and tap Following to unfollow it"
+      expected: "It disappears from My Exams; if it was active, another exam is active and Home reflects it"
+    - step: 4
+      action: "Open Preparation Radar with no exam passed in"
+      expected: "It scores against the active exam, matching Home -- not an arbitrary followed exam"
+  expected_result: >
+    No entry point can leave the app disagreeing with itself about the active exam.
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    ManualOnly. Step 4 guards the second root cause: the radar used the same unordered
+    getFollowedExam query Home did.
+  automation_status: ManualOnly
+  automation_reference: null
+
+- id: TC-CATALOG-055
+  requirement_ids: [REQ-CATALOG-025]
+  scenario_id: SCN-CATALOG-045
+  system: Mobile
+  module: CATALOG
+  feature: Active exam persistence
+  title: The active exam survives restart, offline use and removal
+  objective: >
+    Confirm persistence and the promotion rule, and that no path leaves the app on an infinite
+    spinner or with no exam while exams remain.
+  preconditions:
+    - Three exams followed
+    - Migration 0026 applied on a device with existing preferences (theme/zoom/language set)
+  test_data: "SSC CGL, RRB NTPC, IBPS PO"
+  test_environment: "Emulator emulator-5554"
+  priority: High
+  severity: High
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Make RRB NTPC active, force-stop the app and reopen it"
+      expected: "Home shows RRB NTPC; the previously chosen theme, zoom and language are also intact"
+    - step: 2
+      action: "Turn on airplane mode and switch between two exams whose data is already local"
+      expected: "Both switches complete; the transition ends rather than hanging; Home updates"
+    - step: 3
+      action: "While offline, switch to an exam with no cached guide"
+      expected: "The switch still completes; Home renders without the deadline card rather than blocking"
+    - step: 4
+      action: "Unfollow the currently active exam from My Exams"
+      expected: "The most recently followed remaining exam becomes active and Home follows it"
+    - step: 5
+      action: "Unfollow every exam and confirm the empty state, then force-stop the app and reopen it"
+      expected: >
+        The empty state appears while no exam is followed. On the NEXT LAUNCH (not on a
+        pull-to-refresh - ensureExamFollowed runs at app start, not on a delta sync) an exam is
+        auto-followed AND becomes active: Home shows its name and its Focus-next card, never a
+        blank "Preparing for" card.
+  expected_result: >
+    The choice is durable, works offline, and never strands the app without an exam while one
+    is available.
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    ManualOnly. Step 1 preferences check is the regression guard for migration 0026: the new
+    column sits on the same row as theme, zoom and language. Step 5 was corrected after
+    EXEC-CATALOG-0003: its original wording named pull-to-refresh as the trigger, which is wrong,
+    and it only asserted that an exam gets followed - which let DEF-CATALOG-001 (followed, but no
+    active exam, so Home rendered blank) sit exactly in the gap. It now asserts the active exam.
+  automation_status: ManualOnly
+  automation_reference: null

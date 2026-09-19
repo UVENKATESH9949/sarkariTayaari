@@ -1,0 +1,33 @@
+# Regression — ONBOARDING
+#
+# Every test case belonging to the ONBOARDING module. Run after any change confined to that module.
+#
+# 25 test case(s). Membership rule: module == ONBOARDING (mechanical filter).
+
+suite: Regression — ONBOARDING
+test_case_ids:
+  - TC-ONBOARDING-001
+  - TC-ONBOARDING-002
+  - TC-ONBOARDING-003
+  - TC-ONBOARDING-004
+  - TC-ONBOARDING-005
+  - TC-ONBOARDING-006
+  - TC-ONBOARDING-007
+  - TC-ONBOARDING-008
+  - TC-ONBOARDING-009
+  - TC-ONBOARDING-010
+  - TC-ONBOARDING-011
+  - TC-ONBOARDING-012
+  - TC-ONBOARDING-013
+  - TC-ONBOARDING-014
+  - TC-ONBOARDING-015
+  - TC-ONBOARDING-016
+  - TC-ONBOARDING-017
+  - TC-ONBOARDING-018
+  - TC-ONBOARDING-019
+  - TC-ONBOARDING-020
+  - TC-ONBOARDING-021
+  - TC-ONBOARDING-022
+  - TC-ONBOARDING-023
+  - TC-ONBOARDING-024
+  - TC-ONBOARDING-025

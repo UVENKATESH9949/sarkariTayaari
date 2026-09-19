@@ -1,0 +1,426 @@
+# ROADMAP module — manual test cases
+#
+# Every case below has a real test method behind it (StudyRoadmapTest). They are recorded here as
+# UNEXECUTED manual cases in the register's own convention; the automated runs that actually
+# happened are recorded in qa/execution/.
+
+- id: TC-ROADMAP-001
+  requirement_ids: [REQ-ROADMAP-001]
+  scenario_id: SCN-ROADMAP-001
+  system: Backend
+  module: ROADMAP
+  feature: A student's roadmap is readable, scoped to them, and never plans the impossible
+  title: The roadmap endpoint rejects an unauthenticated caller
+  objective: "Confirm the new endpoint is token-gated, like the learning state it reads."
+  preconditions:
+    - "A running backend"
+    - "An exam with at least one mapped topic"
+  test_data: "One disposable exam"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Critical
+  test_type: Security
+  steps:
+    - step: 1
+      action: "GET /api/me/study-roadmap?examCode={code} with no Authorization header"
+      expected: "401"
+    - step: 2
+      action: "Inspect the controller's route definition"
+      expected: "examCode is the only parameter — nothing names a user"
+  expected_result: "The endpoint is unreachable unauthenticated and cannot be pointed at another account. (REQ-ROADMAP-001 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "StudyRoadmapTest.requiresASignedInUser"
+
+- id: TC-ROADMAP-002
+  requirement_ids: [REQ-ROADMAP-001]
+  scenario_id: SCN-ROADMAP-002
+  system: Backend
+  module: ROADMAP
+  feature: A student's roadmap is readable, scoped to them, and never plans the impossible
+  title: An unknown exam code returns 404
+  objective: "Confirm a typo fails loudly instead of returning an empty plan."
+  preconditions:
+    - "A signed-in student"
+  test_data: "An exam code that does not exist"
+  test_environment: "Backend against the real dev database"
+  priority: Medium
+  severity: Major
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "GET /api/me/study-roadmap?examCode=NO_SUCH_EXAM with a valid token"
+      expected: "404, not 200 with an empty topics array"
+  expected_result: "An unknown exam is an error, never an empty success. (REQ-ROADMAP-001 validations)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "StudyRoadmapTest.unknownExamIs404"
+
+- id: TC-ROADMAP-003
+  requirement_ids: [REQ-ROADMAP-001]
+  scenario_id: SCN-ROADMAP-003
+  system: Backend
+  module: ROADMAP
+  feature: A student's roadmap is readable, scoped to them, and never plans the impossible
+  title: A top-priority topic with no questions never reaches the plan
+  objective: "Confirm the plan can never send a student to an empty question screen."
+  preconditions:
+    - "Two mapped topics: one with questions and a low priority, one with none and the highest priority"
+  test_data: "One disposable exam, two topics, questions on only one"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "GET /api/me/study-roadmap for that exam"
+      expected: "The practicable topic is present"
+    - step: 2
+      action: "Look for the higher-priority topic that has no questions"
+      expected: "Absent from topics[] entirely, despite outranking everything"
+  expected_result: "Question availability gates the plan, not just the ordering. (REQ-ROADMAP-001 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Regression guard for the on-device finding that produced this rule in PreparePlanService."
+  automation_status: Automated
+  automation_reference: "StudyRoadmapTest.aTopicWithNoPracticableQuestionsIsNeverPlanned"
+
+- id: TC-ROADMAP-004
+  requirement_ids: [REQ-ROADMAP-002]
+  scenario_id: SCN-ROADMAP-004
+  system: Backend
+  module: ROADMAP
+  feature: The plan is ordered by exam priority, balanced across subjects, and the reordering is visible
+  title: The highest-priority topic leads, and exactly one topic is recommended
+  objective: "Confirm ordering follows Epic L's priority and that 'next up' is a single item."
+  preconditions:
+    - "Three mapped topics with distinct priorities, all with questions"
+  test_data: "Priorities 95 / 55 / 20"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "GET /api/me/study-roadmap and read topics[0]"
+      expected: "The priority-95 topic, with priorityRank 1"
+    - step: 2
+      action: "Count topics with recommended: true"
+      expected: "Exactly 1, and it is topics[0]"
+  expected_result: "Priority drives the order and one topic is named as next. (REQ-ROADMAP-002 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "StudyRoadmapTest.theHigherPriorityTopicLeadsThePlanAndExactlyOneIsRecommended"
+
+- id: TC-ROADMAP-005
+  requirement_ids: [REQ-ROADMAP-002]
+  scenario_id: SCN-ROADMAP-005
+  system: Backend
+  module: ROADMAP
+  feature: The plan is ordered by exam priority, balanced across subjects, and the reordering is visible
+  title: No subject runs longer than the cap, and nothing is lost in the reordering
+  objective: >
+    Confirm the interleave genuinely breaks a run rather than being a no-op, and that it reorders
+    without dropping or renumbering anything.
+  preconditions:
+    - "Two subjects; the five highest priorities all belong to the first subject"
+  test_data: "Ten topics, five per subject, priorities 99 down to 90"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Walk all ten topics and count consecutive ones sharing a subjectId"
+      expected: >
+        Never more than 2 in a row while both subjects still have topics left. A longer run is
+        legitimate only once one subject is exhausted, since nothing remains to interleave with —
+        asserted by requiring every topic from that point on to share one subject.
+    - step: 2
+      action: "Collect every priorityRank in the response"
+      expected: "1..10, each exactly once"
+    - step: 3
+      action: "Read topics[2].priorityRank"
+      expected: "Not 3 — proving a topic actually moved, so the assertion is not vacuous"
+  expected_result: "Balance is enforced and remains inspectable. (REQ-ROADMAP-002 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Step 3 exists so the test cannot pass on a plan the interleave never touched. Step 1 was
+    relaxed on 2026-09-19 after failing on a legitimate tail: with five topics per subject and a
+    cap of two, the last three necessarily come from whichever subject is left. The service was
+    right and the assertion was too strong.
+  automation_status: Automated
+  automation_reference: "StudyRoadmapTest.noSubjectRunsLongerThanTheCapAndTheOriginalRankIsStillVisible"
+
+- id: TC-ROADMAP-006
+  requirement_ids: [REQ-ROADMAP-003]
+  scenario_id: SCN-ROADMAP-006
+  system: Backend
+  module: ROADMAP
+  feature: Every workload estimate declares where it came from
+  title: The student's own measured time is used, and labelled, when there is enough of it
+  objective: "Confirm tier 1 of the estimate ladder resolves from real uploaded per-question times."
+  preconditions:
+    - "A topic with six questions and no prior history"
+  test_data: "One practice session of 6 answers, each with timeMs 90000"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Upload the session through POST /api/progress/sync, then GET the roadmap"
+      expected: "estimate.source is PERSONAL_TOPIC"
+    - step: 2
+      action: "Read estimate.secondsPerQuestion and estimate.sampleSize"
+      expected: "90 and 6 — the real average and the real number of timed attempts behind it"
+  expected_result: "A measured estimate is used and identified as measured. (REQ-ROADMAP-003 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "StudyRoadmapTest.aStudentsOwnMeasuredTimeIsUsedWhenThereIsEnoughOfIt"
+
+- id: TC-ROADMAP-007
+  requirement_ids: [REQ-ROADMAP-003]
+  scenario_id: SCN-ROADMAP-007
+  system: Backend
+  module: ROADMAP
+  feature: Every workload estimate declares where it came from
+  title: Every estimate declares a tier with a sample size consistent with it
+  objective: >
+    Confirm the ladder always resolves to one of the four declared tiers, and that the sample size
+    reported is consistent with the tier's own floor.
+  preconditions:
+    - "A fresh topic with no attempts by the calling student"
+  test_data: "A disposable exam and topic with four questions"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "GET the roadmap as a newly registered student and read estimate.source"
+      expected: "One of PERSONAL_TOPIC, COHORT_TOPIC, COHORT_DIFFICULTY, DEFAULT"
+    - step: 2
+      action: "Compare estimate.sampleSize against the tier reported"
+      expected: "Exactly 0 for DEFAULT; at or above that tier's floor otherwise"
+    - step: 3
+      action: "Read estimatedMinutes"
+      expected: "Present and positive — whichever tier won, the student still gets real minutes"
+  expected_result: "The tier that produced a number always travels with it, consistently. (REQ-ROADMAP-003 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Reframed 2026-09-19 after its first run failed. It originally asserted DEFAULT for a fresh
+    topic and got COHORT_DIFFICULTY, because the shared dev database genuinely holds 53 timed
+    attempts at the easiest difficulty — the ladder working, not a bug. A tier-selection rule
+    cannot be asserted against a database the test does not control, so the tiers themselves moved
+    to TC-ROADMAP-013 with constructed samples.
+  automation_status: Automated
+  automation_reference: "StudyRoadmapTest.everyEstimateDeclaresATierWithASampleSizeConsistentWithIt"
+
+- id: TC-ROADMAP-013
+  requirement_ids: [REQ-ROADMAP-003]
+  scenario_id: SCN-ROADMAP-007
+  system: Backend
+  module: ROADMAP
+  feature: Every workload estimate declares where it came from
+  title: Each tier of the estimate ladder is selected exactly when its own rule says so
+  objective: >
+    Confirm every branch of the ladder — including the ones the real database can no longer reach
+    — with samples the test constructs itself.
+  preconditions:
+    - "None — plain JUnit, no Spring context, no database"
+  test_data: "Constructed personal, cohort-topic and cohort-difficulty samples around each floor"
+  test_environment: "Plain JUnit"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Resolve with a personal sample at the floor, beside a far larger cohort sample"
+      expected: "PERSONAL_TOPIC — the student's own rate wins; the question is how long THEY take"
+    - step: 2
+      action: "Resolve with a personal sample one attempt below the floor"
+      expected: "COHORT_TOPIC — below the floor an average is noise and is not trusted"
+    - step: 3
+      action: "Resolve for a topic nobody has practised, with cohort data at that difficulty"
+      expected: "COHORT_DIFFICULTY"
+    - step: 4
+      action: "Resolve with nothing measured anywhere, and with a step naming no difficulty"
+      expected: "DEFAULT with sampleSize 0 in both cases — no tier is guessed at"
+    - step: 5
+      action: "Convert question counts to minutes at a known rate"
+      expected: "Rounded up, never zero, and no spurious rounding when it divides exactly"
+  expected_result: "Every tier and both floors behave as documented. (REQ-ROADMAP-003 validations)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Added 2026-09-19 when TC-ROADMAP-007 was reframed — see its remarks."
+  automation_status: Automated
+  automation_reference: "WorkloadEstimatorTest (6 methods)"
+
+- id: TC-ROADMAP-008
+  requirement_ids: [REQ-ROADMAP-003]
+  scenario_id: SCN-ROADMAP-008
+  system: Backend
+  module: ROADMAP
+  feature: Every workload estimate declares where it came from
+  title: One student's measured time is not reported as another's personal estimate
+  objective: "Confirm the personal tier is genuinely per student."
+  preconditions:
+    - "Two registered students; only the first uploads timed attempts on the topic"
+  test_data: "One practice session of 6 answers at 120000 ms each, owned by the first student"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Critical
+  test_type: Security
+  steps:
+    - step: 1
+      action: "GET the roadmap as the student who uploaded"
+      expected: "estimate.source is PERSONAL_TOPIC"
+    - step: 2
+      action: "GET the roadmap as the second student"
+      expected: "estimate.source is not PERSONAL_TOPIC"
+  expected_result: "Personal means personal; cohort data may be shared, a personal rate may not. (REQ-ROADMAP-003 validations)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "StudyRoadmapTest.oneStudentsMeasuredTimeIsNotUsedAsAnothersPersonalEstimate"
+
+- id: TC-ROADMAP-009
+  requirement_ids: [REQ-ROADMAP-004]
+  scenario_id: SCN-ROADMAP-009
+  system: Backend
+  module: ROADMAP
+  feature: A step that is not a question set carries no invented duration
+  title: Non-question steps have no minutes, and topic totals reconcile
+  objective: "Confirm no duration is invented for an activity this product has no content for."
+  preconditions:
+    - "A topic whose recommendation includes both question-bearing and non-question steps"
+  test_data: "A disposable exam and topic with five questions"
+  test_environment: "Backend against the real dev database"
+  priority: Medium
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "For each step, compare questionCount and estimatedMinutes"
+      expected: "estimatedMinutes is null exactly when questionCount is null, positive otherwise"
+    - step: 2
+      action: "Sum the non-null step minutes and compare with the topic's estimatedMinutes"
+      expected: "Equal — the total is reconcilable from what is shown"
+  expected_result: "Totals contain only estimable work. (REQ-ROADMAP-004 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "StudyRoadmapTest.stepsWithNoQuestionCountCarryNoMinutesAndAreExcludedFromTheTotal"
+
+- id: TC-ROADMAP-010
+  requirement_ids: [REQ-ROADMAP-005]
+  scenario_id: SCN-ROADMAP-010
+  system: Backend
+  module: ROADMAP
+  feature: The plan is dated only when the exam genuinely has a date
+  title: An exam with no published cycle returns an explicitly undated plan
+  objective: "Confirm the normal case for ten of eleven exams degrades honestly."
+  preconditions:
+    - "An exam with no recruitment cycle at all"
+  test_data: "A disposable exam with one practicable topic"
+  test_environment: "Backend against the real dev database"
+  priority: Medium
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Read timeline from the response"
+      expected: "hasExamDate false; examDate, daysRemaining and dailyMinutesRequired all null; note explains why"
+    - step: 2
+      action: "Read topics[] and totalEstimatedMinutes"
+      expected: "A full plan with real minutes — the absence of a date does not weaken the plan"
+  expected_result: "No deadline is invented. (REQ-ROADMAP-005 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "StudyRoadmapTest.anExamWithNoPublishedCycleIsAnUndatedBacklog"
+
+- id: TC-ROADMAP-011
+  requirement_ids: [REQ-ROADMAP-005]
+  scenario_id: SCN-ROADMAP-011
+  system: Backend
+  module: ROADMAP
+  feature: The plan is dated only when the exam genuinely has a date
+  title: A published exam date yields days remaining and a consistent daily figure
+  objective: "Confirm the countdown and the daily figure both derive from real data, not constants."
+  preconditions:
+    - "A current PUBLISHED recruitment cycle whose exam_start is 40 days away"
+  test_data: "A disposable exam, one practicable topic, one seeded cycle"
+  test_environment: "Backend against the real dev database"
+  priority: Medium
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Read timeline.hasExamDate and timeline.daysRemaining"
+      expected: "true and 40"
+    - step: 2
+      action: "Compute ceil(totalEstimatedMinutes / 40) from the same response and compare"
+      expected: "Equal to timeline.dailyMinutesRequired"
+  expected_result: "The daily figure is arithmetic over this plan's own total. (REQ-ROADMAP-005 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Asserted against the response's own total so the two cannot drift apart unnoticed."
+  automation_status: Automated
+  automation_reference: "StudyRoadmapTest.aPublishedCycleWithAnExamDateGivesDaysRemainingAndADailyFigure"
+
+- id: TC-ROADMAP-012
+  requirement_ids: [REQ-ROADMAP-005]
+  scenario_id: SCN-ROADMAP-012
+  system: Backend
+  module: ROADMAP
+  feature: The plan is dated only when the exam genuinely has a date
+  title: An exam date in the past produces no countdown
+  objective: "Confirm a passed date cannot produce a negative countdown or a nonsense daily figure."
+  preconditions:
+    - "A current PUBLISHED cycle whose exam_start was five days ago"
+  test_data: "A disposable exam, one practicable topic, one seeded cycle"
+  test_environment: "Backend against the real dev database"
+  priority: Low
+  severity: Minor
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "Read timeline"
+      expected: "hasExamDate true and the date reported; daysRemaining and dailyMinutesRequired null"
+    - step: 2
+      action: "Read topics[]"
+      expected: "The plan is still returned and usable"
+  expected_result: "A passed date is stated, not counted down from. (REQ-ROADMAP-005 validations)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "StudyRoadmapTest.anExamDateInThePastIsReportedWithoutACountdown"

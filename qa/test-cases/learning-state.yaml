@@ -1,0 +1,269 @@
+# LEARNING-STATE module — manual test cases
+#
+# Every case below is Automated with a real, verified test method behind it (LearningStateTest,
+# 8/8 green against the real dev database on 2026-09-19). They are recorded here as UNEXECUTED
+# manual cases in the register's own convention; the automated runs that actually happened are
+# recorded in qa/execution/.
+
+- id: TC-LEARNINGSTATE-001
+  requirement_ids: [REQ-LEARNINGSTATE-001]
+  scenario_id: SCN-LEARNINGSTATE-001
+  system: Backend
+  module: LEARNING-STATE
+  feature: One student's canonical learning state is readable, and only their own
+  title: The learning-state endpoint rejects an unauthenticated caller
+  objective: "Confirm the new endpoint is token-gated, like the radar and unlike the public topic-intelligence read."
+  preconditions:
+    - "A running backend"
+    - "An exam with at least one mapped topic"
+  test_data: "One disposable exam"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Critical
+  test_type: Security
+  steps:
+    - step: 1
+      action: "GET /api/me/learning-state?examCode={code} with no Authorization header"
+      expected: "401"
+    - step: 2
+      action: "Inspect the controller's route definition"
+      expected: "examCode is the only parameter — nothing names a user"
+  expected_result: "The endpoint is unreachable unauthenticated and cannot be pointed at another account. (REQ-LEARNINGSTATE-001 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "LearningStateTest.requiresASignedInUser"
+
+- id: TC-LEARNINGSTATE-002
+  requirement_ids: [REQ-LEARNINGSTATE-001]
+  scenario_id: SCN-LEARNINGSTATE-002
+  system: Backend
+  module: LEARNING-STATE
+  feature: One student's canonical learning state is readable, and only their own
+  title: An unknown exam code returns 404
+  objective: "Confirm a bad exam code fails loudly instead of returning an empty list that reads as a real answer."
+  preconditions:
+    - "A signed-in student"
+  test_data: "An exam code that does not exist"
+  test_environment: "Backend against the real dev database"
+  priority: Medium
+  severity: Major
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "GET /api/me/learning-state?examCode=NO_SUCH_EXAM with a valid token"
+      expected: "404, not a 200 with an empty topics array"
+  expected_result: "An unknown exam is an error, not an empty success. (REQ-LEARNINGSTATE-001 validations)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "LearningStateTest.unknownExamIs404"
+
+- id: TC-LEARNINGSTATE-003
+  requirement_ids: [REQ-LEARNINGSTATE-001]
+  scenario_id: SCN-LEARNINGSTATE-003
+  system: Backend
+  module: LEARNING-STATE
+  feature: One student's canonical learning state is readable, and only their own
+  title: One student's state does not leak into another's response
+  objective: "Confirm the new composite did not widen the already-scoped read paths it assembles."
+  preconditions:
+    - "Two disposable accounts and one exam with a mapped topic"
+  test_data: "Practice history and a curriculum row uploaded by the first account only"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Critical
+  test_type: Security
+  steps:
+    - step: 1
+      action: "As student A, upload practice history and a PRACTICING curriculum row for the topic, then read the learning state"
+      expected: "curriculumState PRACTICING, attempts 4"
+    - step: 2
+      action: "As student B, read the learning state for the same exam"
+      expected: "curriculumState NOT_STARTED, attempts 0, performanceState null"
+  expected_result: "Each student sees only their own figures for the same topic. (REQ-LEARNINGSTATE-001 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "LearningStateTest.stateIsScopedToTheCallingStudent"
+
+- id: TC-LEARNINGSTATE-004
+  requirement_ids: [REQ-LEARNINGSTATE-002]
+  scenario_id: SCN-LEARNINGSTATE-004
+  system: Backend
+  module: LEARNING-STATE
+  feature: The two per-topic state dimensions are named separately and never collapsed
+  title: Curriculum NEEDS_REVISION and a healthy performance state both survive the round trip
+  objective: >
+    Confirm the exact ambiguity this phase exists to remove: the two dimensions can hold
+    different verdicts about one topic and a reader can still tell which is which.
+  preconditions:
+    - "A signed-in student and an exam with one mapped topic"
+  test_data: "A curriculum row in NEEDS_REVISION (20 attempted, 55%) plus six all-correct recent practice answers"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Upload a NEEDS_REVISION curriculum row via POST /api/topic-progress/sync"
+      expected: "stored 1"
+    - step: 2
+      action: "Upload one practice session answering six questions on that topic, all correct"
+      expected: "200"
+    - step: 3
+      action: "GET the learning state and read the topic"
+      expected: "curriculumState NEEDS_REVISION with 20 attempts and 55.00 accuracy"
+    - step: 4
+      action: "Read performanceState on the same topic"
+      expected: "Non-null and NOT NEEDS_REVISION; attempts 6 and accuracy 100 from the recent window"
+  expected_result: >
+    Both dimensions are present, independent, and disagree — which is the information a single
+    flattened label would have destroyed. (REQ-LEARNINGSTATE-002 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "The decisive case for TASK-3001. If this ever fails, the contract has been collapsed."
+  automation_status: Automated
+  automation_reference: "LearningStateTest.theTwoStateDimensionsAreSeparatelyReadableEvenWhenBothCouldSayNeedsRevision"
+
+- id: TC-LEARNINGSTATE-005
+  requirement_ids: [REQ-LEARNINGSTATE-002]
+  scenario_id: SCN-LEARNINGSTATE-005
+  system: Backend
+  module: LEARNING-STATE
+  feature: The two per-topic state dimensions are named separately and never collapsed
+  title: An untouched topic is NOT_STARTED with a null performance verdict
+  objective: "Confirm 'never measured' and 'measured, not enough to judge' stay distinguishable."
+  preconditions:
+    - "A freshly registered account and an exam with one mapped topic"
+  test_data: "No uploaded history at all"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Major
+  test_type: EdgeCase
+  steps:
+    - step: 1
+      action: "GET the learning state for a student who has done nothing"
+      expected: "200"
+    - step: 2
+      action: "Read the topic's two state fields"
+      expected: "curriculumState NOT_STARTED (never null); performanceState, healthScore and trend all null"
+    - step: 3
+      action: "Read the counters"
+      expected: "curriculumAttempts 0, attempts 0, curriculumAccuracy null — not 0%, which would read as 'tried and failed'"
+  expected_result: "A new student's state is honest rather than fabricated. (REQ-LEARNINGSTATE-002 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "LearningStateTest.anUntouchedTopicIsNotStartedWithNoPerformanceVerdict"
+
+- id: TC-LEARNINGSTATE-006
+  requirement_ids: [REQ-LEARNINGSTATE-003]
+  scenario_id: SCN-LEARNINGSTATE-006
+  system: Backend
+  module: LEARNING-STATE
+  feature: Per-topic direction has exactly one producer
+  title: Trend comes from the health model and analytics carries none
+  objective: "Confirm the duplicate removed by this phase has not been reintroduced on either side."
+  preconditions:
+    - "A signed-in student with one practice session on a mapped topic"
+  test_data: "Five answers, three correct"
+  test_environment: "Backend against the real dev database"
+  priority: Medium
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "GET the learning state and read the topic's trend"
+      expected: "NOT_ENOUGH_DATA — the health model's vocabulary, not INSUFFICIENT_DATA"
+    - step: 2
+      action: "GET /api/me/analytics/topics and inspect the raw JSON"
+      expected: "No trend key anywhere in the payload"
+  expected_result: "Direction has one owner across the whole product. (REQ-LEARNINGSTATE-003 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Step 2 is the regression guard — it asserts against raw JSON because a removed record component cannot be referenced from Java."
+  automation_status: Automated
+  automation_reference: "LearningStateTest.trendComesFromTheHealthModelAndAnalyticsNoLongerReportsOne"
+
+- id: TC-LEARNINGSTATE-007
+  requirement_ids: [REQ-LEARNINGSTATE-004]
+  scenario_id: SCN-LEARNINGSTATE-007
+  system: Backend
+  module: LEARNING-STATE
+  feature: Practice and mock evidence stay separately readable
+  title: Perfect practice and failed mock on one topic report 100, 0 and 50
+  objective: "Confirm the pooled figure does not hide a student who knows the material but runs out of time."
+  preconditions:
+    - "A signed-in student and an exam with one mapped topic"
+  test_data: "Four questions answered correctly in practice and wrongly in a mock attempt"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Upload one practice session (4/4 correct) and one mock attempt (0/4 correct) on the same four questions"
+      expected: "200"
+    - step: 2
+      action: "GET the learning state and read the topic"
+      expected: "practiceAccuracy 100.0, mockAccuracy 0.0"
+    - step: 3
+      action: "Read the pooled accuracy"
+      expected: "50 — what the health model sees, and exactly the figure that would have hidden the split"
+  expected_result: "Both sources are independently readable. (REQ-LEARNINGSTATE-004 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "LearningStateTest.practiceAndMockAccuracyAreReadableSeparately"
+
+- id: TC-LEARNINGSTATE-008
+  requirement_ids: [REQ-LEARNINGSTATE-005]
+  scenario_id: SCN-LEARNINGSTATE-008
+  system: Backend
+  module: LEARNING-STATE
+  feature: A subject rolls up as a distribution and coverage, never a single score
+  title: A subject reports counts and a weightage pair, with no aggregate score
+  objective: "Confirm the rollup stays factual and does not answer the open readiness question by accident."
+  preconditions:
+    - "An exam whose subject has two mapped topics at 10% each"
+  test_data: "One topic practised and marked PRACTICING; the other untouched"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Upload practice and a PRACTICING curriculum row for the first topic only"
+      expected: "200"
+    - step: 2
+      action: "GET the learning state and read subjects[0]"
+      expected: "topicsInSyllabus 2, topicsStarted 1, topicsWithEvidence 1"
+    - step: 3
+      action: "Read the two count maps"
+      expected: "curriculumCounts has PRACTICING 1 and NOT_STARTED 1; performanceCounts totals 1 — the untouched topic is absent, not bucketed"
+    - step: 4
+      action: "Read the weightage pair"
+      expected: "weightagePercentTotal 20.00 and weightagePercentStarted 10.00"
+    - step: 5
+      action: "Inspect the response shape for any single per-subject score"
+      expected: "None exists — a weighted mean would be a readiness score, which is still an undecided product question"
+  expected_result: "The rollup is a distribution plus coverage. (REQ-LEARNINGSTATE-005 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Step 5 is a design guard, not a behavioural assertion — it exists so a later change that adds a score is a deliberate decision rather than a drift."
+  automation_status: Automated
+  automation_reference: "LearningStateTest.subjectRollupReportsDistributionAndWeightageCoverage"

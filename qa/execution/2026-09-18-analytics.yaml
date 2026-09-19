@@ -1,0 +1,261 @@
+# ANALYTICS + USER-PROGRESS — execution records, 2026-09-18 (TASK-2801)
+#
+# Two groups. EXEC-ANALYTICS-000x are automated runs: each corresponds to a test method
+# written for this change and executed against the real Neon dev database via
+# `mvn test -Dtest=BehavioralAnalyticsTest` — 13 tests, 0 failures. EXEC-USERPROGRESS-000x at
+# the end are the Gate 1 device pass, run by hand on emulator-5554.
+#
+# Nothing here is backfilled, and one record is a Fail: EXEC-USERPROGRESS-0002 records that the
+# four new practice-session fields reached the device's own database correctly but arrived NULL
+# at the server. It is KEPT as a Fail rather than rewritten -- it genuinely failed when it ran --
+# and EXEC-USERPROGRESS-0003 is its passing re-run, which also identifies the cause: the device
+# had been uploading to a STALE pre-V47 backend, because the app targets 10.0.2.2:8080 (the
+# emulator's host-loopback alias) and so bypasses `adb reverse` entirely. A test-environment
+# fault, not product code, which is why neither record carries a defect id.
+#
+# TC-ANALYTICS-005 is absent: it is PartiallyAutomated and its step 3 (the /trends empty-week
+# assertion) was not exercised, so recording it as a pass would overstate what was checked.
+
+- execution_id: EXEC-ANALYTICS-0001
+  test_case_id: TC-USERPROGRESS-003
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ 3a89856 + uncommitted TASK-2801 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-18T16:19:00+05:30"
+  actual_result: >
+    All 4 steps passed. Account B's upload of account A's session id returned
+    practiceSessionsStored 0 with rejectedPracticeSessionIds naming the contested id; A's
+    session still reported correctCount 9 (A's own value, not B's 1) and B's restore was
+    empty. The server also logged the refusal:
+    "progress.sync rejected ids owned by another account user=9c054419-... sessions=1 attempts=0".
+  status: Pass
+  defect_id: ""
+  evidence: "mvn surefire output for BehavioralAnalyticsTest; backend WARN log line quoted above"
+  remarks: >
+    Before this change the same input silently overwrote account A's row and reassigned it to
+    B. The rejection log line is the observable proof the new branch actually executed rather
+    than the ids simply not colliding.
+
+- execution_id: EXEC-ANALYTICS-0002
+  test_case_id: TC-USERPROGRESS-004
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database"
+  build_version: "feature/on-device-llm-spike @ 3a89856 + uncommitted TASK-2801 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-18T16:19:00+05:30"
+  actual_result: >
+    Both steps passed. A two-session batch containing one contested id and one of B's own
+    stored exactly 1 session and named only the contested id as rejected; B's restore held
+    exactly the uncontested session.
+  status: Pass
+  defect_id: ""
+  evidence: "mvn surefire output; second backend WARN line (user=5710cf58-...)"
+  remarks: null
+
+- execution_id: EXEC-ANALYTICS-0003
+  test_case_id: TC-USERPROGRESS-005
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database"
+  build_version: "feature/on-device-llm-spike @ 3a89856 + uncommitted TASK-2801 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-18T16:19:00+05:30"
+  actual_result: >
+    All 4 steps passed across two test methods. A session uploaded with durationMs 720000,
+    availableCount 25 and an examCode returned all four unchanged from GET /api/progress, and
+    the overview reported totalStudyTimeMs 720000 with practiceSessionsWithoutDuration 0. A
+    separate session with no duration left totalStudyTimeMs at 0 and reported
+    practiceSessionsWithoutDuration 1 — disclosed rather than counted as zero-length study.
+  status: Pass
+  defect_id: ""
+  evidence: "mvn surefire output for practiceSessionTimingAndExamSurviveUploadAndRestore and aSessionWithNoDurationIsCountedAsUnmeasured_notAsZeroTime"
+  remarks: "Steps 1-3 and step 4 are covered by two separate test methods, both green in the same run."
+
+- execution_id: EXEC-ANALYTICS-0004
+  test_case_id: TC-USERPROGRESS-006
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database"
+  build_version: "feature/on-device-llm-spike @ 3a89856 + uncommitted TASK-2801 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-18T16:19:00+05:30"
+  actual_result: >
+    All 4 steps passed. A question answered while tagged "easy" produced one difficulty row
+    with code "easy" and attempts 1. The admin PUT then genuinely changed the question to
+    "hard" (asserted on the response body, so the edit really happened). Re-reading
+    /api/me/analytics/difficulty still returned exactly one row, "easy", attempts 1 — the
+    student's history did not move.
+  status: Pass
+  defect_id: ""
+  evidence: "mvn surefire output for retaggingAQuestionDoesNotRewriteHistoryAlreadyRecorded"
+  remarks: >
+    This is the decisive evidence for the classification-snapshot decision (D1). Against the
+    pre-V47 live join, step 4 would have reported "hard".
+
+- execution_id: EXEC-ANALYTICS-0005
+  test_case_id: TC-ANALYTICS-001
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database"
+  build_version: "feature/on-device-llm-spike @ 3a89856 + uncommitted TASK-2801 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-18T16:19:00+05:30"
+  actual_result: >
+    Passed. All six endpoints (/overview, /subjects, /topics, /difficulty, /activity,
+    /trends) returned 401 unauthenticated, asserted individually so a single open endpoint
+    could not hide behind the others.
+  status: Pass
+  defect_id: ""
+  evidence: "mvn surefire output for everyAnalyticsEndpointRequiresSigningIn"
+  remarks: null
+
+- execution_id: EXEC-ANALYTICS-0006
+  test_case_id: TC-ANALYTICS-002
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database"
+  build_version: "feature/on-device-llm-spike @ 3a89856 + uncommitted TASK-2801 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-18T16:19:00+05:30"
+  actual_result: >
+    Both steps passed. A freshly registered account returned totalQuestionsAttempted 0,
+    overallAccuracy null, lastActiveAt null, daysSinceLastActivity null and
+    currentStreakDays 0, with /topics, /subjects and /difficulty all empty arrays.
+  status: Pass
+  defect_id: ""
+  evidence: "mvn surefire output for aBrandNewAccountGetsEmptyAnalyticsRatherThanAnError"
+  remarks: "overallAccuracy asserted null rather than 0 — the distinction the whole null policy rests on."
+
+- execution_id: EXEC-ANALYTICS-0007
+  test_case_id: TC-ANALYTICS-003
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database"
+  build_version: "feature/on-device-llm-spike @ 3a89856 + uncommitted TASK-2801 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-18T16:19:00+05:30"
+  actual_result: >
+    Both steps passed. A mock attempt with outcomes CORRECT / INCORRECT / UNATTEMPTED
+    reported totalQuestionsAttempted 2, totalCorrect 1 and overallAccuracy 50.0 — the
+    skipped question excluded from the denominator rather than counted wrong.
+  status: Pass
+  defect_id: ""
+  evidence: "mvn surefire output for unattemptedMockQuestionsAreExcluded_notCountedWrong"
+  remarks: null
+
+- execution_id: EXEC-ANALYTICS-0008
+  test_case_id: TC-ANALYTICS-004
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database"
+  build_version: "feature/on-device-llm-spike @ 3a89856 + uncommitted TASK-2801 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-18T16:19:00+05:30"
+  actual_result: >
+    Both steps passed. A topic with one 40,000ms timed answer and one untimed answer reported
+    attempts 2 and averageTimeMs 40000 — divided by the timed attempt only, not by both.
+  status: Pass
+  defect_id: ""
+  evidence: "mvn surefire output for averageTimeDividesByTheAttemptsThatWereActuallyTimed"
+  remarks: null
+
+- execution_id: EXEC-ANALYTICS-0009
+  test_case_id: TC-ANALYTICS-006
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database"
+  build_version: "feature/on-device-llm-spike @ 3a89856 + uncommitted TASK-2801 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-18T16:19:00+05:30"
+  actual_result: >
+    All 3 steps passed, across three test methods. zone=Asia/Kolkata returned
+    currentStreakDays 1, longestStreakDays 1 and daysSinceLastActivity 0 for a session
+    completed the same local day; window=LAST_FORTNIGHT returned 400; and
+    zone=Mars/Olympus_Mons returned 400.
+  status: Pass
+  defect_id: ""
+  evidence: "mvn surefire output for streakCountsTodayInTheRequestedZone, activityRejectsAnUnknownWindowRatherThanSilentlyDefaulting, anUnknownTimeZoneIsRejected"
+  remarks: null
+
+# ---------------------------------------------------------------------------------------
+# Device execution, same day — Gate 1 (emulator-5554, AVD Pixel_7). Recorded separately from
+# the automated records above because these were run by hand on a real device.
+
+- execution_id: EXEC-USERPROGRESS-0001
+  test_case_id: TC-USERPROGRESS-007
+  test_case_version: 1
+  environment: "Android emulator-5554 (Pixel_7), Metro dev client, isolated backend on :8090"
+  build_version: "feature/on-device-llm-spike @ 3a89856 + uncommitted TASK-2801 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-18T17:52:00+05:30"
+  actual_result: >
+    All 4 steps passed. A real SSC CGL Tier 1 mock attempt was started, 3 questions answered
+    across the Reasoning section and 97 left unattempted, then submitted (the app's own
+    confirmation read "97 questions unanswered"). The stored attempt recorded 1 correct,
+    2 wrong, 97 unattempted, 100 total. topic_progress then held three NEW rows written by
+    recordMockTopicPractice - Matrix (1 attempted, 0 correct), Seating Arrangement (1, 0) and
+    Syllogism (1, 1) - i.e. exactly the 3 ANSWERED questions and not the 97 skipped ones, with
+    correctness matching the attempt's 1-correct/2-wrong split. Per-topic total_time_ms came
+    from the per-question timings (69285 / 7551 / 72082ms), not from dividing the attempt's
+    duration. Pipes & Cisterns, a topic from an earlier practice session that this mock did not
+    cover, was untouched at 2 attempts.
+  status: Pass
+  defect_id: ""
+  evidence: "Device SQLite pulled via adb exec-out run-as; screenshots of the engine (3/100 answered) and the submit confirmation"
+  remarks: >
+    Before this change a mock attempt updated no topic mastery at all. Note the attempt id is a
+    UUID (mocktest-828d01aa-...), confirming the TASK-2801 id change is live on device too.
+
+- execution_id: EXEC-USERPROGRESS-0002
+  test_case_id: TC-USERPROGRESS-005
+  test_case_version: 1
+  environment: "Android emulator-5554 (Pixel_7), Metro dev client"
+  build_version: "feature/on-device-llm-spike @ 3a89856 + uncommitted TASK-2801 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-18T17:35:00+05:30"
+  actual_result: >
+    PARTIAL - device capture verified, server round trip NOT verified from the device.
+    A real practice session (Pipes & Cisterns, Easy, 2 of 42 answered) stored started_at
+    1789732625754, completed_at 1789732854339 and duration_ms 228585 - the duration exactly
+    equal to completed minus started - plus available_count 42, total_count 2, exam_code
+    SSC_CGL, and per-question time_ms of 103361 and 125053. The Summary screen independently
+    read "Finished early - 2 of 42 answered, 40 left". The session id was a UUID.
+    HOWEVER, after signing in, GET /api/progress returned that session with startedAt,
+    durationMs, availableCount and examCode all NULL, while timeMs on both results arrived
+    correctly. The server itself round-trips all four correctly when sent the same payload by
+    curl, and the client's only upload path builds them - so this is unexplained rather than
+    diagnosed. See the report for the two candidate causes.
+  status: Fail
+  defect_id: ""
+  evidence: "Device SQLite before/after; GET /api/progress response; curl round-trip against the same backend"
+  remarks: >
+    Recorded as Fail rather than Pass because the acceptance criterion is a round trip, and it
+    did not happen. Deliberately NOT logged as a defect: the cause is unidentified and may be a
+    stale Metro transform rather than product code. Re-run with `expo start --clear` first.
+
+- execution_id: EXEC-USERPROGRESS-0003
+  test_case_id: TC-USERPROGRESS-005
+  test_case_version: 1
+  environment: "Android emulator-5554 (Pixel_7), Metro dev client, V47 backend on host port 8080"
+  build_version: "feature/on-device-llm-spike @ 3a89856 + uncommitted TASK-2801 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-18T20:59:00+05:30"
+  actual_result: >
+    PASS - the re-run of EXEC-USERPROGRESS-0002, and it identifies that failure's cause as a
+    test-environment fault rather than product code. A real practice session (Pipes & Cisterns,
+    Easy, 2 of 42 answered) stored started_at 1789744511576, duration_ms 149511, available_count
+    42 and exam_code SSC_CGL locally, then uploaded on account creation. GET /api/progress
+    returned startedAt "2026-09-18T15:15:11.576Z" - the exact same instant as the local
+    1789744511576 - plus durationMs 149511, availableCount 42, examCode SSC_CGL, and per-result
+    timeMs [76751, 72305]. GET /api/me/analytics/overview then reported totalStudyTimeMs 149511
+    with practiceSessionsWithoutDuration 0 and currentStreakDays 1 in Asia/Kolkata, and
+    /topics reported averageTimeMs 74528 - exactly the mean of the two recorded times - with
+    mockAccuracy null and trend INSUFFICIENT_DATA.
+  status: Pass
+  defect_id: ""
+  evidence: "Device SQLite; GET /api/progress; GET /api/me/analytics/{overview,topics}"
+  remarks: >
+    ROOT CAUSE of EXEC-USERPROGRESS-0002, confirmed: the app's baked-in base URL is
+    http://10.0.2.2:8080/api - the emulator's HOST-loopback alias - which goes straight to the
+    host's port 8080 and completely bypasses `adb reverse`. The previous run had mapped
+    `adb reverse tcp:8080 tcp:8090` and assumed that pointed the app at the V47 backend; it did
+    not. The device was in fact uploading to a STALE backend left running on host:8080 from
+    2026-09-17, built before V47. That build's ProgressDtos had no startedAt/durationMs/
+    availableCount/examCode, and Spring's Jackson silently ignores unknown JSON properties, so
+    those four were dropped while timeMs - which existed in that older build - came through.
+    NOT logged as a defect: no product code was at fault. The earlier "stale Metro transform"
+    hypothesis was wrong and is corrected in the report and in memory/STATUS.md.

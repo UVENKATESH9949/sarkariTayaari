@@ -1,0 +1,115 @@
+# REVISION module — test scenarios
+#
+# Scoped to GET /api/me/revision-plan (TASK-3201, Phase 7). Nothing here asserts that the borrowed
+# 3/7/21/45-day intervals are right for this product — they are a decision, not a measurement, and
+# no test could establish it.
+
+- id: SCN-REVISION-001
+  requirement_ids: [REQ-REVISION-001]
+  category: Security
+  title: The endpoint requires a token and takes no user id
+  objective: >
+    Verify an unauthenticated caller is rejected, and that nothing in the route would let one
+    account read another's schedule.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-REVISION-002
+  requirement_ids: [REQ-REVISION-001]
+  category: Negative
+  title: An unknown exam code is a 404, not an empty schedule
+  objective: "Verify a typo fails loudly rather than reading as 'nothing to revise'."
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-REVISION-003
+  requirement_ids: [REQ-REVISION-001]
+  category: Functional
+  title: A topic the bank cannot test is absent from the plan
+  objective: >
+    Verify a topic with no practicable questions is excluded entirely, so a re-test can never open
+    a screen with nothing behind it.
+  systems: [Backend]
+  status: Ready
+  notes: "Same rule as the roadmap's; asserted separately because this endpoint applies it independently."
+
+- id: SCN-REVISION-004
+  requirement_ids: [REQ-REVISION-001]
+  category: Security
+  title: One student's practice history does not schedule another student's revision
+  objective: >
+    Verify the schedule is genuinely per student — the same topic is DUE for the student who
+    practised it and NOT_SCHEDULED for one who never has.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-REVISION-005
+  requirement_ids: [REQ-REVISION-002, REQ-REVISION-005]
+  category: Functional
+  title: A topic practised long ago is due and leads the plan
+  objective: >
+    Verify a real attempt timestamp produces a real due date, that daysOverdue is populated, and
+    that overdue work outranks a fresher topic carrying higher exam priority.
+  systems: [Backend]
+  status: Ready
+  notes: >
+    Deliberately asserts properties that hold whatever rung the health model's verdict selects —
+    90 days exceeds even the longest interval, so the topic is due either way.
+
+- id: SCN-REVISION-006
+  requirement_ids: [REQ-REVISION-003]
+  category: Functional
+  title: Each rung is reachable and the ladder is monotonic
+  objective: >
+    Verify all four rungs resolve from the state combinations that define them, and that a weaker
+    topic never waits longer than a stronger one.
+  systems: [Backend]
+  status: Ready
+  notes: "Asserted with constructed states, since a real attempt cannot be made to land on a chosen rung."
+
+- id: SCN-REVISION-007
+  requirement_ids: [REQ-REVISION-004]
+  category: Functional
+  title: A topic with nothing measured is unscheduled, with the reason stated
+  objective: >
+    Verify NEVER_PRACTISED and NOT_ENOUGH_EVIDENCE are distinguishable, and that every scheduling
+    field including the re-test comes back null for them.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-REVISION-008
+  requirement_ids: [REQ-REVISION-003]
+  category: Boundary
+  title: An unrecognised performance state is left unscheduled rather than defaulted
+  objective: >
+    Verify a state this service does not understand produces no rung, rather than silently falling
+    onto the shortest or longest interval.
+  systems: [Backend]
+  status: Ready
+  notes: "Guards a future health-model state from acquiring a due date nobody designed for it."
+
+- id: SCN-REVISION-009
+  requirement_ids: [REQ-REVISION-005]
+  category: Functional
+  title: The re-test is timed practice and never exceeds the questions available
+  objective: >
+    Verify the instrument is TIMED_PRACTICE, that the count is capped by what the bank holds, and
+    that its minutes come from the same declared estimate ladder the roadmap uses.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-REVISION-010
+  requirement_ids: [REQ-REVISION-005]
+  category: Boundary
+  title: Nothing due reports null minutes rather than zero
+  objective: >
+    Verify "no revision outstanding" is expressed as null, distinct from "work that happens to
+    total zero minutes".
+  systems: [Backend]
+  status: Ready
+  notes: null

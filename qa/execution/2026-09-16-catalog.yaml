@@ -1,0 +1,103 @@
+# CATALOG module - execution records, 2026-09-16
+#
+# The FIRST real executions in this register. Every record below is a test actually run on
+# Android emulator-5554 against a real dev backend, with the observed result written down as
+# observed. Nothing here is backfilled to make coverage look better: TC-CATALOG-055 is recorded
+# twice because it genuinely failed the first time, produced DEF-CATALOG-001, and passed only
+# after the fix.
+
+- execution_id: EXEC-CATALOG-0001
+  test_case_id: TC-CATALOG-053
+  test_case_version: 1
+  environment: "Android emulator-5554 (Pixel_7), Metro dev client, real dev backend on localhost:8080"
+  build_version: "feature/on-device-llm-spike @ 3a89856 + uncommitted active-exam work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-16T16:44:00+05:30"
+  actual_result: >
+    All 5 steps passed. The picker listed all three followed exams with the current one marked
+    ACTIVE. Selecting a different exam raised the full-screen transition ("SWITCHING / Preparing
+    your dashboard / Switching to IBPS PO..."), captured in a screenshot. Home then showed the new
+    exam with no reload: "Preparing for RRB NTPC" and "Highest-weightage topics for RRB NTPC"
+    (Analogy, Matrix, Number System), where the previous exam had shown Blood Relations / Awards &
+    Honours / Science & Technology. SSC CGL's deadline card correctly disappeared for RRB NTPC,
+    which has no recruitment cycle. Five switches were timed from the app log: 508ms, 523ms, 753ms,
+    1204ms, 2201ms - all real work, none padded to a fixed duration.
+  status: Pass
+  defect_id: ""
+  evidence: "Screenshots switching.png / overlay.png / home_rrb.png; app log lines [ExamSwitch] switch complete <N>ms"
+  remarks: >
+    The overlay was hard to capture: screencap on this emulator lags the tap, and two attempts
+    caught the picker's press state instead. A burst of six captures in one adb round trip caught
+    it, and the frame is unambiguous.
+
+- execution_id: EXEC-CATALOG-0002
+  test_case_id: TC-CATALOG-054
+  test_case_version: 1
+  environment: "Android emulator-5554 (Pixel_7), Metro dev client, real dev backend on localhost:8080"
+  build_version: "feature/on-device-llm-spike @ 3a89856 + uncommitted active-exam work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-16T17:11:00+05:30"
+  actual_result: >
+    All 4 steps passed. (1) My Exams "Set active" on SSC CGL switched in 766ms; the Active marker
+    moved and Home showed SSC CGL on return. (2) Following IBPS PO and RRB NTPC from the Exams tab
+    left the active exam untouched - the log reads "followed IBPS_PO (active now SSC_CGL)" and
+    "followed RRB_NTPC (active now SSC_CGL)". (3) Unfollowing the active exam from SSC CGL's Exam
+    Guide flipped the footer button "Following" -> "Follow" and promoted IBPS_CLERK, with Home
+    following. (4) Preparation Radar opened with no exam argument showed "61 of 61 topics practised"
+    with SSC CGL active and "46 of 46" with RRB NTPC active - so it scores the ACTIVE exam. Under
+    the old unordered query it would always have used SSC_CGL (the first-followed row).
+  status: Pass
+  defect_id: ""
+  evidence: "app log [ExamSwitch] lines; radar topic counts 61 vs 46; Exam Guide footer button state"
+  remarks: >
+    Step 4 is the direct regression guard for the second root cause and is the clearest single
+    piece of evidence that the active exam, not an arbitrary followed one, now drives the app.
+
+- execution_id: EXEC-CATALOG-0003
+  test_case_id: TC-CATALOG-055
+  test_case_version: 1
+  environment: "Android emulator-5554 (Pixel_7), Metro dev client, real dev backend on localhost:8080"
+  build_version: "feature/on-device-llm-spike @ 3a89856 + uncommitted active-exam work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-16T17:05:00+05:30"
+  actual_result: >
+    Steps 1-4 passed. (1) With IBPS PO active (deliberately NOT the first-followed exam, so the
+    result could not be a false pass), force-stop and relaunch came back on IBPS PO; migration 0026
+    had already applied against this device's real populated database and the existing preferences
+    row survived. (2) In airplane mode, switching IBPS PO -> RRB NTPC completed in 586ms and Home
+    updated; no network was required. (3) Switching to an exam with no cached guide completed and
+    Home rendered without the deadline card rather than blocking. (4) Unfollowing the active exam
+    promoted the most recently followed remaining exam every time, down to "(none left)".
+    STEP 5 FAILED. Unfollowing everything and pulling to refresh did NOT auto-follow an exam
+    (ensureExamFollowed only runs at app start, not on a delta sync). On the next cold start it
+    DID auto-follow SSC CGL - but active_exam_code stayed NULL and Home rendered a blank
+    "Preparing for" card with no exam name, no Focus next and no deadline, and stayed that way.
+  status: Fail
+  defect_id: DEF-CATALOG-001
+  evidence: "device SQLite: active_exam_code NULL with followed_exams = [SSC_CGL]; screenshot empty.png"
+  remarks: >
+    Two separate findings. The step's own expectation was wrong about the trigger (app start, not
+    pull-to-refresh) and has been corrected in the test-case definition. The blank-card state that
+    followed is a genuine defect and is recorded as DEF-CATALOG-001.
+
+- execution_id: EXEC-CATALOG-0004
+  test_case_id: TC-CATALOG-055
+  test_case_version: 2
+  environment: "Android emulator-5554 (Pixel_7), Metro dev client, real dev backend on localhost:8080"
+  build_version: "feature/on-device-llm-spike @ 3a89856 + uncommitted active-exam work incl. DEF-CATALOG-001 fix"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-16T17:09:00+05:30"
+  actual_result: >
+    Re-run after the fix, from the exact failing state (device SQLite confirmed active_exam_code
+    NULL and zero live followed_exams rows before the launch). A cold start now auto-follows
+    SSC CGL, the provider re-reads, and Home shows "Preparing for SSC CGL" with
+    "Highest-weightage topics for SSC CGL". The app log carries the self-heal:
+    "[ExamSwitch] resolved active exam differed from stored - rewritten { stored: null, resolved:
+    'SSC_CGL' }", and the device row is active_exam_code = SSC_CGL. Steps 1-4 unchanged from
+    EXEC-CATALOG-0003.
+  status: Pass
+  defect_id: DEF-CATALOG-001
+  evidence: "device SQLite active_exam_code = SSC_CGL; logcat [ExamSwitch] resolved ... { stored: null, resolved: 'SSC_CGL' }"
+  remarks: >
+    Executed against the corrected step 5, which now names an app restart as the trigger and
+    asserts that an active exam is resolved, not merely that one gets followed.

@@ -1912,3 +1912,133 @@
     the backend path is verified against real Groq, but no emulator pass has been done for this card.
   automation_status: ManualOnly
   automation_reference: null
+
+- id: TC-AI-053
+  requirement_ids: [REQ-AI-024]
+  scenario_id: SCN-AI-051
+  system: Mobile
+  module: AI
+  feature: Shared AI card
+  title: The same card renders on all five AI surfaces
+  objective: >
+    Confirm every AI surface uses the shared card, with a header, the model's own text, and only
+    the slots each surface has real data for.
+  preconditions:
+    - SESSION_FEEDBACK, PROFILE_SUMMARY, QUESTION_EXPLANATION and MISTAKE_ANALYSIS enabled and synced
+    - Some practice history, one finished mock attempt, and one published question explanation
+  test_data: "Demo student account with real practice and mock history"
+  test_environment: "Emulator emulator-5554, real dev backend"
+  priority: Medium
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Finish a practice quiz and open the Session Summary"
+      expected: "One AI Feedback card: sparkle header, status pill, score ring, narrative, a focus row naming this session's topic, and the next-step tiles"
+    - step: 2
+      action: "Compare the ring percentage against the accuracy line and the stats row on the same screen"
+      expected: "All three state the same percentage"
+    - step: 3
+      action: "Tap the focus row"
+      expected: "The Practice levels screen for that same topic opens"
+    - step: 4
+      action: "Open a finished Mock Test result"
+      expected: "The same card idiom, with a ring scored over questions ATTEMPTED (not the paper size) and no focus row"
+    - step: 5
+      action: "Open Preparation Radar"
+      expected: "An AI Summary card with a coverage ring, the narrative, and a focus row naming the top needs-attention topic; tapping it opens that topic's detail screen"
+    - step: 6
+      action: "Open a question with a published AI explanation, then Revise -> Wrong Answers and tap 'Why did I get this wrong?'"
+      expected: "Both render as the same card family -- explanation with a labelled why-others-wrong list and an exam-tip strip; mistake analysis with a taxonomy pill and a next-step strip"
+  expected_result: >
+    Five surfaces, one visual language, with every figure matching the screen it sits on.
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    ManualOnly: mobile has no automated UI test runner in this project. This is the case that would
+    catch a ring disagreeing with the accuracy beside it.
+  automation_status: ManualOnly
+  automation_reference: null
+
+- id: TC-AI-054
+  requirement_ids: [REQ-AI-024]
+  scenario_id: SCN-AI-052
+  system: Mobile
+  module: AI
+  feature: Shared AI card
+  title: Absent data leaves a slot out rather than filling it
+  objective: >
+    Confirm the card never renders a placeholder where a real value is missing.
+  preconditions:
+    - One mock attempt finished with every answer correct
+    - One exam whose radar has no NEEDS_ATTENTION or NEEDS_REVISION topic
+  test_data: "A short all-correct session; a radar with only STRONG/DEVELOPING topics"
+  test_environment: "Emulator emulator-5554, real dev backend"
+  priority: Medium
+  severity: Medium
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Finish a session answering everything correctly and open the Summary"
+      expected: "No 'Revisit mistakes' tile appears; the other two tiles render and the row stays balanced"
+    - step: 2
+      action: "Open a Mock Test result"
+      expected: "No focus row at all -- a mock attempt carries no topic id, so none is invented"
+    - step: 3
+      action: "Open Preparation Radar for an exam with no weak topic"
+      expected: "The narrative and coverage ring render; no focus row"
+    - step: 4
+      action: "Open a Mock Test result where nothing was attempted"
+      expected: "The ring reads 0% rather than showing NaN or a blank"
+  expected_result: >
+    Every missing input produces one fewer element, never a placeholder or a wrong figure.
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    ManualOnly. Step 1 is the explicit regression guard for the one way the fixed tile copy could
+    state something false -- telling a clean sheet to go back over its mistakes.
+  automation_status: ManualOnly
+  automation_reference: null
+
+- id: TC-AI-055
+  requirement_ids: [REQ-AI-024]
+  scenario_id: SCN-AI-052
+  system: Mobile
+  module: AI
+  feature: Shared AI card
+  title: The card is legible in light mode and at the largest zoom step
+  objective: >
+    Confirm no colour or width was hardcoded for the dark, default-zoom case.
+  preconditions:
+    - At least one AI surface has content to show
+  test_data: "Any session with an AI narrative"
+  test_environment: "Emulator emulator-5554"
+  priority: Medium
+  severity: Medium
+  test_type: UI
+  steps:
+    - step: 1
+      action: "Open the Session Summary in dark mode and note the card"
+      expected: "Card, ring, focus row, tiles and footer all read clearly against the dark page"
+    - step: 2
+      action: "Switch to light mode in Settings and return to the same screen"
+      expected: "Every element remains legible -- no white-on-white text, no invisible tint, no lost border"
+    - step: 3
+      action: "Raise the content size to the largest zoom step and return"
+      expected: "Tile text grows and the tiles reflow to fewer per row; nothing clips or overlaps"
+    - step: 4
+      action: "Switch the interface language to Telugu and return"
+      expected: "Card chrome is translated; the model's narrative stays in the content language it was generated in"
+  expected_result: >
+    One card design that holds up in both palettes, at every zoom step, in both interface languages.
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    ManualOnly. Light mode is the likeliest failure: the reference design was drawn light while this
+    app shipped dark-first. The Preparation Radar card is English-only by an earlier, unrelated
+    decision, so step 4 does not apply to it.
+  automation_status: ManualOnly
+  automation_reference: null

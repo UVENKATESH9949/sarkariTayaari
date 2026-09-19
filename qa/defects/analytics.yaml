@@ -1,0 +1,12 @@
+# ANALYTICS module — defects
+#
+# Empty by design. A defect here must trace to a real failed execution in qa/execution/,
+# never to a bug found while writing the code — those are fixed in the same change and
+# written up in the report. See qa/defects/auth.yaml for the schema.
+#
+# Worth stating explicitly for this module: the cross-account overwrite TASK-2801 found in
+# ProgressService.upload is NOT recorded here. It was found by reading the code during the
+# architectural audit, before any test existed to fail, and fixed in the same change — so it
+# belongs in the task doc and the report, not in a register of observed execution failures.
+
+[]

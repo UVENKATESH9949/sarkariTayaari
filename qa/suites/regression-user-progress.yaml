@@ -2,9 +2,15 @@
 #
 # Every test case belonging to the USER-PROGRESS module. Run after any change confined to that module.
 #
-# 2 test case(s). Membership rule: module == USER-PROGRESS (mechanical filter).
+# 8 test case(s). Membership rule: module == USER-PROGRESS (mechanical filter).
 
 suite: Regression — USER-PROGRESS
 test_case_ids:
   - TC-USERPROGRESS-001
   - TC-USERPROGRESS-002
+  - TC-USERPROGRESS-003
+  - TC-USERPROGRESS-004
+  - TC-USERPROGRESS-005
+  - TC-USERPROGRESS-006
+  - TC-USERPROGRESS-007
+  - TC-USERPROGRESS-008

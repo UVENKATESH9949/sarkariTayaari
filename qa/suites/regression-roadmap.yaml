@@ -1,0 +1,21 @@
+# Regression — ROADMAP
+#
+# Every test case belonging to the ROADMAP module. Run after any change confined to that module.
+#
+# 13 test case(s). Membership rule: module == ROADMAP (mechanical filter).
+
+suite: Regression — ROADMAP
+test_case_ids:
+  - TC-ROADMAP-001
+  - TC-ROADMAP-002
+  - TC-ROADMAP-003
+  - TC-ROADMAP-004
+  - TC-ROADMAP-005
+  - TC-ROADMAP-006
+  - TC-ROADMAP-007
+  - TC-ROADMAP-013
+  - TC-ROADMAP-008
+  - TC-ROADMAP-009
+  - TC-ROADMAP-010
+  - TC-ROADMAP-011
+  - TC-ROADMAP-012

@@ -1,0 +1,154 @@
+# LEARNING-STATE — execution records, 2026-09-19 (TASK-3001, Phase 3)
+#
+# All eight are automated runs: each corresponds to a test method written for this change and
+# executed against the real Neon dev database via `mvn test -Dtest=LearningStateTest` —
+# 8 tests, 0 failures, 473.5s.
+#
+# Worth recording, because the first run of this same suite did NOT pass: 5 of 8 failed with
+# 500s, and the cause was a real defect in this session's own service rather than a fixture
+# problem. LearningStateService was annotated @Transactional(readOnly = true), which looked
+# correct for a GET — but TopicHealthService recomputes lazily and DELETEs the student's health
+# rows when its cache is stale, so the read-only transaction propagated into that recompute and
+# blocked it ("cannot execute DELETE in a read-only transaction"). The endpoint therefore worked
+# for a student with no practice history and returned 500 for one with any, which is exactly the
+# case a fixture-light test would have missed. Fixed by dropping readOnly, with the reason
+# written into the service's own doc comment. Not logged as a defect: it never reached a build
+# anyone could run, and was found and fixed in the same session by the test written to cover it.
+
+- execution_id: EXEC-LEARNINGSTATE-0001
+  test_case_id: TC-LEARNINGSTATE-001
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ 3a89856 + uncommitted TASK-2801/3001 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T00:05:00+05:30"
+  actual_result: >
+    Both steps passed. An anonymous GET /api/me/learning-state?examCode={code} returned 401,
+    and the controller takes examCode as its only parameter — nothing in the route names a user.
+  status: Pass
+  defect_id: ""
+  evidence: "mvn surefire output for LearningStateTest.requiresASignedInUser"
+  remarks: null
+
+- execution_id: EXEC-LEARNINGSTATE-0002
+  test_case_id: TC-LEARNINGSTATE-002
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ 3a89856 + uncommitted TASK-2801/3001 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T00:05:00+05:30"
+  actual_result: "An unknown exam code returned 404, not a 200 with an empty topics array."
+  status: Pass
+  defect_id: ""
+  evidence: "mvn surefire output for LearningStateTest.unknownExamIs404"
+  remarks: null
+
+- execution_id: EXEC-LEARNINGSTATE-0003
+  test_case_id: TC-LEARNINGSTATE-003
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ 3a89856 + uncommitted TASK-2801/3001 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T00:05:00+05:30"
+  actual_result: >
+    Both steps passed against two real disposable accounts. Student A, after uploading four
+    correct answers and a PRACTICING curriculum row, read curriculumState PRACTICING with 4
+    attempts. Student B, reading the same exam and topic, read curriculumState NOT_STARTED,
+    0 attempts and a null performanceState.
+  status: Pass
+  defect_id: ""
+  evidence: "mvn surefire output for LearningStateTest.stateIsScopedToTheCallingStudent"
+  remarks: "Confirms the composite did not widen the already-scoped reads it assembles."
+
+- execution_id: EXEC-LEARNINGSTATE-0004
+  test_case_id: TC-LEARNINGSTATE-004
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ 3a89856 + uncommitted TASK-2801/3001 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T00:05:00+05:30"
+  actual_result: >
+    All 4 steps passed. A NEEDS_REVISION curriculum row (20 attempted, 55.00%) uploaded through
+    the real POST /api/topic-progress/sync came back intact, while six all-correct recent
+    practice answers on the same topic produced a non-null performanceState that was NOT
+    NEEDS_REVISION, with attempts 6 and accuracy 100. The two dimensions held different
+    verdicts about one topic and both survived the round trip under distinct names.
+  status: Pass
+  defect_id: ""
+  evidence: "mvn surefire output for LearningStateTest.theTwoStateDimensionsAreSeparatelyReadableEvenWhenBothCouldSayNeedsRevision"
+  remarks: >
+    The decisive record for TASK-3001. Before this contract a consumer reading the bare string
+    "state" could have received either dimension with no way to know which.
+
+- execution_id: EXEC-LEARNINGSTATE-0005
+  test_case_id: TC-LEARNINGSTATE-005
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ 3a89856 + uncommitted TASK-2801/3001 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T00:05:00+05:30"
+  actual_result: >
+    All 3 steps passed. A student with no history read curriculumState NOT_STARTED with
+    curriculumAttempts 0 and curriculumAccuracy null, and performanceState, healthScore and
+    trend all null — "never measured" reported as absence rather than as a fabricated
+    INSUFFICIENT_DATA or a 0% that would read as "tried and failed".
+  status: Pass
+  defect_id: ""
+  evidence: "mvn surefire output for LearningStateTest.anUntouchedTopicIsNotStartedWithNoPerformanceVerdict"
+  remarks: null
+
+- execution_id: EXEC-LEARNINGSTATE-0006
+  test_case_id: TC-LEARNINGSTATE-006
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ 3a89856 + uncommitted TASK-2801/3001 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T00:05:00+05:30"
+  actual_result: >
+    Both steps passed. A topic with one five-answer session returned trend NOT_ENOUGH_DATA —
+    the health model's spelling — and the raw /api/me/analytics/topics JSON contained no
+    "trend" key at all, confirming the duplicate removed by this phase is genuinely gone from
+    the wire and not merely unread.
+  status: Pass
+  defect_id: ""
+  evidence: "mvn surefire output for LearningStateTest.trendComesFromTheHealthModelAndAnalyticsNoLongerReportsOne"
+  remarks: "Asserted against raw JSON because a removed record component cannot be referenced from Java."
+
+- execution_id: EXEC-LEARNINGSTATE-0007
+  test_case_id: TC-LEARNINGSTATE-007
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ 3a89856 + uncommitted TASK-2801/3001 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T00:05:00+05:30"
+  actual_result: >
+    All 3 steps passed. The same four questions answered correctly in practice and wrongly in a
+    mock attempt reported practiceAccuracy 100.0 and mockAccuracy 0.0 separately, with a pooled
+    accuracy of 50 — the figure the health model sees, and the one that would have hidden the
+    split entirely.
+  status: Pass
+  defect_id: ""
+  evidence: "mvn surefire output for LearningStateTest.practiceAndMockAccuracyAreReadableSeparately"
+  remarks: >
+    A fixture bug was found and fixed during this case's first run: MockAttempt.startedAt is
+    @NotNull and was unset, so /api/progress/sync returned 400. Test-side only.
+
+- execution_id: EXEC-LEARNINGSTATE-0008
+  test_case_id: TC-LEARNINGSTATE-008
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ 3a89856 + uncommitted TASK-2801/3001 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T00:05:00+05:30"
+  actual_result: >
+    Steps 1-4 passed: two topics mapped at 10% each with one started returned topicsInSyllabus 2,
+    topicsStarted 1, topicsWithEvidence 1, curriculumCounts {PRACTICING 1, NOT_STARTED 1},
+    performanceCounts totalling 1 (the untouched topic absent rather than bucketed), and the
+    weightage pair 20.00 total / 10.00 started.
+  status: Pass
+  defect_id: ""
+  evidence: "mvn surefire output for LearningStateTest.subjectRollupReportsDistributionAndWeightageCoverage"
+  remarks: >
+    Step 5 is a design guard rather than a runtime assertion — "no single per-subject score
+    exists in the shape" is a property of SubjectLearningState's own definition, verified by
+    reading it, not by an assertion. Recorded as such rather than claimed as an executed step.

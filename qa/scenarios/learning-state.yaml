@@ -1,0 +1,99 @@
+# LEARNING-STATE module — test scenarios
+#
+# Scoped to GET /api/me/learning-state, the canonical per-topic contract added by TASK-3001.
+# Nothing here covers planning, scheduling or a readiness score: none exists, by design.
+
+- id: SCN-LEARNINGSTATE-001
+  requirement_ids: [REQ-LEARNINGSTATE-001]
+  category: Security
+  title: The endpoint requires a token and takes no user id
+  objective: >
+    Verify an unauthenticated caller is rejected, and that nothing in the route would let one
+    account address another's state.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-LEARNINGSTATE-002
+  requirement_ids: [REQ-LEARNINGSTATE-001]
+  category: Negative
+  title: An unknown exam code is a 404, not an empty success
+  objective: >
+    Verify a typo in examCode fails loudly rather than returning an empty topic list that
+    would read as "this student has no syllabus".
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-LEARNINGSTATE-003
+  requirement_ids: [REQ-LEARNINGSTATE-001]
+  category: Security
+  title: Two students reading the same exam see their own state
+  objective: >
+    Verify one student's uploaded curriculum and attempts do not appear in another student's
+    response for the same exam and topic.
+  systems: [Backend]
+  status: Ready
+  notes: "The read paths were already scoped; this asserts the new composite did not widen them."
+
+- id: SCN-LEARNINGSTATE-004
+  requirement_ids: [REQ-LEARNINGSTATE-002]
+  category: Functional
+  title: Curriculum and performance disagree, and both survive
+  objective: >
+    Verify a topic whose curriculum ladder says NEEDS_REVISION but whose recent practice is
+    all correct returns both dimensions, unmixed and under distinct names.
+  systems: [Backend]
+  status: Ready
+  notes: >
+    The decisive scenario for the whole phase — it constructs the exact NEEDS_REVISION
+    collision the contract exists to disambiguate.
+
+- id: SCN-LEARNINGSTATE-005
+  requirement_ids: [REQ-LEARNINGSTATE-002]
+  category: EdgeCase
+  title: An untouched topic is NOT_STARTED with no performance verdict
+  objective: >
+    Verify curriculumState is a real value rather than null, and performanceState is null
+    rather than a fabricated INSUFFICIENT_DATA, for a topic nobody has attempted.
+  systems: [Backend]
+  status: Ready
+  notes: "Guards the distinction between 'never measured' and 'measured, not enough to judge'."
+
+- id: SCN-LEARNINGSTATE-006
+  requirement_ids: [REQ-LEARNINGSTATE-003]
+  category: Functional
+  title: Direction comes from the health model, and analytics reports none
+  objective: >
+    Verify trend uses the health model's vocabulary here, and that the analytics topics
+    payload no longer carries a trend key at all.
+  systems: [Backend]
+  status: Ready
+  notes: >
+    Written as a regression guard against the duplicate being reintroduced — two producers
+    for one judgement is exactly the drift this phase closed.
+
+- id: SCN-LEARNINGSTATE-007
+  requirement_ids: [REQ-LEARNINGSTATE-004]
+  category: Functional
+  title: Untimed and timed accuracy are readable apart from the pooled figure
+  objective: >
+    Verify a topic answered perfectly in practice and wrongly under the clock reports 100 and
+    0 separately, with 50 as the pooled figure the health model sees.
+  systems: [Backend]
+  status: Ready
+  notes: "The student who knows the material but runs out of time is invisible in the pooled number alone."
+
+- id: SCN-LEARNINGSTATE-008
+  requirement_ids: [REQ-LEARNINGSTATE-005]
+  category: Functional
+  title: A subject reports a distribution and a weightage pair, not a score
+  objective: >
+    Verify state counts, the started/total topic counts and the
+    weightagePercentStarted/weightagePercentTotal pair, and that no single aggregate score is
+    produced for the subject.
+  systems: [Backend]
+  status: Ready
+  notes: >
+    Also guards the decision not to answer the open readiness question as a side effect of a
+    technical rollup.

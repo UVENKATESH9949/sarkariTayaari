@@ -2,7 +2,7 @@
 #
 # Every test case belonging to the CATALOG module. Run after any change confined to that module.
 #
-# 52 test case(s). Membership rule: module == CATALOG (mechanical filter).
+# 55 test case(s). Membership rule: module == CATALOG (mechanical filter).
 
 suite: Regression — CATALOG
 test_case_ids:
@@ -58,3 +58,6 @@ test_case_ids:
   - TC-CATALOG-050
   - TC-CATALOG-051
   - TC-CATALOG-052
+  - TC-CATALOG-053
+  - TC-CATALOG-054
+  - TC-CATALOG-055

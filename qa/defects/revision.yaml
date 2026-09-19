@@ -1,0 +1,11 @@
+# REVISION module — defects
+#
+# Empty by design. A defect here must trace to a real failed execution in qa/execution/, never to
+# a bug found while writing the code. See qa/defects/auth.yaml for the schema.
+#
+# Worth stating for this module, since it is the kind of thing a later reader may mistake for a
+# defect: the 3/7/21/45-day intervals are BORROWED from published spaced-repetition research, not
+# measured on this product's students (TASK-3201 D7.1). If they later prove wrong for this app,
+# that is a retune of a declared, versioned model — not a defect against it.
+
+[]

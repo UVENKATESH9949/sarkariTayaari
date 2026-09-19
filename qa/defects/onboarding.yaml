@@ -1,0 +1,7 @@
+# ONBOARDING module — defects
+#
+# Empty by design. A defect here must trace to a real failed execution in qa/execution/,
+# never to a bug found while writing the code — those are fixed in the same change and
+# written up in the report. See qa/defects/auth.yaml for the schema.
+
+[]

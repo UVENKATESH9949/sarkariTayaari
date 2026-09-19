@@ -1,0 +1,14 @@
+# Regression — ANALYTICS
+#
+# Every test case belonging to the ANALYTICS module. Run after any change confined to that module.
+#
+# 6 test case(s). Membership rule: module == ANALYTICS (mechanical filter).
+
+suite: Regression — ANALYTICS
+test_case_ids:
+  - TC-ANALYTICS-001
+  - TC-ANALYTICS-002
+  - TC-ANALYTICS-003
+  - TC-ANALYTICS-004
+  - TC-ANALYTICS-005
+  - TC-ANALYTICS-006

@@ -58,3 +58,231 @@
     ProgressSyncTest (backend) covers the endpoint's contract generically; there is no test
     exercising it from the web client specifically, and no browser-test runner exists in this
     project.
+
+# ---------------------------------------------------------------------------------------
+# TASK-2801 — behavioural data foundation. These extend this module beyond TASK-2601's
+# original web-upload scope to the capture and integrity properties the whole analytics
+# layer sits on. automation_status is evidence-based: every reference below names a real
+# test method written and run for this change.
+
+- id: REQ-USERPROGRESS-002
+  feature: Upload ownership — a session id owned by another account is refused, never merged
+  module: USER-PROGRESS
+  system: [Backend, Mobile]
+  source_doc: api/USER-PROGRESS.md
+  source_section: "POST /api/progress/sync — Ownership"
+  description: >
+    POST /api/progress/sync must never write a row that already belongs to a different
+    account. The existence check that decides create-vs-overwrite is scoped by the acting
+    user; an id owned by someone else is skipped and named in the response, while the rest
+    of the batch is stored normally.
+  business_rule: >
+    Before TASK-2801 the check asked only whether an id existed, not whose it was, and the
+    mapper then set the row's user to the caller — so uploading another account's id
+    overwrote their session AND reassigned ownership. Reachable by accident (mobile
+    generated session-millis ids, which two students can collide on) and deliberately
+    (those ids are guessable). Rejecting one row rather than failing the batch is
+    deliberate: the rest of a device's queue is blameless.
+  actor: Signed-in student
+  preconditions:
+    - "Two distinct accounts exist; one has already uploaded a session under a known id"
+  inputs:
+    - "A SyncRequest from account B naming a session id already owned by account A"
+  expected_outputs:
+    - "200, practiceSessionsStored excludes the contested id, rejectedPracticeSessionIds names it"
+  validations:
+    - "Account A's session retains A's own correctCount and remains owned by A"
+    - "Account B's restore does not contain the contested session"
+  permissions:
+    - "Acting user comes from the bearer token; there is no user id in the request body"
+  dependencies: []
+  error_conditions:
+    - "A rejected id does not fail the request and does not prevent other rows in the same batch from being stored"
+  edge_conditions:
+    - "Mobile now generates UUIDs (mobile/src/db/ids.ts), so this should never fire in practice; an already-synced legacy timestamp id is already stored under the right account and is unaffected"
+  offline_behavior: "A rejected row stays flagged unsynced on the device and is retried; it is never silently dropped"
+  acceptance_criteria:
+    - "One account cannot overwrite or acquire another account's practice session or mock attempt by naming its id"
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    BehavioralAnalyticsTest.anotherAccountsSessionIdIsRejected_notMergedOverTheirs and
+    .aRejectedIdDoesNotBlockTheRestOfTheBatch — both run against the real dev database.
+
+- id: REQ-USERPROGRESS-003
+  feature: Practice-session timing and exam context reach the server and come back
+  module: USER-PROGRESS
+  system: [Backend, Mobile]
+  source_doc: api/USER-PROGRESS.md
+  source_section: "POST /api/progress/sync — practice session fields"
+  description: >
+    A practice session's startedAt, durationMs, availableCount and examCode are uploaded and
+    returned on restore. Before V47 the device recorded all four and never sent them, so a
+    session's real duration and exam were lost permanently on a device change and no
+    server-side study-time figure was possible.
+  business_rule: >
+    All four are optional in both directions. Absent means "not recorded", never zero — a
+    session uploaded by a client older than V47 legitimately has none, and a reader that
+    treated absence as zero-length study would silently understate a long history.
+  actor: Signed-in student
+  preconditions:
+    - "The student completes a practice session on a client built after V47"
+  inputs:
+    - "A PracticeSessionPayload carrying startedAt/durationMs/availableCount/examCode"
+  expected_outputs:
+    - "GET /api/progress returns the same four values on that session"
+  validations:
+    - "availableCount is never used as an accuracy denominator — accuracy stays correct-over-answered"
+  permissions:
+    - "Requires a valid user bearer token"
+  dependencies: [REQ-USERPROGRESS-001]
+  error_conditions:
+    - "A session with no durationMs is reported as unmeasured, not as zero study time"
+  edge_conditions:
+    - "examCode is null for the All Government Exams shortcut, which spans every exam at once"
+  offline_behavior: "All four are written to the device's own SQLite the moment the session finishes; upload happens later"
+  acceptance_criteria:
+    - "A practice session restored onto a new device carries the same duration and exam it was recorded with"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    BehavioralAnalyticsTest.practiceSessionTimingAndExamSurviveUploadAndRestore and
+    .aSessionWithNoDurationIsCountedAsUnmeasured_notAsZeroTime.
+
+- id: REQ-USERPROGRESS-004
+  feature: Each answer records the classification the question had when it was answered
+  module: USER-PROGRESS
+  system: [Backend]
+  source_doc: system-design/02-database.md
+  source_section: "V47 — classification snapshot"
+  description: >
+    On upload the server stores, per answer, the topic/subject/difficulty/PYQ flag the
+    question carried at that moment. Retagging that question later must not change what any
+    analytics reports about history already recorded.
+  business_rule: >
+    Every reader previously joined questions live, so an admin retagging a question silently
+    rewrote every student's history — a student who answered forty Percentage questions
+    became one who answered forty Profit and Loss questions, retroactively. question_id
+    stays the canonical reference to the question; the snapshot describes only how it was
+    classified.
+  actor: System (on upload)
+  preconditions:
+    - "A question exists with a known topic/subject/difficulty"
+  inputs:
+    - "An upload referencing that question, followed by an admin edit to the question's difficulty or topic"
+  expected_outputs:
+    - "The per-difficulty and per-topic analytics for that student are unchanged by the edit"
+  validations:
+    - "A row whose question was hard-deleted before the V47 backfill has a null snapshot and is excluded from grouped views, never bucketed as Other"
+  permissions:
+    - "Written server-side; clients neither send nor receive the snapshot"
+  dependencies: []
+  error_conditions:
+    - "A question missing at upload time leaves all four fields null rather than failing the upload"
+  edge_conditions:
+    - "Classification is captured at UPLOAD, not at answer time — a device offline for weeks while a question is retagged records the newer tagging. Narrow and bounded, unlike the unbounded case this fixes"
+  offline_behavior: "Not applicable — written server-side"
+  acceptance_criteria:
+    - "Retagging a question does not move any figure derived from answers recorded before the edit"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    BehavioralAnalyticsTest.retaggingAQuestionDoesNotRewriteHistoryAlreadyRecorded and
+    .topicAndSubjectAnalyticsComeFromTheSnapshot.
+
+- id: REQ-USERPROGRESS-005
+  feature: Mock attempts contribute to per-topic mastery, as practice already did
+  module: USER-PROGRESS
+  system: [Mobile]
+  source_doc: tasks/TASK-2801-behavioral-data-foundation.md
+  source_section: "Mock tests never update user_topic_progress"
+  description: >
+    Completing a mock test folds its per-topic results into the same user_topic_progress
+    ladder a practice session updates. Previously recordTopicPractice was called only from
+    the practice quiz and the diagnostic test, so a student could sit twenty mocks and have
+    mastery show nothing for the topics they were tested on, while Weakness Radar — which
+    reads both sources — disagreed.
+  business_rule: >
+    Unattempted questions are excluded, never counted wrong: running out of time on a timed
+    paper is normal and scoring skipped questions as mistakes manufactures weakness out of
+    the clock. Correctness reads outcome, never selectedIndex = correctIndex, which has no
+    meaning for MULTIPLE_CHOICE/TRUE_FALSE.
+  actor: Student (signed in or out)
+  preconditions:
+    - "A mock attempt is completed on a device whose local question rows carry topic ids"
+  inputs:
+    - "The attempt's per-question results"
+  expected_outputs:
+    - "user_topic_progress rows for each topic the attempt actually tested, updated cumulatively"
+  validations:
+    - "A question missing from the device's local bank is skipped rather than attributed to no topic"
+  permissions:
+    - "Device-local; syncs later under the existing last-write-wins topic-progress contract"
+  dependencies: []
+  error_conditions:
+    - "A failure recording mastery must not fail or roll back the attempt itself (fire-and-forget after the attempt is stored)"
+  edge_conditions:
+    - "Per-topic time is summed from per-question timeMs where measured, never by dividing the attempt's total duration across topics"
+  offline_behavior: "Works fully offline — the write is local, the upload is later"
+  acceptance_criteria:
+    - "After a mock test, the topics it covered show updated mastery without any practice session being completed"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: >
+    Mobile has no automated test runner in this project, and this logic is device-side
+    (mobile/src/db/topicProgressStore.ts recordMockTopicPractice). Needs an emulator pass.
+
+- id: REQ-USERPROGRESS-006
+  feature: The web client measures per-question time, as mobile already did
+  module: USER-PROGRESS
+  system: [Web]
+  source_doc: api/USER-PROGRESS.md
+  source_section: "Per-question time (timeMs)"
+  description: >
+    Practice and Mock Test on web record how long each question was on screen and send it as
+    timeMs on every uploaded result. Until TASK-2801 Phase 1 web sent nothing at all, so every
+    answer given in a browser was permanently unmeasured and contributed to no average.
+  business_rule: >
+    Deliberately a mirror of mobile's useQuestionTimer — same per-question ceiling, same
+    accumulation across revisits, same null rule — so a minute measured in a browser means the
+    same thing as a minute measured on a phone and the two can be averaged together. Display
+    time is accumulated across every visit to a question, not measured from first view to
+    answer, because both screens let a student move back and forth.
+  actor: Student (signed in or out)
+  preconditions:
+    - "A practice session or mock attempt is started in a browser"
+  inputs:
+    - "Time spent with each question on screen"
+  expected_outputs:
+    - "Each uploaded result carries timeMs; averageTimeMs in /api/me/analytics reflects it"
+  validations:
+    - "A question never displayed carries null, not 0 — absence means unmeasured, never instant"
+    - "Each question's total is capped at 5 minutes, so a backgrounded tab cannot record hours"
+  permissions:
+    - "Capture is client-side and happens signed out too; only the upload requires a token"
+  dependencies: [REQ-USERPROGRESS-001]
+  error_conditions:
+    - "Closing the tab outright loses the in-flight period — but an unfinished session is never uploaded, so nothing partial reaches the server"
+  edge_conditions:
+    - "The question on screen when the student presses Finish (or when a mock auto-submits on timeout) must still be counted — nothing navigates away first"
+  offline_behavior: "Not applicable — web is online-only"
+  acceptance_criteria:
+    - "A practice session and a mock attempt completed in a browser both upload a non-null timeMs for every question the student actually saw"
+  priority: Medium
+  status: Active
+  ambiguity: >
+    Time with the browser tab in the background is included, as it is on mobile. Adding
+    visibilitychange handling was rejected for a signal nothing reads in real time; the 5-minute
+    cap bounds the damage.
+  automation_status: ManualOnly
+  automation_hint: >
+    No browser-test runner exists under web/. The mirrored mobile hook has no automated test
+    either — this is behaviour only a real session can demonstrate.

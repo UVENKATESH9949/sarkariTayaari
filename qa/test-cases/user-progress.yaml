@@ -74,3 +74,262 @@
   remarks: null
   automation_status: ManualOnly
   automation_reference: ""
+
+# --------------------------------------------------------------------------------------
+# TASK-2801 — behavioural data foundation. The four backend cases below are Automated and
+# were genuinely executed for this change (see qa/execution/); the mobile one is not, and
+# stays Not Executed with no invented result.
+
+- id: TC-USERPROGRESS-003
+  requirement_ids: [REQ-USERPROGRESS-002]
+  scenario_id: SCN-USERPROGRESS-003
+  system: Backend
+  module: USER-PROGRESS
+  feature: Upload ownership — a session id owned by another account is refused, never merged
+  title: Uploading another account's session id neither overwrites it nor transfers it
+  objective: >
+    Confirm the ownership invariant holds on the write path: a client can only create or
+    update progress belonging to the authenticated user.
+  preconditions:
+    - "Two distinct signed-up accounts, A and B"
+  test_data: "Two disposable accounts; one shared session id string"
+  test_environment: "Backend against the real dev database"
+  priority: Critical
+  severity: Critical
+  test_type: Security
+  steps:
+    - step: 1
+      action: "As account A, POST /api/progress/sync with a session id S and correctCount 9"
+      expected: "200, practiceSessionsStored = 1"
+    - step: 2
+      action: "As account B, POST /api/progress/sync with the SAME id S and correctCount 1"
+      expected: "200, practiceSessionsStored = 0, rejectedPracticeSessionIds contains S"
+    - step: 3
+      action: "GET /api/progress as account A"
+      expected: "Session S is present and still has correctCount 9 — not overwritten with B's 1"
+    - step: 4
+      action: "GET /api/progress as account B"
+      expected: "Empty — B did not acquire A's session"
+  expected_result: >
+    One account cannot overwrite or acquire another's history by naming its id.
+    (REQ-USERPROGRESS-002 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Regression guard for the defect TASK-2801's audit found in ProgressService.upload."
+  automation_status: Automated
+  automation_reference: "BehavioralAnalyticsTest.anotherAccountsSessionIdIsRejected_notMergedOverTheirs"
+
+- id: TC-USERPROGRESS-004
+  requirement_ids: [REQ-USERPROGRESS-002]
+  scenario_id: SCN-USERPROGRESS-004
+  system: Backend
+  module: USER-PROGRESS
+  feature: Upload ownership — a session id owned by another account is refused, never merged
+  title: A contested id in a batch does not prevent the rest of the batch from being stored
+  objective: >
+    Confirm rejection is per-row, so one bad id cannot strand a device's entire queue.
+  preconditions:
+    - "Account A has already uploaded a session under id S"
+  test_data: "Two disposable accounts"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Major
+  test_type: ErrorHandling
+  steps:
+    - step: 1
+      action: "As account B, upload a batch containing BOTH id S (owned by A) and B's own new id T"
+      expected: "200, practiceSessionsStored = 1, rejectedPracticeSessionIds = [S]"
+    - step: 2
+      action: "GET /api/progress as account B"
+      expected: "Exactly one session, id T — S is absent"
+  expected_result: >
+    A rejected id is skipped, not fatal to the request. (REQ-USERPROGRESS-002 error_conditions)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "BehavioralAnalyticsTest.aRejectedIdDoesNotBlockTheRestOfTheBatch"
+
+- id: TC-USERPROGRESS-005
+  requirement_ids: [REQ-USERPROGRESS-003]
+  scenario_id: SCN-USERPROGRESS-005
+  system: Backend
+  module: USER-PROGRESS
+  feature: Practice-session timing and exam context reach the server and come back
+  title: A practice session's duration, offered-count and exam round-trip; a missing duration reads as unmeasured
+  objective: >
+    Confirm the four fields the device recorded but never sent now survive a full upload and
+    restore, and that their absence is reported honestly rather than as zero.
+  preconditions:
+    - "A signed-up test account"
+  test_data: "One session with startedAt/durationMs/availableCount/examCode, one without"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Major
+  test_type: Integration
+  steps:
+    - step: 1
+      action: "Upload a practice session carrying startedAt, durationMs 720000, availableCount 25 and an examCode"
+      expected: "200"
+    - step: 2
+      action: "GET /api/progress"
+      expected: "The same session returns all four values unchanged"
+    - step: 3
+      action: "GET /api/me/analytics/overview"
+      expected: "totalStudyTimeMs = 720000 and practiceSessionsWithoutDuration = 0"
+    - step: 4
+      action: "Upload a second session with no durationMs, then re-read the overview"
+      expected: >
+        totalStudyTimeMs does NOT increase, and practiceSessionsWithoutDuration = 1 — the
+        unmeasured session is disclosed rather than counted as zero-length study
+  expected_result: >
+    A restored session carries the duration and exam it was recorded with.
+    (REQ-USERPROGRESS-003 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "BehavioralAnalyticsTest.practiceSessionTimingAndExamSurviveUploadAndRestore"
+
+- id: TC-USERPROGRESS-006
+  requirement_ids: [REQ-USERPROGRESS-004]
+  scenario_id: SCN-USERPROGRESS-006
+  system: Backend
+  module: USER-PROGRESS
+  feature: Each answer records the classification the question had when it was answered
+  title: Retagging a question leaves history already recorded unchanged
+  objective: >
+    Confirm the classification snapshot is what analytics groups by, so a later content edit
+    cannot retroactively rewrite what a student did.
+  preconditions:
+    - "An admin token; a question tagged easy"
+  test_data: "One question, one disposable student account"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Major
+  test_type: Integration
+  steps:
+    - step: 1
+      action: "As a student, answer the easy question and upload the session"
+      expected: "200"
+    - step: 2
+      action: "GET /api/me/analytics/difficulty"
+      expected: "One row, difficultyCode easy, attempts 1"
+    - step: 3
+      action: "As an admin, PUT the question with difficulty hard"
+      expected: "200, the question now reports difficulty hard"
+    - step: 4
+      action: "GET /api/me/analytics/difficulty again"
+      expected: >
+        STILL one row, difficultyCode easy, attempts 1 — the student's history did not move.
+        Before the snapshot existed this would have flipped to hard.
+  expected_result: >
+    Retagging a question does not move any figure derived from earlier answers.
+    (REQ-USERPROGRESS-004 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Step 4 is the whole reason the snapshot columns exist — treat it as the regression guard."
+  automation_status: Automated
+  automation_reference: "BehavioralAnalyticsTest.retaggingAQuestionDoesNotRewriteHistoryAlreadyRecorded"
+
+- id: TC-USERPROGRESS-007
+  requirement_ids: [REQ-USERPROGRESS-005]
+  scenario_id: SCN-USERPROGRESS-007
+  system: Mobile
+  module: USER-PROGRESS
+  feature: Mock attempts contribute to per-topic mastery, as practice already did
+  title: A completed mock test updates mastery for the topics it tested, ignoring skipped questions
+  objective: >
+    Confirm mock attempts now feed user_topic_progress, and that unattempted questions are
+    excluded rather than counted as mistakes.
+  preconditions:
+    - "A device with synced questions and a mockable paper; note the current mastery of at least one topic the paper covers"
+  test_data: "One mock paper spanning at least two topics"
+  test_environment: "Android emulator-5554, Metro dev client, real dev backend"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Note the current state/attempt counts for two topics the paper covers (Practice > Topics chips, or the local topic_progress table)"
+      expected: "Baseline recorded"
+    - step: 2
+      action: "Start the mock test, answer several questions across both topics, deliberately LEAVE several unanswered, and submit"
+      expected: "The Result screen appears with the expected score"
+    - step: 3
+      action: "Re-check mastery for those two topics"
+      expected: >
+        Attempt counts increased by the number of questions ANSWERED for each topic — not by
+        the number the paper offered. Skipped questions did not count as wrong and did not
+        push either topic toward NEEDS_REVISION
+    - step: 4
+      action: "Re-check a topic the paper did not cover"
+      expected: "Unchanged"
+  expected_result: >
+    Mock performance reaches the same mastery ladder practice does.
+    (REQ-USERPROGRESS-005 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Never executed — no emulator pass has been done for this change."
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-USERPROGRESS-008
+  requirement_ids: [REQ-USERPROGRESS-006]
+  scenario_id: SCN-USERPROGRESS-008
+  system: Web
+  module: USER-PROGRESS
+  feature: The web client measures per-question time, as mobile already did
+  title: Web practice and mock uploads carry a per-question timeMs, including the last question
+  objective: >
+    Confirm the browser now measures what mobile has measured since V24, that revisiting a
+    question accumulates rather than restarting, and that the question on screen at submit is
+    not silently lost.
+  preconditions:
+    - "Signed in as a disposable test account; a topic with at least 3 real questions; a mockable paper"
+  test_data: "One disposable account; one practice topic; one mock paper"
+  test_environment: "web/ dev build against a running backend"
+  priority: Medium
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Start a practice session. Spend an obviously different amount of time on each of three questions (e.g. ~5s, ~20s, ~40s), answering each"
+      expected: "Each question reveals normally; nothing about timing is visible to the student"
+    - step: 2
+      action: "Navigate back to the first question, wait ~10 more seconds, then return forward"
+      expected: "No state is lost; the answer and reveal are unchanged"
+    - step: 3
+      action: "Press Finish while the last question is still on screen, then GET /api/progress for this account"
+      expected: >
+        Every result carries a non-null timeMs. The first question's value reflects BOTH visits
+        (roughly 15s, not 5s). The LAST question has a non-null value — not null, which is what a
+        missing commit-on-finish would produce
+    - step: 4
+      action: "GET /api/me/analytics/topics"
+      expected: "averageTimeMs for that topic is non-null and in the right order of magnitude"
+    - step: 5
+      action: "Start a mock attempt, answer two questions, leave one untouched, and submit"
+      expected: >
+        The answered questions carry non-null timeMs; the untouched one carries null, not 0 —
+        never displayed means never measured
+    - step: 6
+      action: "Open a question, switch to another browser tab for several minutes, return, and finish"
+      expected: "That question's timeMs is capped at 300000 (5 minutes), not the full wall-clock gap"
+  expected_result: >
+    Web-recorded answers carry honest per-question times that mean the same thing as mobile's.
+    (REQ-USERPROGRESS-006 acceptance_criteria)
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Step 3's last-question assertion is the explicit regression guard — the effect that banks a
+    period only runs on navigation or unmount, so without the explicit commit at submit the final
+    question's time is always lost. Step 6 exercises the cap.
+  automation_status: ManualOnly
+  automation_reference: ""
