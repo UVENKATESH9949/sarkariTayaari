@@ -33,7 +33,7 @@ for (const m of MODULES) {
   };
 }
 
-// executions: any file under qa/execution/*.yaml (none exist yet as real data)
+// executions: any file under qa/execution/*.yaml. Real records exist since 2026-09-16 (CATALOG).
 let executions = [];
 const execDir = path.join(ROOT, "qa", "execution");
 if (fs.existsSync(execDir)) {
@@ -48,7 +48,7 @@ if (fs.existsSync(execDir)) {
 // ---------- RTM ----------
 let rtm = `# Requirement Traceability Matrix (RTM)\n\n`;
 rtm += `**GENERATED FILE — do not hand-edit.** Regenerate with \`node scripts/qa/generate-reports.js\` after any change to qa/requirements, qa/scenarios, or qa/test-cases.\n\n`;
-rtm += `Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requirement across AUTH, CATALOG, and QUESTIONS. Execution and Defect columns are empty everywhere right now because no real test execution has occurred yet — this reflects the actual current state, not a placeholder to be filled in by hand.\n\n`;
+rtm += `Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requirement in every module under qa/requirements/. The Execution and Defect columns are populated only from real records in qa/execution/ and qa/defects/ — a blank cell means that case genuinely has not been run, never a placeholder to be filled in by hand.\n\n`;
 
 let totalReq = 0, totalScn = 0, totalTc = 0, uncoveredReq = [];
 for (const m of MODULES) {
@@ -74,8 +74,13 @@ for (const m of MODULES) {
       return `${t.id} (${lastStatus})`;
     }).join("<br>") || "_none_";
     const defectCell = tcs.flatMap(t => data[m].defects.filter(d => d.test_case_id === t.id).map(d => d.id)).join("<br>") || "";
+    // Was hardcoded empty while qa/execution/ had no real data. Now that it does, the column
+    // has to show it, or the RTM reports a blank (i.e. "never run") for a case that has been run.
+    const execCell = tcs
+      .flatMap(t => executions.filter(e => e.test_case_id === t.id).map(e => e.execution_id))
+      .join("<br>") || "";
 
-    rtm += `| ${req.id}: ${req.feature} | ${req.priority} | ${req.status} | ${scnCell} | ${tcCell} | | ${defectCell} |\n`;
+    rtm += `| ${req.id}: ${req.feature} | ${req.priority} | ${req.status} | ${scnCell} | ${tcCell} | ${execCell} | ${defectCell} |\n`;
   }
   rtm += `\n`;
 }
@@ -110,7 +115,9 @@ for (const m of MODULES) {
 dash += `| **Total** | **${gTotalReq}** | **${gTotalScn}** | **${gTotalTc}** | **${(gTotalTc / gTotalReq).toFixed(1)}** |\n\n`;
 
 dash += `## Execution status\n\n`;
-dash += `No real execution has occurred yet in this environment — every test case is currently \`Not Executed\`. This section will populate automatically once qa/execution/*.yaml files contain real execution records.\n\n`;
+dash += executions.length === 0
+  ? `No real execution has occurred yet in this environment — every test case is currently \`Not Executed\`. This section will populate automatically once qa/execution/*.yaml files contain real execution records.\n\n`
+  : `${executions.length} real execution record(s) across ${new Set(executions.map(e => e.test_case_id)).size} test case(s). A test case with no execution record stays \`Not Executed\`; where a case has been run more than once, the most recent record wins.\n\n`;
 dash += `| Module | Not Executed | Pass | Fail | Blocked | Skipped |\n|---|---|---|---|---|---|\n`;
 for (const m of MODULES) {
   const tcs = data[m].testCases;
