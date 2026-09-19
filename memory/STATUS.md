@@ -1,13 +1,487 @@
 # Project Status — Resume Point
 
-**Last updated:** 2026-09-15 — the web app (TASK-2601 Phase 0-2) is **committed and pushed at
-last** (`f7c924b` on `feature/on-device-llm-spike`, still not `main`); TASK-2701's AI Usage admin
-screen shipped; **Phase 7 is now complete** with Phase 7.4 (`MISTAKE_ANALYSIS`); and **AI is now
-LIVE IN PRODUCTION** — `SESSION_FEEDBACK` and `PROFILE_SUMMARY` are enabled and answering real
-student requests through real Groq calls, after the one missing value (`APP_AI_ENCRYPTION_KEY`) was
-deployed to Cloud Run. The session opened by diagnosing why AI never appeared in a real build: the
-features were never broken, they were switched off, and production held no Groq key at all. See **"Session of 2026-09-15"** immediately below before touching anything
-AI-related. Then the 2026-09-14 entry below that.
+**Last updated:** 2026-09-19 (2) — **Phases 4 and 7 of the personalization program shipped, and
+EVERYTHING IS COMMITTED at last.** Five of seven phases are now done: Gate 1 (data trustworthy) and
+Gate 2 (state defined) are both clean, and the two phases that depend only on Phase 3 — the roadmap
+with workload (TASK-3101) and revision timing (TASK-3201) — are built, **32/32 tests green**, and
+committed in seven commits on `feature/on-device-llm-spike`. **No migration in either.** See
+**"Session of 2026-09-19 (2)"** immediately below.
+
+**Next: Phase 5, and it is blocked on a decision rather than on effort — see the end of that
+section.**
+
+## Session of 2026-09-19 (2) — Phases 4 and 7, and the first commits since 2026-09-15
+
+**The session opened by closing the previous one's loose end.** `WeaknessRadarTest` had been stopped
+mid-run and left unconfirmed; it mattered most because it reads the same health rows Phase 3's
+endpoint now reads through. Re-run first thing: **10/10, 0 failures (611.4s)**. The radar did not
+regress from Phase 3.
+
+**Three decisions taken by the owner for Phase 4** (TASK-3101), all as recommended: the roadmap is
+**recomputed on read** (no migration, matching D3.6); workload estimates use a **labelled fallback
+ladder**; and scope was **Phase 4 only**, with Phase 7 given its own task and sign-off.
+
+**`GET /api/me/study-roadmap`** — the app already knew *what* to study and *in what order*
+(`PreparePlanService` is a correct backlog and is **untouched**, since mobile's Exam Guide screen
+consumes it). What it never knew is **how much work any of it is**. Three additions: minutes,
+subject balance, and the exam's clock.
+
+- **Every estimate declares its tier**: `PERSONAL_TOPIC` (>=5 of the student's own timed attempts),
+  `COHORT_TOPIC` (>=20 across all students), `COHORT_DIFFICULTY` (>=20 at that difficulty, resolved
+  against the real `difficulty_levels` table), then `DEFAULT` — a stated 75s constant with
+  `sampleSize` 0. A measured average and a stated constant are different claims and never wear the
+  same shape.
+- **Steps with no question count get null minutes** and are excluded from every total —
+  `LEARN_CONCEPT`/`REVISION`/`TIMED_PRACTICE`. There is no concept-learning content in this product
+  to spend time on, and an invented number summed into a total corrupts the total.
+- **Subject balance** caps a run at two consecutive topics from one subject and keeps each topic's
+  pre-balance `priorityRank` in the payload, so the reordering is visible rather than silent.
+- **Dated only when a published cycle has an exam date.** Ten of eleven exams have none, so an
+  undated roadmap is the normal case and says so rather than leaving a client to infer it.
+
+**Two decisions taken by the owner for Phase 7** (TASK-3201). The first went **against the
+recommendation, and that is recorded everywhere it matters**: asked how revision timing should work,
+the recommendation was to reuse `TopicHealthService`'s existing **45-day evidence half-life** — at
+least this app's own curve — and the owner chose an explicit **spaced-repetition ladder of
+3/7/21/45 days** instead. **Those intervals are borrowed from published research on other learners,
+not measured on this product's students**, and this app's timing history (V47, weeks old) is far too
+young to have derived its own. So every response carries a versioned
+`intervalBasis: SPACED_REPETITION_LADDER_V1`, and the caveat is written into the service doc, the
+API contract, the QA requirement, the module's defects file and the report — because this is exactly
+the kind of qualifier that evaporates between sessions. The second decision: a re-test is **timed
+practice on that topic**, which opens a screen that already exists.
+
+**`GET /api/me/revision-plan`** — the rung is read from the student's **current state**, not from a
+stored repetition counter, which is a deliberate deviation from SM-2: a topic that keeps going well
+climbs the ladder on its own, one that slips drops straight back to 3 days without waiting for a
+review to fail, and nothing is stored that can go stale. **The cost is stated rather than glossed:**
+it is not a strict per-item progression, so two students with identical review histories but
+different current health get different intervals. `NOT_SCHEDULED` is an answer, with
+`NEVER_PRACTISED` and `NOT_ENOUGH_EVIDENCE` kept distinct; an unrecognised performance state is left
+unscheduled rather than defaulted onto a rung.
+
+**Phase 4's estimate ladder was extracted into a shared `WorkloadEstimator`** used by both
+endpoints — two services with separate ideas of how long a question takes is exactly the drift Phase
+3 existed to remove. `LearningStateService` gained one additive method, `assemble`, so a caller
+needing both the composite and the radar's ordered steps gets them from **one** computation; calling
+the two services separately would recompute the radar twice, and since it lazily rebuilds health
+rows that is two *writes*, not two reads.
+
+**Verified: 32 tests, 0 failures, BUILD SUCCESS** against the real Neon dev database —
+`StudyRoadmapTest` **12/12** (857.7s), `RevisionPlanTest` **8/8** (463.1s), `WorkloadEstimatorTest`
+**6/6** and `RevisionLadderTest` **6/6** (0.01s each). Plus `WeaknessRadarTest` 10/10 at the top of
+the session. `mvn compile`/`test-compile` clean throughout.
+
+**THE FIRST RUN DID NOT PASS — 5 failures across the two suites, and in every single case the
+service was right and the test was wrong.** Worth internalising, because two of them generalise:
+
+1. **A tier-selection rule cannot be asserted against a database the test does not control.** A test
+   expected `DEFAULT` for a fresh topic and got `COHORT_DIFFICULTY` — **17 seconds, n=53** — because
+   the shared dev database genuinely holds cohort timings. The ladder was working. The tier rules
+   moved to a plain-JUnit test with constructed samples (0.010s, and it reaches branches the real
+   database no longer can); the round trip now asserts tier/sample-size consistency instead.
+   **Related disclosure: that 17s/question figure is almost certainly load-test fixture data, not
+   humans** — cohort estimates on the shared dev database are contaminated by the ~35,700 synthetic
+   questions and the automated-test accounts, so they prove the tier resolves, not what real
+   students do.
+2. **"No subject runs more than twice in a row" is false at the tail, by design.** With five topics
+   per subject, once one subject is exhausted the remainder *must* run consecutively. The assertion
+   now checks the real contract: a run past the cap is legitimate only when every topic from that
+   point on belongs to one subject — plus a check that the cap genuinely bites where there *is* a
+   choice, so the test cannot pass on a plan the interleave never touched.
+3. A fixture saving a `RecruitmentCycle` straight through its repository hit `NOT NULL` on
+   `created_at` — that entity has no `@PrePersist`; `ExamGuideService` stamps it on the real path.
+4. A revision test practised a **two-question topic in one session**, which cannot reach the health
+   model's evidence floor, so it came back `INSUFFICIENT_DATA` -> `NOT_SCHEDULED` -> null re-test.
+   Exactly as designed; the fixture now spreads the same questions across three sessions.
+
+**A correction to the program plan, per AI_RULES §6:** TASK-2901 described
+`/api/progress/wrong-answers` as "deduped by question". It is not — `findWrongAnswers` is a plain
+paged select ordered by recency, so a question answered wrongly three times appears three times.
+Fixed in place. It mattered because a revision surface built on that assumption would double-count.
+
+**QA**: new `ROADMAP` and `REVISION` modules — `REQ-ROADMAP-001..005`, `SCN-ROADMAP-001..012`,
+`TC-ROADMAP-001..013`, `REQ-REVISION-001..005`, `SCN-REVISION-001..010`, `TC-REVISION-001..010`,
+plus `EXEC-ROADMAP-0001..0013` and `EXEC-REVISION-0001..0010` (all Pass) for the runs that genuinely
+happened. Two roadmap cases carry `test_case_version: 2` and record in their own remarks why they
+were reframed, rather than being quietly corrected. RTM 134/249/270 -> **144/271/293**.
+
+**COMMITTED — the first commits since 2026-09-15.** Seven commits on
+`feature/on-device-llm-spike`, grouped by feature rather than by directory, each carrying its own
+findings in the message: `990310a` client (onboarding, active exam, AI cards, UUID session ids),
+`b760ccb` web/, `993f899` behavioural foundation V47 + learning state, `aa6d93f` Phases 4 and 7,
+`724aabe` reports 30-33, `08f2ed5` QA register, `b46b304` the RTM execution-column fix.
+**Nothing is pushed.**
+
+**NOT verified, and the list matters:**
+
+- **No consumer exists for any of the three personalization endpoints.** `learning-state`,
+  `study-roadmap` and `revision-plan` all ship with zero callers, by design — but three phases of
+  the program are now invisible to an actual student.
+- **No performance measurement and no `curl` against a real account with a large history.** The
+  cohort timing queries scan attempt rows across all students (bounded to 365 days) and are the most
+  expensive thing a roadmap read does. If it becomes a problem the answer is a small
+  periodically-rebuilt aggregate, the shape `user_topic_health` already uses — not a shorter window,
+  which would change what the figure means.
+- **The 3/7/21/45 intervals are unvalidated for this product**, and no test could validate them.
+  Establishing the real curve is a retention study, not a bug fix.
+- **Rungs 3 and 4 have never been reached by a real student's history** in a test — reaching
+  STRONG+MASTERED needs health rows written directly, so they are proven by the decision table only.
+- **Per-difficulty question availability is unchecked**: a step may ask for 10 easy questions when
+  the bank holds fewer *at that difficulty*, though the topic overall has plenty. The topic-level
+  zero-question rule does hold.
+- No device or browser pass for either phase — there is nothing to look at yet.
+
+**NEXT, in order:**
+
+1. **Phase 5 (daily task assignment) is blocked on a decision, not on effort — D5.1.** The student's
+   `dailyStudyTime`, `preparationLevel` and `targetYear` live **only** in device-local
+   `app_preferences` (migration 0027) and have never reached the server; grepping the backend for
+   any of them returns nothing. Phase 5 turns the roadmap and revision plan into "what do I do in my
+   90 minutes today", so it cannot start without knowing where those minutes come from. D3.2
+   (personalization is signed-in for V1) makes **option (a) — sync a small preparation profile to
+   the server — much easier than it was**, but it is a migration, an API and a rule for "device says
+   2h, account says 1h". **Take this decision before writing any Phase 5 code.**
+2. **Give the three endpoints a consumer**, or the whole program stays invisible to students. This
+   has no blocker and is arguably worth more than Phase 5.
+3. **Phase 6 (adaptive re-planning)** needs Phase 5's persisted assignments to exist first.
+4. Still outstanding from earlier sessions: `web/` has never been deployed, and production still
+   shares one Neon database with dev.
+
+## Session of 2026-09-19 — the canonical learning state (TASK-3001, Phase 3)
+
+**The owner approved all three proposals as recommended**, in plain-language form after asking for
+the question to be simplified. Scope doc, including the full pre-implementation audit:
+`tasks/TASK-3001-canonical-learning-state.md`. Contract: new `api/LEARNING-STATE.md`. Full account:
+`reports/35-canonical-learning-state/canonical-learning-state.md`.
+
+**The audit changed the plan four times before any code was written.**
+
+1. **The composite already half-existed.** `WeaknessRadarDtos.RadarTopic` already returns state,
+   health, trend/delta, evidence level, intervention value, `recommendedAction` + ordered steps and
+   unmet prerequisites per topic. So Phase 3 is **naming and exposing**, not building — and the
+   service reads the radar rather than reassembling the composite, because a parallel assembler
+   would have been a second place for "what is this student's state" to drift.
+2. **A THIRD collision, not previously recorded: practice and mock evidence are pooled by one model
+   and separated by the other.** `TopicHealthService.rebuild` collects both into one list and
+   `EvidenceEvent` carries **no source field**, so a rushed mock answer and an untimed practice
+   answer are identical evidence to every health component — while Phase 2 analytics keeps
+   `practiceAccuracy`/`mockAccuracy` separate on purpose. D3.4 was therefore not open, it was
+   already answered two different ways. **Health keeps pooling** (separating it there is a retune of
+   a shipped scorer with its own version bump) and the contract exposes the split as facts.
+3. **The rollup nearly answered an open business question by accident.** A weighted mean of topic
+   health per exam *is* readiness — still unresolved in `reports/open-questions.md`, and Home's card
+   is literally `MOCK.readinessPercent = 62`. `RadarOverview` already set the opposite precedent,
+   reporting a **distribution + coverage** rather than a score. Logged as new decision **D3.8**;
+   readiness stays explicitly out of scope.
+4. **The trend collision resolves in the health model's favour**, decisively: its version has a
+   *flagged* stale-window fallback that lowers confidence rather than fabricating a direction, and
+   asymmetric +12/-15pp thresholds. TASK-2801's was a cruder fixed-window duplicate with no consumer.
+
+**The three decisions, as taken.** (D3.1) **Namespace, do not rename or flatten** —
+`curriculumState` (coverage, from `user_topic_progress`) and `performanceState` (quality, from
+`user_topic_health`) are two separately named fields, so no consumer ever reads a bare `state` and
+the `NEEDS_REVISION` ambiguity becomes impossible to express rather than something a reader must
+remember. Zero migration, zero client change, zero data change. (Trend) **Keep the health model's,
+delete mine** — `/api/me/analytics/topics` no longer reports a per-topic `trend` at all; the field,
+its two repository queries and its merge helper are gone, and nothing consumed it. (D3.8) **A
+subject reports a distribution, never one score** — state counts, `topicsStarted`/
+`topicsWithEvidence`, and the pair `weightagePercentTotal`/`weightagePercentStarted`, which is the
+real planning signal: "19 of 28 topics started, but only 27.5 of 40 marks" is actionable in a way
+one average is not.
+
+**Shipped**: `LearningStateDtos`, `LearningStateService`, `LearningStateController`
+(`GET /api/me/learning-state?examCode=`, user-scoped from the token with no user-id parameter
+anywhere), `api/LEARNING-STATE.md`, an `api/README.md` index row, and the analytics trend removal.
+**No migration — none was needed.** `curriculumState` is never null (no row means NOT_STARTED, a
+real answer) while `performanceState` **is** null when nothing was ever measured, which is
+deliberately different from `INSUFFICIENT_DATA` ("measured, not enough to judge").
+
+**A real bug, found by running the new tests and not by review.** `LearningStateService` was first
+annotated `@Transactional(readOnly = true)` — obviously correct for a GET, and wrong.
+`TopicHealthService` recomputes **lazily**: it DELETEs and rewrites a student's health rows when the
+cache is stale, so a read-only transaction propagates into that recompute and blocks it
+(`cannot execute DELETE in a read-only transaction`). The endpoint therefore worked perfectly for a
+student with no history and **returned 500 for anyone who had actually practised** — exactly the
+case a fixture-light test would miss. 5 of 8 tests failed on the first run. Fixed by dropping
+`readOnly`, with the surprise written into the service's own doc comment rather than left for the
+next reader. **This GET can write, by design.**
+
+**Verified**: `LearningStateTest` **8/8** against the real Neon dev database (473s), including the
+decisive case — a topic whose curriculum says `NEEDS_REVISION` while its recent performance is good
+returns **both**, unmixed, under distinct names. Regression `BehavioralAnalyticsTest` **13/13** and
+`ProgressSyncTest` **4/4**. `mvn compile`/`test-compile` clean.
+
+**NOT verified — start the next session here.** `WeaknessRadarTest` was **mid-run and was stopped**
+when the session ended, so it is unconfirmed. It matters more than the two that passed: it reads the
+same health rows this endpoint now reads through, and it is the one class that could show the radar
+regressed. **Re-run `mvn -f backend/pom.xml test -Dtest=WeaknessRadarTest` before anything else.**
+Also unverified: no `curl` against a real account with a large history, no performance measurement
+of the composite read (it fans out to the radar, analytics and two repositories), and **no mobile or
+web consumer exists** — this endpoint has no caller at all yet, by design.
+
+**A mistake of mine worth not repeating, and it cost real data.** A Python one-off that rewrote this
+file used `\uXXXX` escapes for astral-plane emoji, which Python encodes as unpaired surrogates and
+refuses to write as UTF-8 — and the exception fired **after** the file had been opened for writing,
+so it **truncated `memory/STATUS.md` to 0 bytes**. Recovered by restoring the committed version and
+rebuilding the uncommitted top section from the copy loaded into the session. **Write emoji as
+literal characters, and write to a scratch file before replacing anything that is not committed.**
+The reconstruction is faithful in substance; exact wording of the pre-2026-09-19 entries below may
+differ in small ways from what was lost.
+
+**QA**: new `LEARNING-STATE` module — `REQ-LEARNINGSTATE-001..005`, `SCN-LEARNINGSTATE-001..008`,
+`TC-LEARNINGSTATE-001..008`, plus `EXEC-LEARNINGSTATE-0001..0008` (all Pass) for the eight automated
+cases that genuinely ran. RTM 129/241/262 -> **134/249/270**. `TC-LEARNINGSTATE-008`'s step 5 is
+recorded as a *design guard verified by reading*, not claimed as an executed assertion.
+
+**Next, in order:** (1) **re-run `WeaknessRadarTest`** — the one unconfirmed regression, stopped
+mid-run; (2) Phase 3's remaining open decisions are only the ones already recommended in
+`tasks/TASK-3001-canonical-learning-state.md` (D3.3 what "weak" means, D3.5 recency decay, D3.6
+read-time vs stored, D3.7 sub-topic grain) — none blocks Phase 4 or 7, which both depend only on the
+contract now shipped; (3) the still-outstanding `web/` and onboarding device work from the entries
+below. Nothing committed.
+
+## Session of 2026-09-18 (2) — behavioural data foundation (TASK-2801)
+
+**A 25-section brief asked for automatic behavioural capture, preserved raw events, derived metrics,
+and explicitly NOT the recommendation engine.** Its §25 required an architectural analysis first,
+which is what changed the plan. Scope doc, including the full pre-implementation audit:
+`tasks/TASK-2801-behavioral-data-foundation.md`. Full account:
+`reports/34-behavioral-data-foundation/behavioral-data-foundation.md`.
+
+**Three of the brief's premises did not survive the audit, and all three are recorded.** (1) The raw
+per-question event store **already exists** — `user_practice_session_results` /
+`user_mock_attempt_results` carry `outcome`, which is exactly the `answer_status` the brief asks for
+and which V26 backfilled across all history; a new `question_attempts` table would have duplicated
+live data. (2) **`REVISION` is not a thing in this product** — `revise.tsx` is a read-only review
+screen with no answering and no session, so that source type would have meant inventing UX to
+satisfy an enum; the real third source is the diagnostic test, which is local-only with no server
+table. (3) "Existing analytics" is Sentry breadcrumbs — ephemeral, never persisted, never queryable
+— and Home's streak/readiness are literally `const MOCK = { streakDays: 3, readinessPercent: 62 }`.
+The project owner accepted the corrected scope, refined D1 (snapshot the analytics-relevant
+classification as **ids**, keep `question_id` canonical), deferred the diagnostic work out of V47,
+and pulled the integrity fix ahead of everything else.
+
+**THE DEFECT, fixed first: `POST /api/progress/sync` could overwrite another account's session and
+reassign ownership.** `ProgressService.upload` decided create-vs-overwrite from
+`findAllById(sessionIds)` — **not scoped to the calling user** — and `toEntity` then set the row's
+user to the caller. Reachable deliberately (mobile generated `session-${Date.now()}` /
+`mocktest-${Date.now()}`, trivially guessable) and by accident (a millisecond timestamp is not
+unique across a user base). Read paths were already correctly scoped, so this was write-integrity,
+not a read leak — but a personalization engine reading these rows would have inherited corrupted
+ownership. **Fixed on both sides**: the server now resolves `[id, userId]`, skips ids owned by
+another account and names them in `rejectedPracticeSessionIds`/`rejectedMockAttemptIds` (skipping one
+row rather than failing the batch — the rest of a device's queue is blameless); mobile moved to
+UUIDs via a new `mobile/src/db/ids.ts`, with no new dependency. **A bug in this session's own first
+draft, caught by reading not by a test**: the empty-id-list guard sat inside the helper, but the
+repository call is an argument and is evaluated first, so it never fired.
+
+**Migration V47 — the two capture gaps that were real.** (1) `user_practice_sessions` gains
+`started_at`/`duration_ms`/`available_count`/`exam_code`: the device recorded all four since Doc 2
+§7 and **never sent them**, so a practice session's real duration and exam were lost outright on a
+device change and no server-side study-time figure was possible (mock attempts have carried the
+equivalent since V6). (2) Both result tables gain `topic_id`/`subject_id`/`difficulty_code`/`is_pyq`,
+**frozen at upload**. Every reader previously joined `questions` live, so retagging a question
+retroactively rewrote history — a student who answered forty Percentage questions became one who
+answered forty Profit & Loss questions. Backfilled once; all nullable; NULL means unknown, never
+zero. The snapshot is written **server-side at upload** rather than sent by the client, which covers
+old builds and `web/` with no client change; the residual gap (a device offline for weeks while a
+question is retagged) is stated in the code and docs rather than hidden. Mobile migration **0029**
+adds `practice_sessions.started_at`, the one field neither side had.
+
+**A second inconsistency, found while auditing and fixed: mock tests never updated
+`user_topic_progress`.** `recordTopicPractice` was called only from the practice quiz and the
+diagnostic test, so a student could sit twenty mocks and have mastery show nothing for the topics
+they were tested on — while Weakness Radar, which reads both sources, disagreed about the same
+student. New `recordMockTopicPractice` closes it device-side, excluding `UNATTEMPTED` (running out of
+time on a timed paper is normal; counting skipped questions as mistakes manufactures weakness out of
+the clock) and reading correctness from `outcome`, never `selectedIndex === correctIndex`.
+
+**The read layer**: `GET /api/me/analytics/{overview,subjects,topics,difficulty,activity,trends}`,
+user-scoped from the token with no user-id parameter anywhere. **Everything is computed on read — no
+aggregate table, no streak table, no trend column, no `user_personalization`.** `trend` compared two
+time windows and returned `INSUFFICIENT_DATA` rather than defaulting to `STABLE` (**the per-topic
+trend was removed the next day by TASK-3001 — see the entry above**); averages divide by the *timed*
+attempts only; `null` is returned wherever there is nothing to measure; and `totalStudyTimeMs` ships
+with `practiceSessionsWithoutDuration` so a figure that necessarily under-reports pre-V47 history is
+interpretable rather than quietly short. Day-bounded figures take an optional IANA `zone` (default
+UTC) because `users` stores no time zone; an unknown zone or window is a 400, never a silent
+fallback. Contract: new `api/USER-ANALYTICS.md`.
+
+**Verified**: `BehavioralAnalyticsTest` **13/13** against the real Neon dev database, with **V47
+applied cleanly** to it (6.5s including the backfill); regression `ProgressSyncTest`/
+`ProgressHistoryTest`/`WeaknessRadarTest`/`BookmarkSyncTest` **24/24** (the radar one matters most —
+it reads the same two tables); `mvn compile` clean; `packages/core` `tsc` clean and **280/280**;
+mobile `tsc` clean and `expo lint` at the **exact 9-problem baseline** with all four flagged files
+confirmed untouched by this change; `web/` `tsc` clean. The rejection path was confirmed to genuinely
+execute, not to pass by ids not colliding — the backend logged `progress.sync rejected ids owned by
+another account` twice during the run. **The AI test classes were deliberately not run**, per this
+file's own recorded hazard about them disabling AI in production.
+
+**Two pieces of doc drift fixed in place per §6, neither caused by this change**:
+`system-design/02-database.md`'s Group 5 table map **omitted `user_topic_progress` (V14) entirely**
+(it appeared only in the migration list at the bottom of the file), and that same migration list
+**stopped at V39**, missing V40-V46.
+
+**QA**: new `ANALYTICS` module (`REQ-ANALYTICS-001..005`, `SCN-ANALYTICS-001..006`,
+`TC-ANALYTICS-001..006`) plus `REQ-USERPROGRESS-002..005`, `SCN-USERPROGRESS-003..007`,
+`TC-USERPROGRESS-003..007`, and nine execution records (`EXEC-ANALYTICS-0001..0009`, all Pass) for
+the fully-automated cases that genuinely ran. `TC-ANALYTICS-005` (PartiallyAutomated) and
+`TC-USERPROGRESS-007` (ManualOnly) are deliberately absent from the execution file rather than
+recorded as passes. RTM 119/229/250 -> **128/240/261**.
+
+**The whole personalization program is planned end to end**, at the owner's request, in
+`tasks/TASK-2901-personalization-engine.md` — **seven phases**, with AI deliberately outside the core
+rather than a final phase (its infrastructure already exists and three features are live, so making
+it "Phase 8" only invites starting it early). **The owner made one correction that reshaped the
+plan**: an earlier draft proposed converging the three overlapping models into one canonical learning
+state, which would have destroyed information. They are not three competing answers, they are three
+*dimensions* — learning state (where in the curriculum: `user_topic_progress`), health (current
+performance: `user_topic_health`), trend (direction), plus confidence and recency. A planner that
+knows all three can tell "barely started" from "was strong and slipping"; one flattened label cannot,
+and those two want opposite treatment. **That correction is what Phase 3 (TASK-3001, above)
+implemented.**
+
+**The audit again found the phases further along than the brief assumed.** Phase 4's
+`PreparePlanService` is already a correct topic backlog (priority-ordered, prerequisite-gated,
+mastery-aware, coverage-filtered, one "next up") missing only workload estimates and the time
+dimension — the key addition being that **one topic ≠ one unit of work**. Phase 7's *what* already
+exists as `RecommendedAction`'s nine deterministic values (and, found during the Phase 3 audit, its
+*how much* too — `ActionStepDto(action, questionCount, difficultyCode)`); what is missing is **when**,
+and Phase 7 therefore depends only on Phase 3 and runs **parallel to Phase 4**, not after Phase 6.
+Phase 5 is blocked on a real architectural decision rather than effort: `dailyStudyTime`/
+`preparationLevel`/`targetYear` live only in device-local `app_preferences` and never reach the
+server. **Assignments will be persisted** (owner's call): without a record of what was *assigned*,
+"no Percentage activity" cannot distinguish never-assigned / ignored / abandoned /
+completed-offline-not-synced, and Phase 6 cannot adapt. Four gates govern the program — data
+trustworthy, **state defined (now done)**, planning works, adaptation works.
+
+**Then, same session: Phase 1's last open item was closed — `web/` now captures per-question time.**
+`PracticeQuiz.tsx` and `MockTestEngine.tsx` sent no `timeMs` at all, so **every answer ever given in
+a browser was permanently unmeasured**, and average question time per topic is a direct input to the
+workload estimation Phase 4 needs. New `web/src/questions/useQuestionTimer.ts` deliberately mirrors
+`mobile/src/practice/useQuestionTimer.ts` — same 5-minute per-question cap, same accumulation across
+revisits, same null-not-zero rule — so a minute measured in a browser means the same thing as a
+minute measured on a phone. The two files stay separate because one is a React-DOM hook and the
+other React-Native, and `packages/core` is platform-pure; the duplication is one constant and ~40
+lines, recorded rather than hidden. `timeMs` now flows through both upload payloads. **The trap the
+design exists to avoid**, inherited from mobile: the effect that banks a period only fires on
+navigation or unmount, but a session finishes while its last question is still on screen — without
+the explicit `commitCurrent()` at submit the final question's time is always null (and a mock's
+auto-submit-on-timeout navigates away from nothing). Verified `tsc`/`oxlint` (zero-warning
+baseline)/`vite build` clean; **no browser pass** — `web/` has no browser-test runner, so
+`TC-USERPROGRESS-008` is `ManualOnly`, `Not Executed`, with step 3 written as the explicit
+last-question regression guard. Also corrected drift TASK-2801 itself caused:
+`api/USER-PROGRESS.md` still claimed **"nothing consumes `timeMs` yet"**, false the moment
+`/api/me/analytics` began reporting `averageTimeMs`. RTM 128/240/261 -> **129/241/262**.
+
+**Then, same session: GATE 1 WAS RUN on `emulator-5554`, and it passed the riskiest item.** Passed:
+**migration `0029` applied through the real drizzle migrator** on a genuine pre-0029 database
+(29 -> 30, 37,094 questions preserved, no failure screen), and again from scratch on a rebuilt
+database; strengthened beforehand by applying `0029` off-device to a *populated* copy, where the
+pre-existing row came back byte-identical with `started_at` NULL (not 0, not `""`) and a re-run
+correctly failed as one-shot. A real practice session recorded
+`started_at`/`duration_ms`/`available_count`/`exam_code` with **`duration_ms` exactly equal to
+`completed_at - started_at`**, plus per-question `time_ms`, under a **UUID** id. And the new
+behaviour worked: a real SSC CGL Tier 1 mock (**3 answered, 97 left unattempted**) fed per-topic
+mastery with **exactly the 3** — Matrix 1/0, Seating Arrangement 1/0, Syllogism 1/1 — matching the
+attempt's own 1-correct/2-wrong split, per-topic time summed from real per-question values, and a
+topic the mock did not cover untouched. Incidentally closed a gap from 2026-09-17: **onboarding steps
+2-7 rendered and completed for the first time**, content-language step included, ending on the
+personalised Home greeting.
+
+**THE FAILURE — since RESOLVED, and my hypothesis about it was WRONG.** At the time: after sign-in,
+`GET /api/progress` returned the session with `startedAt`/`durationMs`/`availableCount`/`examCode`
+all **NULL**, while `timeMs` arrived correctly and the device's own SQLite held all four. I recorded
+"a stale Metro transform" as the leading hypothesis. **It was not that, and it was not client code
+either. The real cause: the app's baked-in base URL is `http://10.0.2.2:8080/api` — the Android
+emulator's HOST-loopback alias — which goes straight to the host machine's port 8080 and therefore
+COMPLETELY BYPASSES `adb reverse`.** I had mapped `adb reverse tcp:8080 tcp:8090` and assumed that
+pointed the device at my V47 backend; `adb reverse` only maps the *device's own* localhost, which
+this app never uses. So the device was uploading to the **stale backend left running since
+2026-09-17**, which predates V47: its `ProgressDtos` had no such fields, and Spring's Jackson
+silently ignores unknown JSON properties, so the four were dropped on arrival while `timeMs` came
+through.
+
+**Re-run with the V47 backend on port 8080 itself: all four arrive.** A real session stored
+`started_at 1789744511576 / duration_ms 149511 / available_count 42 / exam_code SSC_CGL` locally and
+came back from `GET /api/progress` as `startedAt "2026-09-18T15:15:11.576Z"` — the same instant
+exactly — with the other three intact and per-result `timeMs [76751, 72305]`. From that real data,
+`/api/me/analytics/overview?zone=Asia/Kolkata` reported **`totalStudyTimeMs 149511`**,
+`practiceSessionsWithoutDuration 0`, `currentStreakDays 1`; `/topics` reported `attempts 2` and
+**`averageTimeMs 74528`, exactly the mean of the two recorded times**. Every null-policy rule held on
+real device data. Recorded as `EXEC-USERPROGRESS-0003` (Pass); `EXEC-USERPROGRESS-0002` is **kept as
+a Fail** rather than rewritten. Neither carries a defect id — no product code was at fault.
+**GATE 1 IS CLEAN.**
+
+**THE ENVIRONMENT LESSON, and it is the durable part: `adb reverse` does NOT affect `10.0.2.2`.**
+This app's dev build targets the host directly via that alias, so port-remapping silently does
+nothing and the device quietly talks to whatever is already on the host's port 8080. **Run the
+backend under test on 8080 itself, and check what is already listening there first.** This is the
+third appearance of the same underlying trap in this project — and the new wrinkle is that checking
+the port was not enough: I *did* observe :8080 was stale and 404ing the new endpoint, then routed
+around it in a way that had no effect.
+
+**Another mistake of mine worth not repeating**: forcing a re-upload by pushing an edited database
+back with `adb shell "run-as ... sh -c 'cat > ...'"` **truncated 64MB to 337 bytes** — `adb shell`
+stdin is not binary-safe for writes, the write-side counterpart of the already-documented `exec-out`
+read trap, and there is no clean `exec-in`. The app then failed to start; recovered by deleting the
+file and letting it rebuild (which also re-proved all 30 migrations). Two more environment notes:
+Metro dying makes a lazily-routed screen's button **silently do nothing** rather than crash, and
+`uiautomator dump` again served a **stale tree** — the screenshot is the authority. Cleanup: two test
+accounts (`gate1.device@`/`gate1.ui@`) plus a `curl-check-1` session remain in the shared dev
+database, same category as the existing `automated-test-*` fixtures, with no user-delete endpoint to
+remove them.
+
+Before that, on 2026-09-18 — **`web/`'s Home page and app-wide navigation were redesigned again**,
+this time by explicit user direction with real reference screenshots: the sidebar (desktop) /
+bottom-tab-bar (phone) pair is gone, replaced by one top navigation bar at every width (confirmed
+with the user first — they explicitly chose "whole app" over "Home only"), and Home now shows a dark
+editorial hero plus horizontally-scrollable category rows of "spotlight" exam tiles. A real,
+disclosed trade-off: phone width no longer has an always-visible bottom tab bar, only a menu button.
+Two now-stale QA requirements (REQ-WEB-003/004) were corrected in place per `AI_RULES.md` §6.
+Verified with a live Playwright pass across four breakpoints and both themes against the live shared
+backend — zero console errors. Full account:
+`reports/33-web-premium-redesign/home-hero-and-topnav-redesign.md`. See **"Session of 2026-09-18"**
+below.
+
+Before that, on 2026-09-17 (later the same day) — **`web/`'s presentation layer got a premium
+visual/responsive redesign pass**: consistent content-shaped loading states, desktop breadcrumbs on
+every Practice/Mock Test drill-down page, a premium hero treatment for the two `ComingSoon` stub
+routes, and the session's flagship change — **Mock Test Engine's question navigator and Practice
+Quiz's session context both became always-visible desktop sidebars** (>=1024px). Presentation only.
+Verified with a real Playwright pass across five breakpoints (390-1920px), both themes, against the
+live shared backend — zero console errors anywhere. Full account:
+`reports/33-web-premium-redesign/web-premium-redesign.md`. See **"Session of 2026-09-17 (2)"** below.
+
+Before that, same day — **first-time onboarding shipped**: a seven-step first-run flow (name, app
+language, **content languages**, exam, stage/year, preparation level, daily study time) writing a
+device-local preparation profile (migrations **0027** + **0028**), a personalised preparation screen,
+a welcome by name, and a Home greeting to match. Existing installs are adopted silently and never
+re-onboarded. Four of the first brief's premises were wrong and are recorded as such. Verified by
+**83 new automated tests (packages/core 195 -> 278)** and two off-device migration checks.
+See **"Session of 2026-09-17"** below. Before that, on 2026-09-16 — **the Active Exam / My Exams
+feature was device-verified**: 13 behavioural scenarios run on `emulator-5554`, migration 0026
+applied through the real migrator, and one real defect (DEF-CATALOG-001) found, fixed and
+re-verified — plus the **first real executions ever recorded in `qa/`**. Also earlier the same day,
+every AI surface moved onto one shared premium card family (`ui/AiCard.tsx`); presentation only,
+verified by compile/lint/tests but **not yet seen on a device**. See **"Session of 2026-09-16"**
+entries below, then the 2026-09-15 entry after them. Before that: the web app (TASK-2601 Phase 0-2)
+is **committed and pushed at last** (`f7c924b` on `feature/on-device-llm-spike`, still not `main`);
+TASK-2701's AI Usage admin screen shipped; **Phase 7 is now complete** with Phase 7.4
+(`MISTAKE_ANALYSIS`); and **AI is now LIVE IN PRODUCTION** — `SESSION_FEEDBACK` and
+`PROFILE_SUMMARY` are enabled and answering real student requests through real Groq calls, after the
+one missing value (`APP_AI_ENCRYPTION_KEY`) was deployed to Cloud Run. See
+**"Session of 2026-09-15"** below before touching anything AI-related.
+
+> **Doc-loss note, 2026-09-19.** The detailed session sections for **2026-09-16, 2026-09-17 and
+> 2026-09-18** (the AI card family, Multiple My Exams / Active Exam and its device pass, first-time
+> onboarding, and the two `web/` redesign passes) were lost when this file was truncated — see the
+> mistake recorded in the 2026-09-19 entry above. Their summaries survive in the "Before that…"
+> paragraphs above, and **the full accounts are intact in their own reports**:
+> `reports/30-ai-card-system/`, `reports/31-active-exam-switching/`,
+> `reports/32-first-time-onboarding/` and `reports/33-web-premium-redesign/`, plus the `qa/` register.
+> Nothing else in this file was affected; everything from here down is the committed text.
 
 ## Session of 2026-09-15 — why the AI features never appeared in a real build; the AI Usage admin screen
 

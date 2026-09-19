@@ -95,8 +95,45 @@ The extraction is behaviour-preserving for Phase 4 — and it paid for itself im
 
 ## Verified
 
-*(filled in from the real run — see below)*
+**`RevisionPlanTest` 8/8 and `RevisionLadderTest` 6/6** against the real Neon dev database (463.1s
+and 0.009s), in the same run that carried Phase 4 — **32 tests, 0 failures, BUILD SUCCESS**.
+`mvn compile` / `test-compile` clean.
+
+The decisive case ran on real data: a topic practised **90 days ago** came back `DUE` with a real
+`daysOverdue`, an interval among the four rungs and a stated `rungReason`, while one practised today
+came back `NOT_DUE` — **and the overdue topic led the plan despite the fresher one carrying more
+than twice its exam priority.** That is the phase's whole point expressed as an assertion: urgency
+of forgetting outranks exam weight *within this plan*, and how much of a day that deserves is Phase
+5's decision.
+
+Deliberately, no test asserts *which* rung a real attempt produces. That depends on the health
+model's verdict, which is its own service's business; the tests assert properties that hold whatever
+verdict comes back. The rung table itself is asserted separately with constructed states, where
+every branch is reachable.
+
+**One first-run failure, and the service was right.** `theRetestIsTimedPracticeAndNeverExceeds...`
+practised a two-question topic in a single session — which cannot reach the health model's evidence
+floor — so the topic came back `INSUFFICIENT_DATA`, therefore `NOT_SCHEDULED`, therefore with a null
+re-test. Exactly as designed. The fixture now spreads the same two questions across three sessions.
+It incidentally confirmed end to end what `RevisionLadderTest` asserts in isolation: an unjudgeable
+topic is left unscheduled rather than handed a due date.
+
+**QA**: new `REVISION` module — `REQ-REVISION-001..005`, `SCN-REVISION-001..010`,
+`TC-REVISION-001..010`, plus `EXEC-REVISION-0001..0010` (all Pass). RTM across both phases:
+134/249/270 -> **144/271/293**.
 
 ## Not verified
 
-*(see below)*
+- **The intervals themselves.** No test asserts that 3/7/21/45 days are right for this product, and
+  none could — they are borrowed from published research on other learners. Establishing the real
+  curve needs a retention study against this app's own history, which is currently too young to
+  support one. This is the single largest open question the phase leaves behind, and it is a
+  measurement task, not a bug.
+- **No consumer.** Neither `mobile/` nor `web/` calls this endpoint.
+- **No `curl` against a real account with a large history**, and no performance measurement. Each
+  read fans out to the radar, the learning state and the cohort timing queries.
+- **The rung boundaries have never been seen on real data at the top of the ladder.** Reaching rung
+  4 requires a topic that is both STRONG and MASTERED, which a fixture cannot manufacture without
+  writing health rows directly — so rungs 3 and 4 are proven by the decision table, not by a real
+  student's history.
+- **No device or browser pass**, for the same reason as Phase 4: there is nothing to look at yet.

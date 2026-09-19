@@ -1,0 +1,231 @@
+# ROADMAP — execution records, 2026-09-19 (TASK-3101, Phase 4)
+#
+# All thirteen are automated runs against the real Neon dev database, from one invocation of
+# `mvn test -Dtest='StudyRoadmapTest,RevisionPlanTest,WorkloadEstimatorTest,RevisionLadderTest'` —
+# 32 tests, 0 failures, BUILD SUCCESS. StudyRoadmapTest alone took 857.7s; WorkloadEstimatorTest,
+# which needs no Spring context and no database, took 0.010s.
+#
+# Worth recording, because the first run of this suite did NOT pass: 4 of 12 failed, and in every
+# case the service was right and the test was wrong.
+#
+#   - Two ERRORs came from a fixture saving a RecruitmentCycle straight through its repository and
+#     hitting NOT NULL on created_at. That entity has no @PrePersist; the real write path stamps it
+#     in ExamGuideService. Fixed in the fixture.
+#   - TC-ROADMAP-007 expected DEFAULT for a fresh topic and got COHORT_DIFFICULTY (17s, n=53). The
+#     shared dev database genuinely holds cohort timings, so the ladder had correctly found a real
+#     tier. The case was reframed to assert tier/sample-size consistency, and the tier rules moved
+#     to TC-ROADMAP-013 with constructed samples.
+#   - TC-ROADMAP-005 asserted "never more than 2 topics in a row from one subject" and failed at
+#     position 9 on a legitimate tail: with five topics per subject, once one is exhausted the
+#     remainder must run consecutively. Relaxed to the real contract.
+#
+# None is logged as a defect: no fault in shipped behaviour, and all were found and fixed in the
+# same session by the tests written to cover the change.
+
+- execution_id: EXEC-ROADMAP-0001
+  test_case_id: TC-ROADMAP-001
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ aa6d93f"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T19:18:00+05:30"
+  actual_result: >
+    An anonymous GET /api/me/study-roadmap?examCode={code} returned 401, and the controller takes
+    examCode as its only parameter — nothing in the route names a user.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for StudyRoadmapTest.requiresASignedInUser"
+  remarks: null
+
+- execution_id: EXEC-ROADMAP-0002
+  test_case_id: TC-ROADMAP-002
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ aa6d93f"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T19:18:00+05:30"
+  actual_result: "An unknown exam code returned 404, not a 200 with an empty topics array."
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for StudyRoadmapTest.unknownExamIs404"
+  remarks: null
+
+- execution_id: EXEC-ROADMAP-0003
+  test_case_id: TC-ROADMAP-003
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ aa6d93f"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T19:18:00+05:30"
+  actual_result: >
+    The topic with priority 99 and zero questions was absent from topics[] entirely, while the
+    practicable topic at priority 10 was present. Question availability gates the plan, not just
+    its ordering.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for StudyRoadmapTest.aTopicWithNoPracticableQuestionsIsNeverPlanned"
+  remarks: "Regression guard for the on-device finding that produced this rule in PreparePlanService."
+
+- execution_id: EXEC-ROADMAP-0004
+  test_case_id: TC-ROADMAP-004
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ aa6d93f"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T19:18:00+05:30"
+  actual_result: >
+    The priority-95 topic led the plan with priorityRank 1, and exactly one topic carried
+    recommended true — that same one.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for StudyRoadmapTest.theHigherPriorityTopicLeadsThePlanAndExactlyOneIsRecommended"
+  remarks: null
+
+- execution_id: EXEC-ROADMAP-0005
+  test_case_id: TC-ROADMAP-005
+  test_case_version: 2
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ aa6d93f"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T19:18:00+05:30"
+  actual_result: >
+    Ten topics, five per subject. No run past the cap occurred while both subjects still had topics
+    left; the one longer run was the tail, where every remaining topic belonged to one subject. All
+    ranks 1..10 were present exactly once, and the plan did not open with the five consecutive
+    same-subject topics pure priority order would have produced.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for StudyRoadmapTest.noSubjectRunsLongerThanTheCapAndTheOriginalRankIsStillVisible"
+  remarks: >
+    Version 2 of this case. Version 1 asserted a flat "never more than two in a row" and failed at
+    position 9 on a legitimate tail — the service was right.
+
+- execution_id: EXEC-ROADMAP-0006
+  test_case_id: TC-ROADMAP-006
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ aa6d93f"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T19:18:00+05:30"
+  actual_result: >
+    Six answers uploaded at 90000 ms each produced estimate.source PERSONAL_TOPIC,
+    secondsPerQuestion 90 and sampleSize 6 — the real average over the real number of timed
+    attempts.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for StudyRoadmapTest.aStudentsOwnMeasuredTimeIsUsedWhenThereIsEnoughOfIt"
+  remarks: null
+
+- execution_id: EXEC-ROADMAP-0007
+  test_case_id: TC-ROADMAP-007
+  test_case_version: 2
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ aa6d93f"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T19:18:00+05:30"
+  actual_result: >
+    The estimate resolved to one of the four declared tiers with a sample size consistent with it,
+    and the topic still received positive minutes.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for StudyRoadmapTest.everyEstimateDeclaresATierWithASampleSizeConsistentWithIt"
+  remarks: >
+    Version 2. Version 1 expected DEFAULT and got COHORT_DIFFICULTY (17s, n=53) from real cohort
+    rows in the shared dev database — the ladder working, not a bug.
+
+- execution_id: EXEC-ROADMAP-0008
+  test_case_id: TC-ROADMAP-008
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ aa6d93f"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T19:18:00+05:30"
+  actual_result: >
+    The student who uploaded 120000 ms answers got PERSONAL_TOPIC; a second student reading the
+    same topic did not. A personal rate stays personal.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for StudyRoadmapTest.oneStudentsMeasuredTimeIsNotUsedAsAnothersPersonalEstimate"
+  remarks: null
+
+- execution_id: EXEC-ROADMAP-0009
+  test_case_id: TC-ROADMAP-009
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ aa6d93f"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T19:18:00+05:30"
+  actual_result: >
+    estimatedMinutes was null on exactly the steps with no question count and positive on the rest,
+    and the topic's total equalled the sum of the non-null step minutes.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for StudyRoadmapTest.stepsWithNoQuestionCountCarryNoMinutesAndAreExcludedFromTheTotal"
+  remarks: null
+
+- execution_id: EXEC-ROADMAP-0010
+  test_case_id: TC-ROADMAP-010
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ aa6d93f"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T19:18:00+05:30"
+  actual_result: >
+    hasExamDate false with examDate, daysRemaining and dailyMinutesRequired all null and a note
+    explaining why, while topics[] and totalEstimatedMinutes came back fully populated.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for StudyRoadmapTest.anExamWithNoPublishedCycleIsAnUndatedBacklog"
+  remarks: "The normal case for ten of eleven exams."
+
+- execution_id: EXEC-ROADMAP-0011
+  test_case_id: TC-ROADMAP-011
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ aa6d93f"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T19:18:00+05:30"
+  actual_result: >
+    A published cycle 40 days out gave daysRemaining 40, and dailyMinutesRequired matched
+    ceil(totalEstimatedMinutes / 40) computed from the same response.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for StudyRoadmapTest.aPublishedCycleWithAnExamDateGivesDaysRemainingAndADailyFigure"
+  remarks: >
+    Failed as an ERROR on the first run — the fixture did not stamp created_at, which is NOT NULL
+    on recruitment_cycles and has no @PrePersist. A fixture bug, fixed in the fixture.
+
+- execution_id: EXEC-ROADMAP-0012
+  test_case_id: TC-ROADMAP-012
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ aa6d93f"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T19:18:00+05:30"
+  actual_result: >
+    A cycle whose exam date was five days past reported hasExamDate true with the date, and both
+    daysRemaining and dailyMinutesRequired null. The plan itself stayed usable.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for StudyRoadmapTest.anExamDateInThePastIsReportedWithoutACountdown"
+  remarks: "Same first-run created_at fixture error as EXEC-ROADMAP-0011."
+
+- execution_id: EXEC-ROADMAP-0013
+  test_case_id: TC-ROADMAP-013
+  test_case_version: 1
+  environment: "Plain JUnit, no Spring context and no database"
+  build_version: "feature/on-device-llm-spike @ aa6d93f"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T19:18:00+05:30"
+  actual_result: >
+    All six methods passed in 0.010s. Every tier was selected under its own rule: a personal sample
+    at the floor beat a 500-strong cohort sample; one attempt below the floor fell through to
+    COHORT_TOPIC; an unpractised topic reached COHORT_DIFFICULTY; nothing measured, and a step
+    naming no difficulty, both gave DEFAULT with sampleSize 0. Minutes rounded up without rounding
+    a whole division up, and never reached zero.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for service.WorkloadEstimatorTest (6 methods)"
+  remarks: >
+    Added because the tiers cannot be asserted end to end against a database the test does not
+    control — see EXEC-ROADMAP-0007.

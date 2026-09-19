@@ -2,7 +2,7 @@
 
 **GENERATED FILE — do not hand-edit.** Regenerate with `node scripts/qa/generate-reports.js`. Every number below is computed directly from qa/*.yaml at generation time — nothing here is hardcoded or estimated.
 
-_Generated at: 2026-09-19T13:15:31.736Z_
+_Generated at: 2026-09-19T13:59:36.951Z_
 
 ## Coverage
 
@@ -23,7 +23,7 @@ _Generated at: 2026-09-19T13:15:31.736Z_
 
 ## Execution status
 
-27 real execution record(s) across 24 test case(s). A test case with no execution record stays `Not Executed`; where a case has been run more than once, the most recent record wins.
+50 real execution record(s) across 47 test case(s). A test case with no execution record stays `Not Executed`; where a case has been run more than once, the most recent record wins.
 
 | Module | Not Executed | Pass | Fail | Blocked | Skipped |
 |---|---|---|---|---|---|
@@ -34,8 +34,8 @@ _Generated at: 2026-09-19T13:15:31.736Z_
 | LEARNING-STATE | 0 | 8 | 0 | 0 | 0 |
 | ONBOARDING | 22 | 3 | 0 | 0 | 0 |
 | QUESTIONS | 64 | 0 | 0 | 0 | 0 |
-| REVISION | 10 | 0 | 0 | 0 | 0 |
-| ROADMAP | 13 | 0 | 0 | 0 | 0 |
+| REVISION | 0 | 10 | 0 | 0 | 0 |
+| ROADMAP | 0 | 13 | 0 | 0 | 0 |
 | USER-PROGRESS | 3 | 5 | 0 | 0 | 0 |
 | WEB | 23 | 0 | 0 | 0 | 0 |
 

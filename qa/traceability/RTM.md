@@ -173,11 +173,11 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 
 | Requirement | Priority | Status | Scenario(s) | Test Case(s) | Execution | Defect |
 |---|---|---|---|---|---|---|
-| REQ-REVISION-001: A student's revision schedule is readable, scoped to them, and only covers testable topics | High | Active | SCN-REVISION-001<br>SCN-REVISION-002<br>SCN-REVISION-003<br>SCN-REVISION-004 | TC-REVISION-001 (Not Executed)<br>TC-REVISION-002 (Not Executed)<br>TC-REVISION-003 (Not Executed)<br>TC-REVISION-004 (Not Executed) |  |  |
-| REQ-REVISION-002: A due date comes from a versioned, declared interval model | High | Active | SCN-REVISION-005 | TC-REVISION-005 (Not Executed) |  |  |
-| REQ-REVISION-003: The rung is scaled by how well the student currently knows the topic | High | Active | SCN-REVISION-006<br>SCN-REVISION-008 | TC-REVISION-006 (Not Executed)<br>TC-REVISION-008 (Not Executed) |  |  |
-| REQ-REVISION-004: A topic with nothing to revise is said to be unscheduled, not given a due date | Medium | Active | SCN-REVISION-007 | TC-REVISION-007 (Not Executed)<br>TC-REVISION-008 (Not Executed) |  |  |
-| REQ-REVISION-005: Due work leads the plan, and re-testing resolves to something the app can open | High | Active | SCN-REVISION-005<br>SCN-REVISION-009<br>SCN-REVISION-010 | TC-REVISION-005 (Not Executed)<br>TC-REVISION-009 (Not Executed)<br>TC-REVISION-010 (Not Executed) |  |  |
+| REQ-REVISION-001: A student's revision schedule is readable, scoped to them, and only covers testable topics | High | Active | SCN-REVISION-001<br>SCN-REVISION-002<br>SCN-REVISION-003<br>SCN-REVISION-004 | TC-REVISION-001 (Pass)<br>TC-REVISION-002 (Pass)<br>TC-REVISION-003 (Pass)<br>TC-REVISION-004 (Pass) | EXEC-REVISION-0001<br>EXEC-REVISION-0002<br>EXEC-REVISION-0003<br>EXEC-REVISION-0004 |  |
+| REQ-REVISION-002: A due date comes from a versioned, declared interval model | High | Active | SCN-REVISION-005 | TC-REVISION-005 (Pass) | EXEC-REVISION-0005 |  |
+| REQ-REVISION-003: The rung is scaled by how well the student currently knows the topic | High | Active | SCN-REVISION-006<br>SCN-REVISION-008 | TC-REVISION-006 (Pass)<br>TC-REVISION-008 (Pass) | EXEC-REVISION-0006<br>EXEC-REVISION-0008 |  |
+| REQ-REVISION-004: A topic with nothing to revise is said to be unscheduled, not given a due date | Medium | Active | SCN-REVISION-007 | TC-REVISION-007 (Pass)<br>TC-REVISION-008 (Pass) | EXEC-REVISION-0007<br>EXEC-REVISION-0008 |  |
+| REQ-REVISION-005: Due work leads the plan, and re-testing resolves to something the app can open | High | Active | SCN-REVISION-005<br>SCN-REVISION-009<br>SCN-REVISION-010 | TC-REVISION-005 (Pass)<br>TC-REVISION-009 (Pass)<br>TC-REVISION-010 (Pass) | EXEC-REVISION-0005<br>EXEC-REVISION-0009<br>EXEC-REVISION-0010 |  |
 
 ## ROADMAP
 
@@ -185,11 +185,11 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 
 | Requirement | Priority | Status | Scenario(s) | Test Case(s) | Execution | Defect |
 |---|---|---|---|---|---|---|
-| REQ-ROADMAP-001: A student's roadmap is readable, scoped to them, and never plans the impossible | High | Active | SCN-ROADMAP-001<br>SCN-ROADMAP-002<br>SCN-ROADMAP-003 | TC-ROADMAP-001 (Not Executed)<br>TC-ROADMAP-002 (Not Executed)<br>TC-ROADMAP-003 (Not Executed) |  |  |
-| REQ-ROADMAP-002: The plan is ordered by exam priority, balanced across subjects, and the reordering is visible | High | Active | SCN-ROADMAP-004<br>SCN-ROADMAP-005 | TC-ROADMAP-004 (Not Executed)<br>TC-ROADMAP-005 (Not Executed) |  |  |
-| REQ-ROADMAP-003: Every workload estimate declares where it came from | High | Active | SCN-ROADMAP-006<br>SCN-ROADMAP-007<br>SCN-ROADMAP-008 | TC-ROADMAP-006 (Not Executed)<br>TC-ROADMAP-007 (Not Executed)<br>TC-ROADMAP-013 (Not Executed)<br>TC-ROADMAP-008 (Not Executed) |  |  |
-| REQ-ROADMAP-004: A step that is not a question set carries no invented duration | Medium | Active | SCN-ROADMAP-009 | TC-ROADMAP-009 (Not Executed) |  |  |
-| REQ-ROADMAP-005: The plan is dated only when the exam genuinely has a date | Medium | Active | SCN-ROADMAP-010<br>SCN-ROADMAP-011<br>SCN-ROADMAP-012 | TC-ROADMAP-010 (Not Executed)<br>TC-ROADMAP-011 (Not Executed)<br>TC-ROADMAP-012 (Not Executed) |  |  |
+| REQ-ROADMAP-001: A student's roadmap is readable, scoped to them, and never plans the impossible | High | Active | SCN-ROADMAP-001<br>SCN-ROADMAP-002<br>SCN-ROADMAP-003 | TC-ROADMAP-001 (Pass)<br>TC-ROADMAP-002 (Pass)<br>TC-ROADMAP-003 (Pass) | EXEC-ROADMAP-0001<br>EXEC-ROADMAP-0002<br>EXEC-ROADMAP-0003 |  |
+| REQ-ROADMAP-002: The plan is ordered by exam priority, balanced across subjects, and the reordering is visible | High | Active | SCN-ROADMAP-004<br>SCN-ROADMAP-005 | TC-ROADMAP-004 (Pass)<br>TC-ROADMAP-005 (Pass) | EXEC-ROADMAP-0004<br>EXEC-ROADMAP-0005 |  |
+| REQ-ROADMAP-003: Every workload estimate declares where it came from | High | Active | SCN-ROADMAP-006<br>SCN-ROADMAP-007<br>SCN-ROADMAP-008 | TC-ROADMAP-006 (Pass)<br>TC-ROADMAP-007 (Pass)<br>TC-ROADMAP-013 (Pass)<br>TC-ROADMAP-008 (Pass) | EXEC-ROADMAP-0006<br>EXEC-ROADMAP-0007<br>EXEC-ROADMAP-0013<br>EXEC-ROADMAP-0008 |  |
+| REQ-ROADMAP-004: A step that is not a question set carries no invented duration | Medium | Active | SCN-ROADMAP-009 | TC-ROADMAP-009 (Pass) | EXEC-ROADMAP-0009 |  |
+| REQ-ROADMAP-005: The plan is dated only when the exam genuinely has a date | Medium | Active | SCN-ROADMAP-010<br>SCN-ROADMAP-011<br>SCN-ROADMAP-012 | TC-ROADMAP-010 (Pass)<br>TC-ROADMAP-011 (Pass)<br>TC-ROADMAP-012 (Pass) | EXEC-ROADMAP-0010<br>EXEC-ROADMAP-0011<br>EXEC-ROADMAP-0012 |  |
 
 ## USER-PROGRESS
 
@@ -233,5 +233,5 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 | Total scenarios | 271 |
 | Total test cases | 293 |
 | Requirements with zero scenarios | 0  |
-| Real executions recorded | 27 |
+| Real executions recorded | 50 |
 | Real defects logged | 1 |

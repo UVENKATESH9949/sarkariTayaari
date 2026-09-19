@@ -121,8 +121,55 @@ to it. Additive; the `/api/me/learning-state` contract is unchanged.
 
 ## Verified
 
-*(filled in below from the real run — see "Verification" section)*
+**`StudyRoadmapTest` 12/12 and `WorkloadEstimatorTest` 6/6**, against the real Neon dev database
+(857.7s and 0.010s respectively), in a run that also carried Phase 7 — **32 tests, 0 failures,
+BUILD SUCCESS**. `mvn compile` / `test-compile` clean throughout.
+
+**The first run did not pass, and every one of the four failures was a test being wrong rather than
+the service.** That is worth the space, because two of them are instructive:
+
+1. **Two ERRORs**: a fixture saved a `RecruitmentCycle` straight through its repository and hit
+   `NOT NULL` on `created_at`. That entity has no `@PrePersist` — the real write path stamps it in
+   `ExamGuideService`. A fixture bug.
+2. **`withNothingMeasuredTheEstimateIsADeclaredDefault` expected `DEFAULT` and got
+   `COHORT_DIFFICULTY` — 17 seconds, n=53.** The shared dev database genuinely holds cohort
+   timings, so the ladder had correctly found a real tier for a topic the *student* had never
+   touched. **A tier-selection rule cannot be asserted against a database the test does not
+   control.** The rules moved to `WorkloadEstimatorTest` with constructed samples, where every
+   branch — including ones the real database can no longer reach — is genuinely exercised; the
+   round trip now asserts tier/sample-size consistency instead. Extracting `WorkloadEstimator` for
+   Phase 7 paid for itself here: the same rules now take 0.010s to assert instead of ~60s.
+3. **The subject-balance test asserted "never more than two topics in a row from one subject" and
+   failed at position 9.** With five topics per subject and a cap of two, the tail was `B,B,B` —
+   once one subject is exhausted, the remainder *must* run consecutively. That is the service's own
+   documented rule ("reordering cannot invent variety the syllabus does not have"), so the
+   assertion was relaxed to the real contract: a run past the cap is legitimate only when every
+   topic from that point on belongs to one subject. It also now asserts the cap genuinely bites
+   where there *is* a choice, so the test cannot pass on a plan the interleave never touched.
+
+**Also worth knowing, and disclosed rather than buried:** that 17-seconds-per-question cohort figure
+is almost certainly load-test fixture data, not humans. Cohort estimates on the shared dev database
+are contaminated by the ~35,700 synthetic questions and the automated-test accounts, so
+`COHORT_TOPIC` / `COHORT_DIFFICULTY` numbers there are not meaningful as measurements of real
+students — only as proof that the tier resolves.
+
+**QA**: new `ROADMAP` module — `REQ-ROADMAP-001..005`, `SCN-ROADMAP-001..012`,
+`TC-ROADMAP-001..013`, plus `EXEC-ROADMAP-0001..0013` (all Pass) for the runs that genuinely
+happened. Two cases carry a `test_case_version: 2` and record in their own remarks why they were
+reframed, rather than being quietly corrected.
 
 ## Not verified
 
-*(see below)*
+- **No consumer exists.** Neither `mobile/` nor `web/` calls this endpoint; it ships with no caller
+  by design, exactly as Phase 3 did.
+- **No `curl` against a real account with a large history**, and **no performance measurement**. The
+  cohort queries scan attempt rows across all students, bounded to 365 days, and are the most
+  expensive thing this read does. If that becomes a problem the answer is a small periodically-
+  rebuilt aggregate — the shape `user_topic_health` already uses — not a shorter window, which
+  would change what the figure means.
+- **Per-difficulty question availability is not checked.** A step may ask for 10 questions at the
+  easiest difficulty when the bank holds fewer *at that difficulty*, even though the topic as a
+  whole has plenty. The topic-level zero-question rule holds; this narrower case does not, and
+  closing it needs a new grouped query.
+- **The subject-balance cap of 2 is a judgement**, not a measured preference, and no student has
+  been asked whether a plan balanced this way is better than one in pure priority order.

@@ -1,0 +1,171 @@
+# REVISION — execution records, 2026-09-19 (TASK-3201, Phase 7)
+#
+# All ten are automated runs from the same invocation as the ROADMAP records — 32 tests,
+# 0 failures, BUILD SUCCESS. RevisionPlanTest took 463.1s against the real Neon dev database;
+# RevisionLadderTest, which needs no Spring context, took 0.009s.
+#
+# One case failed on the first run, and the service was right: TC-REVISION-009 practised a
+# two-question topic in a single session, which cannot reach the health model's evidence floor, so
+# the topic came back INSUFFICIENT_DATA and therefore NOT_SCHEDULED with no re-test. The fixture
+# now practises the same two questions across three sessions. Not a defect — no fault in shipped
+# behaviour, and it incidentally confirmed end to end that an unjudgeable topic is left unscheduled
+# rather than given a due date.
+
+- execution_id: EXEC-REVISION-0001
+  test_case_id: TC-REVISION-001
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ aa6d93f"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T19:18:00+05:30"
+  actual_result: >
+    An anonymous GET /api/me/revision-plan?examCode={code} returned 401, and examCode is the
+    controller's only parameter.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for RevisionPlanTest.requiresASignedInUser"
+  remarks: null
+
+- execution_id: EXEC-REVISION-0002
+  test_case_id: TC-REVISION-002
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ aa6d93f"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T19:18:00+05:30"
+  actual_result: "An unknown exam code returned 404, not an empty schedule."
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for RevisionPlanTest.unknownExamIs404"
+  remarks: null
+
+- execution_id: EXEC-REVISION-0003
+  test_case_id: TC-REVISION-003
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ aa6d93f"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T19:18:00+05:30"
+  actual_result: >
+    The topic with no questions was absent from topics[] entirely — not merely unscheduled — while
+    the practicable one was present.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for RevisionPlanTest.aTopicWithNoQuestionsIsNotInThePlanAtAll"
+  remarks: null
+
+- execution_id: EXEC-REVISION-0004
+  test_case_id: TC-REVISION-004
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ aa6d93f"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T19:18:00+05:30"
+  actual_result: >
+    The same topic was DUE for the student who practised it 90 days ago and NOT_SCHEDULED with
+    reason NEVER_PRACTISED for a second student.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for RevisionPlanTest.oneStudentsScheduleIsNotAnothers"
+  remarks: null
+
+- execution_id: EXEC-REVISION-0005
+  test_case_id: TC-REVISION-005
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ aa6d93f"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T19:18:00+05:30"
+  actual_result: >
+    The topic practised 90 days ago came back DUE with a positive daysOverdue, a null daysUntilDue,
+    a real dueAt, an intervalDays among the four rungs and a non-blank rungReason; the topic
+    practised today came back NOT_DUE with daysUntilDue set and daysOverdue null. The overdue topic
+    led topics[] despite the fresher one carrying more than twice its exam priority, and dueCount
+    was 1 with a positive totalDueMinutes.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for RevisionPlanTest.aTopicLastPractisedLongAgoIsDueAndLeadsThePlan"
+  remarks: "The decisive case for the phase: urgency of forgetting outranks exam weight."
+
+- execution_id: EXEC-REVISION-0006
+  test_case_id: TC-REVISION-006
+  test_case_version: 1
+  environment: "Plain JUnit, no Spring context and no database"
+  build_version: "feature/on-device-llm-spike @ aa6d93f"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T19:18:00+05:30"
+  actual_result: >
+    NEEDS_ATTENTION and NEEDS_REVISION both resolved to rung 1 at 3 days; DEVELOPING and IMPROVING
+    to rung 2 at 7; STRONG alone to rung 3 at 21; STRONG with MASTERED to rung 4 at 45, reason
+    STRONG_AND_MASTERED. The ladder was strictly increasing across all four.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for service.RevisionLadderTest (4 of 6 methods)"
+  remarks: >
+    Asserts the ladder behaves as DECIDED. It does not assert that 3/7/21/45 are right for this
+    product — those intervals are borrowed from published research and are not measured here.
+
+- execution_id: EXEC-REVISION-0007
+  test_case_id: TC-REVISION-007
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ aa6d93f"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T19:18:00+05:30"
+  actual_result: >
+    An untouched topic returned status NOT_SCHEDULED with reason NEVER_PRACTISED, and dueAt,
+    intervalDays and retest all null.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for RevisionPlanTest.anUntouchedTopicIsNotScheduledAndSaysWhy"
+  remarks: null
+
+- execution_id: EXEC-REVISION-0008
+  test_case_id: TC-REVISION-008
+  test_case_version: 1
+  environment: "Plain JUnit, no Spring context and no database"
+  build_version: "feature/on-device-llm-spike @ aa6d93f"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T19:18:00+05:30"
+  actual_result: >
+    A null performance state, INSUFFICIENT_DATA, and an unrecognised state string all produced no
+    rung — none fell through onto the shortest or longest interval.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for service.RevisionLadderTest (2 of 6 methods)"
+  remarks: "Guards a future health-model state from silently inheriting someone else's spacing."
+
+- execution_id: EXEC-REVISION-0009
+  test_case_id: TC-REVISION-009
+  test_case_version: 2
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ aa6d93f"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T19:18:00+05:30"
+  actual_result: >
+    retest.action was TIMED_PRACTICE with a positive questionCount no greater than the two
+    questions the topic holds, a questionCountBasis of RECOMMENDED_STEP or DEFAULT, positive
+    estimatedMinutes, and an estimate.source among the four declared tiers.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for RevisionPlanTest.theRetestIsTimedPracticeAndNeverExceedsTheQuestionsAvailable"
+  remarks: >
+    Version 2. Version 1 practised the two-question topic in a single session, which cannot reach
+    the health model's evidence floor, so the topic was correctly INSUFFICIENT_DATA and therefore
+    unscheduled with a null retest. The fixture now spreads the same two questions across three
+    sessions.
+
+- execution_id: EXEC-REVISION-0010
+  test_case_id: TC-REVISION-010
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ aa6d93f"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T19:18:00+05:30"
+  actual_result: >
+    With the only topic practised today, dueCount was 0 and totalDueMinutes was null rather than
+    zero, and intervalBasis was SPACED_REPETITION_LADDER_V1.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for RevisionPlanTest.whenNothingIsDueTheTotalIsNullRatherThanZero"
+  remarks: null
