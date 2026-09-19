@@ -1,0 +1,161 @@
+# DAILYPLAN — execution records, 2026-09-19 (TASK-3301, Phase 5)
+#
+# All nine are automated runs against the real Neon dev database:
+# `mvn clean test -Dtest=DailyPlanTest` — 9 tests, 0 failures, BUILD SUCCESS, 670.4s.
+# Migrations V48 and V49 applied cleanly to that database on the first of these runs (3.868s).
+#
+# IT TOOK THREE RUNS, and the failures are worth recording because only one was a product bug:
+#
+#   RUN 1 — 5 of 9 failed, all 500s, one cause. UserPreparationProfile was first mapped with
+#   @MapsId onto a @OneToOne User, which makes Hibernate treat the user as part of this row's
+#   identity and cascade a persist into it. The User handed in by AuthService was loaded in an
+#   earlier transaction and is therefore detached, so every write died with "detached entity passed
+#   to persist: User". Fixed by storing a bare userId on both new entities — neither needs to
+#   navigate to the user, and the database still enforces the foreign key. A REAL defect in this
+#   session's own code, found by the tests written to cover it, fixed before any build existed that
+#   anyone could run — so not logged in qa/defects/.
+#
+#   RUN 2 — 3 of 9 failed, none of them the planner. Two were SocketTimeoutException while the
+#   fixtures were still creating topics (the remote database being slow). The third was
+#   NoClassDefFoundError on WeaknessRadarService$1 — the synthetic class javac generates for a
+#   switch over an enum — missing from target/classes because an earlier `mvn test-compile` in this
+#   same session had been run while a test suite was still executing, corrupting the build output.
+#   That is the concurrent-Maven trap this project's own STATUS.md already documents; `mvn clean` resolved
+#   it. An environment fault, not a code fault.
+#
+#   RUN 3 — 9 of 9, clean.
+#
+# Also fixed between runs 1 and 2: the suite took 3652s (61 minutes) because its fixtures created
+# 305 questions one API call at a time, at roughly 14 seconds each, none of which anything asserted
+# on. Cut to 33; the run is now 670s and exercises exactly the same paths.
+
+- execution_id: EXEC-DAILYPLAN-0001
+  test_case_id: TC-DAILYPLAN-001
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ 0ffb1b1 + uncommitted TASK-3301 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T22:05:00+05:30"
+  actual_result: >
+    The uploaded profile came back with stored true and its own values, and a second account reading
+    the same endpoint received profile null rather than the first account's row.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for DailyPlanTest.theProfileRoundTripsAndIsScopedToItsOwner"
+  remarks: "Failed on run 1 with a 500 — the @MapsId cascade described in this file's header."
+
+- execution_id: EXEC-DAILYPLAN-0002
+  test_case_id: TC-DAILYPLAN-002
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ 0ffb1b1 + uncommitted TASK-3301 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T22:05:00+05:30"
+  actual_result: "A dailyStudyTime of SEVEN_HOURS_ISH was rejected with 400 and nothing was stored."
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for DailyPlanTest.anUnknownStudyTimeBandIsRejected"
+  remarks: "Passed on every run — validation happens before any write."
+
+- execution_id: EXEC-DAILYPLAN-0003
+  test_case_id: TC-DAILYPLAN-003
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ 0ffb1b1 + uncommitted TASK-3301 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T22:05:00+05:30"
+  actual_result: >
+    An upload dated three days ago returned stored false against a profile written a minute earlier,
+    the response carried the winning values, and a subsequent GET confirmed the stale edit had
+    changed nothing.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for DailyPlanTest.anOlderEditDoesNotOverwriteANewerOneAndTheLoserIsToldWhatWon"
+  remarks: "The rule that makes an offline edit uploaded days later behave correctly."
+
+- execution_id: EXEC-DAILYPLAN-0004
+  test_case_id: TC-DAILYPLAN-004
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ 0ffb1b1 + uncommitted TASK-3301 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T22:05:00+05:30"
+  actual_result: >
+    A ONE_TO_TWO profile produced a 90-minute budget with basis STATED_BAND; the assigned tasks
+    summed within it; every task named a real topic, carried positive minutes, status ASSIGNED and
+    an estimate tier from the shared workload ladder; and displayOrder was ascending.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for DailyPlanTest.aOneToTwoHourStudentGetsADayThatFitsTheBudget"
+  remarks: "Gate 3's exit criterion. Failed on runs 1 and 2 — the cascade bug, then the stale build."
+
+- execution_id: EXEC-DAILYPLAN-0005
+  test_case_id: TC-DAILYPLAN-005
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ 0ffb1b1 + uncommitted TASK-3301 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T22:05:00+05:30"
+  actual_result: >
+    An account with no profile received a plan with dailyStudyTime null, minutes 60 and basis
+    DEFAULT, and a non-empty task list.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for DailyPlanTest.withNoProfileTheBudgetIsADeclaredDefault"
+  remarks: "Errored on run 2 with a fixture-creation read timeout, not a product failure."
+
+- execution_id: EXEC-DAILYPLAN-0006
+  test_case_id: TC-DAILYPLAN-006
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ 0ffb1b1 + uncommitted TASK-3301 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T22:05:00+05:30"
+  actual_result: >
+    The first read reported generated true; the second reported false and returned the identical
+    task ids in the same order with the same total minutes.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for DailyPlanTest.asecondReadReturnsTheSamePlanRatherThanReplanning"
+  remarks: "Errored on run 2 with a fixture-creation read timeout, not a product failure."
+
+- execution_id: EXEC-DAILYPLAN-0007
+  test_case_id: TC-DAILYPLAN-007
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ 0ffb1b1 + uncommitted TASK-3301 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T22:05:00+05:30"
+  actual_result: "zone=Mars/Olympus returned 400 rather than silently planning a UTC day."
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for DailyPlanTest.anUnknownTimeZoneIsRejected"
+  remarks: null
+
+- execution_id: EXEC-DAILYPLAN-0008
+  test_case_id: TC-DAILYPLAN-008
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ 0ffb1b1 + uncommitted TASK-3301 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T22:05:00+05:30"
+  actual_result: "An exam whose topics carry no questions returned 200 with no tasks and 0 planned minutes."
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for DailyPlanTest.anExamWithNothingPracticableGetsAnEmptyPlanRatherThanAnError"
+  remarks: >
+    Passed on every run, including run 1 — it is the one plan test that never reaches a write, which
+    is what pointed at the persist cascade as the common cause.
+
+- execution_id: EXEC-DAILYPLAN-0009
+  test_case_id: TC-DAILYPLAN-009
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ 0ffb1b1 + uncommitted TASK-3301 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-19T22:05:00+05:30"
+  actual_result: "An anonymous GET /api/me/daily-plan returned 401."
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for DailyPlanTest.requiresASignedInUser"
+  remarks: null

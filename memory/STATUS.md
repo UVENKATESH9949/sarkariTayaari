@@ -1,14 +1,101 @@
 # Project Status — Resume Point
 
-**Last updated:** 2026-09-19 (2) — **Phases 4 and 7 of the personalization program shipped, and
-EVERYTHING IS COMMITTED at last.** Five of seven phases are now done: Gate 1 (data trustworthy) and
-Gate 2 (state defined) are both clean, and the two phases that depend only on Phase 3 — the roadmap
-with workload (TASK-3101) and revision timing (TASK-3201) — are built, **32/32 tests green**, and
-committed in seven commits on `feature/on-device-llm-spike`. **No migration in either.** See
-**"Session of 2026-09-19 (2)"** immediately below.
+**Last updated:** 2026-09-19 (3) — **Phase 5 shipped: the daily plan (TASK-3301), and 🟡 Gate 3 is
+clean.** Six of the personalization program's seven phases are now done; only **Phase 6 (adaptive
+re-planning)** remains, and it is unblocked. The blocker that had stopped Phase 5 — the student's
+study time never reaching the server — was **decided by the owner (D5.1: the phone sends the profile
+up)** and is built, with migrations **V48** and **V49**. `DailyPlanTest` **9/9** against the real
+Neon dev database.
 
-**Next: Phase 5, and it is blocked on a decision rather than on effort — see the end of that
-section.**
+**The one thing to do first next session: mobile still does not send the profile.** The server side
+is complete and tested, but no device uploads it, so every real account currently falls back to the
+declared 60-minute default. Until that lands, D5.1 is only half-implemented.
+
+## Session of 2026-09-19 (3) — Phase 5, the daily plan
+
+**D5.1, the blocker, decided by the owner in plain terms:** the phone sends the preparation profile
+to the server, rather than the server sending down an unscheduled plan for the device to allocate.
+The rejected option would have needed the same allocation logic written twice — mobile and `web/` —
+with a parity script to keep them honest, which is the tax this program has avoided since D3.2.
+**Migration 0027 had predicted this exact table** in its own comment ("an additive backend table plus
+an endpoint plus a conflict rule"); nothing in it had to move.
+
+**THE FINDING THAT SHAPED THE PHASE: the student never states a number of minutes.**
+`DAILY_STUDY_TIMES` is a set of **bands** — `UNDER_1H` / `ONE_TO_TWO` / `TWO_TO_FOUR` /
+`FOUR_TO_SIX` / `SIX_PLUS` — so a planner filling "today's 90 minutes" is working from a figure
+nobody supplied. Handled the way Phase 4 handled workload: a declared figure per band (45 / 90 / 180
+/ 300 / **360, the floor of an open-ended band**), reported *beside* the band so the assumption is
+visible. No profile at all budgets a stated 60 and says `basis: "DEFAULT"`. **Whether the mid-points
+are right is unmeasured** and recorded as such.
+
+**Shipped.** **V48 `user_preparation_profiles`** + `GET`/`POST /api/me/preparation-profile` —
+last-write-wins on a **client-supplied** `updatedAt`, because an edit made offline and uploaded three
+days later happened three days ago; stamping on arrival would let a stale edit win by syncing second.
+A losing upload is a `200 stored:false` **carrying the winner**, so the losing device corrects itself
+in the same round trip. **V49 `study_tasks`** + `GET /api/me/daily-plan?examCode=&zone=` — revision
+first (capped at **half** the day so a backlog cannot consume it), then new ground, both in the order
+Phases 7 and 4 already set. **One step per topic**, never a topic's whole multi-day ladder. An
+unknown zone is a 400, never a silent UTC fallback that would plan a different calendar day.
+
+**A day is planned once**, and this is the one phase of the program that **stores** its output.
+Every other phase derives on read deliberately; here the reason is Phase 6: without a record of what
+was *assigned*, "no Percentage practice this week" is four situations nothing else in the schema can
+separate — never assigned / ignored / abandoned / done offline and unsynced. So `study_tasks` is a
+historical fact, not a cache that can drift.
+
+**Verified: `DailyPlanTest` 9/9, BUILD SUCCESS, 670.4s** against the real Neon dev database, with
+**V48 and V49 applied cleanly to it** (3.868s). Gate 3's own wording is now a passing assertion: a
+`ONE_TO_TWO` student gets a 90-minute budget, tasks summing inside it, each naming a practicable
+topic and carrying a declared estimate tier. Also proven: the profile round-trips and stays scoped to
+its owner; an older edit loses and is told what won; an invented band is rejected before reaching the
+planner; a second read returns **the same task ids**; an unknown zone is a 400; an exam with nothing
+practicable returns an empty plan rather than an error.
+
+**IT TOOK THREE RUNS, and only one failure was a product bug — the other two are process lessons.**
+
+1. **Run 1, 5 of 9 failed, all 500s, one cause.** `UserPreparationProfile` was first mapped with
+   `@MapsId` onto a `@OneToOne User`, which makes Hibernate treat the user as part of the row's
+   identity and **cascade a persist into it** — and the `User` from `AuthService` is loaded in an
+   earlier transaction, so it is detached. Every write died with *"detached entity passed to persist:
+   User"*. Fixed by storing a bare `userId` on **both** new entities; neither needs to navigate to
+   the user and the FK still holds. **The tell was which test passed**: the only plan test that never
+   reaches a write was green throughout.
+2. **Run 2, 3 of 9 failed, none of them the planner.** Two were socket timeouts creating fixtures.
+   The third was `NoClassDefFoundError: WeaknessRadarService$1` — the synthetic class javac generates
+   for a **switch over an enum** — missing from `target/classes` because an earlier `mvn test-compile`
+   **ran while a test suite was still executing**. That is the concurrent-Maven trap this very file
+   already documents, walked into anyway, and then read past in the first log. `mvn clean` fixed it.
+   **If a class that obviously exists is "not found", suspect `target/` before suspecting the code.**
+3. **A fixture cost worth not repeating**: run 1 took **61 minutes** because the fixtures created
+   **305 questions** one API call at a time (~14s each against the remote database) that nothing
+   asserted on. The roadmap's steps ask for a fixed question count whatever the bank holds, so three
+   per topic exercises the same paths as thirty. Cut to 33 → 670s. The reason is written into the
+   test class.
+
+**QA**: new `DAILYPLAN` module — `REQ-DAILYPLAN-001..004`, `SCN-DAILYPLAN-001..009`,
+`TC-DAILYPLAN-001..009`, plus `EXEC-DAILYPLAN-0001..0009` (all Pass). RTM 144/271/293 ->
+**148/280/302**.
+
+**NOT verified — and the first item is the important one:**
+
+- **Mobile does not send the profile.** Nothing on a device uploads it, so every real account falls
+  back to the 60-minute default and D5.1 is only half-implemented. **Start here.**
+- **No consumer for the plan** — `mobile/` and `web/` do not call it, same as Phases 3, 4 and 7.
+- **No task can be completed.** `status` is always `ASSIGNED`; there is no endpoint to mark one done
+  or skipped, so the four-way distinction `study_tasks` exists to preserve is *recordable* but not
+  yet *recorded*.
+- **The band mid-points and the half-a-day revision cap are judgements**, not measurements.
+- No performance measurement, no run against a large-history account, no device or browser pass.
+
+**NEXT, in order:**
+
+1. **Send the profile from the phone** (and from `web/`). Small, and it is what makes Phase 5 real.
+2. **Give the four endpoints a consumer** — `learning-state`, `study-roadmap`, `revision-plan` and
+   `daily-plan` all work and none is visible to a student. This is now the program's largest gap.
+3. **Phase 6 (adaptive re-planning)** — unblocked, since `study_tasks` now exists. It also wants a
+   way to mark a task done, which is the natural companion to item 2.
+4. Still outstanding from earlier sessions: `web/` has never been deployed, and production still
+   shares one Neon database with dev.
 
 ## Session of 2026-09-19 (2) — Phases 4 and 7, and the first commits since 2026-09-15
 

@@ -1,0 +1,15 @@
+# DAILYPLAN module — defects
+#
+# Empty by design. A defect here must trace to a real failed execution in qa/execution/, never to a
+# bug found while writing the code. See qa/defects/auth.yaml for the schema.
+#
+# The @MapsId persist-cascade bug that failed 5 of 9 tests on this phase's first run is NOT recorded
+# here: it was found by the tests written to cover the change, in the same session, before any build
+# existed that anyone could run. The full account is in qa/execution/2026-09-19-dailyplan.yaml's
+# header and in reports/38-daily-task-assignment/.
+#
+# Nor is the NoClassDefFoundError from run 2: that was a corrupted target/ directory caused by
+# running `mvn test-compile` while a test suite was still executing — an environment fault this
+# project's own notes already warn about, resolved by `mvn clean`.
+
+[]

@@ -86,14 +86,28 @@ public class StudyRoadmapService {
     }
 
     public StudyRoadmapResponse roadmapFor(User user, String examCode, OffsetDateTime now) {
-        AssembledState assembled = learningState.assemble(user, examCode, now);
+        return roadmapFrom(learningState.assemble(user, examCode, now),
+                estimator.load(user.getId(), now), now);
+    }
 
+    /**
+     * The same roadmap, built from state and timings a caller already has.
+     *
+     * <p>Exists for {@link DailyPlanService}, which needs the roadmap and the revision plan in one
+     * request. Letting it call {@link #roadmapFor} and {@code RevisionPlanService.planFor} would
+     * assemble the learning state twice per day-plan — and since that lazily rebuilds health rows,
+     * twice would mean two rounds of DELETE-and-rewrite, not two reads. Same reasoning that put
+     * {@code assemble} on {@link LearningStateService} in the first place.
+     */
+    public StudyRoadmapResponse roadmapFrom(AssembledState assembled,
+                                            WorkloadEstimator.Timing timing,
+                                            OffsetDateTime now) {
         Map<UUID, RadarTopic> radarByTopic = new HashMap<>();
         for (RadarTopic t : assembled.radar().topics()) {
             radarByTopic.put(t.topicId(), t);
         }
 
-        WorkloadEstimator.Timing timing = estimator.load(user.getId(), now);
+        String examCode = assembled.state().examCode();
 
         /*
          * A topic with no practicable questions is excluded outright rather than listed with

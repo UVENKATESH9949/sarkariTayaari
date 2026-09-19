@@ -94,14 +94,21 @@ public class RevisionPlanService {
     }
 
     public RevisionPlanResponse planFor(User user, String examCode, OffsetDateTime now) {
-        AssembledState assembled = learningState.assemble(user, examCode, now);
+        return planFrom(learningState.assemble(user, examCode, now),
+                estimator.load(user.getId(), now), now);
+    }
 
+    /**
+     * The same plan, built from state and timings a caller already has — see
+     * {@code StudyRoadmapService.roadmapFrom} for why this overload exists.
+     */
+    public RevisionPlanResponse planFrom(AssembledState assembled,
+                                         WorkloadEstimator.Timing timing,
+                                         OffsetDateTime now) {
         Map<UUID, RadarTopic> radarByTopic = new HashMap<>();
         for (RadarTopic t : assembled.radar().topics()) {
             radarByTopic.put(t.topicId(), t);
         }
-
-        WorkloadEstimator.Timing timing = estimator.load(user.getId(), now);
 
         List<RevisionTopic> topics = new ArrayList<>();
         for (TopicLearningState t : assembled.state().topics()) {

@@ -1,0 +1,183 @@
+# DAILYPLAN module — requirement repository
+#
+# Scope: PreparationProfileController (GET/POST /api/me/preparation-profile) and
+# DailyPlanController (GET /api/me/daily-plan) — TASK-3301, Phase 5 of the personalization program.
+# Both in one module because the profile exists only to feed the planner: the endpoint was built in
+# the same change, for that reason, and splitting them would hide the dependency.
+#
+# The caveat to carry forward: the student never states a number of minutes. Onboarding asks for a
+# BAND (UNDER_1H, ONE_TO_TWO, ...), so every minutes figure the planner uses is its own assumption,
+# declared in the payload rather than presented as the student's answer.
+#
+# automation_status is evidence-based, per qa/README.md's standing rule.
+
+- id: REQ-DAILYPLAN-001
+  feature: The preparation profile reaches the server and stays scoped to its owner
+  module: DAILYPLAN
+  system: [Backend]
+  source_doc: api/PREPARATION-PROFILE.md
+  source_section: "GET / POST /api/me/preparation-profile"
+  description: >
+    A signed-in student can upload and read back their preparation profile — display name, primary
+    exam, stage, target year, preparation level and daily study time. The acting student comes from
+    the bearer token; there is no user-id parameter anywhere.
+  business_rule: >
+    Onboarding still runs before sign-in and still writes to device-local app_preferences. This row
+    is the account-wide copy and is authoritative for PLANNING only, which is narrower than being
+    authoritative for the profile. An account that never uploaded one has no row, and that is a real
+    answer rather than an error.
+  actor: Signed-in student
+  preconditions:
+    - "A valid bearer token"
+  inputs:
+    - "A profile body carrying the device's own updatedAt"
+  expected_outputs:
+    - "200 with the stored profile; GET returns {profile: null} when none exists"
+  validations:
+    - "401 without a token"
+    - "An unknown preparationLevel or dailyStudyTime is rejected with 400"
+    - "updatedAt is required — without it two devices cannot be resolved"
+  permissions:
+    - "User token required; one account cannot read or overwrite another's profile"
+  dependencies: [REQ-AUTH-001]
+  error_conditions:
+    - "A targetYear outside 2000-2100 is rejected"
+  edge_conditions:
+    - "Every field except the timestamps may be null — a student can finish onboarding having skipped a step"
+    - "An upload replaces every field, including with null, so a cleared value can reach the server"
+  offline_behavior: "The device keeps its own copy; onboarding is unaffected by being signed out"
+  acceptance_criteria:
+    - "A profile round-trips, and a second account reading the same endpoint sees only its own"
+    - "A value outside the app's own vocabulary never reaches the planner"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    DailyPlanTest.theProfileRoundTripsAndIsScopedToItsOwner and .anUnknownStudyTimeBandIsRejected.
+
+- id: REQ-DAILYPLAN-002
+  feature: Two devices disagreeing resolve on when the edit happened, not on who synced last
+  module: DAILYPLAN
+  system: [Backend]
+  source_doc: api/PREPARATION-PROFILE.md
+  source_section: "Last-write-wins"
+  description: >
+    An upload whose updatedAt is older than the stored row does not overwrite it. The response
+    reports stored: false and returns the winning profile.
+  business_rule: >
+    updatedAt is supplied by the device, not stamped on arrival, because an edit made offline and
+    uploaded three days later happened three days ago. Stamping on arrival would let a stale edit
+    win purely by syncing second. Same rule user_bookmarks and followed_exams already apply.
+  actor: Signed-in student with more than one device
+  preconditions:
+    - "A stored profile with a recent updatedAt"
+  inputs:
+    - "A second upload carrying an older updatedAt"
+  expected_outputs:
+    - "200 with stored: false and the winning profile in the body"
+  validations:
+    - "The stored row is unchanged afterwards"
+  permissions:
+    - "User token required"
+  dependencies: [REQ-DAILYPLAN-001]
+  error_conditions: []
+  edge_conditions:
+    - "A losing upload is not an error — the loser is handed the winner so it can correct itself in the same round trip"
+  offline_behavior: "This rule exists specifically so an offline edit uploaded later behaves correctly"
+  acceptance_criteria:
+    - "The older edit loses and the caller is told what won"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "DailyPlanTest.anOlderEditDoesNotOverwriteANewerOneAndTheLoserIsToldWhatWon"
+
+- id: REQ-DAILYPLAN-003
+  feature: A day's tasks fit the time the student said they have
+  module: DAILYPLAN
+  system: [Backend]
+  source_doc: api/DAILY-PLAN.md
+  source_section: "The budget"
+  description: >
+    GET /api/me/daily-plan?examCode=&zone= returns today's tasks with a budget, the minutes those
+    tasks add up to, and each task's own planned minutes, question count and estimate tier.
+  business_rule: >
+    The student chose a BAND, never a number, so the planner maps each band to a figure — 45 / 90 /
+    180 / 300 / 360 minutes — and reports the band beside the minutes so the assumption is visible.
+    SIX_PLUS takes the floor of an open-ended band: inventing an upper bound the student never gave
+    would be worse than planning short. No profile at all means a declared default of 60, labelled
+    DEFAULT rather than dressed up as the student's answer.
+  actor: Signed-in student
+  preconditions:
+    - "An exam with practicable topics"
+    - "A profile stating ONE_TO_TWO, or no profile at all"
+  inputs:
+    - "examCode and an optional IANA zone"
+  expected_outputs:
+    - "budget {dailyStudyTime, minutes, basis}, plannedMinutes, and ordered tasks"
+  validations:
+    - "plannedMinutes does not exceed the budget when any task fits inside it"
+    - "Every task carries an estimate tier from the shared workload ladder"
+    - "Every task names a topic that has questions behind it"
+  permissions:
+    - "User token required"
+  dependencies: [REQ-DAILYPLAN-001, REQ-ROADMAP-003, REQ-REVISION-005]
+  error_conditions:
+    - "An unknown time zone is a 400, never a silent fallback that would plan a different day"
+  edge_conditions:
+    - "An exam with nothing practicable returns an empty plan rather than an error"
+    - "A single task longer than the whole budget is still assigned — an empty day is worse — and the overshoot is reported honestly"
+  offline_behavior: "None — server-computed"
+  acceptance_criteria:
+    - "A student who said 1-2 hours gets a 90-minute budget and tasks that fit it"
+    - "A student with no profile still gets a plan, with the budget labelled DEFAULT"
+  priority: High
+  status: Active
+  ambiguity: >
+    Whether the band mid-points are the right figures is unmeasured — nobody has checked what a
+    student who says "1-2 hours" actually does.
+  automation_status: Automated
+  automation_hint: >
+    DailyPlanTest.aOneToTwoHourStudentGetsADayThatFitsTheBudget,
+    .withNoProfileTheBudgetIsADeclaredDefault, .anUnknownTimeZoneIsRejected and
+    .anExamWithNothingPracticableGetsAnEmptyPlanRatherThanAnError.
+
+- id: REQ-DAILYPLAN-004
+  feature: A day is planned once, and what was assigned is recorded
+  module: DAILYPLAN
+  system: [Backend]
+  source_doc: api/DAILY-PLAN.md
+  source_section: "A day is planned once"
+  description: >
+    The first read for a given student, day and exam generates and persists that day's tasks into
+    study_tasks; every later read returns the same rows, with generated: false.
+  business_rule: >
+    Re-planning on each read would show a different list to a student who had already started, and
+    would destroy the record Phase 6 needs. That record is the only reason this phase stores
+    anything: without it, "no Percentage practice this week" cannot distinguish never-assigned from
+    ignored from abandoned from completed-offline-and-unsynced.
+  actor: Signed-in student
+  preconditions:
+    - "An exam with practicable topics"
+  inputs:
+    - "Two successive reads of the same day"
+  expected_outputs:
+    - "generated true then false, with identical task ids and identical plannedMinutes"
+  validations:
+    - "Task ids are stable across reads"
+    - "Tasks are returned in their assigned display order"
+  permissions:
+    - "User token required"
+  dependencies: [REQ-DAILYPLAN-003]
+  error_conditions: []
+  edge_conditions:
+    - "The zone the day was resolved in is stored with the task, so a student who travels does not get two Mondays or none"
+  offline_behavior: "None"
+  acceptance_criteria:
+    - "A second read returns the same plan rather than a new one"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "DailyPlanTest.asecondReadReturnsTheSamePlanRatherThanReplanning"

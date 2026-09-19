@@ -1,0 +1,102 @@
+# DAILYPLAN module — test scenarios
+#
+# Scoped to the preparation profile and the daily plan it feeds (TASK-3301, Phase 5).
+# Nothing here asserts that the band-to-minutes figures are right for real students — they are
+# declared assumptions, and no test could establish them.
+
+- id: SCN-DAILYPLAN-001
+  requirement_ids: [REQ-DAILYPLAN-001]
+  category: Functional
+  title: The profile round-trips and one account cannot see another's
+  objective: >
+    Verify an uploaded profile reads back intact, and that a second account reading the same
+    endpoint gets its own empty profile rather than the first account's.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-DAILYPLAN-002
+  requirement_ids: [REQ-DAILYPLAN-001]
+  category: Negative
+  title: A study-time value outside the app's own vocabulary is rejected
+  objective: >
+    Verify an unknown band is refused at the boundary rather than reaching the planner, which would
+    then have to guess what it means.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-DAILYPLAN-003
+  requirement_ids: [REQ-DAILYPLAN-002]
+  category: Functional
+  title: An older edit does not overwrite a newer one
+  objective: >
+    Verify last-write-wins resolves on the timestamp the device recorded, not on which upload
+    arrived last, and that the losing device is handed the winner.
+  systems: [Backend]
+  status: Ready
+  notes: "The rule that makes an offline edit uploaded days later behave correctly."
+
+- id: SCN-DAILYPLAN-004
+  requirement_ids: [REQ-DAILYPLAN-003]
+  category: Functional
+  title: A student who said 1-2 hours gets a day that fits
+  objective: >
+    Verify Gate 3's own wording: a 90-minute budget from the stated band, tasks summing within it,
+    each naming a practicable topic and carrying a declared estimate tier.
+  systems: [Backend]
+  status: Ready
+  notes: "The exit criterion for the phase."
+
+- id: SCN-DAILYPLAN-005
+  requirement_ids: [REQ-DAILYPLAN-003]
+  category: Boundary
+  title: An account that never onboarded still gets a plan, labelled as a default
+  objective: >
+    Verify the budget falls back to a declared constant rather than refusing to plan — this is the
+    account most in need of a plan — and that the payload says the figure is not the student's own.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-DAILYPLAN-006
+  requirement_ids: [REQ-DAILYPLAN-004]
+  category: Functional
+  title: A second read returns the same plan rather than re-planning
+  objective: >
+    Verify task ids and totals are stable across reads, so a student who has already started does
+    not see a different list, and the record of what was assigned survives.
+  systems: [Backend]
+  status: Ready
+  notes: "The property that makes the stored table worth having at all."
+
+- id: SCN-DAILYPLAN-007
+  requirement_ids: [REQ-DAILYPLAN-003]
+  category: Negative
+  title: An unknown time zone is rejected rather than silently becoming UTC
+  objective: >
+    Verify a bad zone is a 400. A silent fallback would plan a different calendar day than the
+    student is living in, and the plan is assigned to a day.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-DAILYPLAN-008
+  requirement_ids: [REQ-DAILYPLAN-003]
+  category: Boundary
+  title: An exam with nothing practicable returns an empty plan, not an error
+  objective: >
+    Verify the planner degrades to an honest empty day when the bank holds no questions for any of
+    the exam's topics.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-DAILYPLAN-009
+  requirement_ids: [REQ-DAILYPLAN-001]
+  category: Security
+  title: The daily plan requires a signed-in student
+  objective: "Verify the endpoint is token-gated, like every other personalization endpoint."
+  systems: [Backend]
+  status: Ready
+  notes: null

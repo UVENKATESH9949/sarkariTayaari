@@ -100,6 +100,17 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 | REQ-CATALOG-024: Admin nested structure editor — inherited-value display and cascade-delete confirmation | Medium | Active | SCN-CATALOG-041<br>SCN-CATALOG-042 | TC-CATALOG-051 (Not Executed)<br>TC-CATALOG-052 (Not Executed) |  |  |
 | REQ-CATALOG-025: One active exam out of several followed, with every screen agreeing on which | High | Active | SCN-CATALOG-044<br>SCN-CATALOG-045 | TC-CATALOG-053 (Pass)<br>TC-CATALOG-054 (Pass)<br>TC-CATALOG-055 (Pass) | EXEC-CATALOG-0001<br>EXEC-CATALOG-0002<br>EXEC-CATALOG-0003<br>EXEC-CATALOG-0004 | DEF-CATALOG-001 |
 
+## DAILYPLAN
+
+4 requirements, 9 scenarios, 9 test cases.
+
+| Requirement | Priority | Status | Scenario(s) | Test Case(s) | Execution | Defect |
+|---|---|---|---|---|---|---|
+| REQ-DAILYPLAN-001: The preparation profile reaches the server and stays scoped to its owner | High | Active | SCN-DAILYPLAN-001<br>SCN-DAILYPLAN-002<br>SCN-DAILYPLAN-009 | TC-DAILYPLAN-001 (Pass)<br>TC-DAILYPLAN-002 (Pass)<br>TC-DAILYPLAN-009 (Pass) | EXEC-DAILYPLAN-0001<br>EXEC-DAILYPLAN-0002<br>EXEC-DAILYPLAN-0009 |  |
+| REQ-DAILYPLAN-002: Two devices disagreeing resolve on when the edit happened, not on who synced last | High | Active | SCN-DAILYPLAN-003 | TC-DAILYPLAN-003 (Pass) | EXEC-DAILYPLAN-0003 |  |
+| REQ-DAILYPLAN-003: A day's tasks fit the time the student said they have | High | Active | SCN-DAILYPLAN-004<br>SCN-DAILYPLAN-005<br>SCN-DAILYPLAN-007<br>SCN-DAILYPLAN-008 | TC-DAILYPLAN-004 (Pass)<br>TC-DAILYPLAN-005 (Pass)<br>TC-DAILYPLAN-007 (Pass)<br>TC-DAILYPLAN-008 (Pass) | EXEC-DAILYPLAN-0004<br>EXEC-DAILYPLAN-0005<br>EXEC-DAILYPLAN-0007<br>EXEC-DAILYPLAN-0008 |  |
+| REQ-DAILYPLAN-004: A day is planned once, and what was assigned is recorded | High | Active | SCN-DAILYPLAN-006 | TC-DAILYPLAN-006 (Pass) | EXEC-DAILYPLAN-0006 |  |
+
 ## LEARNING-STATE
 
 5 requirements, 8 scenarios, 8 test cases.
@@ -229,9 +240,9 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 
 | Metric | Value |
 |---|---|
-| Total requirements | 144 |
-| Total scenarios | 271 |
-| Total test cases | 293 |
+| Total requirements | 148 |
+| Total scenarios | 280 |
+| Total test cases | 302 |
 | Requirements with zero scenarios | 0  |
-| Real executions recorded | 50 |
+| Real executions recorded | 59 |
 | Real defects logged | 1 |

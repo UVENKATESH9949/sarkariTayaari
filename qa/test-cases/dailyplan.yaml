@@ -1,0 +1,284 @@
+# DAILYPLAN module — manual test cases
+#
+# Every case has a real test method behind it (DailyPlanTest, 9/9 green on 2026-09-19 against the
+# real Neon dev database). Recorded here as UNEXECUTED manual cases in the register's own
+# convention; the runs that actually happened are in qa/execution/.
+
+- id: TC-DAILYPLAN-001
+  requirement_ids: [REQ-DAILYPLAN-001]
+  scenario_id: SCN-DAILYPLAN-001
+  system: Backend
+  module: DAILYPLAN
+  feature: The preparation profile reaches the server and stays scoped to its owner
+  title: A profile round-trips, and another account sees only its own
+  objective: "Confirm the profile now reaches the server at all, and cannot leak between accounts."
+  preconditions:
+    - "Two registered students"
+  test_data: "A profile stating ONE_TO_TWO and PRACTICING"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST the profile, then GET it back as the same student"
+      expected: "stored true; dailyStudyTime ONE_TO_TWO and preparationLevel PRACTICING returned"
+    - step: 2
+      action: "GET the profile as a second student"
+      expected: "profile is null — their own empty profile, never the first student's"
+  expected_result: "The profile is stored per account and readable only by its owner. (REQ-DAILYPLAN-001 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "DailyPlanTest.theProfileRoundTripsAndIsScopedToItsOwner"
+
+- id: TC-DAILYPLAN-002
+  requirement_ids: [REQ-DAILYPLAN-001]
+  scenario_id: SCN-DAILYPLAN-002
+  system: Backend
+  module: DAILYPLAN
+  feature: The preparation profile reaches the server and stays scoped to its owner
+  title: An unknown study-time band is rejected
+  objective: "Confirm a value outside the app's own vocabulary never reaches the planner."
+  preconditions:
+    - "A signed-in student"
+  test_data: "dailyStudyTime of SEVEN_HOURS_ISH"
+  test_environment: "Backend against the real dev database"
+  priority: Medium
+  severity: Major
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "POST a profile whose dailyStudyTime is not one of the five known bands"
+      expected: "400, and nothing stored"
+  expected_result: "The planner never has to guess what an unrecognised band means. (REQ-DAILYPLAN-001 validations)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "DailyPlanTest.anUnknownStudyTimeBandIsRejected"
+
+- id: TC-DAILYPLAN-003
+  requirement_ids: [REQ-DAILYPLAN-002]
+  scenario_id: SCN-DAILYPLAN-003
+  system: Backend
+  module: DAILYPLAN
+  feature: Two devices disagreeing resolve on when the edit happened, not on who synced last
+  title: An older edit loses, and the loser is told what won
+  objective: >
+    Confirm last-write-wins uses the device's own timestamp, so an edit made offline and uploaded
+    later cannot overwrite a newer one simply by arriving second.
+  preconditions:
+    - "A profile stored with an updatedAt of one minute ago"
+  test_data: "A second upload dated three days ago"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST the older profile"
+      expected: "200 with stored false"
+    - step: 2
+      action: "Read the profile returned in that same response"
+      expected: "The winning values, so the losing device can correct itself without another round trip"
+    - step: 3
+      action: "GET the profile afterwards"
+      expected: "Still the newer values — the stale edit changed nothing"
+  expected_result: "Arrival order never decides the winner. (REQ-DAILYPLAN-002 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "DailyPlanTest.anOlderEditDoesNotOverwriteANewerOneAndTheLoserIsToldWhatWon"
+
+- id: TC-DAILYPLAN-004
+  requirement_ids: [REQ-DAILYPLAN-003]
+  scenario_id: SCN-DAILYPLAN-004
+  system: Backend
+  module: DAILYPLAN
+  feature: A day's tasks fit the time the student said they have
+  title: A student who said 1-2 hours gets a 90-minute day that fits
+  objective: "Confirm Gate 3's own exit criterion, end to end on real data."
+  preconditions:
+    - "An exam with four practicable topics, each carrying questions and a priority"
+    - "A profile stating ONE_TO_TWO"
+  test_data: "Four topics, three questions each, priorities 90 down to 87"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Read budget from the response"
+      expected: "dailyStudyTime ONE_TO_TWO, minutes 90, basis STATED_BAND"
+    - step: 2
+      action: "Read plannedMinutes"
+      expected: "Positive and no greater than 90"
+    - step: 3
+      action: "For every task, read topicId, plannedMinutes, source, status and estimate"
+      expected: >
+        A real topic; positive minutes; source PRACTICE or REVISION; status ASSIGNED; and an
+        estimate tier from the shared workload ladder rather than an unattributed number
+    - step: 4
+      action: "Read displayOrder across the tasks"
+      expected: "Ascending — the order the plan was assigned in survives"
+  expected_result: "A day of work that fits the stated time, every item practicable. (REQ-DAILYPLAN-003 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "The phase's exit criterion, expressed almost verbatim from the program plan."
+  automation_status: Automated
+  automation_reference: "DailyPlanTest.aOneToTwoHourStudentGetsADayThatFitsTheBudget"
+
+- id: TC-DAILYPLAN-005
+  requirement_ids: [REQ-DAILYPLAN-003]
+  scenario_id: SCN-DAILYPLAN-005
+  system: Backend
+  module: DAILYPLAN
+  feature: A day's tasks fit the time the student said they have
+  title: With no profile the budget is a declared default
+  objective: >
+    Confirm an account that never onboarded still gets a plan, and that the minutes are labelled an
+    assumption rather than presented as the student's own answer.
+  preconditions:
+    - "An exam with practicable topics and no profile for the calling student"
+  test_data: "Three topics, three questions each"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Major
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "Read budget"
+      expected: "dailyStudyTime null, minutes 60, basis DEFAULT"
+    - step: 2
+      action: "Read tasks"
+      expected: "Non-empty — the account with least information is the one most in need of a plan"
+  expected_result: "A usable plan without fabricating the student's answer. (REQ-DAILYPLAN-003 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "DailyPlanTest.withNoProfileTheBudgetIsADeclaredDefault"
+
+- id: TC-DAILYPLAN-006
+  requirement_ids: [REQ-DAILYPLAN-004]
+  scenario_id: SCN-DAILYPLAN-006
+  system: Backend
+  module: DAILYPLAN
+  feature: A day is planned once, and what was assigned is recorded
+  title: A second read returns the same plan rather than re-planning
+  objective: >
+    Confirm the plan is generated once and persisted, so a student who has already started does not
+    see a reshuffled list and the record of what was assigned survives for Phase 6.
+  preconditions:
+    - "An exam with practicable topics and a stored profile"
+  test_data: "Three topics, three questions each"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "GET the daily plan and read generated"
+      expected: "true — this call created it"
+    - step: 2
+      action: "GET it again and read generated"
+      expected: "false — the stored plan was returned"
+    - step: 3
+      action: "Compare task ids and plannedMinutes between the two reads"
+      expected: "Identical ids in the same order, and the same total"
+  expected_result: "A day is planned once. (REQ-DAILYPLAN-004 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Step 3 is the regression guard: comparing ids, not just counts, catches a silent re-plan."
+  automation_status: Automated
+  automation_reference: "DailyPlanTest.asecondReadReturnsTheSamePlanRatherThanReplanning"
+
+- id: TC-DAILYPLAN-007
+  requirement_ids: [REQ-DAILYPLAN-003]
+  scenario_id: SCN-DAILYPLAN-007
+  system: Backend
+  module: DAILYPLAN
+  feature: A day's tasks fit the time the student said they have
+  title: An unknown time zone is rejected
+  objective: "Confirm a bad zone fails loudly rather than silently planning a different day."
+  preconditions:
+    - "A signed-in student and an exam with questions"
+  test_data: "zone=Mars/Olympus"
+  test_environment: "Backend against the real dev database"
+  priority: Medium
+  severity: Major
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "GET the daily plan with an unknown zone"
+      expected: "400, never a silent fallback to UTC"
+  expected_result: "The plan belongs to a calendar day, so the zone has to be right. (REQ-DAILYPLAN-003 error_conditions)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "DailyPlanTest.anUnknownTimeZoneIsRejected"
+
+- id: TC-DAILYPLAN-008
+  requirement_ids: [REQ-DAILYPLAN-003]
+  scenario_id: SCN-DAILYPLAN-008
+  system: Backend
+  module: DAILYPLAN
+  feature: A day's tasks fit the time the student said they have
+  title: An exam with nothing practicable returns an empty plan
+  objective: "Confirm the planner degrades honestly when there is genuinely nothing to assign."
+  preconditions:
+    - "An exam whose topics carry no questions at all"
+  test_data: "Two mapped topics, zero questions"
+  test_environment: "Backend against the real dev database"
+  priority: Medium
+  severity: Minor
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "GET the daily plan"
+      expected: "200 with an empty task list and plannedMinutes 0 — not an error"
+  expected_result: "An empty day is a real answer when nothing can be practised. (REQ-DAILYPLAN-003 edge_conditions)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "DailyPlanTest.anExamWithNothingPracticableGetsAnEmptyPlanRatherThanAnError"
+
+- id: TC-DAILYPLAN-009
+  requirement_ids: [REQ-DAILYPLAN-001]
+  scenario_id: SCN-DAILYPLAN-009
+  system: Backend
+  module: DAILYPLAN
+  feature: The preparation profile reaches the server and stays scoped to its owner
+  title: The daily plan rejects an unauthenticated caller
+  objective: "Confirm the endpoint is token-gated like the rest of the personalization surface."
+  preconditions:
+    - "An exam with at least one mapped topic"
+  test_data: "One disposable exam"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Critical
+  test_type: Security
+  steps:
+    - step: 1
+      action: "GET /api/me/daily-plan with no Authorization header"
+      expected: "401"
+  expected_result: "Unreachable unauthenticated. (REQ-DAILYPLAN-001 validations)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "DailyPlanTest.requiresASignedInUser"
