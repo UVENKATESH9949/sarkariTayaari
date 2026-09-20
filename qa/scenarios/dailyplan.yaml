@@ -159,10 +159,34 @@
 - id: SCN-DAILYPLAN-015
   requirement_ids: [REQ-DAILYPLAN-007]
   category: Boundary
-  title: An install that never edited its profile uploads nothing
+  title: An install that never completed onboarding uploads nothing
   objective: >
-    Verify a device with a NULL profile_updated_at takes the server's copy if there is one and
-    pushes nothing, rather than inventing a timestamp that would beat a genuine older edit.
+    Verify a device with no edit moment at all takes the server's copy if there is one and pushes
+    nothing, rather than inventing a timestamp that would beat a genuine older edit.
   systems: [Mobile]
   status: Ready
-  notes: "Covers installs predating migration 0030."
+  notes: >
+    Reframed 2026-09-20: this used to say "a NULL profile_updated_at", which the device pass proved
+    was the wrong boundary — see SCN-DAILYPLAN-016.
+
+- id: SCN-DAILYPLAN-016
+  requirement_ids: [REQ-DAILYPLAN-007]
+  category: Regression
+  title: An install predating migration 0030 still sends its band
+  objective: >
+    Verify a device whose profile_updated_at is NULL but which did complete onboarding uploads its
+    band, carrying onboarding_completed_at as the edit moment rather than "now".
+  systems: [Backend, Mobile]
+  status: Ready
+  notes: "Guards the defect found by the device pass; without it every existing install stays silent."
+
+- id: SCN-DAILYPLAN-017
+  requirement_ids: [REQ-DAILYPLAN-007]
+  category: Functional
+  title: Migration 0030 applies to a populated database
+  objective: >
+    Verify the one unguardable ADD COLUMN runs against a real 64MB database with real content and a
+    real profile, losing nothing and leaving the new column NULL.
+  systems: [Mobile]
+  status: Ready
+  notes: "A failed local migration is a hard gate that stops the app starting, so this is the riskiest statement in the change."

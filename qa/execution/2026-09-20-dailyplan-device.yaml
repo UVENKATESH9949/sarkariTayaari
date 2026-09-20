@@ -1,0 +1,91 @@
+# DAILYPLAN — execution records, 2026-09-20: the on-device pass for the preparation-profile sync.
+#
+# Emulator `emulator-5554` (AVD Pixel_7) against a real dev backend on localhost:8080, with the
+# real Neon dev database behind it. No physical device was attached; every adb call was pinned to
+# emulator-5554 regardless.
+#
+# This is the pass that turns D5.1 from half-implemented into implemented: the server side shipped
+# on 2026-09-19 and nothing called it, so every real account was budgeted a declared 60 minutes
+# however long the student had said they study.
+#
+# THE PASS FOUND A REAL DEFECT, AND IT WOULD HAVE MADE THE WHOLE CHANGE A NO-OP IN PRODUCTION.
+# The first version of syncPreparationProfile uploaded nothing when app_preferences.profile_updated_at
+# was NULL — reasoning that an install with no edit moment should not invent one and beat a genuine
+# older edit made on another device. That reasoning is sound and is still in the code; the mistake
+# was the population it applied to. profile_updated_at arrives WITH migration 0030, so it is NULL on
+# every install that already exists. The emulator made this immediate rather than theoretical: its
+# real profile says ONE_TO_TWO, and the very first check of the server returned {"profile": null}.
+# Fixed by falling back to onboarding_completed_at, which is not a guess — it is the moment the
+# student answered these questions, and it was already stored. TC-DAILYPLAN-016 is the regression
+# guard; TC-DAILYPLAN-015 was reframed to version 2 rather than quietly corrected, because its
+# version 1 asserted the wrong rule.
+#
+# No defect id: the bug never shipped. It was found and fixed inside the same change, before commit.
+#
+# NOT COVERED HERE, and the honest gap: nothing on a screen shows any of this. The daily plan still
+# has no consumer in mobile/ or web/, so the verification is the device's own database plus two
+# authenticated reads using the token that device is actually holding — not a student watching a
+# plan appear.
+
+- execution_id: EXEC-DAILYPLAN-0014
+  test_case_id: TC-DAILYPLAN-014
+  test_case_version: 1
+  environment: "emulator-5554 (Pixel_7) + dev backend on localhost:8080 + real Neon dev database"
+  build_version: "feature/on-device-llm-spike @ bb1f004 + the uncommitted fallback fix"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-20T09:55:00+05:30"
+  actual_result: >
+    Account gate1.retest@example.com, signed in on the device, band ONE_TO_TWO chosen at onboarding.
+    GET /api/me/preparation-profile returned dailyStudyTime ONE_TO_TWO with updatedAt
+    2026-09-18T15:13:26.873Z. GET /api/me/daily-plan?examCode=SSC_CGL&zone=Asia/Kolkata returned
+    budget.minutes 90, budget.basis STATED_BAND, plannedMinutes 89 across 31 tasks — one step per
+    topic, 31 distinct topics, each naming a real topic and carrying an estimate tier. A second read
+    returned generated:false with the same task ids.
+  status: Pass
+  defect_id: ""
+  evidence: "Two authenticated reads using the token read out of the device's own auth_session row"
+  remarks: >
+    Step 3 is the assertion that counts and it passed only after the fix recorded in
+    EXEC-DAILYPLAN-0016. Before it, step 2 returned {"profile": null} and the budget would have been
+    60 / DEFAULT on this very device.
+
+- execution_id: EXEC-DAILYPLAN-0015
+  test_case_id: TC-DAILYPLAN-017
+  test_case_version: 1
+  environment: "emulator-5554 (Pixel_7)"
+  build_version: "feature/on-device-llm-spike @ bb1f004 + the uncommitted fallback fix"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-20T09:40:00+05:30"
+  actual_result: >
+    Before launch: 64,135,168 bytes, 30 migrations, no profile_updated_at column, daily_study_time
+    ONE_TO_TWO, 37,105 questions. After launch: no migration-failure screen, logs show Running
+    "main" then "[sync] delta sync completed (12 upserted, 0 deleted)". After: 31 migrations,
+    profile_updated_at present and NULL, the profile row otherwise byte-identical, 37,117 questions
+    — exactly the 12 the delta sync had just written.
+  status: Pass
+  defect_id: ""
+  evidence: "Two read-only inspections of pulled copies of files/SQLite/sarkaritaiyaari.db"
+  remarks: >
+    The single highest-risk statement in the change, because SQLite has no ADD COLUMN IF NOT EXISTS
+    and a failed local migration is a hard gate that stops the app starting. NULL rather than 0 or
+    "" matters: only NULL means "never edited" to the conflict rule.
+
+- execution_id: EXEC-DAILYPLAN-0016
+  test_case_id: TC-DAILYPLAN-016
+  test_case_version: 1
+  environment: "emulator-5554 (Pixel_7) + dev backend on localhost:8080 + real Neon dev database"
+  build_version: "feature/on-device-llm-spike @ bb1f004 + the uncommitted fallback fix"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-20T09:55:00+05:30"
+  actual_result: >
+    The device's own database showed profile_updated_at null with daily_study_time ONE_TO_TWO and
+    onboarding_completed_at 2026-09-18T15:13:26.873Z — the exact shape of every install that
+    predates migration 0030. After the sync, the server held that band with updatedAt
+    2026-09-18T15:13:26.873Z, equal to the millisecond, rather than a fresh stamp.
+  status: Pass
+  defect_id: ""
+  evidence: "The pulled app_preferences row beside GET /api/me/preparation-profile's response"
+  remarks: >
+    Both halves matter. Uploading the band at all is what stops an existing install being silent
+    forever; uploading it with the ORIGINAL moment is what stops that install winning a conflict
+    against a genuine later edit made on the student's other device.

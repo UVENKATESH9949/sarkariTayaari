@@ -457,12 +457,19 @@
       action: "GET /api/me/daily-plan?examCode=... for the same account"
       expected: "budget.minutes 90 and budget.basis STATED_BAND — not 60 / DEFAULT"
   expected_result: "The student's own answer drives the plan. (REQ-DAILYPLAN-007 acceptance_criteria)"
-  actual_result: ""
-  status: Not Executed
+  actual_result: >
+    Executed 2026-09-20 on emulator-5554 against a real dev backend, on a genuinely populated
+    pre-0030 install (31 migrations after launch, 37,117 questions, profile intact). The account
+    gate1.retest@example.com had chosen ONE_TO_TWO at onboarding. Step 2: the server returned
+    dailyStudyTime ONE_TO_TWO with updatedAt 2026-09-18T15:13:26.873Z, exactly the device's
+    onboarding_completed_at. Step 3: budget.minutes 90, budget.basis STATED_BAND, plannedMinutes 89
+    across 31 tasks — not 60 / DEFAULT.
+  status: Pass
   defect_id: ""
   remarks: >
     Step 3 is the one that matters: steps 1-2 can pass while the planner still budgets the default
-    if the band is stored but not read.
+    if the band is stored but not read. It only passed after the defect this pass found — see
+    TC-DAILYPLAN-016, without which step 2 returned {"profile": null} on this very device.
   automation_status: ManualOnly
   automation_reference: ""
 
@@ -472,12 +479,13 @@
   system: Mobile
   module: DAILYPLAN
   feature: The phone sends the preparation profile, so the planner budgets the student's real time
-  title: An install that never edited its profile pushes nothing
+  test_case_version: 2
+  title: An install that never completed onboarding pushes nothing
   objective: >
-    Confirm a NULL local timestamp means "nothing worth uploading" rather than an invented moment
+    Confirm a device with no edit moment of any kind stays quiet, rather than inventing a moment
     that would beat a genuine older edit made on another device.
   preconditions:
-    - "A device whose app_preferences.profile_updated_at is NULL (an install predating migration 0030)"
+    - "A device with neither profile_updated_at nor onboarding_completed_at (onboarding never finished)"
     - "A profile already stored on the server from another device"
   test_data: "A server-side profile stating TWO_TO_FOUR"
   test_environment: "emulator-5554 against a real dev backend"
@@ -498,6 +506,97 @@
   actual_result: ""
   status: Not Executed
   defect_id: ""
-  remarks: "Step 2's timestamp check is the guard against this device winning a conflict it did not earn."
+  remarks: >
+    Step 2's timestamp check is the guard against this device winning a conflict it did not earn.
+    REFRAMED to version 2 on 2026-09-20, rather than quietly corrected: version 1 asserted that a
+    NULL profile_updated_at uploads nothing, which the device pass proved was the wrong rule — it
+    would have silenced every install predating migration 0030. The real boundary is an install with
+    no edit moment AT ALL. Still Not Executed: reaching it needs an install abandoned part-way
+    through onboarding, which the emulator used for TC-DAILYPLAN-014 is not.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-DAILYPLAN-016
+  requirement_ids: [REQ-DAILYPLAN-007]
+  scenario_id: SCN-DAILYPLAN-016
+  system: Mobile
+  module: DAILYPLAN
+  feature: The phone sends the preparation profile, so the planner budgets the student's real time
+  title: An install predating migration 0030 still sends the band it was told
+  objective: >
+    Regression guard for the defect the device pass found: an existing install has no
+    profile_updated_at, and treating that as "nothing to say" keeps its real answer on the phone
+    forever — for exactly the students this change exists to serve.
+  preconditions:
+    - "An install onboarded before migration 0030, so profile_updated_at is NULL after it applies"
+    - "onboarding_completed_at present, and a study-time band chosen"
+  test_data: "profile_updated_at NULL, onboarding_completed_at 2026-09-18T15:13:26.873Z, band ONE_TO_TWO"
+  test_environment: "emulator-5554 against a real dev backend"
+  priority: High
+  severity: Critical
+  test_type: Regression
+  steps:
+    - step: 1
+      action: "Confirm on the device's own database that profile_updated_at is NULL and a band is set"
+      expected: "NULL timestamp, daily_study_time ONE_TO_TWO"
+    - step: 2
+      action: "Sign in and let the sync run, then GET /api/me/preparation-profile"
+      expected: "The band is present, and updatedAt equals onboarding_completed_at exactly — not now"
+  expected_result: "The fallback carries the answer, and carries the real moment with it."
+  actual_result: >
+    Executed 2026-09-20. Step 1: the pulled database showed profile_updated_at null,
+    daily_study_time ONE_TO_TWO, onboarding_completed_at 2026-09-18T15:13:26.873Z. Step 2: the
+    server returned that band with updatedAt 2026-09-18T15:13:26.873Z, to the millisecond. Before
+    the fix the same call returned {"profile": null}.
+  status: Pass
+  defect_id: ""
+  remarks: >
+    Step 2's timestamp equality is the half that keeps the fix honest: uploading the band while
+    stamping "now" would make an existing install win every conflict against a genuine later edit
+    made elsewhere. No defect id — the bug never shipped; it was found and fixed inside the same
+    change.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-DAILYPLAN-017
+  requirement_ids: [REQ-DAILYPLAN-007]
+  scenario_id: SCN-DAILYPLAN-017
+  system: Mobile
+  module: DAILYPLAN
+  feature: The phone sends the preparation profile, so the planner budgets the student's real time
+  title: Migration 0030 applies to a populated database without losing anything
+  objective: >
+    SQLite has no ADD COLUMN IF NOT EXISTS, so 0030's single statement is unguardable and a failed
+    migration is a hard gate that stops the app starting. Prove it on real data, not a fresh install.
+  preconditions:
+    - "A device at migration 0029 holding real synced content and a real profile"
+  test_data: "A 64MB database: 30 migrations, 37,105 questions, a completed onboarding profile"
+  test_environment: "emulator-5554"
+  priority: High
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Pull and inspect the database before launch"
+      expected: "30 migrations, no profile_updated_at column, profile and content intact"
+    - step: 2
+      action: "Launch the app on the new build and let the migrator run"
+      expected: "No migration-failure screen; the app reaches Home"
+    - step: 3
+      action: "Pull and inspect again"
+      expected: "31 migrations, profile_updated_at present and NULL — not 0, not empty string — and nothing lost"
+  expected_result: "The riskiest statement in the change is proven against real data."
+  actual_result: >
+    Executed 2026-09-20 on emulator-5554. Step 1: 64,135,168 bytes, 30 migrations, column absent,
+    daily_study_time ONE_TO_TWO. Step 2: the app launched to Home with no failure screen; logs show
+    "Running \"main\"" then a clean delta sync (12 upserted, 0 deleted). Step 3: 31 migrations,
+    profile_updated_at present and NULL, profile unchanged, questions 37,105 -> 37,117 (the 12 the
+    delta sync had just written).
+  status: Pass
+  defect_id: ""
+  remarks: >
+    The NULL check in step 3 is deliberate, not pedantry: a NULL means "this install never edited
+    its profile", while a 0 or an empty string would be a timestamp the conflict rule could compare
+    and lose to.
   automation_status: ManualOnly
   automation_reference: ""

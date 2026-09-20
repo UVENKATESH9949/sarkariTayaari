@@ -101,9 +101,19 @@ sign-out. It uploads, and takes the server's copy when that copy is newer, writi
 *remote* edit's own timestamp so this device does not look like the most recent editor.
 
 The device's timestamp comes from `app_preferences.profile_updated_at` (mobile migration **0030**),
-stamped whenever the student edits the profile. **A NULL timestamp uploads nothing** — an install
-predating that migration, or one that never onboarded, has no edit moment to claim, and inventing a
-"now" would beat a genuine older edit on the student's other device.
+stamped whenever the student edits the profile. An install predating that migration has none, so it
+**falls back to `onboarding_completed_at`** — which is not a guess: that *is* the moment the student
+answered these questions, and it was already stored. Only an install with neither timestamp, one
+that never completed onboarding, uploads nothing, because inventing a "now" there would beat a
+genuine older edit on the student's other device.
+
+That fallback was added on 2026-09-20 after the device pass, and it is the difference between this
+feature working and not: `profile_updated_at` arrives *with* 0030, so it is NULL on every install
+that already exists. The first version treated NULL as "nothing to say" and would have kept every
+current student's real answer on their phone forever — exactly the population the change exists to
+serve. Verified on `emulator-5554`: a real install carrying `ONE_TO_TWO` reached the server with
+`updatedAt` equal to its onboarding moment to the millisecond, and the daily plan then budgeted
+**90 minutes with `basis: STATED_BAND`** instead of 60 / `DEFAULT`.
 
 Failures are caught per-call and never abort the sync batch: a backend predating V48 returns 404
 here, and that must not cost a student their restored practice history.

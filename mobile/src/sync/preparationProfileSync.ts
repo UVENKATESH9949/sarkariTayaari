@@ -32,12 +32,28 @@ export async function syncPreparationProfile(token: string): Promise<"uploaded" 
   const local = await loadPreparationProfile();
 
   /*
-   * A profile with no timestamp has never been edited since migration 0030 — an install that
-   * predates it, or one that has never onboarded. Uploading it would mean inventing a moment, and
-   * an invented "now" would beat a genuine older edit made on the student's other device. So the
-   * server's copy is taken instead if there is one, and nothing is pushed.
+   * When the student actually stated this profile.
+   *
+   * `profileUpdatedAt` only exists from migration 0030 onward, so every install that onboarded
+   * before it has none — which is most of them. Falling back to `onboardingCompletedAt` is not a
+   * guess: that IS the moment the student answered these questions, and it is already stored.
+   *
+   * Found by the device pass, not by review. The first version treated a missing timestamp as
+   * "nothing to say" and pushed nothing — so a real device carrying a real "1-2 hours" answer from
+   * onboarding would have kept it to itself forever, and the planner would have budgeted the
+   * 60-minute default for exactly the students this change exists to serve. The instinct behind it
+   * was right, but it only matters when the server already holds something, which the ordering
+   * below preserves: a genuine later edit on another device still wins, because its timestamp is
+   * newer than this onboarding moment.
    */
-  if (!local.profileUpdatedAt) {
+  const editedAt = local.profileUpdatedAt ?? local.onboardingCompletedAt;
+
+  /*
+   * No timestamp at all means this install has never completed onboarding, so there is genuinely
+   * nothing to say about this student. Take the server's copy if it has one, and push nothing —
+   * inventing a "now" here would beat a real edit made on their other device.
+   */
+  if (!editedAt) {
     return (await pullIfPresent(token)) ? "pulled" : "noop";
   }
 
@@ -48,7 +64,7 @@ export async function syncPreparationProfile(token: string): Promise<"uploaded" 
     targetYear: local.targetYear,
     preparationLevel: local.preparationLevel,
     dailyStudyTime: local.dailyStudyTime,
-    updatedAt: local.profileUpdatedAt,
+    updatedAt: editedAt,
   };
 
   const result = await uploadPreparationProfile(token, payload);

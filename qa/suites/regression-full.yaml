@@ -2,7 +2,7 @@
 #
 # Every test case across all three modules, including Ambiguous/blocked ones (their execution still records real observed behavior, even without a pre-asserted pass/fail). Run before a significant, cross-cutting change.
 #
-# 308 test case(s). Membership rule: All test cases in qa/test-cases/*.yaml.
+# 310 test case(s). Membership rule: All test cases in qa/test-cases/*.yaml.
 
 suite: Regression (Full)
 test_case_ids:
@@ -163,6 +163,8 @@ test_case_ids:
   - TC-DAILYPLAN-013
   - TC-DAILYPLAN-014
   - TC-DAILYPLAN-015
+  - TC-DAILYPLAN-016
+  - TC-DAILYPLAN-017
   - TC-LEARNINGSTATE-001
   - TC-LEARNINGSTATE-002
   - TC-LEARNINGSTATE-003

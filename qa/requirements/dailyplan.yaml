@@ -289,9 +289,11 @@
     Until this existed the server side was complete and unused: every real account fell back to the
     declared 60-minute default budget however long the student had actually said they study. The
     timestamp is the moment of the EDIT, never of the upload — an edit made offline and synced three
-    days later must still lose to a newer one made elsewhere. A NULL timestamp (an install predating
-    0030, or one never onboarded) uploads nothing rather than inventing a moment, because an
-    invented "now" would beat a genuine older edit on the student's other device.
+    days later must still lose to a newer one made elsewhere. An install predating 0030 has no
+    profile_updated_at and falls back to onboarding_completed_at, which IS the moment the student
+    answered these questions and is already stored. Only an install with neither — one that never
+    completed onboarding — uploads nothing, because inventing a "now" there would beat a genuine
+    older edit on the student's other device.
   actor: Signed-in student
   preconditions:
     - "A device with a locally-stored preparation profile"
@@ -310,6 +312,10 @@
   edge_conditions:
     - "Content languages, interface language, theme and zoom are deliberately not synced — device preferences, not planning inputs"
     - "The two onboarding timestamps stay device-local: they answer whether THIS INSTALL was onboarded"
+    - >
+      An install predating 0030 uploads using onboarding_completed_at. Corrected 2026-09-20 after
+      the device pass: the first rule ("a NULL timestamp uploads nothing") would have silenced every
+      existing install, which is precisely the population this change exists to serve.
   offline_behavior: "The edit is kept locally with its own timestamp and goes up on the next sync"
   acceptance_criteria:
     - "A student who chose 1-2 hours gets a 90-minute budget on the server rather than the 60-minute default"
