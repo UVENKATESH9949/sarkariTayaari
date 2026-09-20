@@ -947,6 +947,20 @@ export const appPreferences = sqliteTable("app_preferences", {
   onboardingStartedAt: text("onboarding_started_at"),
   /** ISO timestamp. The completion flag: set once, never cleared. */
   onboardingCompletedAt: text("onboarding_completed_at"),
+
+  /**
+   * ISO timestamp of the last edit to the preparation profile itself (migration 0030).
+   *
+   * This is what the server resolves two devices with — last write wins on the moment the STUDENT
+   * edited, not the moment the upload arrived, so an edit made offline and synced days later still
+   * loses to a newer one. Neither onboarding timestamp can stand in: `onboardingCompletedAt` is set
+   * once and would freeze at the first-run value, so every later edit in Settings would silently
+   * lose every conflict.
+   *
+   * NULL means "never edited since this column existed", which the sync path treats as nothing
+   * worth uploading rather than inventing a time.
+   */
+  profileUpdatedAt: text("profile_updated_at"),
 });
 
 /**

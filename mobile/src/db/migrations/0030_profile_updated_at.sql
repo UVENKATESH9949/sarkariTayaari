@@ -1,0 +1,19 @@
+-- TASK-3401 follow-up — the preparation profile can now be synced, so it needs a timestamp.
+--
+-- The server resolves two devices disagreeing by LAST WRITE WINS on a client-supplied `updatedAt`
+-- (see api/PREPARATION-PROFILE.md). That timestamp has to be the moment the STUDENT made the edit,
+-- not the moment it was uploaded: an edit made offline and synced three days later happened three
+-- days ago, and stamping on arrival would let a stale edit win purely by syncing second.
+--
+-- So the device has to record it, and nothing here did. The existing columns cannot stand in:
+--
+--   * `onboarding_completed_at` is set once and never again, so it would freeze at the first-run
+--     value and every later edit in Settings would silently lose every conflict.
+--   * `onboarding_started_at` is earlier still, and exists for a different question entirely
+--     ("was this install mid-flow when it was killed?").
+--
+-- Nullable with no backfill. NULL means "never edited since this column existed", which is exactly
+-- true of every install predating it — and the sync path treats a NULL as "nothing local worth
+-- uploading" rather than inventing a time, so an old install cannot overwrite a good server row
+-- with a fabricated timestamp.
+ALTER TABLE `app_preferences` ADD `profile_updated_at` text;

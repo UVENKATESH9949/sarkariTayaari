@@ -427,3 +427,77 @@
   remarks: "Step 3 is what makes 'a bad session changes tomorrow' checkable rather than asserted."
   automation_status: Automated
   automation_reference: "AdaptiveReplanningTest.everyTaskCarriesADeterministicReason, .aTaskReportsTheWorkActuallyDoneOnItsTopicToday"
+
+- id: TC-DAILYPLAN-014
+  requirement_ids: [REQ-DAILYPLAN-007]
+  scenario_id: SCN-DAILYPLAN-014
+  system: Mobile
+  module: DAILYPLAN
+  feature: The phone sends the preparation profile, so the planner budgets the student's real time
+  title: A device's stated study time reaches the server and changes the budget
+  objective: >
+    Confirm the end of the gap Phase 5 left open: the planner budgets what the student chose rather
+    than the declared default.
+  preconditions:
+    - "An emulator install whose onboarding chose a study-time band other than the default's 60 minutes"
+    - "A backend at V48 or later, reachable from the device"
+  test_data: "A preparation profile stating ONE_TO_TWO"
+  test_environment: "emulator-5554 against a real dev backend"
+  priority: High
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Complete onboarding choosing 1-2 hours, then sign in"
+      expected: "Sync completes; no error surfaces"
+    - step: 2
+      action: "GET /api/me/preparation-profile with that account's token"
+      expected: "dailyStudyTime ONE_TO_TWO, and updatedAt matching the device's own edit time"
+    - step: 3
+      action: "GET /api/me/daily-plan?examCode=... for the same account"
+      expected: "budget.minutes 90 and budget.basis STATED_BAND — not 60 / DEFAULT"
+  expected_result: "The student's own answer drives the plan. (REQ-DAILYPLAN-007 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Step 3 is the one that matters: steps 1-2 can pass while the planner still budgets the default
+    if the band is stored but not read.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-DAILYPLAN-015
+  requirement_ids: [REQ-DAILYPLAN-007]
+  scenario_id: SCN-DAILYPLAN-015
+  system: Mobile
+  module: DAILYPLAN
+  feature: The phone sends the preparation profile, so the planner budgets the student's real time
+  title: An install that never edited its profile pushes nothing
+  objective: >
+    Confirm a NULL local timestamp means "nothing worth uploading" rather than an invented moment
+    that would beat a genuine older edit made on another device.
+  preconditions:
+    - "A device whose app_preferences.profile_updated_at is NULL (an install predating migration 0030)"
+    - "A profile already stored on the server from another device"
+  test_data: "A server-side profile stating TWO_TO_FOUR"
+  test_environment: "emulator-5554 against a real dev backend"
+  priority: Medium
+  severity: Major
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "Sign in on the device and let the sync run"
+      expected: "No upload is attempted"
+    - step: 2
+      action: "Read the device's local profile"
+      expected: "The server's TWO_TO_FOUR, carrying the server's own updatedAt rather than now"
+    - step: 3
+      action: "GET the profile from the server"
+      expected: "Unchanged — the device did not overwrite it"
+  expected_result: "A device with nothing to say stays quiet. (REQ-DAILYPLAN-007 edge_conditions)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Step 2's timestamp check is the guard against this device winning a conflict it did not earn."
+  automation_status: ManualOnly
+  automation_reference: ""

@@ -93,8 +93,22 @@ profile unwritable.
 
 ## Consumers
 
-`DailyPlanService` reads it. No client writes it yet — **mobile still has to send it**, which is the
-remaining half of this work and is called out in `memory/STATUS.md`.
+`DailyPlanService` reads it.
+
+**`mobile/` writes it** (2026-09-20): `sync/preparationProfileSync.ts`, wired into all three of
+`authContext`'s sync points — the full sync after sign-in, the push-only sync, and the flush before
+sign-out. It uploads, and takes the server's copy when that copy is newer, writing it back with the
+*remote* edit's own timestamp so this device does not look like the most recent editor.
+
+The device's timestamp comes from `app_preferences.profile_updated_at` (mobile migration **0030**),
+stamped whenever the student edits the profile. **A NULL timestamp uploads nothing** — an install
+predating that migration, or one that never onboarded, has no edit moment to claim, and inventing a
+"now" would beat a genuine older edit on the student's other device.
+
+Failures are caught per-call and never abort the sync batch: a backend predating V48 returns 404
+here, and that must not cost a student their restored practice history.
+
+**`web/` does not write it yet** — same pattern, not yet built.
 
 ## Related
 

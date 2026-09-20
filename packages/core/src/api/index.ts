@@ -15,5 +15,6 @@ export * from "./questions";
 export * from "./reference";
 export * from "./reminders";
 export * from "./sessionFeedback";
+export * from "./preparationProfile";
 export * from "./topicProgress";
 export * from "./weaknessRadar";

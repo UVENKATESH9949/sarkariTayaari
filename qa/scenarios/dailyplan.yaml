@@ -144,3 +144,25 @@
   systems: [Backend]
   status: Ready
   notes: "Makes 'a bad session changed tomorrow' inspectable rather than something to take on trust."
+
+- id: SCN-DAILYPLAN-014
+  requirement_ids: [REQ-DAILYPLAN-007]
+  category: Functional
+  title: A real device's stated study time reaches the planner
+  objective: >
+    Verify that after signing in on a device whose onboarding chose a study-time band, the server
+    holds that band and the daily plan budgets from it rather than the 60-minute default.
+  systems: [Backend, Mobile]
+  status: Ready
+  notes: "The whole point of the change — until it passes, Phase 5's decision is only half-implemented."
+
+- id: SCN-DAILYPLAN-015
+  requirement_ids: [REQ-DAILYPLAN-007]
+  category: Boundary
+  title: An install that never edited its profile uploads nothing
+  objective: >
+    Verify a device with a NULL profile_updated_at takes the server's copy if there is one and
+    pushes nothing, rather than inventing a timestamp that would beat a genuine older edit.
+  systems: [Mobile]
+  status: Ready
+  notes: "Covers installs predating migration 0030."

@@ -43,8 +43,9 @@ function coerce(row: {
   dailyStudyTime: string | null;
   onboardingStartedAt: string | null;
   onboardingCompletedAt: string | null;
+  profileUpdatedAt: string | null;
   uiLanguage: string | null;
-}): PreparationProfile & { onboardingStartedAt: string | null } {
+}): PreparationProfile & { onboardingStartedAt: string | null; profileUpdatedAt: string | null } {
   return {
     displayName: row.displayName?.trim() ? row.displayName.trim() : "",
     // Filled in by loadPreparationProfile from its own table — see the note there.
@@ -60,12 +61,21 @@ function coerce(row: {
     dailyStudyTime: isDailyStudyTime(row.dailyStudyTime) ? row.dailyStudyTime : null,
     onboardingStartedAt: row.onboardingStartedAt || null,
     onboardingCompletedAt: row.onboardingCompletedAt || null,
+    profileUpdatedAt: row.profileUpdatedAt || null,
   };
 }
 
-export type StoredProfile = PreparationProfile & { onboardingStartedAt: string | null };
+export type StoredProfile = PreparationProfile & {
+  onboardingStartedAt: string | null;
+  /** When the student last edited this profile — what resolves two devices. See migration 0030. */
+  profileUpdatedAt: string | null;
+};
 
-const EMPTY_STORED: StoredProfile = { ...EMPTY_PREPARATION_PROFILE, onboardingStartedAt: null };
+const EMPTY_STORED: StoredProfile = {
+  ...EMPTY_PREPARATION_PROFILE,
+  onboardingStartedAt: null,
+  profileUpdatedAt: null,
+};
 
 /** Never rejects: a read failure falls back to an empty profile rather than blocking startup. */
 export async function loadPreparationProfile(): Promise<StoredProfile> {
@@ -103,6 +113,20 @@ export async function savePreparationProfile(patch: Partial<StoredProfile>): Pro
     ...(patch.dailyStudyTime !== undefined ? { dailyStudyTime: patch.dailyStudyTime } : {}),
     ...(patch.onboardingStartedAt !== undefined ? { onboardingStartedAt: patch.onboardingStartedAt } : {}),
     ...(patch.onboardingCompletedAt !== undefined ? { onboardingCompletedAt: patch.onboardingCompletedAt } : {}),
+    /*
+     * Stamped on every write, because this is what the server resolves two devices with — the
+     * moment the student edited, never the moment an upload arrived. See migration 0030.
+     *
+     * Deliberately stamped even for a write that only touches onboarding timestamps: those happen
+     * during the flow that is setting the profile in the first place, and a profile whose fields
+     * moved without its timestamp moving would silently lose every later conflict.
+     *
+     * An explicit value wins, and exactly one caller passes one: `preparationProfileSync` writing
+     * the server's copy after losing a conflict. That edit happened on another device at another
+     * time, and stamping it "now" here would make this device look like the most recent editor and
+     * win the next conflict it did not earn.
+     */
+    profileUpdatedAt: patch.profileUpdatedAt ?? new Date().toISOString(),
     // Deliberately absent: preferredLanguage (written through savePreferences({ uiLanguage }), so
     // there is exactly one column and therefore one answer for the interface language) and
     // contentLanguages (its own table, handled above).

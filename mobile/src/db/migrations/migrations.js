@@ -31,6 +31,7 @@ import m0026 from './0026_active_exam.sql';
 import m0027 from './0027_onboarding_profile.sql';
 import m0028 from './0028_content_languages.sql';
 import m0029 from './0029_practice_session_started_at.sql';
+import m0030 from './0030_profile_updated_at.sql';
 
   export default {
     journal,
@@ -64,6 +65,7 @@ m0025,
 m0026,
 m0027,
 m0028,
-m0029
+m0029,
+m0030
     }
   }

@@ -1,15 +1,21 @@
-﻿# Project Status — Resume Point
+# Project Status — Resume Point
 
 **Last updated:** 2026-09-20 — **THE PERSONALIZATION PROGRAM IS COMPLETE. All seven phases shipped,
 all four gates clean.** Phase 6 (TASK-3401, adaptive re-planning) closed it this morning with
 migration **V50** and **20/20 tests green**. Five endpoints now exist end to end:
 `/api/me/learning-state`, `/study-roadmap`, `/revision-plan`, `/preparation-profile`, `/daily-plan`.
 
-**THE ONE THING THAT MATTERS MOST NOW: none of it is visible to a student.** Not one of those five
-endpoints has a caller in `mobile/` or `web/`, and mobile still does not send the preparation
-profile — so every real account falls back to the declared 60-minute default budget. Six phases of
-work exist behind a wall. **That is the next job, and it is bigger than any remaining backend
-work.**
+**THE ONE THING THAT MATTERS MOST NOW: almost none of it is visible to a student.** Not one of the
+five endpoints has a *reading* caller in `mobile/` or `web/`. Six phases of work exist behind a
+wall. **That is the next job, and it is bigger than any remaining backend work.**
+
+**One half of that gap closed the same day: mobile now SENDS the preparation profile.**
+`mobile/src/sync/preparationProfileSync.ts` + migration **0030** (`profile_updated_at`), wired into
+all three of `authContext`'s sync points. Until this, the planner budgeted the declared 60-minute
+default for every real account no matter what the student chose. `tsc` clean on `mobile/` and
+`packages/core`; `expo lint` back at the exact 9-problem baseline. **Not device-verified** —
+`TC-DAILYPLAN-014` exists for exactly that and is `Not Executed`, and step 3 is the one that
+matters (the band can be stored and still not reach the budget).
 
 ## Session of 2026-09-20 — Phase 6, and the program closes
 
@@ -82,7 +88,13 @@ new one created — it is the same endpoint, and splitting it would hide that. R
 
 **NOT verified:**
 
-- **No consumer for any of the five endpoints**, and **mobile still does not send the profile**.
+- **No consumer for any of the five endpoints.** Mobile now *sends* the preparation profile (below),
+  but nothing *reads* a learning state, roadmap, revision plan or daily plan on any client.
+- **The profile sync has never run on a device.** It typechecks and lints clean; nobody has watched
+  a real study-time band travel to the server and change a real budget. `TC-DAILYPLAN-014`.
+- **Migration 0030 has never executed.** SQLite has no `ADD COLUMN IF NOT EXISTS`, so this one
+  statement is unguardable and a failed migration is a hard gate that stops the app starting —
+  the same standing risk every mobile migration in this project carries.
 - The 60% completion line and the 14-day lookback are **declared judgements**, not measurements.
 - **Settlement has never run against a student with a long history** — every test seeds one or two
   past-day tasks; the lookback query is indexed but unmeasured at volume.
@@ -90,10 +102,11 @@ new one created — it is the same endpoint, and splitting it would hide that. R
   real student have a bad Monday and compared Tuesday's plan against it — that needs two real days.
 - No device or browser pass.
 
-**NEXT, in order — and the first two are the same job:**
+**NEXT, in order:**
 
-1. **Send the preparation profile from the phone** (and `web/`). Small, and without it the daily
-   plan budgets a default for every real account.
+1. **Device-verify the profile sync** (`TC-DAILYPLAN-014`/`015`), which also exercises migration
+   0030 against a real populated database — the riskiest single item in that change. `web/` still
+   does not send the profile at all.
 2. **Give the five endpoints a consumer.** This is now the whole program's bottleneck: everything
    works and nothing is visible. Start with the daily plan, since it is the surface a student would
    actually open, and it already resolves each task to a screen that exists.

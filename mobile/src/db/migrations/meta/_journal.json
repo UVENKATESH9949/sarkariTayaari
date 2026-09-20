@@ -211,6 +211,13 @@
       "when": 1788345606040,
       "tag": "0029_practice_session_started_at",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1788432006040,
+      "tag": "0030_profile_updated_at",
+      "breakpoints": true
     }
   ]
 }

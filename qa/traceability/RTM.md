@@ -102,7 +102,7 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 
 ## DAILYPLAN
 
-6 requirements, 13 scenarios, 13 test cases.
+7 requirements, 15 scenarios, 15 test cases.
 
 | Requirement | Priority | Status | Scenario(s) | Test Case(s) | Execution | Defect |
 |---|---|---|---|---|---|---|
@@ -112,6 +112,7 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 | REQ-DAILYPLAN-004: A day is planned once, and what was assigned is recorded | High | Active | SCN-DAILYPLAN-006 | TC-DAILYPLAN-006 (Pass) | EXEC-DAILYPLAN-0006 |  |
 | REQ-DAILYPLAN-005: A closed day's tasks are settled from what the student actually practised | High | Active | SCN-DAILYPLAN-010<br>SCN-DAILYPLAN-011<br>SCN-DAILYPLAN-012 | TC-DAILYPLAN-010 (Pass)<br>TC-DAILYPLAN-011 (Pass)<br>TC-DAILYPLAN-012 (Pass) | EXEC-DAILYPLAN-0010<br>EXEC-DAILYPLAN-0011<br>EXEC-DAILYPLAN-0012 |  |
 | REQ-DAILYPLAN-006: Every task explains why it was assigned, and reports what happened against it | Medium | Active | SCN-DAILYPLAN-013 | TC-DAILYPLAN-013 (Pass) | EXEC-DAILYPLAN-0013 |  |
+| REQ-DAILYPLAN-007: The phone sends the preparation profile, so the planner budgets the student's real time | High | Active | SCN-DAILYPLAN-014<br>SCN-DAILYPLAN-015 | TC-DAILYPLAN-014 (Not Executed)<br>TC-DAILYPLAN-015 (Not Executed) |  |  |
 
 ## LEARNING-STATE
 
@@ -242,9 +243,9 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 
 | Metric | Value |
 |---|---|
-| Total requirements | 150 |
-| Total scenarios | 284 |
-| Total test cases | 306 |
+| Total requirements | 151 |
+| Total scenarios | 286 |
+| Total test cases | 308 |
 | Requirements with zero scenarios | 0  |
 | Real executions recorded | 63 |
 | Real defects logged | 1 |

@@ -5,6 +5,7 @@ import { login as apiLogin, logout as apiLogout, register as apiRegister, type A
 import { syncProgress, uploadPendingProgress } from "../sync/progressSync";
 import { syncBookmarks, uploadPendingBookmarks } from "../sync/bookmarkSync";
 import { syncFollowedExams, uploadPendingFollowedExams } from "../sync/followedExamSync";
+import { syncPreparationProfile } from "../sync/preparationProfileSync";
 import {
   restoreTopicProgressForDevice,
   uploadPendingTopicProgress,
@@ -118,6 +119,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               return 0;
             }
           })(),
+          /*
+           * The preparation profile (TASK-3301/3401). Caught for exactly the same reason as the
+           * two above: a backend predating V48 has no such endpoint, and a 404 here must not abort
+           * the batch and cost a student their restored history.
+           *
+           * It genuinely matters that this runs at all — the daily planner reads this row on the
+           * server, so without it every account is budgeted the declared 60-minute default however
+           * long the student actually said they study.
+           */
+          syncPreparationProfile(activeToken).catch((err) => {
+            captureError(err, { context: "authContext.preparationProfileSync", full: true });
+            return "noop" as const;
+          }),
         ]);
         // Only nudge the UI when something actually landed locally.
         if (
@@ -145,6 +159,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           uploadPendingTopicProgress(activeToken).catch((err) => {
             captureError(err, { context: "authContext.topicProgressSync", full: false });
             return 0;
+          }),
+          // Same batch, same reasoning. A profile edited in Settings while offline goes up on the
+          // next push rather than waiting for a full sync.
+          syncPreparationProfile(activeToken).catch((err) => {
+            captureError(err, { context: "authContext.preparationProfileSync", full: false });
+            return "noop" as const;
           }),
         ]);
       }
@@ -216,6 +236,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           uploadPendingTopicProgress(current).catch((err) => {
             captureError(err, { context: "authContext.topicProgressSync", full: false });
             return 0;
+          }),
+          // Last chance before the token goes away: a study-time change made this session must not
+          // be stranded on the device, or the planner keeps budgeting the old figure.
+          syncPreparationProfile(current).catch((err) => {
+            captureError(err, { context: "authContext.preparationProfileSync", full: false });
+            return "noop" as const;
           }),
         ]);
       } catch {

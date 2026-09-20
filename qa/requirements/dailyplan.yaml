@@ -274,3 +274,52 @@
   automation_hint: >
     AdaptiveReplanningTest.everyTaskCarriesADeterministicReason and
     .aTaskReportsTheWorkActuallyDoneOnItsTopicToday.
+
+- id: REQ-DAILYPLAN-007
+  feature: The phone sends the preparation profile, so the planner budgets the student's real time
+  module: DAILYPLAN
+  system: [Backend, Mobile]
+  source_doc: api/PREPARATION-PROFILE.md
+  source_section: "Consumers"
+  description: >
+    On sign-in and on every push sync, the device uploads its preparation profile and accepts the
+    server's copy when that copy is newer. Mobile migration 0030 adds profile_updated_at, stamped
+    whenever the student edits the profile.
+  business_rule: >
+    Until this existed the server side was complete and unused: every real account fell back to the
+    declared 60-minute default budget however long the student had actually said they study. The
+    timestamp is the moment of the EDIT, never of the upload — an edit made offline and synced three
+    days later must still lose to a newer one made elsewhere. A NULL timestamp (an install predating
+    0030, or one never onboarded) uploads nothing rather than inventing a moment, because an
+    invented "now" would beat a genuine older edit on the student's other device.
+  actor: Signed-in student
+  preconditions:
+    - "A device with a locally-stored preparation profile"
+  inputs:
+    - "A full sync, a push sync, or a sign-out flush"
+  expected_outputs:
+    - "The profile present on the server, or the server's newer copy written locally"
+  validations:
+    - "A losing upload writes the winner locally, preserving the remote edit's own timestamp"
+    - "A failure here never aborts the batch that restores practice history"
+  permissions:
+    - "User token required"
+  dependencies: [REQ-DAILYPLAN-001, REQ-DAILYPLAN-002]
+  error_conditions:
+    - "A backend predating V48 returns 404; caught per-call so the rest of the sync completes"
+  edge_conditions:
+    - "Content languages, interface language, theme and zoom are deliberately not synced — device preferences, not planning inputs"
+    - "The two onboarding timestamps stay device-local: they answer whether THIS INSTALL was onboarded"
+  offline_behavior: "The edit is kept locally with its own timestamp and goes up on the next sync"
+  acceptance_criteria:
+    - "A student who chose 1-2 hours gets a 90-minute budget on the server rather than the 60-minute default"
+    - "Two devices disagreeing converge on the later edit, in one round trip"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: >
+    No automated runner exists for mobile in this project. The server halves are covered by
+    DailyPlanTest.theProfileRoundTripsAndIsScopedToItsOwner and
+    .anOlderEditDoesNotOverwriteANewerOneAndTheLoserIsToldWhatWon; the device half needs a real
+    device pass.
