@@ -9,13 +9,77 @@ migration **V50** and **20/20 tests green**. Five endpoints now exist end to end
 five endpoints has a *reading* caller in `mobile/` or `web/`. Six phases of work exist behind a
 wall. **That is the next job, and it is bigger than any remaining backend work.**
 
-**One half of that gap closed the same day: mobile now SENDS the preparation profile.**
-`mobile/src/sync/preparationProfileSync.ts` + migration **0030** (`profile_updated_at`), wired into
-all three of `authContext`'s sync points. Until this, the planner budgeted the declared 60-minute
-default for every real account no matter what the student chose. `tsc` clean on `mobile/` and
-`packages/core`; `expo lint` back at the exact 9-problem baseline. **Not device-verified** —
-`TC-DAILYPLAN-014` exists for exactly that and is `Not Executed`, and step 3 is the one that
-matters (the band can be stored and still not reach the budget).
+**One half of that gap closed the same day: mobile now SENDS the preparation profile**
+(`mobile/src/sync/preparationProfileSync.ts` + migration **0030**), and **it is now device-verified**
+— see the entry below. On `emulator-5554`, a real install's `ONE_TO_TWO` reached the server and the
+daily plan budgeted **90 minutes, `basis: STATED_BAND`**, not 60 / `DEFAULT`. **Gate 3's wording is
+now true of a real account, not just a fixture.**
+
+**THE DEVICE PASS FOUND A DEFECT THAT WOULD HAVE MADE THE WHOLE CHANGE A NO-OP.** `profile_updated_at`
+arrives *with* migration 0030, so it is NULL on **every install that already exists** — and the first
+version treated a NULL timestamp as "nothing to say" and pushed nothing. The reasoning was sound
+(don't invent a moment and beat a real edit made on another device); the population it applied to was
+wrong. It now falls back to `onboarding_completed_at`, which is not a guess: that *is* when the
+student answered, and it was already stored. **A clean `tsc` and a clean lint said nothing about
+this** — only a real device carrying a real pre-0030 profile did. Fixed and committed in `389f3ca`;
+no defect id, because it never shipped.
+
+## Session of 2026-09-20 (2) — the device pass for the profile sync, and the defect it found
+
+**Emulator `emulator-5554` (Pixel_7), real dev backend on `localhost:8080`, real Neon dev database.
+No physical device was attached; every `adb` call was pinned anyway.** Full records:
+`qa/execution/2026-09-20-dailyplan-device.yaml`. Committed `389f3ca`.
+
+**The defect, and why no amount of reading would have caught it.** `app_preferences.profile_updated_at`
+is added *by* migration 0030 — so it is NULL on **every install that already exists**, which is the
+entire population this change exists to serve. The first version of `syncPreparationProfile` read a
+NULL timestamp as "this device has nothing to say" and uploaded nothing. That rule is right in the
+abstract (inventing a "now" would beat a genuine older edit made on the student's other device) and
+wrong about who it caught. The emulator settled it in one call: its real profile says `ONE_TO_TWO`,
+and `GET /api/me/preparation-profile` returned `{"profile": null}`. **Fixed by falling back to
+`onboarding_completed_at`** — not a guess, that *is* the moment the student answered these questions
+and it was already stored. The original instinct survives where it belongs: an install with
+**neither** timestamp, one that never finished onboarding, still pushes nothing. And the fallback
+carries the *original* moment rather than stamping now, so an existing install cannot win a conflict
+it did not earn. No defect id — it never shipped.
+
+**Verified, with the token read out of the device's own `auth_session` row:**
+
+- **Migration 0030 against a genuinely populated database** (64MB, 37,105 questions, a real
+  profile): **30 -> 31 migrations, nothing lost**, no failure screen, `profile_updated_at` NULL —
+  not `0`, not `""`, which matters because only NULL means "never edited" to the conflict rule. The
+  riskiest statement in the change, since SQLite has no `ADD COLUMN IF NOT EXISTS` and a failed
+  local migration is a hard gate that stops the app starting.
+- The profile reached the server with `updatedAt 2026-09-18T15:13:26.873Z` — the device's own
+  onboarding moment, **equal to the millisecond**.
+- `GET /api/me/daily-plan` returned **`budget.minutes 90`, `basis STATED_BAND`**, `plannedMinutes 89`
+  across **31 tasks / 31 distinct topics** (one step each), and a second read returned
+  `generated:false` with the same task ids. Re-uploading an identical timestamp is accepted as an
+  idempotent write, so a repeat sync neither loops nor flips local state.
+
+**A real observation worth carrying forward, not a defect: 31 tasks for 90 minutes is the wrong
+SHAPE for a day**, and the cause is already on record. Each step is costed at ~3 minutes because the
+estimate tier is `COHORT_DIFFICULTY` on a dev database whose cohort timings are contaminated by the
+~35,700 synthetic load-test questions (this file already discloses the 17s/question figure as
+fixture data, not humans). At the honest `DEFAULT` of 75s/question, ten questions is ~12 minutes and
+a 90-minute day is ~7 topics, which is a sensible plan. **The declared-tier design is what made this
+legible at all** — the payload says `COHORT_DIFFICULTY`, so the small number explains itself rather
+than looking like a planner bug. Worth re-checking against a clean database before anyone tunes the
+planner.
+
+**Docs corrected in place per §6, in all three places that carried the old NULL rule:**
+`api/PREPARATION-PROFILE.md`, `REQ-DAILYPLAN-007`'s `business_rule`, and `TC`/`SCN-DAILYPLAN-015` —
+**reframed to `test_case_version: 2` with its own remarks saying why**, rather than quietly rewritten.
+
+**QA**: `TC-DAILYPLAN-014` **Pass**; new `TC-DAILYPLAN-016` (the regression guard for this defect)
+and `TC-DAILYPLAN-017` (migration 0030 on populated data) both **Pass**; `EXEC-DAILYPLAN-0014..0016`.
+`TC-DAILYPLAN-015` stays `Not Executed` — reaching it needs an install abandoned part-way through
+onboarding. RTM 151/286/308 -> **151/288/310**.
+
+**NOT verified:** **nothing renders any of this.** The daily plan still has no reading consumer, so
+this pass is the device's own database plus two authenticated reads — not a student watching a plan
+appear. `web/` does not send the profile at all. No performance measurement, and no run against an
+account with a large history.
 
 ## Session of 2026-09-20 — Phase 6, and the program closes
 
@@ -104,9 +168,8 @@ new one created — it is the same endpoint, and splitting it would hide that. R
 
 **NEXT, in order:**
 
-1. **Device-verify the profile sync** (`TC-DAILYPLAN-014`/`015`), which also exercises migration
-   0030 against a real populated database — the riskiest single item in that change. `web/` still
-   does not send the profile at all.
+1. ~~Device-verify the profile sync~~ — **DONE 2026-09-20, and it found a defect.** See the session
+   entry above. `web/` still does not send the profile at all.
 2. **Give the five endpoints a consumer.** This is now the whole program's bottleneck: everything
    works and nothing is visible. Start with the daily plan, since it is the surface a student would
    actually open, and it already resolves each task to a screen that exists.
