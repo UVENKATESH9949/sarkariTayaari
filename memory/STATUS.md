@@ -1,15 +1,110 @@
-# Project Status — Resume Point
+﻿# Project Status — Resume Point
 
-**Last updated:** 2026-09-19 (3) — **Phase 5 shipped: the daily plan (TASK-3301), and 🟡 Gate 3 is
-clean.** Six of the personalization program's seven phases are now done; only **Phase 6 (adaptive
-re-planning)** remains, and it is unblocked. The blocker that had stopped Phase 5 — the student's
-study time never reaching the server — was **decided by the owner (D5.1: the phone sends the profile
-up)** and is built, with migrations **V48** and **V49**. `DailyPlanTest` **9/9** against the real
-Neon dev database.
+**Last updated:** 2026-09-20 — **THE PERSONALIZATION PROGRAM IS COMPLETE. All seven phases shipped,
+all four gates clean.** Phase 6 (TASK-3401, adaptive re-planning) closed it this morning with
+migration **V50** and **20/20 tests green**. Five endpoints now exist end to end:
+`/api/me/learning-state`, `/study-roadmap`, `/revision-plan`, `/preparation-profile`, `/daily-plan`.
 
-**The one thing to do first next session: mobile still does not send the profile.** The server side
-is complete and tested, but no device uploads it, so every real account currently falls back to the
-declared 60-minute default. Until that lands, D5.1 is only half-implemented.
+**THE ONE THING THAT MATTERS MOST NOW: none of it is visible to a student.** Not one of those five
+endpoints has a caller in `mobile/` or `web/`, and mobile still does not send the preparation
+profile — so every real account falls back to the declared 60-minute default budget. Six phases of
+work exist behind a wall. **That is the next job, and it is bigger than any remaining backend
+work.**
+
+## Session of 2026-09-20 — Phase 6, and the program closes
+
+**The audit finding that defined the phase: the adaptation already existed.** The program plan
+describes Phase 6 as building adaptive re-planning; the audit found the loop already closed by
+Phases 3-5 — a student practises, attempts land, the health model moves, the roadmap and revision
+orders change, and Phase 5 fills the next day from that changed order. **Building an adaptation
+engine on top would have been a second mechanism competing with the state model**, which is the
+exact drift Phases 3, 4 and 7 spent their time removing. So Phase 6 built the three things
+genuinely missing, and Gate 4's own wording is what it satisfies: *a bad session visibly changes
+tomorrow, and the system can explain the change in one deterministic sentence.*
+
+**Three decisions taken by the owner, all as recommended** (asked in plain language, per the
+standing rule — see the memory note):
+
+1. **D6.1 — outcomes are inferred from real attempts**, not reported by a control. Every answer has
+   carried its `topic_id` since V47, so the system can see whether the assigned topic was
+   practised. Chosen over a "mark as done" button, which needs a screen that does not exist —
+   nothing would have worked until it did.
+2. **D6.2 — unfinished work is dropped**; each day is planned fresh from current state. A student
+   returning after a week off gets a normal day, not a backlog. A genuinely important skipped topic
+   returns through priority ordering.
+3. **D6.3 — one plain deterministic sentence per task**, because a plan that changes with no reason
+   reads as arbitrary.
+
+**Shipped.** Settlement of closed days into `COMPLETED` / `PARTIAL` / `SKIPPED` (>=60% of the asked
+questions is done; idempotent; 14-day lookback so a student returning after a month does not
+trigger a scan of every plan they were ever given); a **stored** reason per task (migration V50, one
+additive nullable column — stored rather than derived because it explains why a task was chosen *at
+the moment it was chosen*, and re-deriving it later would explain an old plan using new state);
+and `answeredToday`/`accuracyToday` per task. **Accuracy never decides the outcome** — doing the
+work and doing it well are different questions, and the health model owns the second.
+
+**Two limits written into the contract rather than left to be discovered:** self-directed practice
+on an assigned topic counts as the task (the system sees activity, not intent), and the 60% line is
+a declared judgement, not a measurement.
+
+**Verified: 20 tests, 0 failures, BUILD SUCCESS** against the real Neon dev database —
+`AdaptiveReplanningTest` **5/5** (526.5s), `TaskOutcomeRuleTest` **6/6** (0.011s), and
+`DailyPlanTest` **9/9** (559.6s) re-run as a regression because Phase 6 changed that endpoint's
+response shape. **Phase 5 did not regress.** V50 applied cleanly (49 -> 50). On real data: two
+tasks seeded for yesterday settled COMPLETED and SKIPPED from genuine practice, a second read
+settled nothing, today's own tasks stayed ASSIGNED, and a real 4-question session with 1 correct
+surfaced as `answeredToday 4` / `accuracyToday 25`.
+
+**PHASE 6 PASSED ITS FIRST REAL RUN — the only phase in this program that did, and the reason is
+worth copying.** Its rules went into a plain-JUnit test (`TaskOutcomeRuleTest`, no Spring, no
+database, 0.011s) **before** any integration test ran, so every threshold was already proven
+against counts the test controlled. Phase 4 learned this the hard way when a tier test failed
+against uncontrolled database contents; Phase 6 applied it up front.
+
+**AN EARLIER RUN TESTED NOTHING, AND IT WAS NOT THE CODE.** On 2026-09-19 at 23:56 all 14
+integration tests errored in ~0.001s each. Not test logic: **the database connection dropped while
+Flyway was acquiring its startup advisory lock** (`SocketException: Connection reset` -> "Unable to
+acquire PostgreSQL advisory lock" -> the Spring context never came up). `TaskOutcomeRuleTest`, which
+needs no database, passed 6/6 in that same run — **that contrast is what made the diagnosis
+immediate, and is the generalisable tell: if every database-backed test dies in a millisecond and
+the database-free one passes, suspect the context, not the code.** This file already records an
+overnight network drop causing the same class of failure once before.
+
+**An environment note for the next session: this session's bash shell lost its PATH** after a
+break — `mvn`, `python`, `grep` and even `tail` were all "command not found". PowerShell had all of
+them, so everything from that point ran there. Worth checking `Get-Command mvn` before concluding a
+build tool is genuinely missing.
+
+**QA**: `REQ-DAILYPLAN-005/006`, `SCN-DAILYPLAN-010..013`, `TC-DAILYPLAN-010..013`, plus
+`EXEC-DAILYPLAN-0010..0013` (all Pass). The existing `DAILYPLAN` module was extended rather than a
+new one created — it is the same endpoint, and splitting it would hide that. RTM 148/280/302 ->
+**150/284/306**.
+
+**NOT verified:**
+
+- **No consumer for any of the five endpoints**, and **mobile still does not send the profile**.
+- The 60% completion line and the 14-day lookback are **declared judgements**, not measurements.
+- **Settlement has never run against a student with a long history** — every test seeds one or two
+  past-day tasks; the lookback query is indexed but unmeasured at volume.
+- **The adaptation is proven by construction, not by a multi-day observation.** Nobody has watched a
+  real student have a bad Monday and compared Tuesday's plan against it — that needs two real days.
+- No device or browser pass.
+
+**NEXT, in order — and the first two are the same job:**
+
+1. **Send the preparation profile from the phone** (and `web/`). Small, and without it the daily
+   plan budgets a default for every real account.
+2. **Give the five endpoints a consumer.** This is now the whole program's bottleneck: everything
+   works and nothing is visible. Start with the daily plan, since it is the surface a student would
+   actually open, and it already resolves each task to a screen that exists.
+3. **A way to act on a task** — marking one done, or simply opening its practice screen from the
+   plan — which is the natural companion to (2) and the only thing `study_tasks.status` still needs
+   before Phase 6's record is complete in practice as well as in principle.
+4. Measure what was assumed: the band-to-minutes mid-points, the 60% completion line, the half-day
+   revision cap, the 3/7/21/45 revision intervals. All are declared judgements, all are now
+   generating real data that could replace them.
+5. Still outstanding from earlier sessions: `web/` has never been deployed, and production still
+   shares one Neon database with dev.
 
 ## Session of 2026-09-19 (3) — Phase 5, the daily plan
 

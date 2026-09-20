@@ -102,7 +102,7 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 
 ## DAILYPLAN
 
-4 requirements, 9 scenarios, 9 test cases.
+6 requirements, 13 scenarios, 13 test cases.
 
 | Requirement | Priority | Status | Scenario(s) | Test Case(s) | Execution | Defect |
 |---|---|---|---|---|---|---|
@@ -110,6 +110,8 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 | REQ-DAILYPLAN-002: Two devices disagreeing resolve on when the edit happened, not on who synced last | High | Active | SCN-DAILYPLAN-003 | TC-DAILYPLAN-003 (Pass) | EXEC-DAILYPLAN-0003 |  |
 | REQ-DAILYPLAN-003: A day's tasks fit the time the student said they have | High | Active | SCN-DAILYPLAN-004<br>SCN-DAILYPLAN-005<br>SCN-DAILYPLAN-007<br>SCN-DAILYPLAN-008 | TC-DAILYPLAN-004 (Pass)<br>TC-DAILYPLAN-005 (Pass)<br>TC-DAILYPLAN-007 (Pass)<br>TC-DAILYPLAN-008 (Pass) | EXEC-DAILYPLAN-0004<br>EXEC-DAILYPLAN-0005<br>EXEC-DAILYPLAN-0007<br>EXEC-DAILYPLAN-0008 |  |
 | REQ-DAILYPLAN-004: A day is planned once, and what was assigned is recorded | High | Active | SCN-DAILYPLAN-006 | TC-DAILYPLAN-006 (Pass) | EXEC-DAILYPLAN-0006 |  |
+| REQ-DAILYPLAN-005: A closed day's tasks are settled from what the student actually practised | High | Active | SCN-DAILYPLAN-010<br>SCN-DAILYPLAN-011<br>SCN-DAILYPLAN-012 | TC-DAILYPLAN-010 (Pass)<br>TC-DAILYPLAN-011 (Pass)<br>TC-DAILYPLAN-012 (Pass) | EXEC-DAILYPLAN-0010<br>EXEC-DAILYPLAN-0011<br>EXEC-DAILYPLAN-0012 |  |
+| REQ-DAILYPLAN-006: Every task explains why it was assigned, and reports what happened against it | Medium | Active | SCN-DAILYPLAN-013 | TC-DAILYPLAN-013 (Pass) | EXEC-DAILYPLAN-0013 |  |
 
 ## LEARNING-STATE
 
@@ -240,9 +242,9 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 
 | Metric | Value |
 |---|---|
-| Total requirements | 148 |
-| Total scenarios | 280 |
-| Total test cases | 302 |
+| Total requirements | 150 |
+| Total scenarios | 284 |
+| Total test cases | 306 |
 | Requirements with zero scenarios | 0  |
-| Real executions recorded | 59 |
+| Real executions recorded | 63 |
 | Real defects logged | 1 |

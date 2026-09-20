@@ -29,6 +29,10 @@ public final class DailyPlanDtos {
      * @param generated      true when this call created the plan, false when it returned the plan
      *                       already assigned for this day. A second read never re-plans — see
      *                       {@code DailyPlanService}
+     * @param settledTaskCount how many tasks from earlier, already-closed days this call settled
+     *                       into a real outcome. Reported rather than silent: it is the one moment
+     *                       the system judges past work, and a caller seeing it move knows the
+     *                       record caught up
      * @param tasks          in the order they were assigned
      */
     public record DailyPlanResponse(String examCode,
@@ -37,6 +41,7 @@ public final class DailyPlanDtos {
                                     TimeBudget budget,
                                     int plannedMinutes,
                                     boolean generated,
+                                    int settledTaskCount,
                                     List<PlannedTask> tasks) {
     }
 
@@ -64,9 +69,17 @@ public final class DailyPlanDtos {
      * @param estimate    which tier of the workload ladder produced {@code plannedMinutes}, carried
      *                    through unchanged so a task is as honest about its numbers as the roadmap
      *                    that produced it
-     * @param status      ASSIGNED / COMPLETED / SKIPPED. Phase 5 only ever writes ASSIGNED; acting
-     *                    on a task is a later phase, and the field exists now so that phase adds
-     *                    behaviour rather than a migration
+     * @param status      ASSIGNED while the day is open; COMPLETED / PARTIAL / SKIPPED once it has
+     *                    closed and been settled from real attempts (TASK-3401). There is no
+     *                    "mark as done" control — the outcome is inferred, because every answer has
+     *                    carried its topic since V47
+     * @param reason      one deterministic sentence saying why this task was assigned, fixed at
+     *                    assignment time. Null for tasks assigned before V50
+     * @param answeredToday how many questions the student actually answered on this topic during
+     *                    this task's day — live for today, historical for a past day
+     * @param accuracyToday accuracy across those answers, or null when none were answered. This is
+     *                    what makes "a bad session changed tomorrow" inspectable rather than
+     *                    something a reader has to take on trust
      */
     public record PlannedTask(UUID taskId,
                               int displayOrder,
@@ -81,6 +94,9 @@ public final class DailyPlanDtos {
                               Integer plannedQuestionCount,
                               String estimate,
                               String status,
+                              String reason,
+                              long answeredToday,
+                              Integer accuracyToday,
                               OffsetDateTime createdAt) {
     }
 }

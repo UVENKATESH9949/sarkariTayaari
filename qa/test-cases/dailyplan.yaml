@@ -282,3 +282,148 @@
   remarks: null
   automation_status: Automated
   automation_reference: "DailyPlanTest.requiresASignedInUser"
+
+- id: TC-DAILYPLAN-010
+  requirement_ids: [REQ-DAILYPLAN-005]
+  scenario_id: SCN-DAILYPLAN-010
+  system: Backend
+  module: DAILYPLAN
+  feature: A closed day's tasks are settled from what the student actually practised
+  title: Yesterday's tasks settle to COMPLETED or SKIPPED from real attempts
+  objective: >
+    Confirm the record stops saying ASSIGNED once a day is over, and that the outcome reflects what
+    the student genuinely did.
+  preconditions:
+    - "Two tasks assigned for yesterday, on two different topics, each asking for 5 questions"
+    - "Real practice uploaded for only one of those topics, dated inside yesterday"
+  test_data: "Two seeded past-day tasks; one practice session of 6 answers dated 19:30 yesterday"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Read today's daily plan, which is what triggers settlement"
+      expected: "settledTaskCount is at least 2"
+    - step: 2
+      action: "Re-read the practised topic's task from the database"
+      expected: "status COMPLETED — 6 answered against 5 planned clears the threshold"
+    - step: 3
+      action: "Re-read the untouched topic's task"
+      expected: "status SKIPPED"
+  expected_result: "A closed day is judged from real activity, not left open forever. (REQ-DAILYPLAN-005 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Only possible because V47 froze topic_id onto every attempt row."
+  automation_status: Automated
+  automation_reference: "AdaptiveReplanningTest.yesterdaysTasksSettleFromWhatWasActuallyPractised"
+
+- id: TC-DAILYPLAN-011
+  requirement_ids: [REQ-DAILYPLAN-005]
+  scenario_id: SCN-DAILYPLAN-011
+  system: Backend
+  module: DAILYPLAN
+  feature: A closed day's tasks are settled from what the student actually practised
+  title: Settlement is idempotent, and today is never judged early
+  objective: "Confirm a decided day is not re-judged, and an open day is not judged at all."
+  preconditions:
+    - "One task assigned for yesterday; a separate exam with tasks generated for today"
+  test_data: "One seeded past-day task; a fresh plan for today"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Major
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "Read the plan once and note settledTaskCount"
+      expected: "1 — the past task was judged"
+    - step: 2
+      action: "Read it again"
+      expected: "0 — nothing left unsettled, so nothing is re-judged"
+    - step: 3
+      action: "Read today's own tasks' status"
+      expected: "All ASSIGNED — marking an untouched task skipped at 9am would be wrong and discouraging"
+  expected_result: "Judgement happens once, and only after a day has closed. (REQ-DAILYPLAN-005 validations)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "AdaptiveReplanningTest.settlementIsIdempotent, .todaysOwnTasksAreLeftAssigned"
+
+- id: TC-DAILYPLAN-012
+  requirement_ids: [REQ-DAILYPLAN-005]
+  scenario_id: SCN-DAILYPLAN-012
+  system: Backend
+  module: DAILYPLAN
+  feature: A closed day's tasks are settled from what the student actually practised
+  title: The outcome rule behaves as decided at every threshold
+  objective: "Confirm each branch with counts the test controls, including ones real data cannot be made to hit."
+  preconditions:
+    - "None — plain JUnit, no Spring context, no database"
+  test_data: "Constructed observed counts against tasks planned at 15, 10 and no question count"
+  test_environment: "Plain JUnit"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Resolve with nothing answered"
+      expected: "SKIPPED"
+    - step: 2
+      action: "Resolve at and above the threshold, including more than asked"
+      expected: "COMPLETED in every case — a student who kept going has not failed the task"
+    - step: 3
+      action: "Resolve with real but insufficient work, including a single answer"
+      expected: "PARTIAL — calling that skipped would be false"
+    - step: 4
+      action: "Resolve a task answered entirely wrongly"
+      expected: "COMPLETED — the work was done; how well is the health model's question"
+    - step: 5
+      action: "Read accuracy with nothing answered"
+      expected: "null, never zero — zero would claim a measured 0%"
+  expected_result: "Every branch behaves as decided. (REQ-DAILYPLAN-005 validations)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Asserts the rule behaves as DECIDED. It does not assert 60% is the right line for this product —
+    that is a declared judgement, and no test could establish it.
+  automation_status: Automated
+  automation_reference: "service.TaskOutcomeRuleTest (6 methods)"
+
+- id: TC-DAILYPLAN-013
+  requirement_ids: [REQ-DAILYPLAN-006]
+  scenario_id: SCN-DAILYPLAN-013
+  system: Backend
+  module: DAILYPLAN
+  feature: Every task explains why it was assigned, and reports what happened against it
+  title: Each task carries a reason naming its topic, and reports real activity
+  objective: >
+    Confirm the plan explains itself rather than appearing to shuffle, and that observed work is
+    readable against the task that asked for it.
+  preconditions:
+    - "Three practicable topics with priorities; a separate topic with four questions for the activity check"
+  test_data: "A generated plan; one practice session of 4 answers, 1 correct"
+  test_environment: "Backend against the real dev database"
+  priority: Medium
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Read reason on every task"
+      expected: "Non-blank, and each names its own topic so it stands alone in a list"
+    - step: 2
+      action: "Read the first task's reason for a never-started topic"
+      expected: "Says it has not been started, rather than a generic ranking line"
+    - step: 3
+      action: "Practise 4 questions on an assigned topic, then re-read the plan"
+      expected: "answeredToday 4, accuracyToday 25, and status still ASSIGNED — the day is open"
+  expected_result: "The plan is explicable and its outcomes inspectable. (REQ-DAILYPLAN-006 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Step 3 is what makes 'a bad session changes tomorrow' checkable rather than asserted."
+  automation_status: Automated
+  automation_reference: "AdaptiveReplanningTest.everyTaskCarriesADeterministicReason, .aTaskReportsTheWorkActuallyDoneOnItsTopicToday"

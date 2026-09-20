@@ -82,6 +82,7 @@ public class DailyPlanService {
     private final RevisionPlanService revision;
     private final PreparationProfileService profiles;
     private final StudyTaskRepository tasks;
+    private final TaskOutcomeService taskOutcomes;
     private final TopicRepository topics;
     private final SubjectRepository subjects;
 
@@ -91,6 +92,7 @@ public class DailyPlanService {
                             RevisionPlanService revision,
                             PreparationProfileService profiles,
                             StudyTaskRepository tasks,
+                            TaskOutcomeService taskOutcomes,
                             TopicRepository topics,
                             SubjectRepository subjects) {
         this.learningState = learningState;
@@ -99,6 +101,7 @@ public class DailyPlanService {
         this.revision = revision;
         this.profiles = profiles;
         this.tasks = tasks;
+        this.taskOutcomes = taskOutcomes;
         this.topics = topics;
         this.subjects = subjects;
     }
@@ -107,9 +110,21 @@ public class DailyPlanService {
         ZoneId zone = parseZone(zoneId);
         LocalDate today = now.atZoneSameInstant(zone).toLocalDate();
 
+        /*
+         * Settle days that have already closed before doing anything else (TASK-3401). This is the
+         * natural moment: it is the one time the system is guaranteed to be looking at this student
+         * again, and yesterday's outcome is exactly what makes today's plan defensible. Idempotent,
+         * because only ASSIGNED rows are eligible.
+         */
+        int settled = taskOutcomes.settlePastDays(user.getId(), today);
+
+        Map<UUID, TaskOutcomeService.Observed> observedToday =
+                taskOutcomes.observedOn(user.getId(), today, zone);
+
         List<StudyTask> existing = tasks.findForDay(user.getId(), today, examCode);
         if (!existing.isEmpty()) {
-            return respond(examCode, today, zone, budgetFor(user), existing, false);
+            return respond(examCode, today, zone, budgetFor(user), existing, false, settled,
+                    observedToday);
         }
 
         /*
@@ -126,7 +141,8 @@ public class DailyPlanService {
                 roadmap.roadmapFrom(assembled, timing, now).topics(),
                 now);
 
-        return respond(examCode, today, zone, budget, tasks.saveAll(generated), true);
+        return respond(examCode, today, zone, budget, tasks.saveAll(generated), true, settled,
+                observedToday);
     }
 
     /* ============================================================================= generation */
@@ -147,7 +163,7 @@ public class DailyPlanService {
             out.add(task(user, examCode, today, zone, out.size(), "REVISION",
                     t.retest().action(), t.topicId(), t.topicName(), t.subjectId(), t.subjectName(),
                     null, minutes, t.retest().questionCount(),
-                    t.retest().estimate().source(), now));
+                    t.retest().estimate().source(), revisionReason(t), now));
             remaining -= minutes;
             revisionAllowance -= minutes;
         }
@@ -168,7 +184,7 @@ public class DailyPlanService {
             out.add(task(user, examCode, today, zone, out.size(), "PRACTICE",
                     step.action(), t.topicId(), t.topicName(), t.subjectId(), t.subjectName(),
                     step.difficultyCode(), step.estimatedMinutes(), step.questionCount(),
-                    t.estimate().source(), now));
+                    t.estimate().source(), practiceReason(t), now));
             remaining -= step.estimatedMinutes();
         }
 
@@ -220,14 +236,14 @@ public class DailyPlanService {
                     bestRevision.retest().action(), bestRevision.topicId(), bestRevision.topicName(),
                     bestRevision.subjectId(), bestRevision.subjectName(), null,
                     bestRevision.retest().estimatedMinutes(), bestRevision.retest().questionCount(),
-                    bestRevision.retest().estimate().source(), now);
+                    bestRevision.retest().estimate().source(), revisionReason(bestRevision), now);
         }
         if (bestStep != null) {
             return task(user, examCode, today, zone, 0, "PRACTICE",
                     bestStep.action(), bestTopic.topicId(), bestTopic.topicName(),
                     bestTopic.subjectId(), bestTopic.subjectName(), bestStep.difficultyCode(),
                     bestStep.estimatedMinutes(), bestStep.questionCount(),
-                    bestTopic.estimate().source(), now);
+                    bestTopic.estimate().source(), practiceReason(bestTopic), now);
         }
         // Nothing practicable at all for this exam — an empty plan is then the honest answer.
         return null;
@@ -251,7 +267,7 @@ public class DailyPlanService {
                            String source, String action, UUID topicId, String topicName,
                            UUID subjectId, String subjectName, String difficultyCode,
                            int minutes, Integer questionCount, String estimateSource,
-                           OffsetDateTime now) {
+                           String reason, OffsetDateTime now) {
         StudyTask task = new StudyTask();
         task.setId(UUID.randomUUID());
         task.setUserId(user.getId());
@@ -272,8 +288,56 @@ public class DailyPlanService {
         task.setEstimateSource(estimateSource);
         task.setDisplayOrder(order);
         task.setStatus("ASSIGNED");
+        task.setReason(reason);
         task.setCreatedAt(now);
         return task;
+    }
+
+    /* =============================================================================== reasons */
+
+    /*
+     * One deterministic sentence per task (TASK-3401 D6.3). A plan that changes with no reason
+     * given reads as arbitrary, and this project already explains rather than asserts — RadarTopic
+     * carries the same kind of sentence for the same reason.
+     *
+     * These are built from a rule table, never from a model, and they are STORED on the task: a
+     * reason explains why something was chosen at the moment it was chosen, and re-deriving it a
+     * week later would explain an old plan using new state — which is precisely the thing that
+     * moved.
+     */
+
+    private static String revisionReason(RevisionTopic t) {
+        String topic = t.topicName() == null ? "This topic" : t.topicName();
+        Integer overdue = t.daysOverdue();
+        Integer since = t.daysSinceLastPractice();
+
+        if (overdue != null && overdue > 0) {
+            return topic + " is " + overdue + (overdue == 1 ? " day" : " days")
+                    + " past its revision date — last practised "
+                    + (since == null ? "a while ago" : since + " days ago")
+                    + ", on a " + t.intervalDays() + "-day interval.";
+        }
+        return topic + " is due for revision today, on a " + t.intervalDays() + "-day interval.";
+    }
+
+    private static String practiceReason(RoadmapTopic t) {
+        String topic = t.topicName() == null ? "This topic" : t.topicName();
+
+        // Weakest signal first: a topic in trouble is here because of that, whatever its rank.
+        if ("NEEDS_ATTENTION".equals(t.performanceState())
+                || "NEEDS_REVISION".equals(t.performanceState())) {
+            return topic + " needs attention — your recent work there has been struggling, and it "
+                    + "ranks " + t.priorityRank() + " for this exam.";
+        }
+        if ("NOT_STARTED".equals(t.curriculumState())) {
+            return topic + " is next by exam priority (rank " + t.priorityRank()
+                    + ") and you have not started it yet.";
+        }
+        if ("IMPROVING".equals(t.performanceState())) {
+            return topic + " is improving — keeping it going while it ranks " + t.priorityRank()
+                    + " for this exam.";
+        }
+        return topic + " ranks " + t.priorityRank() + " for this exam and is not finished yet.";
     }
 
     /* ================================================================================ budget */
@@ -307,11 +371,15 @@ public class DailyPlanService {
 
     private static DailyPlanResponse respond(String examCode, LocalDate today, ZoneId zone,
                                              TimeBudget budget, Iterable<StudyTask> rows,
-                                             boolean generated) {
+                                             boolean generated, int settled,
+                                             Map<UUID, TaskOutcomeService.Observed> observed) {
         List<PlannedTask> out = new ArrayList<>();
         int planned = 0;
         for (StudyTask row : rows) {
             planned += row.getPlannedMinutes();
+            TaskOutcomeService.Observed seen = row.getTopicId() == null
+                    ? TaskOutcomeService.Observed.NOTHING
+                    : observed.getOrDefault(row.getTopicId(), TaskOutcomeService.Observed.NOTHING);
             out.add(new PlannedTask(
                     row.getId(),
                     row.getDisplayOrder(),
@@ -326,8 +394,12 @@ public class DailyPlanService {
                     row.getPlannedQuestionCount(),
                     row.getEstimateSource(),
                     row.getStatus(),
+                    row.getReason(),
+                    seen.answered(),
+                    seen.accuracyPercent(),
                     row.getCreatedAt()));
         }
-        return new DailyPlanResponse(examCode, today, zone.getId(), budget, planned, generated, out);
+        return new DailyPlanResponse(examCode, today, zone.getId(), budget, planned, generated,
+                settled, out);
     }
 }

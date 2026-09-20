@@ -181,3 +181,96 @@
   ambiguity: null
   automation_status: Automated
   automation_hint: "DailyPlanTest.asecondReadReturnsTheSamePlanRatherThanReplanning"
+
+- id: REQ-DAILYPLAN-005
+  feature: A closed day's tasks are settled from what the student actually practised
+  module: DAILYPLAN
+  system: [Backend]
+  source_doc: api/DAILY-PLAN.md
+  source_section: "Outcomes: what actually happened"
+  description: >
+    When a new day's plan is generated, tasks from earlier days that are still ASSIGNED are judged
+    against real attempts on their topic that day and settled to COMPLETED, PARTIAL or SKIPPED.
+    settledTaskCount reports how many were judged.
+  business_rule: >
+    There is no "mark as done" control, because there is no screen to put one on — the outcome is
+    inferred instead, which is possible only because V47 froze topic_id onto every attempt row.
+    COMPLETED is at least 60% of the asked questions, PARTIAL is real but insufficient work, SKIPPED
+    is nothing at all. Accuracy never decides the outcome: doing the work and doing it well are
+    different questions, and the health model owns the second. Two limits are accepted openly —
+    self-directed practice on an assigned topic counts as the task, and the 60% line is a declared
+    judgement rather than a measurement.
+  actor: Signed-in student
+  preconditions:
+    - "Tasks assigned on a day that has since closed"
+  inputs:
+    - "A daily-plan read on a later day"
+  expected_outputs:
+    - "Each closed task carrying COMPLETED, PARTIAL or SKIPPED, and settledTaskCount"
+  validations:
+    - "A topic practised past the threshold settles COMPLETED; one never touched settles SKIPPED"
+    - "Settlement is idempotent — a second read judges nothing"
+    - "Today's own tasks stay ASSIGNED while the day is still open"
+  permissions:
+    - "User token required; settlement is scoped to the calling student"
+  dependencies: [REQ-DAILYPLAN-004, REQ-USERPROGRESS-001]
+  error_conditions: []
+  edge_conditions:
+    - "Lookback is 14 days; older tasks stay ASSIGNED, which is an honest 'never judged'"
+    - "Each task is judged in the zone its own day was resolved in, so a student who travelled still gets their own midnight"
+  offline_behavior: "None — server-computed"
+  acceptance_criteria:
+    - "Yesterday's tasks stop saying ASSIGNED once the day is over"
+    - "A day already judged is never re-judged"
+  priority: High
+  status: Active
+  ambiguity: >
+    Whether 60% is the right line is unmeasured — nobody has checked what share of an assigned set
+    real students complete.
+  automation_status: Automated
+  automation_hint: >
+    AdaptiveReplanningTest.yesterdaysTasksSettleFromWhatWasActuallyPractised, .settlementIsIdempotent,
+    .todaysOwnTasksAreLeftAssigned, and service.TaskOutcomeRuleTest for the rule itself.
+
+- id: REQ-DAILYPLAN-006
+  feature: Every task explains why it was assigned, and reports what happened against it
+  module: DAILYPLAN
+  system: [Backend]
+  source_doc: api/DAILY-PLAN.md
+  source_section: "Every task says why it is there"
+  description: >
+    Each task carries a one-sentence deterministic reason fixed at assignment time, plus
+    answeredToday and accuracyToday describing real activity on its topic during its day.
+  business_rule: >
+    A plan that changes with no reason given reads as arbitrary, and this project explains rather
+    than asserts. The sentence comes from a rule table and never from a model. It is STORED rather
+    than derived on read, because it explains why a task was chosen at the moment it was chosen —
+    re-deriving it later would explain an old plan using new state, which is the very thing that
+    moved.
+  actor: Signed-in student
+  preconditions:
+    - "A generated plan"
+  inputs:
+    - "examCode"
+  expected_outputs:
+    - "reason on every task, naming its topic; answeredToday and accuracyToday"
+  validations:
+    - "accuracyToday is null when nothing was answered, never zero"
+    - "A never-started topic's reason says so rather than giving a generic ranking line"
+  permissions:
+    - "User token required"
+  dependencies: [REQ-DAILYPLAN-003]
+  error_conditions: []
+  edge_conditions:
+    - "Null reason for tasks assigned before migration V50 — no backfill was invented"
+  offline_behavior: "None"
+  acceptance_criteria:
+    - "Every task in a generated plan carries a non-blank reason naming its own topic"
+    - "Observed activity is readable against the plan that asked for it"
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    AdaptiveReplanningTest.everyTaskCarriesADeterministicReason and
+    .aTaskReportsTheWorkActuallyDoneOnItsTopicToday.

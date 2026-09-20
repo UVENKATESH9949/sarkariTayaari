@@ -27,4 +27,20 @@ public interface StudyTaskRepository extends JpaRepository<StudyTask, UUID> {
     List<StudyTask> findForDay(@Param("userId") UUID userId,
                                @Param("planDate") LocalDate planDate,
                                @Param("examCode") String examCode);
+
+    /**
+     * Tasks from days already over that nobody has settled yet (TASK-3401). Bounded to a few days
+     * back rather than all history: a student returning after a month should not trigger a scan of
+     * every plan they were ever given, and an unsettled task from six weeks ago tells Phase 6
+     * nothing it can still act on.
+     */
+    @Query("""
+            select t from StudyTask t
+            where t.userId = :userId and t.status = 'ASSIGNED'
+              and t.planDate < :today and t.planDate >= :since
+            order by t.planDate asc, t.displayOrder asc
+            """)
+    List<StudyTask> findUnsettledBefore(@Param("userId") UUID userId,
+                                        @Param("today") LocalDate today,
+                                        @Param("since") LocalDate since);
 }

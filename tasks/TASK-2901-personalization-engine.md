@@ -1,10 +1,26 @@
 # TASK-2901 — Personalization engine: the seven-phase program
 
-**Status: PLAN.** Phase 1 shipped as [TASK-2801](TASK-2801-behavioral-data-foundation.md) and is
-**device-verified — 🔴 Gate 1 is clean** (2026-09-19); Phase 2 shipped with it. Phases 3-7 are
-unbuilt. **Phase 3 is scoped and awaiting sign-off** in
-[TASK-3001](TASK-3001-canonical-learning-state.md), which audited the producers and proposes the
-contract: D3.2 is decided, D3.1 and the rest are not.
+**Status: ALL SEVEN PHASES SHIPPED** (2026-09-19 / 2026-09-20). Every gate is clean.
+
+| Phase | Task | Shipped | Migrations |
+|---|---|---|---|
+| 1 Data integrity & capture | [TASK-2801](TASK-2801-behavioral-data-foundation.md) | 🔴 **Gate 1** — device-verified | V47, mobile 0029 |
+| 2 Analytics foundation | TASK-2801 | with Phase 1 | — |
+| 3 Canonical learning state | [TASK-3001](TASK-3001-canonical-learning-state.md) | 🟠 **Gate 2** | none needed |
+| 4 Roadmap + workload | [TASK-3101](TASK-3101-personalized-roadmap-and-workload.md) | ✅ | none needed |
+| 7 Revision & assessment timing | [TASK-3201](TASK-3201-revision-and-assessment-timing.md) | ✅ | none needed |
+| 5 Daily task assignment | [TASK-3301](TASK-3301-daily-task-assignment.md) | 🟡 **Gate 3** | V48, V49 |
+| 6 Adaptive re-planning | [TASK-3401](TASK-3401-adaptive-replanning.md) | 🟢 **Gate 4** | V50 |
+
+**What the program did not turn out to need.** Three of the seven phases shipped with **no
+migration at all**, because the audit for each found the capability already present and the work
+was naming and exposing it rather than building it. Phase 6 in particular found the adaptation loop
+already closed by Phases 3-5 — it added legibility and a record, not an engine. That pattern held
+from the first phase to the last, and is the single most useful thing to carry into the next
+program.
+
+**The gap the whole program now has: none of it is visible.** All five endpoints work and none has
+a caller — see each phase's report, and `memory/STATUS.md`'s resume point.
 
 This is the program-level plan: what each phase is for, **what already exists for it in this
 codebase**, what it must decide before starting, and what would make it done. Each phase gets its

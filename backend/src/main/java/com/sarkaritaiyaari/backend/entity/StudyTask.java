@@ -102,9 +102,21 @@ public class StudyTask {
     @Column(name = "display_order", nullable = false)
     private int displayOrder;
 
-    /** ASSIGNED / COMPLETED / SKIPPED. Only ASSIGNED is written by Phase 5. */
+    /**
+     * ASSIGNED while the day is still open, then settled to COMPLETED / PARTIAL / SKIPPED once it
+     * closes (TASK-3401). Settlement is inferred from real attempts on the topic that day — there
+     * is no "mark as done" control, because there is no screen to put one on.
+     */
     @Column(nullable = false)
     private String status = "ASSIGNED";
+
+    /**
+     * One deterministic sentence saying why this task was assigned, fixed at assignment time.
+     * Stored rather than derived on purpose: deriving it later would re-explain an old plan using
+     * today's state, and the state moving is the very thing this phase exists to show.
+     */
+    @Column(length = 400)
+    private String reason;
 
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
@@ -147,6 +159,13 @@ public class StudyTask {
 
     public void setTopic(Topic topic) { this.topic = topic; }
 
+    /**
+     * The assigned topic's id, or null once that topic has left the catalogue (the association is
+     * {@code ON DELETE SET NULL}, so the historical record survives the topic itself). Convenience
+     * for callers matching a task against observed attempts, which key on the id alone.
+     */
+    public UUID getTopicId() { return topic == null ? null : topic.getId(); }
+
     public Subject getSubject() { return subject; }
 
     public void setSubject(Subject subject) { this.subject = subject; }
@@ -184,6 +203,10 @@ public class StudyTask {
     public String getStatus() { return status; }
 
     public void setStatus(String status) { this.status = status; }
+
+    public String getReason() { return reason; }
+
+    public void setReason(String reason) { this.reason = reason; }
 
     public OffsetDateTime getCreatedAt() { return createdAt; }
 

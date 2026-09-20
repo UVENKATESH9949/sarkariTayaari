@@ -100,3 +100,47 @@
   systems: [Backend]
   status: Ready
   notes: null
+
+- id: SCN-DAILYPLAN-010
+  requirement_ids: [REQ-DAILYPLAN-005]
+  category: Functional
+  title: Yesterday's tasks settle from what was actually practised
+  objective: >
+    Verify a task whose topic was genuinely practised settles COMPLETED while one never touched
+    settles SKIPPED, so the record stops saying ASSIGNED forever.
+  systems: [Backend]
+  status: Ready
+  notes: "The core of Phase 6 — the four-way distinction study_tasks exists for, finally recorded."
+
+- id: SCN-DAILYPLAN-011
+  requirement_ids: [REQ-DAILYPLAN-005]
+  category: Boundary
+  title: Settlement runs once, and never judges a day still open
+  objective: >
+    Verify a second read judges nothing, and that today's untouched tasks stay ASSIGNED rather than
+    being marked skipped while the day is still running.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-DAILYPLAN-012
+  requirement_ids: [REQ-DAILYPLAN-005]
+  category: Functional
+  title: The outcome rule maps observed work to an outcome as decided
+  objective: >
+    Verify the thresholds with constructed counts — nothing answered, enough answered, real but
+    insufficient, no planned count — and that correctness never affects the outcome.
+  systems: [Backend]
+  status: Ready
+  notes: "Asserted without a database, since a real attempt cannot be made to land on a chosen count."
+
+- id: SCN-DAILYPLAN-013
+  requirement_ids: [REQ-DAILYPLAN-006]
+  category: Functional
+  title: Every task explains itself, and reports the work done against it
+  objective: >
+    Verify each task carries a non-blank reason naming its own topic, and that answeredToday and
+    accuracyToday reflect real uploaded attempts.
+  systems: [Backend]
+  status: Ready
+  notes: "Makes 'a bad session changed tomorrow' inspectable rather than something to take on trust."

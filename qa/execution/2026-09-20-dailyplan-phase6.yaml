@@ -1,0 +1,97 @@
+# DAILYPLAN — execution records, 2026-09-20 (TASK-3401, Phase 6)
+#
+# Four automated runs against the real Neon dev database:
+# `mvn -f backend/pom.xml test -Dtest=AdaptiveReplanningTest,DailyPlanTest,TaskOutcomeRuleTest` —
+# 20 tests, 0 failures, 0 errors, BUILD SUCCESS. AdaptiveReplanningTest 5/5 (526.5s),
+# TaskOutcomeRuleTest 6/6 (0.011s), and DailyPlanTest 9/9 (559.6s) re-run as a regression because
+# Phase 6 changed that endpoint's response shape — Phase 5 did not regress. Those nine are already
+# recorded as EXEC-DAILYPLAN-0001..0009 and are not duplicated here.
+#
+# Migration V50 applied cleanly to the same database at 2026-09-19T22:16:59 (schema 49 -> 50).
+#
+# PHASE 6 PASSED ON ITS FIRST REAL RUN — unusual for this program, and worth saying plainly rather
+# than leaving the reader to infer it from the absence of a failure note. The likely reason is that
+# the phase's own rules were pulled into a plain-JUnit test (TaskOutcomeRuleTest) before any
+# integration test ran, so the thresholds were already proven against controlled counts.
+#
+# ONE EARLIER RUN FAILED AND TESTED NOTHING, which is worth recording so nobody reads it as a
+# product problem: on 2026-09-19 at 23:56 all 14 integration tests errored in ~0.001s each, because
+# the DATABASE CONNECTION DROPPED while Flyway was acquiring its startup advisory lock
+# (SocketException: Connection reset -> "Unable to acquire PostgreSQL advisory lock" -> the Spring
+# context never came up). TaskOutcomeRuleTest, which needs no database, passed 6/6 in that same run
+# — which is what made the diagnosis immediate. An environment fault; this project's STATUS.md
+# already records an overnight network drop causing the same class of failure once before.
+
+- execution_id: EXEC-DAILYPLAN-0010
+  test_case_id: TC-DAILYPLAN-010
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ 6a3e089 + uncommitted TASK-3401 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-20T09:05:00+05:30"
+  actual_result: >
+    Reading today's plan settled both of yesterday's seeded tasks (settledTaskCount 2). The topic
+    with a real 6-answer practice session dated 19:30 yesterday settled COMPLETED against its
+    5-question target; the topic never touched settled SKIPPED. Before this phase both would have
+    said ASSIGNED forever.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for AdaptiveReplanningTest.yesterdaysTasksSettleFromWhatWasActuallyPractised"
+  remarks: >
+    Only possible because V47 froze topic_id onto every attempt row — joining questions live would
+    let a retagged question silently change what a past day looks like.
+
+- execution_id: EXEC-DAILYPLAN-0011
+  test_case_id: TC-DAILYPLAN-011
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ 6a3e089 + uncommitted TASK-3401 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-20T09:05:00+05:30"
+  actual_result: >
+    The first read reported settledTaskCount 1; an immediate second read reported 0, so a decided
+    day was not re-judged. Separately, every task generated for the current day came back ASSIGNED
+    — an open day is never judged early.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for AdaptiveReplanningTest.settlementIsIdempotent and .todaysOwnTasksAreLeftAssigned"
+  remarks: "Idempotence falls out of the query only returning ASSIGNED rows, and is asserted rather than assumed."
+
+- execution_id: EXEC-DAILYPLAN-0012
+  test_case_id: TC-DAILYPLAN-012
+  test_case_version: 1
+  environment: "Plain JUnit, no Spring context and no database"
+  build_version: "feature/on-device-llm-spike @ 6a3e089 + uncommitted TASK-3401 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-20T09:05:00+05:30"
+  actual_result: >
+    All six methods passed in 0.011s. Nothing answered gave SKIPPED; at the threshold, at the full
+    count and beyond it gave COMPLETED; real but insufficient work — including a single answer —
+    gave PARTIAL; a task answered entirely wrongly still gave COMPLETED, confirming correctness does
+    not decide the outcome; a task with no planned count gave COMPLETED on any activity; and
+    accuracy came back null rather than zero when nothing was answered.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for service.TaskOutcomeRuleTest (6 methods)"
+  remarks: >
+    Asserts the rule behaves as DECIDED, not that 60% is the right line for this product. Written
+    before the integration tests, which is probably why Phase 6 passed its first real run.
+
+- execution_id: EXEC-DAILYPLAN-0013
+  test_case_id: TC-DAILYPLAN-013
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ 6a3e089 + uncommitted TASK-3401 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-20T09:05:00+05:30"
+  actual_result: >
+    Every task in a generated plan carried a non-blank reason naming its own topic, and the leading
+    task's reason said the topic had not been started rather than giving a generic ranking line.
+    After uploading a real 4-question session with 1 correct, that task reported answeredToday 4 and
+    accuracyToday 25 while remaining ASSIGNED, since the day was still open.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for AdaptiveReplanningTest.everyTaskCarriesADeterministicReason and .aTaskReportsTheWorkActuallyDoneOnItsTopicToday"
+  remarks: >
+    The accuracy figure is what makes "a bad session changes tomorrow" inspectable rather than
+    something a reader has to take on trust.
