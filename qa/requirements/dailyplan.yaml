@@ -393,3 +393,58 @@
   automation_hint: >
     No automated runner exists for mobile in this project. The endpoint behind it is covered by
     DailyPlanTest and AdaptiveReplanningTest; the screen itself needs a real device pass.
+
+- id: REQ-DAILYPLAN-009
+  feature: A student can change the study time the planner budgets from
+  module: DAILYPLAN
+  system: [Mobile]
+  source_doc: api/PREPARATION-PROFILE.md
+  source_section: "Consumers"
+  description: >
+    A "Study preferences" screen (mobile/src/app/study-preferences.tsx) lets a signed-in or
+    signed-out student change their daily study-time band and preparation level. Reached from More,
+    and from the daily plan itself whenever the budget is an assumed default. Each tap saves
+    locally, stamping profile_updated_at to that moment, and pushes to the server when signed in.
+  business_rule: >
+    Onboarding asked these questions once and nothing could change them afterwards -
+    savePreparationProfile had exactly one caller and it was the first-run flow. That became a
+    visible defect the moment the daily plan began telling students "we've assumed an hour": the
+    app named an assumption the student could not correct. profile_updated_at (migration 0030)
+    already existed to resolve later edits that nothing could make. Scoped to the two answers the
+    planner reads; the active exam has its own switcher and a display name is not a planning input.
+  actor: Student, signed in or out
+  preconditions:
+    - "Onboarding has run at least once on this install"
+  inputs:
+    - "Tapping one of five study-time bands, or one of five preparation levels"
+  expected_outputs:
+    - "The choice is stored locally and reflected immediately"
+    - "When signed in, the server holds it with the moment of the edit as updatedAt"
+    - "The next daily-plan read budgets from the new band"
+  validations:
+    - "The screen opens showing the student's current answers, not blank defaults"
+    - "A change made while signed out still persists locally"
+  permissions:
+    - "None to edit locally; the push uses the stored session, which the screen never handles"
+  dependencies: [REQ-DAILYPLAN-007, REQ-DAILYPLAN-008]
+  error_conditions:
+    - "A failed push is silent by design - the edit is safely local and every sync point retries it"
+  edge_conditions:
+    - >
+      Today's TASKS do not change, because a day is planned once and stored. The budget figure does
+      update immediately, since it is resolved on read - so the screen promises tomorrow's plan
+      rather than "nothing changes today", which would be false.
+  offline_behavior: "Fully usable offline; the edit syncs at the next sync point."
+  acceptance_criteria:
+    - "A student shown an assumed budget can correct it without reinstalling"
+    - "The corrected band reaches the server and the plan budgets from it"
+  priority: High
+  status: Active
+  ambiguity: >
+    Whether changing the band should also re-plan the remainder of today is an open product
+    question, deliberately not answered here: re-planning would destroy the record of what was
+    originally assigned, which Phase 6 depends on.
+  automation_status: ManualOnly
+  automation_hint: >
+    No automated runner exists for mobile. The server half is covered by DailyPlanTest's profile
+    cases; the screen needs a device pass.

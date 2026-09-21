@@ -129,6 +129,16 @@ export default function More() {
 
       <SectionLabel label={t("more.preferences")} style={styles.sectionSpacing} />
       <Card variant="container" style={styles.card}>
+        {/* The answers onboarding took once and nothing could change afterwards. Sits here
+            rather than under STUDY because it is a preference, not a place to go and study —
+            and next to Appearance because both are "things I told the app about myself". */}
+        <CardRow
+          icon="time-outline"
+          label={t("studyPreferences.row")}
+          value={t("studyPreferences.rowValue")}
+          onPress={() => router.push("/study-preferences")}
+        />
+        <CardDivider />
         <CardRow
           icon="color-palette-outline"
           label={t("more.appearanceAndLanguage")}

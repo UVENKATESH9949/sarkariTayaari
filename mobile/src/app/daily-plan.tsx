@@ -166,7 +166,7 @@ export default function DailyPlanScreen() {
           />
         ) : (
           <>
-            <PlanHeader plan={result!.plan} styles={styles} />
+            <PlanHeader plan={result!.plan} styles={styles} onSetStudyTime={() => router.push("/study-preferences")} />
             {result!.plan.tasks.map((task) => (
               <TaskCard
                 key={task.taskId}
@@ -189,9 +189,11 @@ export default function DailyPlanScreen() {
 function PlanHeader({
   plan,
   styles,
+  onSetStudyTime,
 }: {
   plan: DailyPlanResponse;
   styles: ReturnType<typeof buildStyles>;
+  onSetStudyTime: () => void;
 }) {
   const done = plan.tasks.filter((t) => t.status === "COMPLETED").length;
 
@@ -217,9 +219,26 @@ function PlanHeader({
        */}
       <Text style={styles.headerNote}>
         {plan.budget.basis === "STATED_BAND"
-          ? `Based on the ${BAND_COPY[plan.budget.dailyStudyTime ?? ""] ?? "study time"} you chose when you set up the app.`
+          /*
+           * "you told us", not "you chose when you set up the app". The original wording was
+           * true only until Study preferences shipped and a student could change the band
+           * afterwards — at which point the screen was crediting the edit to onboarding. Found
+           * by changing it on a device and reading the result back.
+           */
+          ? `Based on the ${BAND_COPY[plan.budget.dailyStudyTime ?? ""] ?? "study time"} a day you told us you study.`
           : "We don't know how long you study, so we've assumed an hour. This gets more useful once we do."}
       </Text>
+      {/*
+       * Naming an assumption is only half the job if the student cannot correct it. Offered
+       * exactly when the budget is a guess — beside a band they did choose it would be noise.
+       * The new band applies from tomorrow, which the preferences screen says plainly, because
+       * today's plan is already stored and re-planning it would destroy what was assigned.
+       */}
+      {plan.budget.basis === "DEFAULT" ? (
+        <Text style={styles.headerAction} onPress={onSetStudyTime} accessibilityRole="button">
+          Tell us how long you study →
+        </Text>
+      ) : null}
       <Text style={styles.headerDate}>
         Planned for {plan.planDate} · {plan.zone}
       </Text>
@@ -313,11 +332,11 @@ function TaskCard({
 
 /** How the band reads back to the student, in the words the onboarding step used. */
 const BAND_COPY: Record<string, string> = {
-  UNDER_1H: "under an hour a day",
-  ONE_TO_TWO: "1-2 hours a day",
-  TWO_TO_FOUR: "2-4 hours a day",
-  FOUR_TO_SIX: "4-6 hours a day",
-  SIX_PLUS: "6+ hours a day",
+  UNDER_1H: "under an hour",
+  ONE_TO_TWO: "1-2 hours",
+  TWO_TO_FOUR: "2-4 hours",
+  FOUR_TO_SIX: "4-6 hours",
+  SIX_PLUS: "6+ hours",
 };
 
 function buildStyles({ colors }: Theme) {
@@ -369,6 +388,12 @@ function buildStyles({ colors }: Theme) {
       color: colors.text.muted,
       marginTop: spacing.md,
       fontStyle: "italic",
+    },
+    headerAction: {
+      fontSize: 12.5,
+      fontWeight: "600",
+      color: colors.brand.primary,
+      marginTop: spacing.xs,
     },
     headerDate: {
       fontSize: 11,

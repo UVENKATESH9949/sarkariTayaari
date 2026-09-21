@@ -705,8 +705,12 @@
       action: "Open the plan for the account with no profile"
       expected: "60 minutes, described as an assumption — never attributed to the student"
   expected_result: "A guess reads as a guess. (REQ-DAILYPLAN-008 validations)"
-  actual_result: ""
-  status: Not Executed
+  actual_result: >
+    Both steps run 2026-09-21. A stated band showed 90 minutes and "Based on the 1-2 hours a day
+    you chose when you set up the app." A second account whose profile has a null dailyStudyTime
+    showed 60m/58m/22 tasks with "We don't know how long you study, so we've assumed an hour.
+    This gets more useful once we do." - basis DEFAULT confirmed against the API.
+  status: Pass
   defect_id: ""
   remarks: >
     Step 2 cannot yet offer a fix: nothing in the app edits the profile after onboarding, so the
@@ -757,5 +761,84 @@
   remarks: >
     Step 3 is where the deliberate absence of a cache shows. Serving a saved plan offline would
     risk presenting yesterday's work as today's, and would skip the generation this GET performs.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-DAILYPLAN-022
+  requirement_ids: [REQ-DAILYPLAN-009]
+  scenario_id: SCN-DAILYPLAN-022
+  system: Mobile
+  module: DAILYPLAN
+  feature: A student can change the study time the planner budgets from
+  title: Changing the study time reaches the server and the next plan
+  objective: >
+    Confirm a student shown an assumed budget can correct it, and that the correction travels all
+    the way to the planner.
+  preconditions:
+    - "Signed in, an active exam, and a profile whose dailyStudyTime is null"
+  test_data: "A change from no answer to 2-4 hours"
+  test_environment: "emulator-5554 against a real dev backend"
+  priority: High
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Open More > Study preferences"
+      expected: "The screen shows the student's current answers - no band selected, their real level selected"
+    - step: 2
+      action: "Tap 2-4 hours, then read the profile from the server"
+      expected: "dailyStudyTime TWO_TO_FOUR, with updatedAt at the moment of the edit"
+    - step: 3
+      action: "Reopen Today's Plan"
+      expected: "The budget reads 180m and names the 2-4 hours the student gave; today's tasks are unchanged"
+  expected_result: "The assumption the app named is now correctable. (REQ-DAILYPLAN-009 acceptance_criteria)"
+  actual_result: >
+    Executed 2026-09-21 on emulator-5554. Step 1: no band selected (the account's band was null)
+    and "Practising questions" selected, matching the synced profile. Step 2: the server showed
+    TWO_TO_FOUR with updatedAt bumped to the edit moment, within seconds and with no Save button.
+    Step 3: the plan read 180m / 58m / 22 tasks with "Based on the 2-4 hours a day you told us you
+    study", and the 22 tasks were unchanged.
+  status: Pass
+  defect_id: ""
+  remarks: >
+    Step 3 is where the honest limit shows: the BUDGET is resolved on read so it moves at once,
+    while the TASKS are stored and do not. Both are true at the same time, and the preferences
+    screen says so rather than claiming nothing changes today.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-DAILYPLAN-023
+  requirement_ids: [REQ-DAILYPLAN-009]
+  scenario_id: SCN-DAILYPLAN-023
+  system: Mobile
+  module: DAILYPLAN
+  feature: A student can change the study time the planner budgets from
+  title: The plan offers the fix only when the budget is a guess
+  objective: "Confirm the prompt is conditional, so it never nags a student who already answered."
+  preconditions:
+    - "One plan read with basis DEFAULT and one with basis STATED_BAND"
+  test_data: "The same account before and after setting a band"
+  test_environment: "emulator-5554 against a real dev backend"
+  priority: Medium
+  severity: Major
+  test_type: StateTransition
+  steps:
+    - step: 1
+      action: "Open the plan while the budget is an assumed default"
+      expected: "A tappable 'Tell us how long you study' prompt under the assumption note"
+    - step: 2
+      action: "Set a band, then reopen the plan"
+      expected: "The prompt is gone and the note names the chosen band"
+  expected_result: "The offer appears exactly when there is something to fix."
+  actual_result: >
+    Executed 2026-09-21. With basis DEFAULT the prompt rendered beneath "We don't know how long you
+    study, so we've assumed an hour." After setting 2-4 hours the prompt was absent and the note
+    read "Based on the 2-4 hours a day you told us you study."
+  status: Pass
+  defect_id: ""
+  remarks: >
+    Step 2 also caught a real copy defect: the note originally said "you chose when you set up the
+    app", which became false the moment this screen let a student change the band afterwards. Fixed
+    to "you told us you study" and re-read from the live screen.
   automation_status: ManualOnly
   automation_reference: ""

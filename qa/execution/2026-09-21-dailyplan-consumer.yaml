@@ -83,3 +83,114 @@
     is not held by this session — signing out would have ended the signed-in verification with no
     way back in. Step 2 needs an account with no active exam. Step 3's own result is a genuine
     pass and is the reason this record exists at all.
+
+- execution_id: EXEC-DAILYPLAN-0020
+  test_case_id: TC-DAILYPLAN-021
+  test_case_version: 1
+  environment: "emulator-5554 (Pixel_7) + dev backend on localhost:8080 + real Neon dev database"
+  build_version: "feature/on-device-llm-spike @ 56bf838"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-21T13:16:00+05:30"
+  actual_result: >
+    STEP 1 now run, after the account owner supplied credentials that made signing out recoverable.
+    Signed out via More > Your account > Sign out (whose own dialog confirms "Your progress is
+    saved to your account first. It stays on this phone too"), then opened Today's Plan: "Sign in
+    to get a daily plan - Your plan is built from your practice history across every device, so it
+    lives with your account. Practice itself works fine signed out." with a Sign in button, which
+    routed correctly to the account screen. An invitation, not an error. Step 3 was already passed
+    on 2026-09-21 (EXEC-DAILYPLAN-0019). STEP 2 STILL NOT RUN.
+  status: Blocked
+  defect_id: ""
+  evidence: "Device screenshots of the sign-out dialog and the signed-out plan state"
+  remarks: >
+    Two of three steps now pass. Step 2 needs a device with no active exam, and the only ways to
+    reach that from here were to unfollow the exam on the account owner's REAL account or to wipe
+    the install — both carry more risk than the copy they would verify. Left unrun and named
+    rather than forced.
+
+- execution_id: EXEC-DAILYPLAN-0021
+  test_case_id: TC-DAILYPLAN-020
+  test_case_version: 1
+  environment: "emulator-5554 (Pixel_7) + dev backend on localhost:8080 + real Neon dev database"
+  build_version: "feature/on-device-llm-spike @ 56bf838"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-21T13:19:00+05:30"
+  actual_result: >
+    BOTH STEPS RUN. Step 1 (2026-09-21, EXEC-DAILYPLAN-0017): a stated band showed 90 minutes and
+    "Based on the 1-2 hours a day you chose when you set up the app." Step 2: signed in as a second
+    account holding a profile whose dailyStudyTime is null - a student who finished onboarding but
+    skipped that step - and the screen showed 60m / 58m / 22 tasks with "We don't know how long you
+    study, so we've assumed an hour. This gets more useful once we do." The API confirmed
+    basis DEFAULT with a null band.
+  status: Pass
+  defect_id: ""
+  evidence: "Device screenshot of the DEFAULT budget copy, plus GET /api/me/daily-plan"
+  remarks: >
+    Reached without wiping the install, by seeding the second account with a null-band profile
+    dated NEWER than the device's. The device's own ONE_TO_TWO upload therefore lost on the real
+    last-write-wins path and the device took the winner - so this run incidentally proved, on a
+    device for the first time, that a losing upload corrects itself in the same round trip
+    (REQ-DAILYPLAN-002). The server's updatedAt was unchanged afterwards.
+
+- execution_id: EXEC-DAILYPLAN-0022
+  test_case_id: TC-DAILYPLAN-018
+  test_case_version: 1
+  environment: "emulator-5554 (Pixel_7) + dev backend on localhost:8080 + real Neon dev database"
+  build_version: "feature/on-device-llm-spike @ 56bf838"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-21T13:19:00+05:30"
+  actual_result: >
+    Re-run against a SECOND account with a genuine revision backlog, which the first run could not
+    exercise. REVISION tasks rendered for the first time, with the amber Revise pill and their own
+    reason shape: "Problems on Trains is 9 days past its revision date - last practised 12 days
+    ago, on a 3-day interval", plus Syllogism (6 days past) and Pipes & Cisterns (2 days past),
+    ahead of the New tasks. 22 tasks, 58 planned minutes. Revision took 5 of a possible 30 minutes,
+    inside the half-a-day cap.
+  status: Pass
+  defect_id: ""
+  evidence: "Device screenshot showing three Revise tasks above the New ones"
+  remarks: >
+    The first run's account had no revision due, so every card said New and the Revise branch was
+    unproven. Worth recording as a separate execution rather than folding into the first: it is a
+    different account, a different data shape and a different render path.
+
+- execution_id: EXEC-DAILYPLAN-0023
+  test_case_id: TC-DAILYPLAN-022
+  test_case_version: 1
+  environment: "emulator-5554 (Pixel_7) + dev backend on localhost:8080 + real Neon dev database"
+  build_version: "feature/on-device-llm-spike @ 56bf838 + uncommitted study-preferences work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-21T13:38:00+05:30"
+  actual_result: >
+    More > Study preferences opened with no study-time band selected and "Practising questions"
+    selected, both matching the profile the device had pulled from the server. Tapping "2-4 hours"
+    saved with no Save button and the server showed dailyStudyTime TWO_TO_FOUR with updatedAt
+    2026-09-21T08:08:09.782Z - the moment of the edit, not of the upload. Reopening Today's Plan
+    showed 180m / 58m / 22 tasks and "Based on the 2-4 hours a day you told us you study."
+  status: Pass
+  defect_id: ""
+  evidence: "Device screenshots of the preferences screen and the updated plan, plus GET /api/me/preparation-profile"
+  remarks: >
+    Closes the gap the daily plan exposed on 2026-09-21: the app could name an assumption and the
+    student had no way to correct it, because savePreparationProfile had exactly one caller and it
+    was the first-run flow.
+
+- execution_id: EXEC-DAILYPLAN-0024
+  test_case_id: TC-DAILYPLAN-023
+  test_case_version: 1
+  environment: "emulator-5554 (Pixel_7) + dev backend on localhost:8080 + real Neon dev database"
+  build_version: "feature/on-device-llm-spike @ 56bf838 + uncommitted study-preferences work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-21T13:42:00+05:30"
+  actual_result: >
+    The prompt rendered with basis DEFAULT and was absent after a band was set, with the note
+    changing accordingly. A REAL COPY DEFECT was found in step 2 and fixed in the same change: the
+    stated-band note read "you chose when you set up the app", which this very screen had just
+    made false by letting the student change it afterwards. Corrected to "you told us you study"
+    and confirmed on the live screen via uiautomator.
+  status: Pass
+  defect_id: ""
+  evidence: "uiautomator text dump of the corrected note"
+  remarks: >
+    No defect id - the wrong wording never shipped; it was introduced and corrected inside the same
+    day's work, and only became wrong because of a feature added hours later.

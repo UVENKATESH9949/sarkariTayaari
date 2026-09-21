@@ -118,7 +118,21 @@ serve. Verified on `emulator-5554`: a real install carrying `ONE_TO_TWO` reached
 Failures are caught per-call and never abort the sync batch: a backend predating V48 returns 404
 here, and that must not cost a student their restored practice history.
 
-**`web/` does not write it yet** — same pattern, not yet built.
+**A student can now change it** (2026-09-21): `mobile/src/app/study-preferences.tsx`, reached from
+More and from the daily plan whenever the budget is an assumed default. Until it existed,
+`savePreparationProfile` had exactly one caller and it was the first-run flow — so the app could
+tell a student *"we've assumed an hour"* and offer no way to correct it. Each tap saves locally
+(stamping `profileUpdatedAt` to that moment, so the edit wins against an older one elsewhere) and
+pushes through the same sync; a failed push is silent, because the edit is safely on the device and
+every sync point retries it.
+
+**Changing the band moves the budget immediately but not today's tasks.** `budget` is resolved on
+each read of the daily plan, while the tasks were stored when the day was generated. Both are true
+at once, and the preferences screen says so rather than claiming nothing changes today. Re-planning
+the remainder of a day is deliberately not done: it would destroy the record of what was originally
+assigned, which Phase 6 depends on.
+
+**`web/` does not write it yet** — and has no onboarding either, so it has no profile to write.
 
 ## Related
 

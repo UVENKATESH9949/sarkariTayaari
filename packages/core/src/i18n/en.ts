@@ -298,6 +298,20 @@ export const en = {
     yesterday: "Yesterday, {time}",
   },
 
+  /**
+   * Changing the two onboarding answers the daily planner reads. The option labels themselves
+   * are NOT duplicated here — this screen reuses `onboarding.time.*` and `onboarding.level.*`,
+   * because it asks the same two questions and a second copy would drift from the first.
+   */
+  studyPreferences: {
+    title: "Study preferences",
+    loading: "Loading your preferences...",
+    intro: "These shape your daily plan. Change them whenever your routine does.",
+    appliesTomorrow: "Today's tasks are already chosen, so a change here shapes tomorrow's plan.",
+    row: "Study preferences",
+    rowValue: "Time each day, and where you are",
+  },
+
   settings: {
     title: "Settings",
     appearance: "Appearance",

@@ -234,3 +234,25 @@
   systems: [Mobile]
   status: Ready
   notes: "Signed out is a real state, not a degraded one — the plan is stored server-side and has no local equivalent."
+
+- id: SCN-DAILYPLAN-022
+  requirement_ids: [REQ-DAILYPLAN-009]
+  category: Functional
+  title: Changing the study time reaches the server and the next plan
+  objective: >
+    Verify the loop the daily plan exposed as broken: a student sees an assumed budget, corrects
+    it, and the planner budgets from the correction.
+  systems: [Backend, Mobile]
+  status: Ready
+  notes: "Until this screen existed there was no way to correct an assumption the app itself named."
+
+- id: SCN-DAILYPLAN-023
+  requirement_ids: [REQ-DAILYPLAN-009]
+  category: StateTransition
+  title: The plan offers the fix only when the budget is a guess
+  objective: >
+    Verify the "Tell us how long you study" prompt appears with basis DEFAULT and disappears once
+    a band is stated.
+  systems: [Mobile]
+  status: Ready
+  notes: "Beside a band the student did choose, the prompt would be noise."
