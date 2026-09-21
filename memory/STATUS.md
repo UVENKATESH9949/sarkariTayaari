@@ -1,5 +1,19 @@
 # Project Status — Resume Point
 
+**Last updated:** 2026-09-21 — **AN ACCOUNT IS NOW REQUIRED.** The app's first screen is sign-in
+with a one-time code emailed to a Gmail address (migration **V51**), which reverses this project's
+founding "accounts are optional" decision at the owner's request. Also today: the daily plan, the
+preparation profile (read + edit) and the study roadmap all got device-verified student-facing
+screens, and **[`ENVIRONMENT.md`](../ENVIRONMENT.md)** now captures everything that had only ever
+lived on one laptop.
+
+**⚠️ THE ONE THING BLOCKING A REAL-DEVICE TEST: no email can be sent.** There is no SMTP
+credential anywhere, so the sign-in code is written to the backend log instead of emailed. On the
+emulator that is fine; on a real phone it makes the first screen impossible to get past. It needs a
+Google **app password** and four values on Cloud Run — see `ENVIRONMENT.md` §8.
+
+**⚠️ AND: the backend only auto-deploys from `main`.** All of this is on
+`feature/on-device-llm-spike`. Pushing that branch deploys nothing.
 **Last updated:** 2026-09-20 — **THE PERSONALIZATION PROGRAM IS COMPLETE. All seven phases shipped,
 all four gates clean.** Phase 6 (TASK-3401, adaptive re-planning) closed it this morning with
 migration **V50** and **20/20 tests green**. Five endpoints now exist end to end:
@@ -31,6 +45,75 @@ wrong. It now falls back to `onboarding_completed_at`, which is not a guess: tha
 student answered, and it was already stored. **A clean `tsc` and a clean lint said nothing about
 this** — only a real device carrying a real pre-0030 profile did. Fixed and committed in `389f3ca`;
 no defect id, because it never shipped.
+
+## Session of 2026-09-21 (4) — an account is now REQUIRED: Gmail + one-time code
+
+**The biggest product change in weeks, and it reverses a founding decision.** The owner asked for
+a login/register screen as the first thing after installation, with Gmail-only addresses and OTP
+validation. Three decisions were taken by them before any code changed: **a code emailed to the
+address** (not Google Sign-In), **no skip — an account is required**, and **a Gmail app password**
+as the sending account (to be supplied).
+
+**This app was built so accounts were optional.** Onboarding ran first, and practice, the radar and
+progress all worked signed out. `AppStartGate` now shows the sign-in flow **before onboarding**,
+with no way past it. **The signed-out code paths were deliberately NOT deleted** — they are still
+correct, a token can still expire mid-use and drop a student back to sign-in, and removing them
+would be a large change for no gain.
+
+**Shipped.** Migration **V51** (`email_otp_codes`, no FK to `users` — a code is issued *before* the
+account exists, which is the point), `EmailOtpService`, `OtpMailSender`, `POST /api/auth/otp/request`
+and `/otp/verify`, `packages/core/src/api/emailOtp.ts`, `mobile/src/auth/SignInFlow.tsx`, and
+`requestSignInCode`/`signInWithCode` on `authContext` — both going through the **same** `adopt` as
+password sign-in, so a session created by a code is identical in every way. One new dependency:
+`spring-boot-starter-mail`. **Password sign-in is untouched and still serves the admin console.**
+
+**One flow, not two.** There is no "register" step: the server knows whether the address has an
+account, and a verified code for an unknown one creates it. Requesting a code answers identically
+either way, so the endpoint cannot be used to discover which addresses are registered.
+
+**⚠️ A CRITICAL BUG IN MY OWN CODE, found by running it — DEF-AUTH-001.** After five wrong guesses
+the **correct** code still signed in: the attempt counter did nothing. A wrong guess reports failure
+by throwing `UnauthorizedException`, a `RuntimeException`, so **Spring rolled back the very
+increment meant to record the guess**. `attempt_count` never left 0 and a six-digit code was
+brute-forceable without limit. Nothing failed loudly — each guess returned a correct 401, so from
+outside it looked right. **My own comment in that file asserted the opposite**, reasoning that the
+handler mapping the exception to a 401 meant no rollback; what an exception is later mapped to has
+nothing to do with whether the transaction commits. Fixed with
+`@Transactional(noRollbackFor = UnauthorizedException.class)`. **Remove that annotation and the cap
+silently stops working again.**
+
+**Verified against the real Neon dev database and on `emulator-5554`:** V51 applied cleanly
+(50 → 51, 1.858s); non-Gmail 400; cooldown 400; wrong code 401 then correct code succeeds; reuse
+401; five wrong then correct → 401 (after the fix); a fresh code then signs in; the same address
+twice returns the **same** user id. On the device: the sign-in screen is the first screen, the code
+step honestly says the code is in the server log rather than claiming an email, entering it created
+the account (`newAccount=true`) and landed on Home, and a relaunch goes straight to Home with no
+sign-in flash.
+
+**NOT verified:** **no real email has ever been sent** — there is no SMTP credential on this
+machine, so the code is logged instead. **This is the one thing standing between the feature and a
+real-device test**, and it needs a Google app password plus four values on Cloud Run. Also
+unobserved: a genuinely fresh install showing sign-in *then* onboarding (this device had already
+onboarded), and there is no automated test class for the flow yet.
+
+**QA**: `REQ-AUTH-015`, `SCN-AUTH-024..026`, `TC-AUTH-027..029` (all Pass), `EXEC-AUTH-0001..0003`,
+**`DEF-AUTH-001`** recorded as Fixed. RTM 154/296/318 -> **155/299/321**.
+
+## Session of 2026-09-21 (3b) — documentation for a new laptop
+
+**New: [`ENVIRONMENT.md`](../ENVIRONMENT.md), at the owner's request** — everything that had only
+ever lived on this one machine, so the project is reproducible elsewhere. Exact tool versions read
+off the working machine (JDK 21.0.11, Maven 3.9.16, Node 24.18.0, Spring Boot 3.3.4, Expo ~57.0.11,
+RN 0.86.2, Vite ^8.2.0, AVD `Pixel_7`); the **three gitignored credential files** with every key
+name and where its value comes from; how to run each of the four pieces and on which port; the
+full check list including the **9-problem lint baseline**; every recurring environment trap
+consolidated in one table; what deploys from where and which GitHub secrets/variables it needs; the
+**irreplaceable upload keystore**; and the outstanding manual steps. Cross-linked from `README.md`
+and added to `AI_RULES.md`'s doc map so it is findable.
+
+Also corrected in place per §6: `system-design/02-database.md` still said *"accounts are optional —
+the app works fully signed out"*, which the change above made false for mobile, and its migration
+list stopped at V47 (V48–V51 added).
 
 ## Session of 2026-09-21 (3) — the Study Roadmap gets a reader, built without a device
 
