@@ -459,8 +459,17 @@
       action: "Open Today's Plan and tap 'See the whole path'"
       expected: "The same screen, as the second entry point"
   expected_result: "The whole path is visible and actionable. (REQ-ROADMAP-006 acceptance_criteria)"
-  actual_result: ""
-  status: Not Executed
+  actual_result: >
+    Executed 2026-09-21 on emulator-5554 against a real dev backend. Step 1: "61 topics to work
+    through", "About 2h 59m of practice in total", and a per-subject card reading English 15/45min,
+    General Awareness 10/30, Quantitative Aptitude 20/58, Reasoning 16/46. Step 2: numbered cards
+    in the server order, each with action, question count and minutes; exactly one "Next up"
+    (Awards & Honours at position 2), matching the API. Step 3: positions 58 and 59 showed
+    "priority rank 59" and "priority rank 58" - the swapped pair the API reported - while 57, 60
+    and 61 showed no rank, so the marker is genuinely conditional. Step 4: tapping Blood Relations
+    opened Practice levels for Blood Relations, 167 questions, matching the card. Step 5: "See the
+    whole path" from Today's Plan opened the same screen.
+  status: Pass
   defect_id: ""
   remarks: >
     NOT EXECUTED because the emulator was deliberately not started - the machine was needed for
@@ -499,8 +508,15 @@
       action: "Find a topic with unmet prerequisites"
       expected: "It is still listed, with 'Best after: ...' rather than being hidden or locked"
   expected_result: "An assumption never wears a measurement's shape. (REQ-ROADMAP-006 validations)"
-  actual_result: ""
-  status: Not Executed
+  actual_result: >
+    Executed 2026-09-21. Step 1: switching the active exam to SSC CHSL (no published cycle) showed
+    "This exam has no published date yet, so there's no countdown to work back from", with no
+    daily-minutes line at all. Step 2: "Times are estimates - 61 from other students", matching
+    the API exactly (59 COHORT_DIFFICULTY + 2 COHORT_TOPIC, no PERSONAL, no DEFAULT) - a fresh
+    account has no personal timings, so the line correctly claimed none. Step 3: blocked topics
+    were listed with "Best after: World History", "Best after: Problems on Ages" and similar,
+    never hidden. 36 of 61 topics were blocked.
+  status: Pass
   defect_id: ""
   remarks: >
     NOT EXECUTED - no device pass this session. Step 2 is worth running against the shared dev

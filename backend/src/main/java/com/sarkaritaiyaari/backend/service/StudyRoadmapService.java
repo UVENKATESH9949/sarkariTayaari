@@ -336,7 +336,14 @@ public class StudyRoadmapService {
         return new RoadmapTimeline(true, examDate, (int) days, daily,
                 daily == null
                         ? "Nothing in this plan could be estimated, so no daily figure is shown."
+                        /*
+                         * Pluralised, because `daily` has a floor of 1 and therefore genuinely
+                         * reaches it — an exam far enough out, or a small plan, produces exactly
+                         * one minute. Found on 2026-09-21 by the first client to render this
+                         * sentence, which read "about 1 minutes a day"; no test had looked at the
+                         * prose, only at the number beside it.
+                         */
                         : "Finishing everything in this plan by the exam date implies about "
-                                + daily + " minutes a day.");
+                                + daily + (daily == 1 ? " minute a day." : " minutes a day."));
     }
 }

@@ -1,18 +1,25 @@
 # ROADMAP module — defects
 #
-# Empty by design. A defect here must trace to a real failed execution in qa/execution/, never to
-# a bug found while writing the code — those are fixed in the same change and written up in the
-# report. See qa/defects/auth.yaml for the schema.
-#
-# Two things found while building this phase are deliberately NOT recorded as defects, because
-# neither was a fault in shipped behaviour:
-#
-#   1. A fixture saving a RecruitmentCycle straight through its repository hit a NOT NULL violation
-#      on created_at — that entity has no @PrePersist, and the real write path stamps it in
-#      ExamGuideService. A test-fixture bug, fixed in the fixture.
-#   2. Two of this phase's own tests failed on their first real run, and in both cases the service
-#      was right and the test was wrong: one assumed the shared dev database held no cohort timings
-#      (it holds 53 timed attempts at the easiest difficulty), the other miscounted its own fixture.
-#      Recorded in the execution file as the real Fail results they were, and in the report.
+# Populated only from a real failed execution, never fabricated.
 
-[]
+- id: DEF-ROADMAP-001
+  title: "The roadmap's daily-minutes sentence said \"1 minutes a day\""
+  severity: Minor
+  status: Fixed
+  found_in_execution: EXEC-ROADMAP-0014
+  test_case_id: TC-ROADMAP-014
+  requirement_ids: [REQ-ROADMAP-006]
+  description: >
+    StudyRoadmapService built RoadmapTimeline.note by concatenating " minutes a day." with no
+    pluralisation, so a plan whose dailyMinutesRequired is 1 read "Finishing everything in this
+    plan by the exam date implies about 1 minutes a day."
+  why_it_survived: >
+    Shipped 2026-09-19 and invisible until 2026-09-21, because nothing rendered the sentence.
+    StudyRoadmapTest asserts the NUMBER beside it (12/12 green) but no test looked at the prose.
+    One is not a rare edge either: dailyMinutesRequired has a floor of Math.max(1, ...), so every
+    exam far enough out produces it — the account this was found on had 262 days remaining and
+    179 minutes of work.
+  fix: >
+    Pluralised at the source, with a comment naming how it was found. Verified against the live
+    endpoint ("about 1 minute a day") and re-read from the device screen after a refresh.
+  fixed_in: "feature/on-device-llm-spike, 2026-09-21"

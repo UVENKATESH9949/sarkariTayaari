@@ -164,9 +164,12 @@ ways a student could not see; and the order comes from curated exam priority whi
 from cohort timings, neither of which a device holds. The app already answers the narrower,
 signed-out version of this question through `prepare-plan` on the Exam Guide screen.
 
-**⚠️ Not device-verified.** It typechecks, lints at the project's exact baseline and the shared
-package's 283 tests pass, but no one has watched it render — see `TC-ROADMAP-014`/`015`, both
-`Not Executed`.
+**Device-verified 2026-09-21** on `emulator-5554` against a real dev backend — `TC-ROADMAP-014`
+and `015`, both Pass. The pass found and fixed **DEF-ROADMAP-001**: `timeline.note` read *"implies
+about 1 minutes a day"*, because the sentence was concatenated with no pluralisation and
+`dailyMinutesRequired` has a floor of 1. It had shipped on 2026-09-19 and was invisible purely
+because nothing rendered it — `StudyRoadmapTest` is 12/12 green and asserts the number beside the
+prose, not the prose.
 
 **`web/` does not read it.**
 

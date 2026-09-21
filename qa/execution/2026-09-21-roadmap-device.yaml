@@ -1,0 +1,61 @@
+# ROADMAP — execution records, 2026-09-21: the device pass for the Study Roadmap screen.
+#
+# Emulator `emulator-5554` (Pixel_7) against a real dev backend and the real Neon dev database.
+# A physical device was attached to this machine throughout and was never touched; every adb call
+# was pinned to emulator-5554.
+#
+# Run on a DISPOSABLE account created for this pass (roadmap.check.7706@example.com), rather than
+# reusing the account owner's credentials a second time. That turned out to be the better subject
+# anyway: a fresh account has no personal timings, so the estimate line had to claim none, and 36
+# of its 61 topics were prerequisite-blocked, which exercised a branch a practised account might
+# not have shown at all.
+#
+# TWO MEMORY NOTES, because this keeps costing time. The AVD is configured with hw.ramSize=6144,
+# which gave qemu a 4.9 GB host footprint and left 298 MB available — the level that hung the
+# emulator's system_server the day before. Relaunching with `-memory 3072` cut it to 3.1 GB and
+# left ~1.5 GB free, which ran cleanly start to finish. And the LogBox warning toast overlaps the
+# bottom tab bar and silently eats taps on it — already on record in this project, hit again here.
+
+- execution_id: EXEC-ROADMAP-0014
+  test_case_id: TC-ROADMAP-014
+  test_case_version: 1
+  environment: "emulator-5554 (Pixel_7, -memory 3072) + dev backend on localhost:8080 + real Neon dev database"
+  build_version: "feature/on-device-llm-spike @ ac755a3 + the DEF-ROADMAP-001 fix"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-21T15:08:00+05:30"
+  actual_result: >
+    All five steps passed. 61 topics, "About 2h 59m of practice in total", a four-subject
+    breakdown, numbered cards in the server's order, exactly one "Next up", positions 58 and 59
+    showing "priority rank 59" and "priority rank 58" while their neighbours showed none, a topic
+    opening Practice for itself with a matching question count, and "See the whole path" from
+    Today's Plan reaching the same screen. Scrolling to topic 61 was smooth.
+  status: Pass
+  defect_id: DEF-ROADMAP-001
+  evidence: "Device screenshots of the header, the reordered pair at 58/59, and the levels screen"
+  remarks: >
+    PASSED WITH A REAL DEFECT FOUND AND FIXED IN THE SAME PASS. The header read "implies about 1
+    minutes a day" — a backend pluralisation bug that had shipped on 2026-09-19 and was invisible
+    because no client rendered the sentence. Exactly the class of bug this project's "exercise it,
+    don't trust a green build" rule exists for: StudyRoadmapTest is 12/12 green and asserts the
+    number, not the prose.
+
+- execution_id: EXEC-ROADMAP-0015
+  test_case_id: TC-ROADMAP-015
+  test_case_version: 1
+  environment: "emulator-5554 (Pixel_7, -memory 3072) + dev backend on localhost:8080 + real Neon dev database"
+  build_version: "feature/on-device-llm-spike @ ac755a3 + the DEF-ROADMAP-001 fix"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-21T15:20:00+05:30"
+  actual_result: >
+    All three steps passed. Switching the active exam to SSC CHSL, which has no published cycle,
+    produced "This exam has no published date yet, so there's no countdown to work back from" and
+    no daily-minutes line — the case ten of eleven exams are in. The estimate line read "Times are
+    estimates - 61 from other students", matching the API's tier counts exactly. Blocked topics
+    were listed with "Best after: ..." rather than hidden or locked; 36 of 61 were blocked.
+  status: Pass
+  defect_id: ""
+  evidence: "uiautomator text dumps for both the dated and undated exams"
+  remarks: >
+    Worth doing on the undated exam specifically: SSC CGL is the only one of eleven with a
+    published cycle, so the dated branch seen in EXEC-ROADMAP-0014 is the rare case and this is
+    the common one.

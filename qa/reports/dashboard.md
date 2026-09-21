@@ -2,7 +2,7 @@
 
 **GENERATED FILE — do not hand-edit.** Regenerate with `node scripts/qa/generate-reports.js`. Every number below is computed directly from qa/*.yaml at generation time — nothing here is hardcoded or estimated.
 
-_Generated at: 2026-09-21T09:08:58.406Z_
+_Generated at: 2026-09-21T09:45:15.589Z_
 
 ## Coverage
 
@@ -24,7 +24,7 @@ _Generated at: 2026-09-21T09:08:58.406Z_
 
 ## Execution status
 
-74 real execution record(s) across 69 test case(s). A test case with no execution record stays `Not Executed`; where a case has been run more than once, the most recent record wins.
+76 real execution record(s) across 71 test case(s). A test case with no execution record stays `Not Executed`; where a case has been run more than once, the most recent record wins.
 
 | Module | Not Executed | Pass | Fail | Blocked | Skipped |
 |---|---|---|---|---|---|
@@ -37,7 +37,7 @@ _Generated at: 2026-09-21T09:08:58.406Z_
 | ONBOARDING | 22 | 3 | 0 | 0 | 0 |
 | QUESTIONS | 64 | 0 | 0 | 0 | 0 |
 | REVISION | 0 | 10 | 0 | 0 | 0 |
-| ROADMAP | 2 | 13 | 0 | 0 | 0 |
+| ROADMAP | 0 | 15 | 0 | 0 | 0 |
 | USER-PROGRESS | 3 | 5 | 0 | 0 | 0 |
 | WEB | 23 | 0 | 0 | 0 | 0 |
 
@@ -88,7 +88,7 @@ Test cases with no determinate expected outcome — established behavior, not a 
 
 ## Defects
 
-1 defects logged across all modules.
+2 defects logged across all modules.
 
 ## Suites
 
