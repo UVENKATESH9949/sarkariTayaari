@@ -32,6 +32,86 @@ student answered, and it was already stored. **A clean `tsc` and a clean lint sa
 this** — only a real device carrying a real pre-0030 profile did. Fixed and committed in `389f3ca`;
 no defect id, because it never shipped.
 
+## Session of 2026-09-21 (2) — closing the gaps the reader exposed
+
+**The account owner supplied credentials for `venkatesh9949.u@gmail.com`**, which unblocked the two
+QA cases that needed a sign-out. **That password is deliberately not recorded anywhere in this
+repo** — it is in the session transcript only, and this file has always kept it out on purpose
+because the repo is public.
+
+**A CORRECTION TO MY OWN CLAIM FROM EARLIER TODAY.** The entry below says the first read of a new
+day took "roughly two minutes". **Measured, that is wrong.** Against the real dev database:
+
+| Call | Time |
+|---|---|
+| Cached read (day already planned) | **2.1–2.9 s** |
+| Fresh generation of a new day | **16.7 s** |
+
+The two minutes was cold app start, Metro bundling a new screen in a dev build, and the memory
+pressure below — not the endpoint. 17 s to generate is still slow enough to care about, and the
+loading state carries it, but it is a different problem from the one I reported.
+
+**Shipped: `study-preferences.tsx`, which closes the gap the daily plan exposed.** Until now
+`savePreparationProfile` had exactly one caller and it was the first-run flow, so the app could
+tell a student *"we've assumed an hour"* and offer no way to correct it. Reached from More, and
+from the plan's budget note **only when the budget is a guess**. Saves on tap, local write first,
+best-effort push. **Translated** (it reuses `onboarding.time.*`/`onboarding.level.*`), unlike the
+daily plan screen — **the two new Telugu strings are mine and unreviewed**, the same caveat the
+rest of the catalogue carries.
+
+**A real copy defect, found by using it and reading the result back:** the plan's stated-band note
+said *"you chose when you set up the app"*, which this very screen had just made false. Now *"you
+told us you study"*, re-read from the live screen.
+
+**The honest limit, put on the screen rather than left to be discovered:** changing the band moves
+the **budget** immediately (it is resolved on every read) but **not today's tasks** (stored when
+the day was generated). Re-planning the rest of a day would destroy the record of what was
+originally assigned, which Phase 6 depends on.
+
+**Verified on `emulator-5554` against a real dev backend:**
+
+- **Signed-out state** (`TC-DAILYPLAN-021` step 1): *"Sign in to get a daily plan"*, an invitation
+  with a working route, not an error.
+- **The `DEFAULT` budget branch on screen** (`TC-DAILYPLAN-020`, now **Pass**): 60m / 58m / 22
+  tasks with *"We don't know how long you study, so we've assumed an hour."* Reached **without
+  wiping the install**, by seeding the second account with a null-band profile dated newer than the
+  device's — so the device's own upload lost on the real last-write-wins path and corrected itself.
+  **That incidentally proved REQ-DAILYPLAN-002 on a device for the first time.**
+- **REVISION tasks rendered for the first time**, because that account has a real backlog: the
+  amber Revise pill and *"Problems on Trains is 9 days past its revision date — last practised 12
+  days ago, on a 3-day interval"*, three of them, taking 5 of a possible 30 minutes.
+- **The edit round trip**: tapping "2-4 hours" reached the server as `TWO_TO_FOUR` within seconds,
+  stamped at the moment of the edit; the plan then read 180m with the prompt correctly gone.
+
+**Checked rather than assumed: no cross-account contamination.** Signing a second account in on a
+device holding another account's history could have uploaded it. The newest session on the owner's
+account is 2026-09-16 with old-format ids; the emulator's 2026-09-18 UUID session was **not**
+re-uploaded, because only *pending* progress is pushed.
+
+**TWO THINGS I CHANGED ON A REAL ACCOUNT, disclosed rather than buried.** To reach the `DEFAULT`
+branch I created a preparation profile on `venkatesh9949.u@gmail.com` that did not exist before
+(`displayName: Venkatesh`, `SSC_CGL`, 2026, `PRACTICING`, band null) and then set its band to
+`TWO_TO_FOUR` during the edit test. **There is no delete endpoint for a profile**, so it cannot be
+restored to "none" — but the new Study preferences screen is exactly how to change it. The account
+also now has `study_tasks` rows for today for SSC_CGL and SSC_CHSL.
+
+**`gate1.retest@example.com` can no longer be signed in on this device** — its password was never
+recorded. Signing out of it was the point of the exercise and its local history is untouched, but a
+future device pass needs either that password or a fresh test account.
+
+**QA**: `REQ-DAILYPLAN-009`, `SCN-DAILYPLAN-022/023`, `TC-DAILYPLAN-022/023`,
+`EXEC-DAILYPLAN-0020..0024`. RTM 152/292/314 -> **153/294/316**. `tsc` clean on `mobile/` and
+`packages/core`; `expo lint` at the exact 9-problem baseline; **core 282/282**.
+
+**STILL NOT DONE:**
+
+- `learning-state`, `study-roadmap` and `revision-plan` have no reading caller. The daily plan is
+  built from all three, so a student benefits indirectly, but nothing surfaces them.
+- **`web/` reads none of the five and has no onboarding**, so it has no profile to feed a budget.
+- `TC-DAILYPLAN-021` step 2 (no active exam) and `TC-DAILYPLAN-015` are unrun — both need a device
+  state that would mean unfollowing on the owner's real account or wiping the install.
+- **17 s to generate a day is unprofiled.** Nobody has looked at where it goes.
+
 ## Session of 2026-09-21 — the program gets a reader: Today's Plan on a device
 
 **Emulator `emulator-5554`, real dev backend on `localhost:8080`, real Neon dev database.** No
@@ -97,10 +177,9 @@ RTM 151/288/310 -> **152/292/314**.
 
 **NOT verified:**
 
-- **No performance measurement, and there is something to measure.** The first read of a new day
-  also settles yesterday, and took roughly **two minutes** on this machine before the screen
-  filled. The loading state held correctly, but that is slow enough to matter and nobody has
-  profiled it. Worth a look before this is called ready.
+- ~~No performance measurement~~ — **measured later the same day, and this claim was wrong.** The
+  endpoint is **16.7 s to generate** a new day and **2.1-2.9 s** to re-read one; the two minutes
+  was cold app start plus Metro bundling plus memory pressure. See the session entry above.
 - `learning-state`, `study-roadmap` and `revision-plan` still have no reading caller.
 - `web/` reads none of the five, and **has no onboarding at all**, so it has no profile to feed a
   budget either — an earlier note that "web does not send the profile" understated this.
@@ -256,11 +335,10 @@ new one created — it is the same endpoint, and splitting it would hide that. R
    verified. `learning-state`, `study-roadmap` and `revision-plan` still have none, and `web/`
    reads nothing. **Profile the daily-plan read before building more on it:** the first read of a
    new day took roughly two minutes on the emulator.
-3. ~~A way to act on a task~~ — **opening its practice screen is done**; a task now taps straight
-   into `/practice/levels` for its own topic. Marking one done is still absent by design (outcomes
-   are inferred from real attempts), and is no longer blocked on "there is no screen to put it on".
-   **The more useful missing surface is an edit screen for the preparation profile** — nothing
-   changes the study-time band after onboarding, so a student budgeted a default cannot correct it.
+3. ~~A way to act on a task~~ and ~~an edit screen for the preparation profile~~ — **both done
+   2026-09-21.** A task taps into `/practice/levels` for its own topic, and `study-preferences.tsx`
+   lets a student change the study-time band the budget comes from. Marking a task done stays
+   absent by design: outcomes are inferred from real attempts.
 4. Measure what was assumed: the band-to-minutes mid-points, the 60% completion line, the half-day
    revision cap, the 3/7/21/45 revision intervals. All are declared judgements, all are now
    generating real data that could replace them.
