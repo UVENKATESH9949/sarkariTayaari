@@ -12,10 +12,10 @@ today · About 89 minutes of work"* against a 90-minute budget, with each task n
 stored reason and its cost, and tapping one opened Practice for that topic. See the session entry
 below.
 
-**The remaining visibility gap is now narrower but real:** `learning-state`, `study-roadmap` and
-`revision-plan` still have no reading caller. The daily plan is built *from* all three, so a student
-now benefits from them indirectly — but nothing surfaces them directly, and `web/` reads none of the
-five.
+**The remaining visibility gap is now narrower but real:** `learning-state` and `revision-plan`
+still have no reading caller (`study-roadmap` got one on 2026-09-21, though **it has never
+rendered on a device** — see the top session entry). The daily plan is built *from* all three, so
+a student benefits indirectly, but `web/` reads none of the five.
 
 **One half of that gap closed the same day: mobile now SENDS the preparation profile**
 (`mobile/src/sync/preparationProfileSync.ts` + migration **0030**), and **it is now device-verified**
@@ -31,6 +31,54 @@ wrong. It now falls back to `onboarding_completed_at`, which is not a guess: tha
 student answered, and it was already stored. **A clean `tsc` and a clean lint said nothing about
 this** — only a real device carrying a real pre-0030 profile did. Fixed and committed in `389f3ca`;
 no defect id, because it never shipped.
+
+## Session of 2026-09-21 (3) — the Study Roadmap gets a reader, built without a device
+
+**Built to order by the owner, who asked for the roadmap consumer next and explicitly asked that
+the emulator NOT be started — the machine was needed for IntelliJ.** So this is the one piece of
+personalization work in the program that ships **without a device pass**, and that is a real gap,
+not a formality: a clean build has missed real bugs in this feature area twice in the last two
+days. `TC-ROADMAP-014`/`015` exist for it, both `Not Executed`. **Run them before trusting it.**
+
+**Shipped.** `packages/core/src/api/studyRoadmap.ts` (written against `StudyRoadmapDtos.java`
+rather than the prose, so the nullable fields are nullable in the right places),
+`mobile/src/data/studyRoadmapData.ts` (mirrors `dailyPlanData.ts` — reads the session itself, so
+no screen holds a bearer token), and `mobile/src/app/study-roadmap.tsx`. Reached from More and
+from the bottom of Today's Plan. **A `FlatList`, not a `ScrollView`:** SSC CGL has 61 topics and
+every one is a card.
+
+**Three contract details the screen carries rather than flattens:**
+
+1. **The order IS the roadmap** — `topics[]` renders as received, and the screen adds no ranking.
+2. **`estimate.source` reaches the student.** The header counts topics by tier (*"Times are
+   estimates — 12 from your own pace, 40 from other students, 9 assumed"*) instead of a bare total.
+   A per-card badge was rejected as noise at 61 cards; dropping it entirely would have presented a
+   pile of assumptions as measurement.
+3. **`priorityRank` is shown only when it disagrees with the on-screen position** — which is
+   exactly when the subject interleave moved that topic, something the contract keeps visible on
+   purpose.
+
+**No cache and no signed-out fallback, both choices.** The radar caches because a stale diagnosis
+is still a diagnosis; a roadmap's order moves with every session practised and its minutes move
+with the cohort, so a saved copy would be wrong invisibly. And the order comes from curated exam
+priority while the minutes come from cohort timings — neither of which a device holds. The app
+already answers the narrower signed-out version through `prepare-plan` on the Exam Guide screen.
+
+**One small refactor, in scope because two screens now need it:** `ACTION_COPY` moved from
+`preparation-radar.tsx` into `intelligence/radarPresentation.tsx`. Reaching it by importing a route
+module would have pulled in a whole screen.
+
+**Verified:** `tsc` clean on `mobile/` and `packages/core`; `expo lint` at the exact 9-problem
+baseline; **core 283/283** (one more than yesterday — the i18n coverage test picked up the new
+`studyPreferences` keys). A brief Metro run was needed only to regenerate
+`.expo/types/router.d.ts`, which is generated rather than checked in, and was stopped immediately;
+**the emulator was never started.**
+
+**QA**: `REQ-ROADMAP-006`, `SCN-ROADMAP-013/014`, `TC-ROADMAP-014/015` — both **Not Executed**.
+RTM 153/294/316 -> **154/296/318**.
+
+**NEXT:** `learning-state` and `revision-plan` are the two endpoints still without a reader, and
+the roadmap screen needs its device pass. `web/` reads none of the five and has no onboarding.
 
 ## Session of 2026-09-21 (2) — closing the gaps the reader exposed
 
