@@ -51,6 +51,11 @@ syllabus is always a superset and the two can never contradict each other.
 
 ## Local setup
 
+> **Setting up a machine from scratch?** Read **[`ENVIRONMENT.md`](ENVIRONMENT.md)** first. It has
+> the exact tool versions, the three gitignored credential files and what goes in each, the
+> emulator settings that matter, every environment trap this project has hit, and the manual steps
+> that are still outstanding. This section is the short version.
+
 ### Backend
 
 ```bash

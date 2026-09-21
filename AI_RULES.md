@@ -52,6 +52,7 @@ have.
 | If you need... | Read/update... | Not... |
 |---|---|---|
 | Current state, what's next | `memory/STATUS.md` | a new "status" file |
+| Tool versions, local credential files, machine setup, environment traps | `ENVIRONMENT.md` | a second setup guide |
 | How the systems fit together | `system-design/01-big-picture.md` | a new ARCHITECTURE.md |
 | What's in the database, why two DBs | `system-design/02-database.md` | re-deriving from migrations |
 | How content/sync flows | `system-design/03-how-data-flows.md` | — |
