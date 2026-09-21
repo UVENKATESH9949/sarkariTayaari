@@ -622,3 +622,64 @@
   automation_hint: >
     none found — product-level/negative assertion, a consequence of REQ-AUTH-009 being true;
     no mobile test runner exists in this project.
+
+- id: REQ-AUTH-015
+  feature: Sign in or sign up with a one-time code emailed to a Gmail address
+  module: AUTH
+  system: [Backend, Mobile]
+  source_doc: api/AUTH.md
+  source_section: "Passwordless sign-in (one-time code)"
+  description: >
+    POST /api/auth/otp/request emails a 6-digit code to a Gmail address; POST /api/auth/otp/verify
+    redeems it and returns a session, creating the account on first use. The mobile app shows this
+    as the first screen after installation and requires it - AppStartGate renders the sign-in flow
+    before onboarding, with no way past it.
+  business_rule: >
+    One flow, not two: the server knows whether the address has an account, so making the student
+    choose between "sign in" and "sign up" asks them a question the system can already answer.
+    Requesting a code answers identically for a known and an unknown address, or the endpoint
+    becomes a membership oracle. Email + password sign-in is untouched and still serves the admin
+    console. Requiring an account reverses this app's original "accounts are optional" posture, at
+    the project owner's explicit instruction on 2026-09-21; the signed-out code paths still work
+    and were deliberately not deleted.
+  actor: Student
+  preconditions:
+    - "A Gmail address"
+  inputs:
+    - "An email address, then the 6-digit code"
+  expected_outputs:
+    - "200 with a neutral message, an expiry and whether it was actually emailed"
+    - "200 with a token and user on a correct code; the account is created if new"
+  validations:
+    - "Non-Gmail addresses are rejected with 400"
+    - "A resend inside 60 seconds is rejected with 400"
+    - "Every verify failure is the same 401 message"
+    - "Requesting a new code retires every earlier live one"
+  permissions:
+    - "None - these are the unauthenticated way in"
+  dependencies: [REQ-AUTH-001]
+  error_conditions:
+    - "Five wrong guesses kill the code; the correct one is refused afterwards"
+    - "A delivery failure never fails the request, so SMTP cannot leak whether an address exists"
+  edge_conditions:
+    - >
+      A first-time address gets a password hash of random bytes nobody has seen - the "unusable
+      password" pattern - so users.password_hash could stay NOT NULL rather than relaxing a column
+      on the busiest table in the schema. Password sign-in for such an account can never succeed.
+    - >
+      With no mail account configured the code is written to the log and emailed=false, so the flow
+      is testable. A deployment with mail ON never logs a code; the paths are exclusive.
+  offline_behavior: "None - signing in needs the network by definition."
+  acceptance_criteria:
+    - "A new Gmail address can sign up and sign in with a code, with no password anywhere"
+    - "A six-digit code cannot be brute-forced"
+  priority: High
+  status: Active
+  ambiguity: >
+    Only Gmail is accepted, at the owner's instruction. Widening it later is a one-line change in
+    EmailOtpService, which is why the restriction lives in exactly one place.
+  automation_status: ManualOnly
+  automation_hint: >
+    No automated test exists yet for this flow. It was exercised end to end with curl against the
+    real dev database and then on emulator-5554; a backend test class is the obvious next step and
+    is NOT written.

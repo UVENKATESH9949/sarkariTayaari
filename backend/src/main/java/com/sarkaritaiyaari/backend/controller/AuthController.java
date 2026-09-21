@@ -1,9 +1,11 @@
 package com.sarkaritaiyaari.backend.controller;
 
 import com.sarkaritaiyaari.backend.dto.AuthResponse;
+import com.sarkaritaiyaari.backend.dto.EmailOtpDtos;
 import com.sarkaritaiyaari.backend.dto.LoginRequest;
 import com.sarkaritaiyaari.backend.dto.RegisterRequest;
 import com.sarkaritaiyaari.backend.service.AuthService;
+import com.sarkaritaiyaari.backend.service.EmailOtpService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -20,9 +22,36 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final EmailOtpService emailOtpService;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, EmailOtpService emailOtpService) {
         this.authService = authService;
+        this.emailOtpService = emailOtpService;
+    }
+
+    /**
+     * Sends a one-time sign-in code to a Gmail address (V51).
+     *
+     * <p><b>Answers identically whether or not the address has an account.</b> Saying otherwise
+     * would turn this into a membership oracle for any address someone cares to try — the same
+     * reasoning behind {@code login}'s single error message.
+     *
+     * <p>There is no separate "register": a verified code for an unknown address creates the
+     * account. Password sign-in below is untouched and still serves the admin console.
+     */
+    @PostMapping("/otp/request")
+    public EmailOtpDtos.RequestCodeResponse requestCode(
+            @Valid @RequestBody EmailOtpDtos.RequestCodeRequest request) {
+        EmailOtpService.RequestResult result = emailOtpService.requestCode(request.getEmail());
+        return new EmailOtpDtos.RequestCodeResponse(
+                "If that address can be used, a 6-digit code is on its way.",
+                result.expiresInMinutes(), result.emailed(), result.code());
+    }
+
+    /** Redeems a code and returns a session, creating the account on first use. */
+    @PostMapping("/otp/verify")
+    public AuthResponse verifyCode(@Valid @RequestBody EmailOtpDtos.VerifyCodeRequest request) {
+        return emailOtpService.verifyCode(request.getEmail(), request.getCode(), request.getDeviceLabel());
     }
 
     @PostMapping("/register")

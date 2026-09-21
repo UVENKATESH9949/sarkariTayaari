@@ -271,3 +271,36 @@
   systems: [Mobile]
   status: Ready
   notes: null
+
+- id: SCN-AUTH-024
+  requirement_ids: [REQ-AUTH-015]
+  category: Functional
+  title: A new Gmail address signs up and signs in with a code
+  objective: >
+    Verify the whole passwordless path: request a code, redeem it, get a session, and have the
+    account created on first use.
+  systems: [Backend, Mobile]
+  status: Ready
+  notes: "The first screen after installation, so this is the path every new user takes."
+
+- id: SCN-AUTH-025
+  requirement_ids: [REQ-AUTH-015]
+  category: Security
+  title: A six-digit code cannot be brute-forced
+  objective: >
+    Verify the attempt cap genuinely kills a code, since the cap is the only thing making six
+    digits safe.
+  systems: [Backend]
+  status: Ready
+  notes: "This broke once - a rolled-back transaction meant every guess was free. See api/AUTH.md."
+
+- id: SCN-AUTH-026
+  requirement_ids: [REQ-AUTH-015]
+  category: Negative
+  title: Bad addresses, resends and reused codes are all refused
+  objective: >
+    Verify the boundaries: non-Gmail, a resend inside the cooldown, a wrong code, and a code used
+    twice.
+  systems: [Backend]
+  status: Ready
+  notes: "Every verify failure must read identically, or the endpoint leaks which codes are live."

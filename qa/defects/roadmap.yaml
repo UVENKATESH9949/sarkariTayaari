@@ -1,10 +1,12 @@
 # ROADMAP module — defects
 #
-# Populated only from a real failed execution, never fabricated.
+# A defect record is created ONLY when a real test execution fails (qa/execution/*.yaml records a
+# failure) and someone determines it represents a genuine product defect, not an environment issue
+# or a known deviation. Never fabricated ahead of a real execution.
 
 - id: DEF-ROADMAP-001
-  title: "The roadmap's daily-minutes sentence said \"1 minutes a day\""
-  severity: Minor
+  title: "The roadmap's daily-minutes sentence read \"1 minutes a day\""
+  severity: Low
   status: Fixed
   found_in_execution: EXEC-ROADMAP-0014
   test_case_id: TC-ROADMAP-014
@@ -13,13 +15,11 @@
     StudyRoadmapService built RoadmapTimeline.note by concatenating " minutes a day." with no
     pluralisation, so a plan whose dailyMinutesRequired is 1 read "Finishing everything in this
     plan by the exam date implies about 1 minutes a day."
-  why_it_survived: >
-    Shipped 2026-09-19 and invisible until 2026-09-21, because nothing rendered the sentence.
-    StudyRoadmapTest asserts the NUMBER beside it (12/12 green) but no test looked at the prose.
-    One is not a rare edge either: dailyMinutesRequired has a floor of Math.max(1, ...), so every
-    exam far enough out produces it — the account this was found on had 262 days remaining and
-    179 minutes of work.
-  fix: >
-    Pluralised at the source, with a comment naming how it was found. Verified against the live
-    endpoint ("about 1 minute a day") and re-read from the device screen after a refresh.
-  fixed_in: "feature/on-device-llm-spike, 2026-09-21"
+  external_ref: null
+  remarks: >
+    Shipped 2026-09-19 and invisible until 2026-09-21 because nothing rendered the sentence.
+    StudyRoadmapTest is 12/12 green and asserts the NUMBER beside it; no test looked at the prose.
+    One is not a rare edge either - dailyMinutesRequired has a floor of Math.max(1, ...), so every
+    exam far enough out produces it, and the account this was found on had 262 days remaining
+    against 179 minutes of work. Fixed at the source and confirmed twice: the live endpoint now
+    returns "about 1 minute a day", and the device screen shows it after a refresh.

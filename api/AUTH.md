@@ -11,6 +11,85 @@ an `Authorization: Bearer <token>` header, checked by `AuthService.requireUser`/
 per endpoint — there is no servlet filter, so a controller that forgets the call is silently
 public.
 
+**Since 2026-09-21 there are two ways in.** A one-time code emailed to a Gmail address is what the
+mobile app uses and is the first screen after installation; email + password is unchanged and still
+serves the admin console. They share everything below the point of proving identity — same token
+table, same TTL, same `Authorization` header — because `EmailOtpService` calls
+`AuthService.issueTokenFor` rather than minting a session of its own.
+
+---
+
+## Passwordless sign-in (one-time code)
+
+**Added 2026-09-21** at the project owner's request, with migration **V51** (`email_otp_codes`).
+The mobile app now **requires an account**: `AppStartGate` shows the sign-in flow before onboarding
+and there is no way past it. That reverses the app's original "accounts are optional" posture — the
+signed-out code paths still exist and still work, they are simply no longer reachable from a fresh
+install.
+
+**There is no separate register call.** The server knows whether an address has an account; a
+verified code for an unknown address creates one. Asking the student to choose is asking them a
+question the system can already answer, and getting it wrong the moment somebody forgets whether
+they signed up.
+
+### POST /api/auth/otp/request
+**Purpose:** Email a 6-digit sign-in code.
+**Auth:** none
+**Request:** `{ email: string }`
+**Response:** `200 OK` — `{ message: string, expiresInMinutes: 10, emailed: boolean, code: string|null }`
+**Errors:** 400 for a non-Gmail address (`"Please use a Gmail address for now."`) or a resend inside the 60-second cooldown (`"A code was just sent. Please wait N seconds…"`).
+**Business rules:** **Answers identically whether or not the address has an account** — anything else turns this into a membership oracle for any address someone cares to try, the same reasoning behind `login`'s single error message. Requesting a code **retires every earlier live code** for that address, so exactly one can ever be redeemed. `emailed` is false when the deployment has no mail account configured and wrote the code to its log instead; `code` is non-null **only** where `app.mail.expose-code-in-response` is on, which is a developer convenience and never a real deployment.
+**Consumers:** Mobile (`auth/SignInFlow.tsx`).
+
+### POST /api/auth/otp/verify
+**Purpose:** Redeem a code, returning a session and creating the account on first use.
+**Auth:** none
+**Request:** `{ email: string, code: string (exactly 6 digits), deviceLabel?: string }`
+**Response:** `200 OK` — the same `{ token, expiresAt, user }` shape as `login`.
+**Errors:** 400 for a malformed code; 401 `"That code is not valid. Ask for a new one and try again."` for **every** failure — wrong, expired, already used, or attempts exhausted. Distinguishing them would tell an attacker which addresses have a live code outstanding.
+**Business rules:** A first-time address gets a `STUDENT` account whose password is a BCrypt hash of random bytes nobody has ever seen — the standard "unusable password" pattern, chosen so `users.password_hash` could stay `NOT NULL` rather than relaxing a column on the busiest table in the schema to serve a new sign-in path. Password sign-in for such an account can therefore never succeed.
+
+### What actually keeps a 6-digit code safe
+
+Six digits is a million possibilities, which is nothing to a script. **The safety is entirely in
+these three limits**, so they are named constants in `EmailOtpService` rather than scattered
+numbers:
+
+| Limit | Value | Removing it means |
+|---|---|---|
+| Expiry | 10 minutes | a code stays guessable indefinitely |
+| Wrong guesses per code | 5, then the code is dead | **unlimited brute force** |
+| Resend cooldown | 60 seconds | the endpoint becomes an inbox flooder |
+
+**⚠️ The attempt counter is fragile in a specific way, and it broke once.** A wrong guess reports
+failure by throwing `UnauthorizedException` — a `RuntimeException`, which Spring rolls back on by
+default. That rollback undid the very increment meant to record the guess, so `attempt_count` never
+left 0 and the cap did nothing at all; five wrong guesses followed by the correct one still signed
+in. Fixed with `@Transactional(noRollbackFor = UnauthorizedException.class)`. **If that annotation
+is ever removed, the cap silently stops working and nothing fails loudly.** Found by running it,
+not by reading it — an earlier comment in that file asserted the opposite and was simply wrong.
+
+The code itself is **never stored**, only a BCrypt hash of it, for the same reason passwords are:
+this project's dev and production environments share one database.
+
+### Configuring mail
+
+Off by default, matching this project's posture for anything that leaves the building. With it off
+the code is written to the log at WARN and `emailed` is false, so the whole flow is testable with
+no mail account — and a deployment with mail **on** never logs a code, so the two paths cannot
+overlap.
+
+```
+APP_MAIL_ENABLED=true
+APP_MAIL_FROM=you@gmail.com
+SPRING_MAIL_USERNAME=you@gmail.com
+SPRING_MAIL_PASSWORD=<16-character Google app password, NOT the account password>
+```
+
+Nothing in the code is Gmail-specific beyond those defaults — `SPRING_MAIL_HOST`/`PORT` point it at
+any SMTP provider. Note the `APP_`/`SPRING_` prefixes: Spring relaxed binding needs them, and this
+project has already been bitten once by comments that named the bare form.
+
 ---
 
 ### POST /api/auth/register

@@ -906,3 +906,129 @@
   remarks: null
   automation_status: ManualOnly
   automation_reference: "None — no mobile test runner exists in this project; this is a real on-device/emulator check."
+
+- id: TC-AUTH-027
+  requirement_ids: [REQ-AUTH-015]
+  scenario_id: SCN-AUTH-024
+  system: Mobile
+  module: AUTH
+  feature: Sign in or sign up with a one-time code emailed to a Gmail address
+  title: A new Gmail address signs up and signs in from the app's first screen
+  objective: "Confirm the first screen after installation works, end to end, for a brand-new address."
+  preconditions:
+    - "A signed-out install and a reachable backend"
+  test_data: "An unused @gmail.com address"
+  test_environment: "emulator-5554 against a real dev backend"
+  priority: High
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Launch the app with nobody signed in"
+      expected: "The sign-in screen, before onboarding and before the app; Send is disabled until a valid Gmail is typed"
+    - step: 2
+      action: "Type a Gmail address and tap Send me a code"
+      expected: "The code step, stating where the code went and when it expires"
+    - step: 3
+      action: "Enter the 6-digit code and tap Continue"
+      expected: "Signed in, landing in the app; the server reports the account was created"
+    - step: 4
+      action: "Force-stop and relaunch"
+      expected: "Straight to the app - no sign-in screen, and no flash of one"
+  expected_result: "An account is required and obtainable in three taps. (REQ-AUTH-015 acceptance_criteria)"
+  actual_result: >
+    Executed 2026-09-21 on emulator-5554. Step 1: the sign-in screen rendered first with the brand
+    mark, "Only Gmail addresses for now", and Send greyed out. Step 2: the code step said "This
+    build isn't set up to send email yet - the code is in the server log. It expires in 10
+    minutes", which is the honest emailed=false path rather than claiming an email. Step 3: the
+    code from the log signed in and landed on Home; the backend logged
+    "otp.verified email=signin.check.72692@gmail.com newAccount=true". Step 4: relaunch went
+    straight to Home.
+  status: Pass
+  defect_id: ""
+  remarks: >
+    Onboarding did not run in step 3 because this install had already completed it - onboarding is
+    per-install, sign-in is per-account, and the gate orders them correctly. A genuinely fresh
+    install showing sign-in THEN onboarding has not been observed and is worth a look.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-AUTH-028
+  requirement_ids: [REQ-AUTH-015]
+  scenario_id: SCN-AUTH-025
+  system: Backend
+  module: AUTH
+  feature: Sign in or sign up with a one-time code emailed to a Gmail address
+  title: Five wrong guesses kill the code
+  objective: >
+    Confirm the only thing standing between a six-digit code and a script actually works.
+  preconditions:
+    - "A freshly issued code"
+  test_data: "Five deliberately wrong codes, then the correct one"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Critical
+  test_type: Security
+  steps:
+    - step: 1
+      action: "Submit five wrong codes"
+      expected: "401 each time"
+    - step: 2
+      action: "Submit the CORRECT code"
+      expected: "401 - the code is dead, attempts exhausted"
+    - step: 3
+      action: "Request a fresh code and submit it"
+      expected: "Signs in normally - the cap kills a code, not the address"
+  expected_result: "Guessing is bounded. (REQ-AUTH-015 acceptance_criteria)"
+  actual_result: >
+    Executed 2026-09-21. FAILED FIRST: after five 401s the correct code still signed in, because
+    the attempt increment was rolled back with the UnauthorizedException that reports the failure.
+    Fixed with noRollbackFor and re-run: five 401s, then the correct code 401, then a fresh code
+    signed in normally.
+  status: Pass
+  defect_id: DEF-AUTH-001
+  remarks: >
+    The single most important case in this module. Without the cap a six-digit code is guessable
+    in minutes, and the failure mode is silent - nothing errors, guesses are simply free.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-AUTH-029
+  requirement_ids: [REQ-AUTH-015]
+  scenario_id: SCN-AUTH-026
+  system: Backend
+  module: AUTH
+  feature: Sign in or sign up with a one-time code emailed to a Gmail address
+  title: Bad addresses, quick resends and reused codes are refused
+  objective: "Confirm the boundaries, and that every verify failure reads the same."
+  preconditions:
+    - "A reachable backend"
+  test_data: "A yahoo.com address; an immediate resend; a wrong code; a reused code"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Major
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "Request a code for a non-Gmail address"
+      expected: "400, \"Please use a Gmail address for now.\""
+    - step: 2
+      action: "Request two codes for the same address in quick succession"
+      expected: "400 naming the remaining cooldown"
+    - step: 3
+      action: "Submit a wrong code, then the correct one"
+      expected: "401 then success - a wrong guess must not kill a live code before the cap"
+    - step: 4
+      action: "Submit the same correct code again"
+      expected: "401, with the same wording as every other failure"
+  expected_result: "Each boundary holds and none of them leak. (REQ-AUTH-015 validations)"
+  actual_result: >
+    Executed 2026-09-21, all four as expected: 400 for yahoo.com, 400 with "Please wait 60
+    seconds", 401 then a successful sign-in, and 401 on reuse with identical wording.
+  status: Pass
+  defect_id: ""
+  remarks: >
+    Step 3 matters as a guard in the other direction: the attempt counter must bound guessing
+    without breaking a student who fat-fingers one digit.
+  automation_status: ManualOnly
+  automation_reference: ""

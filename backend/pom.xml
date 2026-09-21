@@ -38,6 +38,17 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
+        <!--
+            Sending the sign-in code by email (V51). The one new dependency this feature needs, and
+            there is no lighter option: SMTP needs a real client, and the JDK ships none. Kept to
+            the Spring starter rather than a vendor SDK so the sending account can change from Gmail
+            to anything else by editing configuration, with no code change — the same reasoning
+            ADR-013 used to keep the AI layer off vendor SDKs.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>

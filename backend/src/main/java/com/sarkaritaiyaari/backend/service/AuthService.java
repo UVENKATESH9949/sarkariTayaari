@@ -158,6 +158,20 @@ public class AuthService {
         return new AuthResponse.UserResponse(user.getId(), user.getEmail(), user.getDisplayName(), user.getRole().name());
     }
 
+    /**
+     * Issues a session for a user who has already been authenticated by some other means.
+     *
+     * Exists for {@link EmailOtpService}, which proves identity with a one-time code rather than a
+     * password. Kept here rather than duplicated there so there is exactly one place that decides
+     * what a session is worth — token shape, TTL and the device label all stay in one file.
+     *
+     * <p><b>Calling this IS signing someone in.</b> It performs no check of its own; the caller is
+     * responsible for having established who the user is.
+     */
+    public AuthResponse issueTokenFor(User user, String deviceLabel) {
+        return issueToken(user, deviceLabel);
+    }
+
     /* ------------------------------------------------------------------- internals */
 
     private AuthResponse issueToken(User user, String deviceLabel) {

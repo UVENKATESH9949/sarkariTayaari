@@ -2,6 +2,25 @@ spring:
   application:
     name: sarkaritaiyaari-backend
 
+  # SMTP for the one-time sign-in code (migration V51). Host and port default to Gmail, but
+  # nothing in the code is Gmail-specific, so pointing at another provider is a configuration
+  # change only. Credentials come from the environment and are never committed.
+  mail:
+    host: ${SPRING_MAIL_HOST:smtp.gmail.com}
+    port: ${SPRING_MAIL_PORT:587}
+    username: ${SPRING_MAIL_USERNAME:}
+    password: ${SPRING_MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          # Without these a dead SMTP host hangs the request thread until the OS gives up.
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
   config:
     import: optional:file:./application-local.yml
 
@@ -87,6 +106,27 @@ app:
     # re-login every few weeks is friction with no security benefit while tokens are
     # revocable server-side.
     token-ttl-days: 365
+
+  # Sending the one-time sign-in code (migration V51).
+  #
+  # OFF BY DEFAULT, matching this project's standing posture for anything that leaves the
+  # building. With it off, OtpMailSender writes the code to the log at WARN instead of emailing
+  # it, so the whole flow is testable on a machine with no mail account. The two paths are
+  # exclusive: a deployment with mail ON never logs a code.
+  #
+  # To turn it on, set all of these (Spring relaxed binding — note the APP_/SPRING_ prefixes,
+  # the trap AIProperties' own comments got wrong once):
+  #   APP_MAIL_ENABLED=true
+  #   APP_MAIL_FROM=you@gmail.com
+  #   SPRING_MAIL_USERNAME=you@gmail.com
+  #   SPRING_MAIL_PASSWORD=<16-character Google app password, NOT your account password>
+  mail:
+    enabled: ${APP_MAIL_ENABLED:false}
+    from: ${APP_MAIL_FROM:}
+    app-name: SarkariTaiyaari
+    # Returns the code in the HTTP response. A developer convenience for driving the flow with
+    # curl and nothing else — never enable this anywhere real.
+    expose-code-in-response: ${APP_MAIL_EXPOSE_CODE:false}
 
   # Folder served at /downloads — drop an APK in and it is immediately downloadable.
   # Relative to the backend module's directory. Deliberately outside src/ so builds are

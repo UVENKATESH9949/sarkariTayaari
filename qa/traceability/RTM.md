@@ -49,7 +49,7 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 
 ## AUTH
 
-14 requirements, 23 scenarios, 26 test cases.
+15 requirements, 26 scenarios, 29 test cases.
 
 | Requirement | Priority | Status | Scenario(s) | Test Case(s) | Execution | Defect |
 |---|---|---|---|---|---|---|
@@ -67,6 +67,7 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 | REQ-AUTH-012: Uniform AUTH error contract | High | Active | SCN-AUTH-021 | TC-AUTH-024 (Not Executed) |  |  |
 | REQ-AUTH-013: Login/register timing must not leak account existence | Medium | Active | SCN-AUTH-022 | TC-AUTH-025 (Not Executed) |  |  |
 | REQ-AUTH-014: Accounts are optional — full app usability while signed out | High | Active | SCN-AUTH-023 | TC-AUTH-026 (Not Executed) |  |  |
+| REQ-AUTH-015: Sign in or sign up with a one-time code emailed to a Gmail address | High | Active | SCN-AUTH-024<br>SCN-AUTH-025<br>SCN-AUTH-026 | TC-AUTH-027 (Pass)<br>TC-AUTH-028 (Pass)<br>TC-AUTH-029 (Pass) | EXEC-AUTH-0003<br>EXEC-AUTH-0001<br>EXEC-AUTH-0002 | DEF-AUTH-001 |
 
 ## CATALOG
 
@@ -246,9 +247,9 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 
 | Metric | Value |
 |---|---|
-| Total requirements | 154 |
-| Total scenarios | 296 |
-| Total test cases | 318 |
+| Total requirements | 155 |
+| Total scenarios | 299 |
+| Total test cases | 321 |
 | Requirements with zero scenarios | 0  |
-| Real executions recorded | 76 |
-| Real defects logged | 2 |
+| Real executions recorded | 79 |
+| Real defects logged | 3 |

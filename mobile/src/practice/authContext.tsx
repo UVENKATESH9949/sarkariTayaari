@@ -1,7 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { AppState } from "react-native";
 import { clearSession, loadSession, saveSession } from "../db/authSession";
-import { login as apiLogin, logout as apiLogout, register as apiRegister, type AuthUser } from "@sarkaritaiyaari/core/api";
+import {
+  login as apiLogin,
+  logout as apiLogout,
+  register as apiRegister,
+  requestEmailOtp,
+  verifyEmailOtp,
+  type AuthUser,
+} from "@sarkaritaiyaari/core/api";
 import { syncProgress, uploadPendingProgress } from "../sync/progressSync";
 import { syncBookmarks, uploadPendingBookmarks } from "../sync/bookmarkSync";
 import { syncFollowedExams, uploadPendingFollowedExams } from "../sync/followedExamSync";
@@ -22,6 +29,15 @@ type AuthContextValue = {
   lastError: string | null;
   signUp: (email: string, password: string, displayName?: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
+  /**
+   * Asks the server to email a one-time code. Resolves with how the server handled it.
+   *
+   * A success says NOTHING about whether the address has an account — the endpoint answers
+   * identically either way on purpose, so a caller must not phrase it as "welcome back".
+   */
+  requestSignInCode: (email: string) => Promise<{ expiresInMinutes: number; emailed: boolean }>;
+  /** Redeems a code and signs in, creating the account if this is the first time. */
+  signInWithCode: (email: string, code: string) => Promise<void>;
   signOut: () => Promise<void>;
   /** Push anything pending; safe to call when signed out (does nothing). */
   pushProgress: () => Promise<void>;
@@ -41,6 +57,8 @@ const AuthContext = createContext<AuthContextValue>({
   lastError: null,
   signUp: async () => {},
   signIn: async () => {},
+  requestSignInCode: async () => ({ expiresInMinutes: 0, emailed: false }),
+  signInWithCode: async () => {},
   signOut: async () => {},
   pushProgress: async () => {},
   progressVersion: 0,
@@ -220,6 +238,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     adoptOrThrow(await apiLogin(email, password), (result) => adopt(result, "sign_in"));
   }, [adopt]);
 
+  /*
+   * Passwordless sign-in (V51). Deliberately goes through the same `adopt` as password sign-in,
+   * so a session created by a code is identical in every way to one created by a password —
+   * same storage, same push registration, same full sync that restores history onto a new phone.
+   * A second path that did any of that differently would drift.
+   */
+  const requestSignInCode = useCallback(async (email: string) => {
+    const result = await requestEmailOtp(email.trim());
+    return { expiresInMinutes: result.expiresInMinutes, emailed: result.emailed };
+  }, []);
+
+  const signInWithCode = useCallback(async (email: string, code: string) => {
+    adoptOrThrow(await verifyEmailOtp(email.trim(), code.trim()), (result) => adopt(result, "sign_in"));
+  }, [adopt]);
+
   const signOut = useCallback(async () => {
     const current = token;
     trackEvent("sign_out");
@@ -277,7 +310,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, syncing, lastError, signUp, signIn, signOut, pushProgress, progressVersion }}
+      value={{
+        user, loading, syncing, lastError,
+        signUp, signIn, requestSignInCode, signInWithCode, signOut,
+        pushProgress, progressVersion,
+      }}
     >
       {children}
     </AuthContext.Provider>

@@ -136,10 +136,25 @@ users                one row per signed-in student (email, password hash)
   +-- user_bookmarks
   +-- followed_exams
   +-- user_topic_progress          per-topic mastery (V14) — was missing from this map
+  +-- user_preparation_profiles    what onboarding asked, account-wide (V48)
+  +-- study_tasks                  what today's plan assigned (V49; reason column V50)
+
+email_otp_codes       a one-time sign-in code (V51) — BESIDE users, not under it
 ```
 
-Accounts are optional — the app works fully signed out. Signing in only adds one
-thing: this activity now survives losing the phone, because it's also stored here.
+**Corrected 2026-09-21:** this section used to say "accounts are optional — the app works fully
+signed out". That is no longer true of the **mobile app**, which since 2026-09-21 requires an
+account and shows a sign-in screen before anything else (`api/AUTH.md`). The *backend* is
+unchanged: content and sync reads are still public, `web/` still works signed out, and the
+signed-out code paths in the app still exist — they are simply unreachable from a fresh install.
+Signing in is still what makes activity survive losing the phone.
+
+**`email_otp_codes` (V51) deliberately has no foreign key to `users`.** A code is issued *before*
+the account exists on a first-time sign-up, which is the entire point of the flow, so the address
+is carried as plain text and normalised the same way `users.email` is. The table stores a BCrypt
+hash of the code rather than the code, plus an expiry, a consumed-at stamp and an attempt counter
+— and that counter is the only thing making a six-digit code safe. See `api/AUTH.md` for the
+transaction subtlety that once silently disabled it.
 
 `user_topic_progress` (V14) is the coarse mastery ladder — NOT_STARTED through MASTERED, plus
 NEEDS_REVISION as a regression — and it syncs last-write-wins like `user_bookmarks` rather than
@@ -317,6 +332,10 @@ per `AI_RULES.md` §6):
     V45__profile_summary_cache.sql                user_profile_summaries — keyed by a hash of the facts it may cite
     V46__ai_usage_events.sql                      ai_usage_events — one row per AI call, the schema's only event log
     V47__behavioral_capture.sql                   practice-session timing/exam + per-attempt classification snapshot (TASK-2801)
+V48__preparation_profile.sql                  user_preparation_profiles — the account-wide copy of what onboarding asked
+V49__study_tasks.sql                          study_tasks — what today's plan assigned, the one phase that stores its output
+V50__study_task_reason.sql                    study_tasks.reason — why a task was chosen, stored at the moment it was chosen
+V51__email_otp.sql                            email_otp_codes — one-time sign-in codes, no FK to users by design
 ```
 
 V8–V24 add whole feature areas ("Epic L" topic intelligence, "Exam Guide", the Exams

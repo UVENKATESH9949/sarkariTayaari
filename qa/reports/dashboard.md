@@ -2,7 +2,7 @@
 
 **GENERATED FILE — do not hand-edit.** Regenerate with `node scripts/qa/generate-reports.js`. Every number below is computed directly from qa/*.yaml at generation time — nothing here is hardcoded or estimated.
 
-_Generated at: 2026-09-21T09:45:15.589Z_
+_Generated at: 2026-09-21T10:26:01.834Z_
 
 ## Coverage
 
@@ -10,7 +10,7 @@ _Generated at: 2026-09-21T09:45:15.589Z_
 |---|---|---|---|---|
 | AI | 24 | 52 | 55 | 2.3 |
 | ANALYTICS | 5 | 6 | 6 | 1.2 |
-| AUTH | 14 | 23 | 26 | 1.9 |
+| AUTH | 15 | 26 | 29 | 1.9 |
 | CATALOG | 25 | 45 | 55 | 2.2 |
 | DAILYPLAN | 9 | 23 | 23 | 2.6 |
 | LEARNING-STATE | 5 | 8 | 8 | 1.6 |
@@ -20,17 +20,17 @@ _Generated at: 2026-09-21T09:45:15.589Z_
 | ROADMAP | 6 | 14 | 15 | 2.5 |
 | USER-PROGRESS | 6 | 8 | 8 | 1.3 |
 | WEB | 14 | 22 | 23 | 1.6 |
-| **Total** | **154** | **296** | **318** | **2.1** |
+| **Total** | **155** | **299** | **321** | **2.1** |
 
 ## Execution status
 
-76 real execution record(s) across 71 test case(s). A test case with no execution record stays `Not Executed`; where a case has been run more than once, the most recent record wins.
+79 real execution record(s) across 74 test case(s). A test case with no execution record stays `Not Executed`; where a case has been run more than once, the most recent record wins.
 
 | Module | Not Executed | Pass | Fail | Blocked | Skipped |
 |---|---|---|---|---|---|
 | AI | 55 | 0 | 0 | 0 | 0 |
 | ANALYTICS | 1 | 5 | 0 | 0 | 0 |
-| AUTH | 26 | 0 | 0 | 0 | 0 |
+| AUTH | 26 | 3 | 0 | 0 | 0 |
 | CATALOG | 52 | 3 | 0 | 0 | 0 |
 | DAILYPLAN | 1 | 21 | 0 | 1 | 0 |
 | LEARNING-STATE | 0 | 8 | 0 | 0 | 0 |
@@ -49,7 +49,7 @@ Evidence-based per qa/README.md's rule — Automated only where a specific test 
 |---|---|---|---|---|---|
 | AI | 47 | 0 | 0 | 8 | 0 |
 | ANALYTICS | 5 | 1 | 0 | 0 | 0 |
-| AUTH | 14 | 5 | 3 | 4 | 0 |
+| AUTH | 14 | 5 | 3 | 7 | 0 |
 | CATALOG | 20 | 4 | 19 | 12 | 0 |
 | DAILYPLAN | 13 | 0 | 0 | 10 | 0 |
 | LEARNING-STATE | 8 | 0 | 0 | 0 | 0 |
@@ -59,16 +59,16 @@ Evidence-based per qa/README.md's rule — Automated only where a specific test 
 | ROADMAP | 13 | 0 | 0 | 2 | 0 |
 | USER-PROGRESS | 4 | 0 | 0 | 4 | 0 |
 | WEB | 3 | 0 | 1 | 19 | 0 |
-| **Total** | **165** | **24** | **55** | **73** | **1** |
+| **Total** | **165** | **24** | **55** | **76** | **1** |
 
-Automated: 52% of all test cases.
+Automated: 51% of all test cases.
 
 ## Priority breakdown (all modules)
 
 | Priority | Count |
 |---|---|
 | Critical | 70 |
-| High | 133 |
+| High | 136 |
 | Medium | 99 |
 | Low | 16 |
 
@@ -88,7 +88,7 @@ Test cases with no determinate expected outcome — established behavior, not a 
 
 ## Defects
 
-2 defects logged across all modules.
+3 defects logged across all modules.
 
 ## Suites
 
@@ -97,10 +97,10 @@ Test cases with no determinate expected outcome — established behavior, not a 
 | Critical Business Flow | 9 |
 | Regression — AI | 55 |
 | Regression — ANALYTICS | 6 |
-| Regression — AUTH | 26 |
+| Regression — AUTH | 29 |
 | Regression — CATALOG | 55 |
 | Regression — DAILYPLAN | 23 |
-| Regression (Full) | 318 |
+| Regression (Full) | 321 |
 | Regression — LEARNING-STATE | 8 |
 | Regression — ONBOARDING | 25 |
 | Regression — QUESTIONS | 64 |
@@ -108,7 +108,7 @@ Test cases with no determinate expected outcome — established behavior, not a 
 | Regression — ROADMAP | 15 |
 | Regression — USER-PROGRESS | 8 |
 | Regression — WEB | 23 |
-| Release Gate | 200 |
+| Release Gate | 203 |
 | Sanity | 70 |
 | Smoke | 14 |
 

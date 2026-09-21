@@ -17,4 +17,25 @@
 #   external_ref: null   # e.g. a Jira key, if/when an external tracker is connected
 #   remarks: null
 
-[]
+
+- id: DEF-AUTH-001
+  title: "The one-time code attempt cap did nothing - every wrong guess was free"
+  severity: Critical
+  status: Fixed
+  found_in_execution: EXEC-AUTH-0001
+  test_case_id: TC-AUTH-028
+  requirement_ids: [REQ-AUTH-015]
+  description: >
+    EmailOtpService.verifyCode incremented attempt_count before comparing the code, then reported
+    a wrong guess by throwing UnauthorizedException. That is a RuntimeException, so Spring rolled
+    the transaction back and undid the increment. attempt_count never left 0, the five-attempt cap
+    never engaged, and a six-digit code could be brute-forced without limit.
+  external_ref: null
+  remarks: >
+    Nothing failed loudly - each wrong guess returned the correct 401, so from outside the
+    behaviour looked right. It only shows if you guess wrongly five times and THEN submit the
+    correct code. The code's own comment asserted the opposite, reasoning that the handler mapping
+    the exception to a 401 meant no rollback; what an exception is later mapped to has nothing to
+    do with whether the transaction commits. Fixed with
+    @Transactional(noRollbackFor = UnauthorizedException.class) before the feature was ever
+    committed or deployed. Removing that annotation silently disables the cap again.

@@ -4,6 +4,7 @@ export * from "./auth";
 export * from "./bookmarks";
 export * from "./clientConfig";
 export * from "./dailyPlan";
+export * from "./emailOtp";
 export * from "./examDiscovery";
 export * from "./examGuide";
 export * from "./followedExams";

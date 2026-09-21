@@ -1,0 +1,71 @@
+# AUTH — execution records, 2026-09-21: passwordless sign-in (migration V51).
+#
+# Backend driven with curl against the real Neon dev database; the app on emulator-5554 with a
+# physical device attached throughout and never touched (every adb call pinned).
+#
+# THE IMPORTANT ONE IS EXEC-AUTH-0001. The five-attempt cap is the only thing that makes a
+# six-digit code safe, and the first implementation's cap did nothing at all — see DEF-AUTH-001.
+# Nothing failed loudly: each wrong guess returned the correct 401, so from outside the behaviour
+# looked right. It only shows if you guess wrongly five times and THEN submit the correct code.
+
+- execution_id: EXEC-AUTH-0001
+  test_case_id: TC-AUTH-028
+  test_case_version: 1
+  environment: "Backend on localhost:8080 against the real Neon dev database"
+  build_version: "feature/on-device-llm-spike @ 6fbcc8e + uncommitted V51 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-21T15:45:00+05:30"
+  actual_result: >
+    FAILED on the first run: five wrong codes each returned 401, and the correct code then SIGNED
+    IN — the cap was not enforced. Diagnosed to the attempt increment being rolled back with the
+    UnauthorizedException that reports a wrong guess. After adding
+    @Transactional(noRollbackFor = UnauthorizedException.class): five 401s, the correct code
+    refused with 401, and a freshly requested code then signed in normally.
+  status: Pass
+  defect_id: DEF-AUTH-001
+  evidence: "Scripted six-call sequence against the live endpoint, before and after the fix"
+  remarks: >
+    Recorded as a Pass for the fixed behaviour with the defect linked, rather than as two records:
+    the failing run never described a shipped state — the feature had not been committed, let
+    alone deployed.
+
+- execution_id: EXEC-AUTH-0002
+  test_case_id: TC-AUTH-029
+  test_case_version: 1
+  environment: "Backend on localhost:8080 against the real Neon dev database"
+  build_version: "feature/on-device-llm-spike @ 6fbcc8e + uncommitted V51 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-21T15:38:00+05:30"
+  actual_result: >
+    All four boundaries as expected. yahoo.com -> 400 "Please use a Gmail address for now."
+    Immediate resend -> 400 "A code was just sent. Please wait 60 seconds before asking for
+    another." Wrong code -> 401, then the correct code signed in and created the account
+    (role STUDENT). Reusing that code -> 401 with identical wording.
+  status: Pass
+  defect_id: ""
+  evidence: "Scripted sequence against the live endpoints"
+  remarks: >
+    Also confirmed separately that signing in twice with the same address returns the SAME user id
+    rather than creating a duplicate account.
+
+- execution_id: EXEC-AUTH-0003
+  test_case_id: TC-AUTH-027
+  test_case_version: 1
+  environment: "emulator-5554 (Pixel_7, -memory 3072) + backend on localhost:8080 + real Neon dev database"
+  build_version: "feature/on-device-llm-spike @ 6fbcc8e + uncommitted V51 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-21T15:50:00+05:30"
+  actual_result: >
+    Migration V51 applied cleanly to the real dev database on startup (schema 50 -> 51, 1.858s).
+    On the device: the sign-in screen rendered as the FIRST screen after launch, with Send
+    disabled until a valid Gmail was typed. The code step honestly reported that this build does
+    not send email and the code is in the server log. Entering it signed in and landed on Home;
+    the backend logged newAccount=true. A force-stop and relaunch went straight to Home with no
+    sign-in flash.
+  status: Pass
+  defect_id: ""
+  evidence: "Device screenshots of both steps and of Home afterwards; backend log lines"
+  remarks: >
+    Onboarding did not appear because this install had already completed it — onboarding is
+    per-install and sign-in is per-account, and the gate orders them correctly. The sequence a
+    genuinely fresh install sees (sign-in THEN onboarding) has NOT been observed.

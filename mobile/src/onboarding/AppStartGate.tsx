@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { View } from "react-native";
+import { SignInFlow } from "../auth/SignInFlow";
+import { useAuth } from "../practice/authContext";
 import { useSyncStatus } from "../sync/SyncContext";
 import { PreparingApp } from "../ui/PreparingApp";
 import { useTheme } from "../ui/ThemeContext";
@@ -19,7 +21,8 @@ import { useOnboarding } from "./OnboardingContext";
  *
  * | Condition | Shown |
  * |---|---|
- * | Still working out whether onboarding is owed | a bare themed background |
+ * | Still reading the stored session, or working out whether onboarding is owed | a bare themed background |
+ * | **Nobody is signed in** | **the sign-in flow** |
  * | Onboarding is owed | the flow |
  * | Onboarding just finished | the personalised warm-up |
  * | A genuinely first-ever sync is still short of usable | the existing preparation screen |
@@ -30,14 +33,32 @@ import { useOnboarding } from "./OnboardingContext";
  *
  * **A returning user never leaves the last row.** The onboarding phase starts as `resolving`
  * and goes straight to `ready`, so nothing here is new work on a normal launch.
+ *
+ * <h2>Sign-in comes before onboarding, and that is a reversal</h2>
+ * This app was built so an account was optional — onboarding ran first and everything worked
+ * signed out. **The project owner asked on 2026-09-21 for an account to be required**, so the
+ * sign-in row sits above onboarding: a student identifies themselves, and only then is asked
+ * about their exam and study time. That ordering also means the profile those questions produce
+ * belongs to an account from the moment it exists, instead of being device-local until someone
+ * happens to sign in.
+ *
+ * The signed-out code paths beneath were deliberately NOT removed. They remain correct, a token
+ * can still expire mid-use and drop a student back here, and deleting them would be a large,
+ * risky change for no gain.
  */
 export function AppStartGate({ children }: { children: ReactNode }) {
   const { phase } = useOnboarding();
+  const { user, loading: authLoading } = useAuth();
   const { firstLaunchSyncActive } = useSyncStatus();
   const { colors } = useTheme();
 
-  if (phase === "resolving") {
+  // Both reads are local and fast. Waiting for the session too stops a signed-in returning user
+  // seeing the sign-in screen flash before their stored token has been read back.
+  if (authLoading || phase === "resolving") {
     return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
+  }
+  if (!user) {
+    return <SignInFlow />;
   }
   if (phase === "collecting") {
     return <OnboardingFlow />;
