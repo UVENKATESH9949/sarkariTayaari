@@ -5,9 +5,17 @@ all four gates clean.** Phase 6 (TASK-3401, adaptive re-planning) closed it this
 migration **V50** and **20/20 tests green**. Five endpoints now exist end to end:
 `/api/me/learning-state`, `/study-roadmap`, `/revision-plan`, `/preparation-profile`, `/daily-plan`.
 
-**THE ONE THING THAT MATTERS MOST NOW: almost none of it is visible to a student.** Not one of the
-five endpoints has a *reading* caller in `mobile/` or `web/`. Six phases of work exist behind a
-wall. **That is the next job, and it is bigger than any remaining backend work.**
+**THE WALL IS BREACHED: the program has a student-facing surface at last.** On 2026-09-21 the
+**daily plan got a reader** — `mobile/src/app/daily-plan.tsx`, reached from a card on Home and a row
+in More, **verified on `emulator-5554` and passing first time**. A real account saw *"31 things to do
+today · About 89 minutes of work"* against a 90-minute budget, with each task naming its topic, its
+stored reason and its cost, and tapping one opened Practice for that topic. See the session entry
+below.
+
+**The remaining visibility gap is now narrower but real:** `learning-state`, `study-roadmap` and
+`revision-plan` still have no reading caller. The daily plan is built *from* all three, so a student
+now benefits from them indirectly — but nothing surfaces them directly, and `web/` reads none of the
+five.
 
 **One half of that gap closed the same day: mobile now SENDS the preparation profile**
 (`mobile/src/sync/preparationProfileSync.ts` + migration **0030**), and **it is now device-verified**
@@ -23,6 +31,80 @@ wrong. It now falls back to `onboarding_completed_at`, which is not a guess: tha
 student answered, and it was already stored. **A clean `tsc` and a clean lint said nothing about
 this** — only a real device carrying a real pre-0030 profile did. Fixed and committed in `389f3ca`;
 no defect id, because it never shipped.
+
+## Session of 2026-09-21 — the program gets a reader: Today's Plan on a device
+
+**Emulator `emulator-5554`, real dev backend on `localhost:8080`, real Neon dev database.** No
+physical device attached; every `adb` call pinned anyway. Committed. Records:
+`qa/execution/2026-09-21-dailyplan-consumer.yaml`.
+
+**Why the daily plan and not one of the other four:** it is the only one a student would open on
+purpose, and **every task it lists already resolved to a screen that exists** (`/practice/levels`),
+so it needed no new Practice work to lead somewhere. The program's own plan named it first for
+exactly that reason.
+
+**Shipped.** `packages/core/src/api/dailyPlan.ts` (`fetchDailyPlan`), `mobile/src/data/dailyPlanData.ts`
+(reads the session itself, so **no screen ever holds a bearer token** — the convention
+`weaknessRadarData.ts` set), and `mobile/src/app/daily-plan.tsx`. Entry points: a card on Home
+between Continue Practice and the readiness card, and a row in More beside Preparation Radar.
+**Not a sixth tab** — the same call the radar made, for the same reason.
+
+**The screen adds nothing to the payload.** No reordering, no "you're behind" framing, no second
+opinion about what matters — a third ranking is the drift Phases 3, 4 and 7 exist to prevent.
+
+**Two deliberate absences, written into the code rather than left to be discovered:**
+
+1. **No cache.** Reading this endpoint is what *generates* the day, so a cached read would hand
+   back a plan while leaving the day unplanned on the server — and a plan belongs to a calendar
+   day, so a saved one risks showing yesterday's work as today's.
+2. **No local fallback when signed out.** The radar computes on-device because every input is a
+   local attempt row; a plan cannot. Signed out is a real state with its own message.
+
+**Verified on the device, and it passed first time** — unusual here, worth saying plainly. Home card
+and More row both open it; the header showed **31 tasks / 89 planned minutes / a 90-minute budget**
+with *"Based on the 1-2 hours a day you chose when you set up the app"* — **yesterday's profile sync
+arriving somewhere a student can read it**. Task cards carried the stored reason sentence, the
+question count and the estimate tier. Tapping a task opened Practice's levels for that task's own
+topic (Blood Relations 167 questions; then Awards & Honours 59). Airplane mode produced the error
+state with a retry rather than a blank screen. The device's zone resolved as `Asia/Calcutta` and the
+server accepted it; `planDate 2026-09-21`.
+
+**Two mistakes of mine, both caught by tooling before the device run:** two theme tokens that do not
+exist (`semantic.warningSoft` / `brand.soft` — the real names are `warningBg` and `glowSoft`), and
+two unused imports.
+
+**AN ENVIRONMENT TRAP WORTH KNOWING: expo-router's typed routes are GENERATED.** `tsc` rejected
+`router.push("/daily-plan")` with the route file already on disk, because `.expo/types/router.d.ts`
+had not regenerated. Metro rewrites it on start; a brief dev-server run fixed it. **Do not "fix"
+that error by casting the path.**
+
+**And the recurring one, again:** the emulator's `system_server` ANRed repeatedly on cold boot with
+**350 MB genuinely available of 16 GB and 26.7 GB committed** — a backend JVM, Metro, the emulator
+and the editor competing. `adb reboot` cleared it, exactly as this file already prescribes. The app
+was never at fault; Home rendered correctly behind the system dialog.
+
+**A gap this consumer exposed rather than created: nothing edits the preparation profile after
+onboarding.** `savePreparationProfile` is called only from the first-run flow, so a student shown
+`basis: DEFAULT` has no way to correct it — and `profile_updated_at` exists precisely to support
+later edits that nothing makes. The screen therefore states the assumption without offering a fix
+that does not exist.
+
+**QA**: `REQ-DAILYPLAN-008`, `SCN-DAILYPLAN-018..021`, `TC-DAILYPLAN-018..021`,
+`EXEC-DAILYPLAN-0017..0019`. `TC-018`/`TC-019` **Pass**; `TC-021` **Blocked** (one of three steps
+ran — signing out would have ended the verification with no password to get back in); `TC-020`
+**Not Executed**, because reaching `basis: DEFAULT` on screen needs an install that never onboarded.
+RTM 151/288/310 -> **152/292/314**.
+
+**NOT verified:**
+
+- **No performance measurement, and there is something to measure.** The first read of a new day
+  also settles yesterday, and took roughly **two minutes** on this machine before the screen
+  filled. The loading state held correctly, but that is slow enough to matter and nobody has
+  profiled it. Worth a look before this is called ready.
+- `learning-state`, `study-roadmap` and `revision-plan` still have no reading caller.
+- `web/` reads none of the five, and **has no onboarding at all**, so it has no profile to feed a
+  budget either — an earlier note that "web does not send the profile" understated this.
+- The `basis: DEFAULT` branch and the signed-out branch have never been seen on a screen.
 
 ## Session of 2026-09-20 (2) — the device pass for the profile sync, and the defect it found
 
@@ -170,12 +252,15 @@ new one created — it is the same endpoint, and splitting it would hide that. R
 
 1. ~~Device-verify the profile sync~~ — **DONE 2026-09-20, and it found a defect.** See the session
    entry above. `web/` still does not send the profile at all.
-2. **Give the five endpoints a consumer.** This is now the whole program's bottleneck: everything
-   works and nothing is visible. Start with the daily plan, since it is the surface a student would
-   actually open, and it already resolves each task to a screen that exists.
-3. **A way to act on a task** — marking one done, or simply opening its practice screen from the
-   plan — which is the natural companion to (2) and the only thing `study_tasks.status` still needs
-   before Phase 6's record is complete in practice as well as in principle.
+2. ~~Give the five endpoints a consumer~~ — **the daily plan has one as of 2026-09-21**, device-
+   verified. `learning-state`, `study-roadmap` and `revision-plan` still have none, and `web/`
+   reads nothing. **Profile the daily-plan read before building more on it:** the first read of a
+   new day took roughly two minutes on the emulator.
+3. ~~A way to act on a task~~ — **opening its practice screen is done**; a task now taps straight
+   into `/practice/levels` for its own topic. Marking one done is still absent by design (outcomes
+   are inferred from real attempts), and is no longer blocked on "there is no screen to put it on".
+   **The more useful missing surface is an edit screen for the preparation profile** — nothing
+   changes the study-time band after onboarding, so a student budgeted a default cannot correct it.
 4. Measure what was assumed: the band-to-minutes mid-points, the 60% completion line, the half-day
    revision cap, the 3/7/21/45 revision intervals. All are declared judgements, all are now
    generating real data that could replace them.
