@@ -600,3 +600,162 @@
     and lose to.
   automation_status: ManualOnly
   automation_reference: ""
+
+- id: TC-DAILYPLAN-018
+  requirement_ids: [REQ-DAILYPLAN-008]
+  scenario_id: SCN-DAILYPLAN-018
+  system: Mobile
+  module: DAILYPLAN
+  feature: A student can see today's plan in the app
+  title: Today's Plan opens from Home and lists the day
+  objective: >
+    Confirm the end of the program's largest gap: six phases behind five endpoints become
+    something a student can actually open and read.
+  preconditions:
+    - "Signed in, an active exam selected, backend reachable"
+  test_data: "An account whose profile states ONE_TO_TWO"
+  test_environment: "emulator-5554 against a real dev backend"
+  priority: High
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "On Home, tap the Today's Plan card"
+      expected: "The screen opens and loads without error"
+    - step: 2
+      action: "Read the header"
+      expected: "Task count, planned minutes, the budget, and the plan date with its time zone"
+    - step: 3
+      action: "Read a task card"
+      expected: "Topic and subject, a Revise/New pill, its stored reason sentence, its question count and estimated minutes"
+    - step: 4
+      action: "Open More and tap Today's Plan"
+      expected: "The same screen, as the second entry point"
+  expected_result: "The plan is visible to a student, not only to curl. (REQ-DAILYPLAN-008 acceptance_criteria)"
+  actual_result: >
+    Executed 2026-09-21 on emulator-5554. "31 things to do today", "About 89 minutes of work",
+    90m/89m/31 across the stats, and the provenance line "Based on the 1-2 hours a day you chose
+    when you set up the app." Task cards showed topic, subject, a New pill, the stored reason
+    sentence and "10 questions, ~3 min, easy". Both entry points open the same screen.
+  status: Pass
+  defect_id: ""
+  remarks: >
+    Step 3 is the one that matters. A list of topic names would be a worse version of the radar;
+    the reason sentence and the cost are what make it a plan.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-DAILYPLAN-019
+  requirement_ids: [REQ-DAILYPLAN-008]
+  scenario_id: SCN-DAILYPLAN-019
+  system: Mobile
+  module: DAILYPLAN
+  feature: A student can see today's plan in the app
+  title: A task leads into Practice for its own topic
+  objective: "Confirm the plan is actionable rather than only descriptive."
+  preconditions:
+    - "A plan with at least one task on screen"
+  test_data: "Any assigned task"
+  test_environment: "emulator-5554 against a real dev backend"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Note the first task's topic name, then tap the card"
+      expected: "Practice's levels screen opens"
+    - step: 2
+      action: "Check the screen's title and scoping"
+      expected: "It is scoped to that same topic, not to the subject or the exam generally"
+  expected_result: "The plan hands the student to a screen that already existed."
+  actual_result: >
+    Executed 2026-09-21. Tapping Blood Relations opened Practice's levels screen for Blood
+    Relations (167 questions); tapping Awards & Honours opened that topic's (59). Scoped to the
+    task's own topic both times.
+  status: Pass
+  defect_id: ""
+  remarks: >
+    Deliberately stops at levels rather than starting a quiz — Practice owns choosing a level, and
+    a second path into the quiz would be another entry point to keep working forever.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-DAILYPLAN-020
+  requirement_ids: [REQ-DAILYPLAN-008]
+  scenario_id: SCN-DAILYPLAN-020
+  system: Mobile
+  module: DAILYPLAN
+  feature: A student can see today's plan in the app
+  title: An assumed budget is labelled as an assumption
+  objective: >
+    Confirm the declared-provenance rule survives all the way to the screen: a student is never
+    shown a number they did not give as though they had given it.
+  preconditions:
+    - "One account with a stated band, and one with no profile on the server"
+  test_data: "basis STATED_BAND (ONE_TO_TWO) and basis DEFAULT"
+  test_environment: "emulator-5554 against a real dev backend"
+  priority: High
+  severity: Major
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "Open the plan for the account with a stated band"
+      expected: "90 minutes, and a line naming the 1-2 hours a day the student chose"
+    - step: 2
+      action: "Open the plan for the account with no profile"
+      expected: "60 minutes, described as an assumption — never attributed to the student"
+  expected_result: "A guess reads as a guess. (REQ-DAILYPLAN-008 validations)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Step 2 cannot yet offer a fix: nothing in the app edits the profile after onboarding, so the
+    copy deliberately does not tell the student to go and change a setting that does not exist.
+    STILL NOT EXECUTED as a case, though step 1 was incidentally confirmed during
+    EXEC-DAILYPLAN-0017 — the device showed 90 minutes and "Based on the 1-2 hours a day you chose
+    when you set up the app." Step 2 is the harder half and is genuinely unreached: this device
+    uploads its own ONE_TO_TWO profile on sign-in, so reaching basis DEFAULT on screen needs an
+    install that never completed onboarding, which is the same device state TC-DAILYPLAN-015 wants
+    and also does not have.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-DAILYPLAN-021
+  requirement_ids: [REQ-DAILYPLAN-008]
+  scenario_id: SCN-DAILYPLAN-021
+  system: Mobile
+  module: DAILYPLAN
+  feature: A student can see today's plan in the app
+  title: Signed out, no exam, and offline are three different answers
+  objective: >
+    Confirm the non-plan states are distinguishable, so a student is never told to check their
+    connection over something a retry cannot fix.
+  preconditions:
+    - "Ability to sign out and to disable the network on the device"
+  test_data: "None"
+  test_environment: "emulator-5554"
+  priority: Medium
+  severity: Major
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "Sign out and open the screen"
+      expected: "An invitation to sign in, explaining the plan lives with the account — not an error"
+    - step: 2
+      action: "Sign in with no active exam selected, and open the screen"
+      expected: "An invitation to pick an exam, with a route to Exams"
+    - step: 3
+      action: "With an active exam, put the device in airplane mode and pull to refresh"
+      expected: "An error state with a retry, saying a connection is needed"
+  expected_result: "Each dead end explains itself. (REQ-DAILYPLAN-008 error_conditions)"
+  actual_result: >
+    Step 3 only, 2026-09-21: in airplane mode the screen showed "No plan right now - We couldn't
+    build today's plan just now. It needs a connection" with a Try Again button. Steps 1 and 2
+    were not run - see EXEC-DAILYPLAN-0019.
+  status: Blocked
+  defect_id: ""
+  remarks: >
+    Step 3 is where the deliberate absence of a cache shows. Serving a saved plan offline would
+    risk presenting yesterday's work as today's, and would skip the generation this GET performs.
+  automation_status: ManualOnly
+  automation_reference: ""

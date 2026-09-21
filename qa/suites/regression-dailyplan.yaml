@@ -2,7 +2,7 @@
 #
 # Every test case belonging to the DAILYPLAN module. Run after any change confined to that module.
 #
-# 17 test case(s). Membership rule: module == DAILYPLAN (mechanical filter).
+# 21 test case(s). Membership rule: module == DAILYPLAN (mechanical filter).
 
 suite: Regression — DAILYPLAN
 test_case_ids:
@@ -23,3 +23,7 @@ test_case_ids:
   - TC-DAILYPLAN-015
   - TC-DAILYPLAN-016
   - TC-DAILYPLAN-017
+  - TC-DAILYPLAN-018
+  - TC-DAILYPLAN-019
+  - TC-DAILYPLAN-020
+  - TC-DAILYPLAN-021

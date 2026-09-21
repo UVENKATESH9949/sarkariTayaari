@@ -329,3 +329,67 @@
     DailyPlanTest.theProfileRoundTripsAndIsScopedToItsOwner and
     .anOlderEditDoesNotOverwriteANewerOneAndTheLoserIsToldWhatWon; the device half needs a real
     device pass.
+
+- id: REQ-DAILYPLAN-008
+  feature: A student can see today's plan in the app
+  module: DAILYPLAN
+  system: [Mobile]
+  source_doc: api/DAILY-PLAN.md
+  source_section: "Consumers"
+  description: >
+    A root-level "Today's Plan" screen (mobile/src/app/daily-plan.tsx) reads
+    GET /api/me/daily-plan for the active exam and lists the day's tasks, each naming its topic,
+    its stored reason, its question count and its estimated minutes. Reached from a card on Home
+    and a row in More. Tapping a task opens Practice's levels screen for that topic.
+  business_rule: >
+    The first student-facing consumer of the personalization program: six phases and five
+    endpoints had shipped with no reader at all. The screen renders the server's plan and adds
+    no ranking, no reordering and no second opinion — a third opinion about what matters is the
+    drift Phases 3, 4 and 7 exist to remove. Where the payload is an assumption it says so: the
+    minutes budget is always reported with the band it came from, or plainly as an assumed
+    default when no profile reached the server.
+  actor: Signed-in student
+  preconditions:
+    - "An active exam is selected"
+    - "The student is signed in and the device can reach the backend"
+  inputs:
+    - "Opening the screen from Home or More; pull-to-refresh"
+  expected_outputs:
+    - "The budget, the planned total, and one card per task in the server's order"
+    - "Each task's stored reason, question count and estimated minutes"
+  validations:
+    - "budget.basis DEFAULT is described as an assumption, never shown as the student's own answer"
+    - "A task opens /practice/levels for its own topic"
+  permissions:
+    - "User token required; the screen never holds it — data/dailyPlanData.ts reads the session"
+  dependencies: [REQ-DAILYPLAN-001, REQ-DAILYPLAN-007]
+  error_conditions:
+    - "Signed out: a real state with its own message, because the plan is stored server-side and has no local equivalent"
+    - "Offline or a server error: an error state with retry; there is deliberately no cache"
+    - "Unknown exam (404): says so, rather than blaming the connection"
+  edge_conditions:
+    - "No active exam: prompts to pick one rather than failing to load"
+    - "An exam with nothing practicable returns an empty plan, shown as an invitation not an error"
+    - >
+      The time zone comes from the device and is validated for IANA shape before being sent, since
+      an unknown zone is a 400. If it cannot be resolved the server plans in UTC, which is a
+      different calendar day in IST between midnight and 05:30 — planDate is shown so that is
+      visible rather than silent.
+  offline_behavior: >
+    None, deliberately. There is no cache: reading the endpoint is what GENERATES the day, so a
+    cached read would hand back a plan while leaving the day unplanned on the server, and a saved
+    plan risks showing yesterday's work as today's. The screen says it needs a connection.
+  acceptance_criteria:
+    - "A signed-in student with an active exam sees today's tasks, each with its reason and cost"
+    - "The 90-minute budget is shown as following from the band the student chose"
+    - "Tapping a task lands on Practice's levels screen for that task's topic"
+  priority: High
+  status: Active
+  ambiguity: >
+    There is no way to change the study-time band after onboarding — nothing in the app calls
+    savePreparationProfile outside the first-run flow — so a student shown an assumed default
+    cannot correct it. Recorded rather than worked around: an edit surface is a separate change.
+  automation_status: ManualOnly
+  automation_hint: >
+    No automated runner exists for mobile in this project. The endpoint behind it is covered by
+    DailyPlanTest and AdaptiveReplanningTest; the screen itself needs a real device pass.

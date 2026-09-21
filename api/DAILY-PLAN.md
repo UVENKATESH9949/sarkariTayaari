@@ -205,7 +205,32 @@ topic genuinely matters, priority ordering brings it back on its own.
 
 ## Consumers
 
-None yet. `mobile/` and `web/` do not call it.
+**`mobile/` reads it** (2026-09-21): `app/daily-plan.tsx`, a root-level pushed screen reached from a
+card on Home and a row in More — **not a sixth tab**, the same call `preparation-radar.tsx` made.
+It goes through `data/dailyPlanData.ts`, which reads the session itself so no screen ever holds a
+bearer token.
+
+This is the program's **first student-facing surface**: six phases behind five endpoints had shipped
+with no reader at all.
+
+Three things about that client are worth knowing before changing it:
+
+- **No cache, deliberately.** Reading this endpoint is what *generates* the day, so a cached read
+  would hand back a plan while leaving the day unplanned on the server — and a plan belongs to a
+  calendar day, so a saved one risks showing yesterday's work as today's. Signed out is likewise a
+  real state with its own message, not a degraded one: the plan is built from a cross-device history
+  and there is no local equivalent to fall back to.
+- **The screen adds no ranking.** It renders the server's order and nothing else. A third opinion
+  about what matters is the drift Phases 3, 4 and 7 exist to remove.
+- **The time zone is validated for IANA shape before being sent**, because an unknown zone is a 400.
+  If the device cannot resolve one the server plans in UTC — a different calendar day in IST between
+  midnight and 05:30 — so the screen shows `planDate` and `zone` rather than letting that be silent.
+
+**A gap this consumer exposed rather than created:** nothing in the app edits the preparation profile
+after onboarding, so a student shown `basis: DEFAULT` has no way to correct it. The screen therefore
+states the assumption without offering a fix that does not exist. An edit surface is separate work.
+
+**`web/` does not read it** — and has no onboarding either, so it has no profile to feed the budget.
 
 ## Related
 

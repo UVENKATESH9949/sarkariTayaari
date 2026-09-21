@@ -1,0 +1,85 @@
+# DAILYPLAN — execution records, 2026-09-21: the first student-facing consumer, on a device.
+#
+# Emulator `emulator-5554` (Pixel_7), real dev backend on localhost:8080, real Neon dev database.
+# No physical device was attached; every adb call was pinned anyway. Account gate1.retest@example.com.
+#
+# This is the run that makes six phases visible. Until it, `learning-state`, `study-roadmap`,
+# `revision-plan`, `preparation-profile` and `daily-plan` all worked and none had a reader.
+#
+# THE SCREEN PASSED FIRST TIME — no product defect was found, which is unusual enough in this
+# project to state plainly rather than leave the reader to infer it from an absent failure note.
+# The two real problems were mine and were caught before this run: two theme tokens that do not
+# exist (`semantic.warningSoft`, `brand.soft` — the real names are `warningBg` and `glowSoft`) and
+# two unused imports, both caught by tsc and lint rather than by review.
+#
+# ONE ENVIRONMENT INCIDENT, and it is the one this file keeps recording. The emulator's
+# system_server ANRed repeatedly on cold boot ("Process system isn't responding"), and the machine
+# had 350 MB genuinely available of 16 GB with 26.7 GB committed — a backend JVM, Metro, the
+# emulator and the editor competing. `adb reboot` cleared it, exactly as this project's own notes
+# prescribe. The app was never at fault: Home rendered correctly behind the system dialog.
+#
+# A SECOND, SMALLER TRAP worth recording: expo-router's typed routes are generated, so `tsc`
+# rejected `router.push("/daily-plan")` with the route file already on disk. Metro regenerates
+# `.expo/types/router.d.ts` on start; a brief dev-server run fixed it. Do not "fix" that error by
+# casting the path.
+
+- execution_id: EXEC-DAILYPLAN-0017
+  test_case_id: TC-DAILYPLAN-018
+  test_case_version: 1
+  environment: "emulator-5554 (Pixel_7) + dev backend on localhost:8080 + real Neon dev database"
+  build_version: "feature/on-device-llm-spike @ 7bc900d + uncommitted daily-plan consumer"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-21T12:49:00+05:30"
+  actual_result: >
+    The Today's Plan card renders on Home between Continue Practice and the readiness card, and
+    opens the screen. The header read "31 things to do today", "About 89 minutes of work", and
+    90m / 89m / 31 across the three stats. Task cards carried topic, subject, a New pill, the
+    stored reason sentence ("Blood Relations is next by exam priority (rank 1) and you have not
+    started it yet.") and "10 questions · ~3 min · easy". The More row opens the same screen.
+  status: Pass
+  defect_id: ""
+  evidence: "Device screenshots of Home and the loaded plan"
+  remarks: >
+    The line that matters most is "Based on the 1-2 hours a day you chose when you set up the app."
+    That is yesterday's profile sync arriving somewhere a student can read it — the declared-
+    provenance rule surviving all the way from the payload to the screen.
+
+- execution_id: EXEC-DAILYPLAN-0018
+  test_case_id: TC-DAILYPLAN-019
+  test_case_version: 1
+  environment: "emulator-5554 (Pixel_7) + dev backend on localhost:8080 + real Neon dev database"
+  build_version: "feature/on-device-llm-spike @ 7bc900d + uncommitted daily-plan consumer"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-21T12:50:00+05:30"
+  actual_result: >
+    Tapping the first task (Blood Relations) opened Practice's levels screen titled "Blood
+    Relations" — 167 questions, Easy 40 / Medium 57 / Hard 70. Repeated accidentally on the second
+    task (Awards & Honours) and it opened that topic's levels, 59 questions. Scoped to the task's
+    own topic both times, never to the subject or the exam.
+  status: Pass
+  defect_id: ""
+  evidence: "Device screenshots of both levels screens"
+  remarks: >
+    This is why the daily plan was the right first consumer: every task already resolved to a
+    screen that existed, so the plan leads somewhere without any new Practice work.
+
+- execution_id: EXEC-DAILYPLAN-0019
+  test_case_id: TC-DAILYPLAN-021
+  test_case_version: 1
+  environment: "emulator-5554 (Pixel_7), airplane mode"
+  build_version: "feature/on-device-llm-spike @ 7bc900d + uncommitted daily-plan consumer"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-21T12:53:00+05:30"
+  actual_result: >
+    STEP 3 ONLY. With airplane mode on, opening the screen showed "No plan right now — We couldn't
+    build today's plan just now. It needs a connection - try again in a moment." with a Try Again
+    button, rather than a blank screen or a stale plan. Steps 1 and 2 were NOT run.
+  status: Blocked
+  defect_id: ""
+  evidence: "Device screenshot of the error state with airplane mode visible in the status bar"
+  remarks: >
+    Blocked rather than Pass, deliberately: one of three steps ran, and recording that as a pass
+    would overstate it. Step 1 needs a sign out, and the password for this device's test account
+    is not held by this session — signing out would have ended the signed-in verification with no
+    way back in. Step 2 needs an account with no active exam. Step 3's own result is a genuine
+    pass and is the reason this record exists at all.

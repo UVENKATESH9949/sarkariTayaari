@@ -3,6 +3,7 @@ export * from "./aiContent";
 export * from "./auth";
 export * from "./bookmarks";
 export * from "./clientConfig";
+export * from "./dailyPlan";
 export * from "./examDiscovery";
 export * from "./examGuide";
 export * from "./followedExams";

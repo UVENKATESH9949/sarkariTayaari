@@ -214,6 +214,20 @@ export default function Home() {
         {t("home.continuePractice")}
       </Button>
 
+      {/* Today's Plan (TASK-3301/3401) — the personalization program's first student-facing
+          surface, and its other entry point is More. Placed right under Continue Practice
+          because that is the "what should I actually do now" moment. Deliberately a plain
+          container card rather than the gradient the readiness card uses: two gradient cards
+          stacked would read as two competing primary actions. */}
+      <Card variant="container" onPress={() => router.push("/daily-plan")} style={styles.dailyPlanCard}>
+        <Ionicons name="today-outline" size={20} color={colors.brand.light} />
+        <View style={styles.dailyPlanText}>
+          <Text style={styles.dailyPlanTitle}>Today&apos;s Plan</Text>
+          <Text style={styles.dailyPlanSubtitle}>What to study today, in the time you have</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={16} color={colors.text.muted} />
+      </Card>
+
       <Card variant="gradient" onPress={() => router.push("/progress")} style={styles.readinessCard}>
         <View>
           <Text style={styles.readinessLabel}>{t("home.readiness")}</Text>
@@ -357,6 +371,24 @@ const buildStyles = ({ colors, typography }: Theme) =>
       fontWeight: "600",
       color: colors.brand.light,
       flex: 1,
+    },
+    dailyPlanCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+    },
+    dailyPlanText: {
+      flex: 1,
+    },
+    dailyPlanTitle: {
+      fontSize: 14.5,
+      fontWeight: "700",
+      color: colors.text.primary,
+    },
+    dailyPlanSubtitle: {
+      fontSize: 11.5,
+      color: colors.text.muted,
+      marginTop: 1,
     },
     readinessCard: {
       flexDirection: "row",

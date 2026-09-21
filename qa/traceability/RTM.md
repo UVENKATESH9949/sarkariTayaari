@@ -102,7 +102,7 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 
 ## DAILYPLAN
 
-7 requirements, 17 scenarios, 17 test cases.
+8 requirements, 21 scenarios, 21 test cases.
 
 | Requirement | Priority | Status | Scenario(s) | Test Case(s) | Execution | Defect |
 |---|---|---|---|---|---|---|
@@ -113,6 +113,7 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 | REQ-DAILYPLAN-005: A closed day's tasks are settled from what the student actually practised | High | Active | SCN-DAILYPLAN-010<br>SCN-DAILYPLAN-011<br>SCN-DAILYPLAN-012 | TC-DAILYPLAN-010 (Pass)<br>TC-DAILYPLAN-011 (Pass)<br>TC-DAILYPLAN-012 (Pass) | EXEC-DAILYPLAN-0010<br>EXEC-DAILYPLAN-0011<br>EXEC-DAILYPLAN-0012 |  |
 | REQ-DAILYPLAN-006: Every task explains why it was assigned, and reports what happened against it | Medium | Active | SCN-DAILYPLAN-013 | TC-DAILYPLAN-013 (Pass) | EXEC-DAILYPLAN-0013 |  |
 | REQ-DAILYPLAN-007: The phone sends the preparation profile, so the planner budgets the student's real time | High | Active | SCN-DAILYPLAN-014<br>SCN-DAILYPLAN-015<br>SCN-DAILYPLAN-016<br>SCN-DAILYPLAN-017 | TC-DAILYPLAN-014 (Pass)<br>TC-DAILYPLAN-015 (Not Executed)<br>TC-DAILYPLAN-016 (Pass)<br>TC-DAILYPLAN-017 (Pass) | EXEC-DAILYPLAN-0014<br>EXEC-DAILYPLAN-0016<br>EXEC-DAILYPLAN-0015 |  |
+| REQ-DAILYPLAN-008: A student can see today's plan in the app | High | Active | SCN-DAILYPLAN-018<br>SCN-DAILYPLAN-019<br>SCN-DAILYPLAN-020<br>SCN-DAILYPLAN-021 | TC-DAILYPLAN-018 (Pass)<br>TC-DAILYPLAN-019 (Pass)<br>TC-DAILYPLAN-020 (Not Executed)<br>TC-DAILYPLAN-021 (Blocked) | EXEC-DAILYPLAN-0017<br>EXEC-DAILYPLAN-0018<br>EXEC-DAILYPLAN-0019 |  |
 
 ## LEARNING-STATE
 
@@ -243,9 +244,9 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 
 | Metric | Value |
 |---|---|
-| Total requirements | 151 |
-| Total scenarios | 288 |
-| Total test cases | 310 |
+| Total requirements | 152 |
+| Total scenarios | 292 |
+| Total test cases | 314 |
 | Requirements with zero scenarios | 0  |
-| Real executions recorded | 66 |
+| Real executions recorded | 69 |
 | Real defects logged | 1 |

@@ -115,6 +115,16 @@ export default function More() {
           value="What to work on next, and why"
           onPress={() => router.push("/preparation-radar")}
         />
+        <CardDivider />
+        {/* Today's Plan (TASK-3301/3401). Second entry point alongside Home's card, and a
+            sibling of the radar rather than a rival: the radar says what is weak, this says
+            what to do about it today. Same "not a sixth tab" reasoning as the row above. */}
+        <CardRow
+          icon="today-outline"
+          label="Today's Plan"
+          value="What to study today, in the time you have"
+          onPress={() => router.push("/daily-plan")}
+        />
       </Card>
 
       <SectionLabel label={t("more.preferences")} style={styles.sectionSpacing} />

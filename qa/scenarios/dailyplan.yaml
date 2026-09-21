@@ -190,3 +190,47 @@
   systems: [Mobile]
   status: Ready
   notes: "A failed local migration is a hard gate that stops the app starting, so this is the riskiest statement in the change."
+
+- id: SCN-DAILYPLAN-018
+  requirement_ids: [REQ-DAILYPLAN-008]
+  category: Functional
+  title: Today's plan renders in the app for the active exam
+  objective: >
+    Verify the screen loads the server's plan for the active exam and shows the budget, the
+    planned total and one card per task, each with its stored reason and its cost.
+  systems: [Mobile]
+  status: Ready
+  notes: "The program's first student-facing surface — until this, six phases were invisible."
+
+- id: SCN-DAILYPLAN-019
+  requirement_ids: [REQ-DAILYPLAN-008]
+  category: Functional
+  title: A task opens Practice for its own topic
+  objective: >
+    Verify tapping a task navigates to the levels screen scoped to that task's topic, so the plan
+    leads somewhere rather than only describing work.
+  systems: [Mobile]
+  status: Ready
+  notes: "Every task already resolves to a screen that exists; this is the whole reason the daily plan was the first consumer built."
+
+- id: SCN-DAILYPLAN-020
+  requirement_ids: [REQ-DAILYPLAN-008]
+  category: Boundary
+  title: An assumed budget is never shown as the student's own answer
+  objective: >
+    Verify a plan with basis DEFAULT is described as an assumption, while basis STATED_BAND names
+    the band the student chose.
+  systems: [Mobile]
+  status: Ready
+  notes: "The declared-provenance rule this whole program follows, at the one place a student actually reads it."
+
+- id: SCN-DAILYPLAN-021
+  requirement_ids: [REQ-DAILYPLAN-008]
+  category: Negative
+  title: Signed out, no active exam, and offline each get their own answer
+  objective: >
+    Verify the three non-plan states are distinguishable: signed out invites signing in, no active
+    exam invites choosing one, and an unreachable server offers a retry.
+  systems: [Mobile]
+  status: Ready
+  notes: "Signed out is a real state, not a degraded one — the plan is stored server-side and has no local equivalent."
