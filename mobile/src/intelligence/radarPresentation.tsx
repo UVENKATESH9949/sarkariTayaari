@@ -180,3 +180,22 @@ function buildPillStyles(_theme: Theme) {
     },
   });
 }
+
+/**
+ * The one-line "do this next" label per RecommendedAction.
+ *
+ * Lives here rather than on a screen because two now render it — the Preparation Radar's topic
+ * cards and the Study Roadmap's — and a second copy of this vocabulary is exactly the drift the
+ * personalization program spent three phases removing.
+ */
+export const ACTION_COPY: Record<string, string> = {
+  LEARN_CONCEPT: "review the concept",
+  PRACTICE_FOUNDATIONAL: "practise the basics",
+  PRACTICE_MEDIUM: "practise at exam level",
+  PRACTICE_ADVANCED: "try harder questions",
+  PRACTICE_PYQ: "solve real exam questions",
+  TIMED_PRACTICE: "take a timed set",
+  REVISION: "revise this topic",
+  MAINTENANCE_PRACTICE: "keep it ticking over",
+  GATHER_EVIDENCE: "practise a few questions",
+};

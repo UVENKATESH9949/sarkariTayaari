@@ -2,7 +2,7 @@
 #
 # Every test case across all three modules, including Ambiguous/blocked ones (their execution still records real observed behavior, even without a pre-asserted pass/fail). Run before a significant, cross-cutting change.
 #
-# 316 test case(s). Membership rule: All test cases in qa/test-cases/*.yaml.
+# 318 test case(s). Membership rule: All test cases in qa/test-cases/*.yaml.
 
 suite: Regression (Full)
 test_case_ids:
@@ -291,6 +291,8 @@ test_case_ids:
   - TC-ROADMAP-010
   - TC-ROADMAP-011
   - TC-ROADMAP-012
+  - TC-ROADMAP-014
+  - TC-ROADMAP-015
   - TC-USERPROGRESS-001
   - TC-USERPROGRESS-002
   - TC-USERPROGRESS-003

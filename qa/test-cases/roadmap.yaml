@@ -424,3 +424,88 @@
   remarks: null
   automation_status: Automated
   automation_reference: "StudyRoadmapTest.anExamDateInThePastIsReportedWithoutACountdown"
+
+- id: TC-ROADMAP-014
+  requirement_ids: [REQ-ROADMAP-006]
+  scenario_id: SCN-ROADMAP-013
+  system: Mobile
+  module: ROADMAP
+  feature: A student can see the whole path, in order, with the work it represents
+  title: The roadmap renders in order and leads into Practice
+  objective: >
+    Confirm the second personalization endpoint has a real reader, and that the path it shows is
+    actionable rather than only descriptive.
+  preconditions:
+    - "Signed in, an active exam with a curated syllabus, backend reachable"
+  test_data: "An account with practice history on SSC CGL"
+  test_environment: "emulator-5554 against a real dev backend"
+  priority: High
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Open More > Study Roadmap"
+      expected: "A header with the topic count and total work, then a per-subject breakdown"
+    - step: 2
+      action: "Read the ordered list"
+      expected: "Numbered topics in the server's order, each with an action, question count and estimate; exactly one marked Next up"
+    - step: 3
+      action: "Find a topic whose priority rank differs from its position"
+      expected: "The card shows both, so the subject interleave is visible rather than silent"
+    - step: 4
+      action: "Tap any topic"
+      expected: "Practice's levels screen for that topic"
+    - step: 5
+      action: "Open Today's Plan and tap 'See the whole path'"
+      expected: "The same screen, as the second entry point"
+  expected_result: "The whole path is visible and actionable. (REQ-ROADMAP-006 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    NOT EXECUTED because the emulator was deliberately not started - the machine was needed for
+    other work. Everything static passed (tsc on mobile and packages/core, expo lint at the
+    9-problem baseline, core 283/283), but a clean build has repeatedly missed real bugs in this
+    project and this screen has never rendered. Step 3 is the one most likely to surprise: it
+    depends on the interleave actually having moved something for this account's data.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-ROADMAP-015
+  requirement_ids: [REQ-ROADMAP-006]
+  scenario_id: SCN-ROADMAP-014
+  system: Mobile
+  module: ROADMAP
+  feature: A student can see the whole path, in order, with the work it represents
+  title: Estimates and a missing exam date are both stated honestly
+  objective: >
+    Confirm the declared-provenance rule survives to this screen, and that the common undated case
+    reads as a fact rather than a gap.
+  preconditions:
+    - "One exam with a published cycle and one without"
+  test_data: "SSC CGL (dated in the demo data) and any of the ten undated exams"
+  test_environment: "emulator-5554 against a real dev backend"
+  priority: Medium
+  severity: Major
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "Read the header note on an exam with no published cycle"
+      expected: "'This exam has no published date yet, so there's no countdown to work back from' - no empty or zero countdown"
+    - step: 2
+      action: "Read the estimate line"
+      expected: "A count of topics estimated from the student's own pace, from other students, and assumed - not a bare total"
+    - step: 3
+      action: "Find a topic with unmet prerequisites"
+      expected: "It is still listed, with 'Best after: ...' rather than being hidden or locked"
+  expected_result: "An assumption never wears a measurement's shape. (REQ-ROADMAP-006 validations)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    NOT EXECUTED - no device pass this session. Step 2 is worth running against the shared dev
+    database specifically: its cohort timings are contaminated by the synthetic load-test
+    questions, so most topics should report "from other students" and the line should make that
+    visible rather than implying the figures are personal.
+  automation_status: ManualOnly
+  automation_reference: ""

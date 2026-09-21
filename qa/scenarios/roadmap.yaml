@@ -139,3 +139,25 @@
   systems: [Backend]
   status: Ready
   notes: null
+
+- id: SCN-ROADMAP-013
+  requirement_ids: [REQ-ROADMAP-006]
+  category: Functional
+  title: The roadmap renders in the app, in the server's order
+  objective: >
+    Verify the ordered path, the totals, the per-subject breakdown and one Next up topic all render
+    for a real account, and that a topic opens Practice.
+  systems: [Mobile]
+  status: Ready
+  notes: "The second of the five personalization endpoints to get a reader."
+
+- id: SCN-ROADMAP-014
+  requirement_ids: [REQ-ROADMAP-006]
+  category: Boundary
+  title: The screen is honest about estimates and about a missing exam date
+  objective: >
+    Verify the header states where the minutes came from, and that an exam with no published cycle
+    reads as a plain fact rather than an empty countdown.
+  systems: [Mobile]
+  status: Ready
+  notes: "Ten of eleven exams have no date, so the undated case is the one most students will see."

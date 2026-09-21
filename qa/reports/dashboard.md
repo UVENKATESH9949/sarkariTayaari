@@ -2,7 +2,7 @@
 
 **GENERATED FILE — do not hand-edit.** Regenerate with `node scripts/qa/generate-reports.js`. Every number below is computed directly from qa/*.yaml at generation time — nothing here is hardcoded or estimated.
 
-_Generated at: 2026-09-21T08:15:30.324Z_
+_Generated at: 2026-09-21T09:08:58.406Z_
 
 ## Coverage
 
@@ -17,10 +17,10 @@ _Generated at: 2026-09-21T08:15:30.324Z_
 | ONBOARDING | 13 | 25 | 25 | 1.9 |
 | QUESTIONS | 28 | 60 | 64 | 2.3 |
 | REVISION | 5 | 10 | 10 | 2.0 |
-| ROADMAP | 5 | 12 | 13 | 2.6 |
+| ROADMAP | 6 | 14 | 15 | 2.5 |
 | USER-PROGRESS | 6 | 8 | 8 | 1.3 |
 | WEB | 14 | 22 | 23 | 1.6 |
-| **Total** | **153** | **294** | **316** | **2.1** |
+| **Total** | **154** | **296** | **318** | **2.1** |
 
 ## Execution status
 
@@ -37,7 +37,7 @@ _Generated at: 2026-09-21T08:15:30.324Z_
 | ONBOARDING | 22 | 3 | 0 | 0 | 0 |
 | QUESTIONS | 64 | 0 | 0 | 0 | 0 |
 | REVISION | 0 | 10 | 0 | 0 | 0 |
-| ROADMAP | 0 | 13 | 0 | 0 | 0 |
+| ROADMAP | 2 | 13 | 0 | 0 | 0 |
 | USER-PROGRESS | 3 | 5 | 0 | 0 | 0 |
 | WEB | 23 | 0 | 0 | 0 | 0 |
 
@@ -56,10 +56,10 @@ Evidence-based per qa/README.md's rule — Automated only where a specific test 
 | ONBOARDING | 3 | 11 | 0 | 11 | 0 |
 | QUESTIONS | 25 | 3 | 32 | 3 | 1 |
 | REVISION | 10 | 0 | 0 | 0 | 0 |
-| ROADMAP | 13 | 0 | 0 | 0 | 0 |
+| ROADMAP | 13 | 0 | 0 | 2 | 0 |
 | USER-PROGRESS | 4 | 0 | 0 | 4 | 0 |
 | WEB | 3 | 0 | 1 | 19 | 0 |
-| **Total** | **165** | **24** | **55** | **71** | **1** |
+| **Total** | **165** | **24** | **55** | **73** | **1** |
 
 Automated: 52% of all test cases.
 
@@ -68,8 +68,8 @@ Automated: 52% of all test cases.
 | Priority | Count |
 |---|---|
 | Critical | 70 |
-| High | 132 |
-| Medium | 98 |
+| High | 133 |
+| Medium | 99 |
 | Low | 16 |
 
 ## Ambiguous / blocked test cases
@@ -100,15 +100,15 @@ Test cases with no determinate expected outcome — established behavior, not a 
 | Regression — AUTH | 26 |
 | Regression — CATALOG | 55 |
 | Regression — DAILYPLAN | 23 |
-| Regression (Full) | 316 |
+| Regression (Full) | 318 |
 | Regression — LEARNING-STATE | 8 |
 | Regression — ONBOARDING | 25 |
 | Regression — QUESTIONS | 64 |
 | Regression — REVISION | 10 |
-| Regression — ROADMAP | 13 |
+| Regression — ROADMAP | 15 |
 | Regression — USER-PROGRESS | 8 |
 | Regression — WEB | 23 |
-| Release Gate | 199 |
+| Release Gate | 200 |
 | Sanity | 70 |
 | Smoke | 14 |
 

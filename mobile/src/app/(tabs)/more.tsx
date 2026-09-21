@@ -125,6 +125,15 @@ export default function More() {
           value="What to study today, in the time you have"
           onPress={() => router.push("/daily-plan")}
         />
+        <CardDivider />
+        {/* The daily plan's companion: today versus the whole path. Kept adjacent because the
+            pair is the point — one is a slice of the other, not a rival ordering. */}
+        <CardRow
+          icon="map-outline"
+          label="Study Roadmap"
+          value="The whole path, in order, and how long it takes"
+          onPress={() => router.push("/study-roadmap")}
+        />
       </Card>
 
       <SectionLabel label={t("more.preferences")} style={styles.sectionSpacing} />

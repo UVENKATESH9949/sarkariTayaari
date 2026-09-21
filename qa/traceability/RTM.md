@@ -197,7 +197,7 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 
 ## ROADMAP
 
-5 requirements, 12 scenarios, 13 test cases.
+6 requirements, 14 scenarios, 15 test cases.
 
 | Requirement | Priority | Status | Scenario(s) | Test Case(s) | Execution | Defect |
 |---|---|---|---|---|---|---|
@@ -206,6 +206,7 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 | REQ-ROADMAP-003: Every workload estimate declares where it came from | High | Active | SCN-ROADMAP-006<br>SCN-ROADMAP-007<br>SCN-ROADMAP-008 | TC-ROADMAP-006 (Pass)<br>TC-ROADMAP-007 (Pass)<br>TC-ROADMAP-013 (Pass)<br>TC-ROADMAP-008 (Pass) | EXEC-ROADMAP-0006<br>EXEC-ROADMAP-0007<br>EXEC-ROADMAP-0013<br>EXEC-ROADMAP-0008 |  |
 | REQ-ROADMAP-004: A step that is not a question set carries no invented duration | Medium | Active | SCN-ROADMAP-009 | TC-ROADMAP-009 (Pass) | EXEC-ROADMAP-0009 |  |
 | REQ-ROADMAP-005: The plan is dated only when the exam genuinely has a date | Medium | Active | SCN-ROADMAP-010<br>SCN-ROADMAP-011<br>SCN-ROADMAP-012 | TC-ROADMAP-010 (Pass)<br>TC-ROADMAP-011 (Pass)<br>TC-ROADMAP-012 (Pass) | EXEC-ROADMAP-0010<br>EXEC-ROADMAP-0011<br>EXEC-ROADMAP-0012 |  |
+| REQ-ROADMAP-006: A student can see the whole path, in order, with the work it represents | High | Active | SCN-ROADMAP-013<br>SCN-ROADMAP-014 | TC-ROADMAP-014 (Not Executed)<br>TC-ROADMAP-015 (Not Executed) |  |  |
 
 ## USER-PROGRESS
 
@@ -245,9 +246,9 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 
 | Metric | Value |
 |---|---|
-| Total requirements | 153 |
-| Total scenarios | 294 |
-| Total test cases | 316 |
+| Total requirements | 154 |
+| Total scenarios | 296 |
+| Total test cases | 318 |
 | Requirements with zero scenarios | 0  |
 | Real executions recorded | 74 |
 | Real defects logged | 1 |

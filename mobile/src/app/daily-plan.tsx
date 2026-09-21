@@ -179,6 +179,17 @@ export default function DailyPlanScreen() {
             <Text style={styles.footnote}>
               Done is worked out from what you actually practise — there&apos;s nothing to tick off.
             </Text>
+            {/*
+             * Today is a slice of the roadmap, so the way out of "is this all there is?" belongs
+             * at the bottom of the day rather than competing with it at the top.
+             */}
+            <Text
+              style={styles.footerAction}
+              onPress={() => router.push("/study-roadmap")}
+              accessibilityRole="button"
+            >
+              See the whole path →
+            </Text>
           </>
         )}
       </ScrollView>
@@ -457,6 +468,13 @@ function buildStyles({ colors }: Theme) {
       fontSize: 12,
       fontWeight: "600",
       color: colors.text.secondary,
+    },
+    footerAction: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.brand.primary,
+      textAlign: "center",
+      marginTop: spacing.md,
     },
     footnote: {
       fontSize: 11.5,

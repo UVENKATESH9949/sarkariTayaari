@@ -237,3 +237,62 @@
     StudyRoadmapTest.anExamWithNoPublishedCycleIsAnUndatedBacklog,
     .aPublishedCycleWithAnExamDateGivesDaysRemainingAndADailyFigure and
     .anExamDateInThePastIsReportedWithoutACountdown.
+
+- id: REQ-ROADMAP-006
+  feature: A student can see the whole path, in order, with the work it represents
+  module: ROADMAP
+  system: [Mobile]
+  source_doc: api/STUDY-ROADMAP.md
+  source_section: "Consumers"
+  description: >
+    A "Study Roadmap" screen (mobile/src/app/study-roadmap.tsx) reads GET /api/me/study-roadmap for
+    the active exam and lists every topic in the server's order, each with its recommended action,
+    question count, estimated minutes and any unmet prerequisites. Reached from More and from the
+    bottom of Today's Plan. Tapping a topic opens Practice's levels screen for it.
+  business_rule: >
+    The companion to the daily plan: that answers "what do I do today", this answers "what is all
+    of it". The screen renders topics[] in the order received and adds no ranking of its own - the
+    order IS the roadmap. Where the contract distinguishes a measurement from an assumption, the
+    screen carries the distinction rather than flattening it: the header states how many topic
+    estimates came from the student's own pace, from other students, and from a stated constant.
+  actor: Signed-in student
+  preconditions:
+    - "An active exam with a curated syllabus"
+    - "Signed in and able to reach the backend"
+  inputs:
+    - "Opening the screen; pull-to-refresh"
+  expected_outputs:
+    - "Total estimated work, the exam's timeline or an honest note that it has none"
+    - "Per-subject outstanding work"
+    - "Every topic in order, with its action, question count and estimate"
+  validations:
+    - "Exactly one topic is marked Next up"
+    - "A topic whose priorityRank differs from its position shows both, so the interleave is visible"
+    - "A blocked topic is still listed, with what it is best done after"
+  permissions:
+    - "User token required; the screen never handles it - data/studyRoadmapData.ts reads the session"
+  dependencies: [REQ-ROADMAP-001, REQ-DAILYPLAN-008]
+  error_conditions:
+    - "Signed out, offline and unknown-exam each get their own message, as on the daily plan"
+  edge_conditions:
+    - "Ten of eleven exams have no published date, so an undated roadmap is the normal case and is stated as a fact rather than shown as a missing countdown"
+    - "Steps with no question count contribute no minutes, so a topic's estimate can legitimately be null"
+  offline_behavior: >
+    None, deliberately. Unlike the radar there is no cache: the order moves with every session
+    practised and the minutes move with the cohort, so a saved copy would mostly be wrong in ways
+    a student could not see. There is also no signed-out local computation - the order comes from
+    curated exam priority and the minutes from cohort timings, neither of which the device holds.
+  acceptance_criteria:
+    - "A student can see the full ordered path and how much work it is"
+    - "The provenance of the minutes is visible, not implied"
+    - "Tapping a topic lands on Practice for that topic"
+  priority: High
+  status: Active
+  ambiguity: >
+    Per-topic steps are not rendered; the topic's single recommended action is. Whether a student
+    wants the full five-step ladder per topic is unknown, and showing it for 61 topics would bury
+    the order the screen exists to convey.
+  automation_status: ManualOnly
+  automation_hint: >
+    No automated runner exists for mobile. The endpoint is covered by StudyRoadmapTest (12/12);
+    the screen needs a device pass and has NOT had one.

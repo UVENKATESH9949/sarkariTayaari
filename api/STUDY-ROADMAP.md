@@ -141,7 +141,34 @@ recomputes lazily underneath, so serving a stale student's roadmap rewrites thei
 
 ## Consumers
 
-None yet. `mobile/` and `web/` do not call it.
+**`mobile/` reads it** (2026-09-21): `app/study-roadmap.tsx`, reached from More and from the bottom
+of Today's Plan, through `data/studyRoadmapData.ts` — which reads the session itself, so no screen
+holds a bearer token. The second of the five personalization endpoints to get a reader, and the
+companion to [`DAILY-PLAN.md`](DAILY-PLAN.md)'s: today versus the whole path.
+
+Three things about that client worth knowing before changing it:
+
+- **It adds no ordering.** `topics[]` is rendered in the order received, because the order *is* the
+  roadmap. A `FlatList`, not a `ScrollView` — SSC CGL has 61 topics and every one is a card.
+- **`estimate.source` reaches the screen.** The header counts topics by tier ("*Times are estimates
+  — 12 from your own pace, 40 from other students, 9 assumed*") rather than printing a bare total,
+  so a roadmap built mostly from assumptions reads as one. Per-card tier badges were rejected as
+  noise at 61 cards.
+- **`priorityRank` is shown when, and only when, it disagrees with the position on screen** — which
+  is exactly when the subject interleave moved that topic. Showing it always would be noise;
+  showing it never would hide the reordering this contract deliberately keeps visible.
+
+**No cache and no signed-out fallback**, unlike the Weakness Radar. The order moves with every
+session practised and the minutes move with the cohort, so a saved copy would mostly be wrong in
+ways a student could not see; and the order comes from curated exam priority while the minutes come
+from cohort timings, neither of which a device holds. The app already answers the narrower,
+signed-out version of this question through `prepare-plan` on the Exam Guide screen.
+
+**⚠️ Not device-verified.** It typechecks, lints at the project's exact baseline and the shared
+package's 283 tests pass, but no one has watched it render — see `TC-ROADMAP-014`/`015`, both
+`Not Executed`.
+
+**`web/` does not read it.**
 
 ## Related
 

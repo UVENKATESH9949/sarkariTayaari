@@ -19,7 +19,7 @@ import { ListSkeleton } from "../ui/Skeleton";
 import { radius, spacing } from "../ui/theme";
 import { useTheme, useThemedStyles, type Theme } from "../ui/ThemeContext";
 import { trackEvent } from "../telemetry/analytics";
-import { SECTIONS, stateVisual, sourceNote, RadarStatePill } from "../intelligence/radarPresentation";
+import { ACTION_COPY, SECTIONS, stateVisual, sourceNote, RadarStatePill } from "../intelligence/radarPresentation";
 
 /**
  * "Your Preparation Radar" — the supplied Weakness Radar spec's §16.
@@ -453,18 +453,6 @@ const OVERVIEW_COPY: Record<string, { title: string; body: string }> = {
   },
 };
 
-/** The one-line "do this next" label per action. Fuller step lists live on the detail screen. */
-export const ACTION_COPY: Record<string, string> = {
-  LEARN_CONCEPT: "review the concept",
-  PRACTICE_FOUNDATIONAL: "practise the basics",
-  PRACTICE_MEDIUM: "practise at exam level",
-  PRACTICE_ADVANCED: "try harder questions",
-  PRACTICE_PYQ: "solve real exam questions",
-  TIMED_PRACTICE: "take a timed set",
-  REVISION: "revise this topic",
-  MAINTENANCE_PRACTICE: "keep it ticking over",
-  GATHER_EVIDENCE: "practise a few questions",
-};
 
 function buildStyles({ colors }: Theme) {
   return StyleSheet.create({
