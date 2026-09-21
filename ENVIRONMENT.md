@@ -269,13 +269,16 @@ wipes the others.
 
 ## 8. ⚠️ Outstanding manual steps (nothing works around these)
 
-1. **Mail credentials for sign-in.** Since 2026-09-21 the app **requires an account**, obtained by
-   a 6-digit code emailed to a Gmail address. With no SMTP credentials the backend writes the code
-   to its log instead of sending it — fine for development, **useless on a real device**. Create a
-   Google **app password** (Google Account → Security → 2-Step Verification → App passwords) and
-   set `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD`, `APP_MAIL_FROM` and `APP_MAIL_ENABLED=true`
-   on Cloud Run. Gmail allows roughly 500 messages a day.
-2. **Merge to `main`** (or dispatch the workflow manually) or the backend deploy will not run.
+1. ~~Mail credentials for sign-in~~ — **DONE 2026-09-21 on Cloud Run.** Secret Manager secret
+   `mail-password`, `secretAccessor` granted to the runtime service account
+   (`815653276881-compute@developer.gserviceaccount.com`), plus `APP_MAIL_ENABLED=true`,
+   `APP_MAIL_FROM` and `SPRING_MAIL_USERNAME`. Confirmed live: `otp/request` returns
+   `emailed: true` and a real email arrives. **Still needed on any NEW environment**, and locally
+   if you want email from your own machine — a Google app password (Account → Security → 2-Step
+   Verification → App passwords), roughly 500 messages a day.
+2. **Merge `feature/on-device-llm-spike` into `main`.** ⚠️ Production was deployed from that
+   feature branch by manual dispatch on 2026-09-21, so **`main` is ~35 commits behind what is
+   live**. The next push to `main` touching `backend/**` would deploy *older* code over it.
 3. **Back up the keystore** (§7).
 4. Give production its **own database** — dev and prod currently share one Neon instance.
 5. Rotate the Cloudinary secret that was briefly committed and later scrubbed from history.

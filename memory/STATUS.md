@@ -7,13 +7,23 @@ preparation profile (read + edit) and the study roadmap all got device-verified 
 screens, and **[`ENVIRONMENT.md`](../ENVIRONMENT.md)** now captures everything that had only ever
 lived on one laptop.
 
-**⚠️ THE ONE THING BLOCKING A REAL-DEVICE TEST: no email can be sent.** There is no SMTP
-credential anywhere, so the sign-in code is written to the backend log instead of emailed. On the
-emulator that is fine; on a real phone it makes the first screen impossible to get past. It needs a
-Google **app password** and four values on Cloud Run — see `ENVIRONMENT.md` §8.
+**✅ DEPLOYED AND LIVE, 2026-09-21.** The owner ran the backend-deploy workflow by manual dispatch
+from `feature/on-device-llm-spike` and configured mail on Cloud Run. **Phases 3 through 7 reached
+production for the first time** — they had been sitting undeployed for weeks. Verified against the
+live service: `otp/request` returns `emailed: true` and **a real email arrived**; `otp/verify`
+rejects a wrong code with 401; a non-Gmail address is a 400; and `me/daily-plan`,
+`/study-roadmap`, `/revision-plan`, `/learning-state` and `/preparation-profile` all went
+**404 → 401**, i.e. live and auth-gated.
 
-**⚠️ AND: the backend only auto-deploys from `main`.** All of this is on
-`feature/on-device-llm-spike`. Pushing that branch deploys nothing.
+Mail on Cloud Run: Secret Manager secret `mail-password` (+ `secretAccessor` for
+`815653276881-compute@developer.gserviceaccount.com`), plus `APP_MAIL_ENABLED=true`,
+`APP_MAIL_FROM` and `SPRING_MAIL_USERNAME`. Attached with `--update-secrets`/`--update-env-vars`,
+never the `--set-` forms, which would wipe `db-password` and `cloudinary-secret`.
+
+**⚠️ `main` is now ~35 commits behind and production does NOT match it.** The deploy came from a
+feature branch by manual dispatch, so the usual "push to `main` deploys" assumption is false right
+now, and the next push to `main` touching `backend/**` would deploy OLDER code over this. **Merge
+`feature/on-device-llm-spike` into `main` once the device test passes.**
 **Last updated:** 2026-09-20 — **THE PERSONALIZATION PROGRAM IS COMPLETE. All seven phases shipped,
 all four gates clean.** Phase 6 (TASK-3401, adaptive re-planning) closed it this morning with
 migration **V50** and **20/20 tests green**. Five endpoints now exist end to end:
