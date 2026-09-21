@@ -12,10 +12,10 @@ today · About 89 minutes of work"* against a 90-minute budget, with each task n
 stored reason and its cost, and tapping one opened Practice for that topic. See the session entry
 below.
 
-**The remaining visibility gap is now narrower but real:** `learning-state` and `revision-plan`
-still have no reading caller (`study-roadmap` got one on 2026-09-21, though **it has never
-rendered on a device** — see the top session entry). The daily plan is built *from* all three, so
-a student benefits indirectly, but `web/` reads none of the five.
+**Three of the five endpoints now have a device-verified reader** — `daily-plan`,
+`preparation-profile` (read and edit) and `study-roadmap`. **`learning-state` and `revision-plan`
+still have none.** The daily plan is built from both, so a student benefits indirectly, but
+`web/` reads none of the five and has no onboarding.
 
 **One half of that gap closed the same day: mobile now SENDS the preparation profile**
 (`mobile/src/sync/preparationProfileSync.ts` + migration **0030**), and **it is now device-verified**
@@ -34,11 +34,21 @@ no defect id, because it never shipped.
 
 ## Session of 2026-09-21 (3) — the Study Roadmap gets a reader, built without a device
 
-**Built to order by the owner, who asked for the roadmap consumer next and explicitly asked that
-the emulator NOT be started — the machine was needed for IntelliJ.** So this is the one piece of
-personalization work in the program that ships **without a device pass**, and that is a real gap,
-not a formality: a clean build has missed real bugs in this feature area twice in the last two
-days. `TC-ROADMAP-014`/`015` exist for it, both `Not Executed`. **Run them before trusting it.**
+**Built to order by the owner, who asked for the roadmap consumer next.** It was written with the
+emulator deliberately off (the machine was needed for IntelliJ) and then **device-verified later
+the same day, once IntelliJ was closed — and the pass found a real shipped defect.**
+
+**DEF-ROADMAP-001: the roadmap''s own timeline sentence read *"implies about 1 MINUTES a day"*.**
+`StudyRoadmapService` concatenated `" minutes a day."` with no pluralisation, and
+`dailyMinutesRequired` has a floor of `Math.max(1, ...)` — so one is not a rare edge, it is what
+every exam far enough out produces (this account: 262 days remaining, 179 minutes of work). **It
+shipped 2026-09-19 and was invisible for two days purely because nothing rendered the sentence** —
+`StudyRoadmapTest` is 12/12 green and asserts the *number* beside the prose, not the prose.
+Fixed, and confirmed both against the live endpoint and on the device screen.
+
+**That is the second time in two days that building a consumer exposed a defect no test saw.**
+The first was the daily plan''s "you chose when you set up the app". Worth internalising: these
+endpoints were well tested and their *prose* was not tested at all.
 
 **Shipped.** `packages/core/src/api/studyRoadmap.ts` (written against `StudyRoadmapDtos.java`
 rather than the prose, so the nullable fields are nullable in the right places),
@@ -68,17 +78,37 @@ already answers the narrower signed-out version through `prepare-plan` on the Ex
 `preparation-radar.tsx` into `intelligence/radarPresentation.tsx`. Reaching it by importing a route
 module would have pulled in a whole screen.
 
-**Verified:** `tsc` clean on `mobile/` and `packages/core`; `expo lint` at the exact 9-problem
-baseline; **core 283/283** (one more than yesterday — the i18n coverage test picked up the new
-`studyPreferences` keys). A brief Metro run was needed only to regenerate
-`.expo/types/router.d.ts`, which is generated rather than checked in, and was stopped immediately;
-**the emulator was never started.**
+**Verified on `emulator-5554` against a real dev backend — both cases Pass, all steps:** 61 topics
+and "About 2h 59m of practice in total"; a four-subject breakdown; exactly one "Next up";
+**positions 58 and 59 showing "priority rank 59" and "priority rank 58"** — the pair the interleave
+swapped — while their neighbours showed none, so the marker is genuinely conditional; a topic
+opening Practice for itself with a matching question count; "See the whole path" from Today''s Plan
+reaching the same screen; **and on SSC CHSL, which has no published cycle, "This exam has no
+published date yet, so there''s no countdown to work back from"** with no daily-minutes line — the
+case ten of eleven exams are in. "Times are estimates — 61 from other students" matched the API''s
+tier counts exactly, and 36 of 61 topics were prerequisite-blocked, each listed with "Best after:".
 
-**QA**: `REQ-ROADMAP-006`, `SCN-ROADMAP-013/014`, `TC-ROADMAP-014/015` — both **Not Executed**.
-RTM 153/294/316 -> **154/296/318**.
+Run on a **disposable account** rather than reusing the owner''s credentials again — and that was
+the better subject: a fresh account has no personal timings, so the estimate line had to claim
+none, and its 36 blocked topics exercised a branch a practised account might not have shown.
 
-**NEXT:** `learning-state` and `revision-plan` are the two endpoints still without a reader, and
-the roadmap screen needs its device pass. `web/` reads none of the five and has no onboarding.
+Also: `tsc` clean on `mobile/` and `packages/core`; `expo lint` at the exact 9-problem baseline;
+**core 283/283**; backend compile clean. **`StudyRoadmapTest` was NOT re-run** — the fix is one
+string concatenation, the class takes ~14 minutes, and the live endpoint plus the device screen
+are stronger evidence for this particular defect.
+
+**TWO MEMORY LESSONS, and the first is new and useful.** The AVD is configured
+**`hw.ramSize=6144`**, which gave qemu a **4.9 GB** host footprint and left **298 MB** available —
+the level that hung `system_server` the day before. Relaunching with **`-memory 3072`** cut it to
+3.1 GB and left ~1.5 GB free, and everything ran cleanly start to finish. **Use `-memory 3072`;
+6 GB of guest RAM is far more than this app needs.** Second, already on record and hit again: the
+**LogBox warning toast overlaps the bottom tab bar and silently eats taps on it.**
+
+**QA**: `REQ-ROADMAP-006`, `SCN-ROADMAP-013/014`, `TC-ROADMAP-014/015` **both Pass**,
+`EXEC-ROADMAP-0014/0015`, `DEF-ROADMAP-001` recorded as Fixed. RTM 153/294/316 -> **154/296/318**.
+
+**NEXT:** `learning-state` and `revision-plan` are the two endpoints still without a reader.
+`web/` reads none of the five and has no onboarding.
 
 ## Session of 2026-09-21 (2) — closing the gaps the reader exposed
 
