@@ -1,0 +1,163 @@
+# PRACTICE module — test scenarios
+#
+# Scoped to the mobile Practice browsing flow (exam -> one screen -> quiz). The quiz itself
+# is out of scope; see QUESTIONS and USER-PROGRESS.
+
+- id: SCN-PRACTICE-001
+  requirement_ids: [REQ-PRACTICE-001]
+  category: Positive
+  title: Subject, topic and difficulty are chosen on one screen
+  objective: >
+    Verify the whole selection happens without a screen transition, and that the quiz is the
+    first thing pushed.
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-PRACTICE-002
+  requirement_ids: [REQ-PRACTICE-001]
+  category: StateTransition
+  title: Changing subject replaces the topic list in place
+  objective: >
+    Verify a second subject's topics replace the first's under the dropdown, and that the
+    heading and the list can never name different subjects — including while the new list is
+    still loading.
+  systems: [Mobile]
+  status: Ready
+  notes: >
+    The mid-load case is the one worth watching. It is prevented by construction (topics are
+    held with the key they were loaded for), so this scenario is checking that the guard is
+    real, not that a race was merely unlikely.
+
+- id: SCN-PRACTICE-003
+  requirement_ids: [REQ-PRACTICE-001]
+  category: Boundary
+  title: A topic with no questions is visible but cannot be opened
+  objective: "Verify an empty topic still shows, dimmed, and does not open the difficulty dialog."
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-PRACTICE-004
+  requirement_ids: [REQ-PRACTICE-002]
+  category: Integration
+  title: The quiz opens with the same parameters the old flow passed
+  objective: >
+    Verify the practice engine is entered unchanged — right topic, right difficulty, right
+    subject name, and a session that lands in history looking like any other.
+  systems: [Mobile]
+  status: Ready
+  notes: "This is the regression that matters most: the redesign is only safe if the engine never noticed it."
+
+- id: SCN-PRACTICE-005
+  requirement_ids: [REQ-PRACTICE-003]
+  category: DataIntegrity
+  title: The difficulty dialog shows synced levels with real counts
+  objective: >
+    Verify the rows are the admin's synced levels rather than a hardcoded three, that each
+    count matches the topic, and that All Levels equals their sum.
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-PRACTICE-006
+  requirement_ids: [REQ-PRACTICE-003]
+  category: StateTransition
+  title: Opening the dialog for a second topic never shows the first topic's counts
+  objective: >
+    Verify the counts are re-read per topic and that stale numbers cannot appear under a new
+    topic's name.
+  systems: [Mobile]
+  status: Ready
+  notes: "The one thing in the dialog a student could act on wrongly, hence its own scenario."
+
+- id: SCN-PRACTICE-007
+  requirement_ids: [REQ-PRACTICE-004]
+  category: Integration
+  title: Every existing deep link into the levels screen still works
+  objective: >
+    Verify the six entry points that push /practice/levels directly are unaffected by the
+    browsing flow no longer using it.
+  systems: [Mobile]
+  status: Ready
+  notes: >
+    Six callers: Today's Plan, the Exam Guide, radar-topic, the study roadmap, Syllabus &
+    Trends, and Home's preparation-plan card.
+
+- id: SCN-PRACTICE-008
+  requirement_ids: [REQ-PRACTICE-001]
+  category: Offline
+  title: The screen behaves the same offline as the screens it replaces
+  objective: >
+    Verify a synced device reads locally, and a device with neither local content nor a
+    network shows the existing offline notice rather than an empty or broken screen.
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-PRACTICE-009
+  requirement_ids: [REQ-PRACTICE-005]
+  category: Compatibility
+  title: Inter renders and both themes stay legible
+  objective: >
+    Verify the typeface actually loads on a device, and that switching to dark mode keeps
+    every surface, border and label readable with the same hierarchy.
+  systems: [Mobile]
+  status: Ready
+  notes: "Visual judgement; there is no automated runner for mobile in this project."
+
+- id: SCN-PRACTICE-010
+  requirement_ids: [REQ-PRACTICE-001]
+  category: Positive
+  title: Search filters subjects and the selected subject's topics
+  objective: >
+    Verify typing filters the topic list, that the dropdown's own options filter too, and
+    that a query matching nothing in the current subject gives a clear empty state rather
+    than a blank list.
+  systems: [Mobile]
+  status: Ready
+  notes: >
+    Search is deliberately scoped to the selected subject's topics — it does not search
+    topics across every subject. That is a stated limitation, not a defect.
+
+- id: SCN-PRACTICE-011
+  requirement_ids: [REQ-PRACTICE-006]
+  category: Functional
+  title: Topic cards carry their Epic L insight chips in both orderings
+  objective: >
+    Verify the chips, parent and prerequisite notice render on the card, and that the
+    By priority / Syllabus order toggle genuinely changes both the order and how the hierarchy
+    is expressed.
+  systems: [Mobile]
+  status: Ready
+  notes: >
+    Regression guard for a reversal: an earlier pass flattened these cards into plain rows and the
+    owner rejected it. If they ever look like plain rows again, this case is what should fail.
+
+- id: SCN-PRACTICE-012
+  requirement_ids: [REQ-PRACTICE-007]
+  category: Functional
+  title: A session is twenty questions and the next one is different
+  objective: >
+    Verify the session length the banner promises is the length the engine delivers, and that
+    consecutive sessions on the same topic and level genuinely draw different questions.
+  systems: [Mobile]
+  status: Ready
+  notes: >
+    The second half is the part worth actually running. ORDER BY RANDOM() makes it true on the
+    local path, but the claim is printed on screen, so it should be checked rather than reasoned
+    about — and it is false on the live path, which is why the banner drops that clause there.
+
+- id: SCN-PRACTICE-013
+  requirement_ids: [REQ-PRACTICE-008]
+  category: DataIntegrity
+  title: The topic coverage bar measures distinct questions and cannot exceed full
+  objective: >
+    Verify the bar reflects distinct questions practised rather than a running total of answers,
+    and that re-practising seen questions does not push it past 100%.
+  systems: [Mobile]
+  status: Ready
+  notes: >
+    Regression guard against swapping the numerator for `user_topic_progress.attemptedCount`,
+    which is cumulative and would eventually read past full.
+

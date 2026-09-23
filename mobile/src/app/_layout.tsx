@@ -2,6 +2,11 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { Text, View } from "react-native";
 import { useMigrations } from "drizzle-orm/expo-sqlite/migrator";
+import { useFonts } from "expo-font";
+import { Inter_400Regular } from "@expo-google-fonts/inter/400Regular";
+import { Inter_500Medium } from "@expo-google-fonts/inter/500Medium";
+import { Inter_600SemiBold } from "@expo-google-fonts/inter/600SemiBold";
+import { Inter_700Bold } from "@expo-google-fonts/inter/700Bold";
 import * as Sentry from "@sentry/react-native";
 import { configureApi } from "@sarkaritaiyaari/core/api";
 import { API_BASE_URL } from "../api/config";
@@ -45,6 +50,35 @@ configureApi({ baseUrl: API_BASE_URL });
 function RootLayout() {
   const { success, error } = useMigrations(db, migrations);
 
+  /*
+   * Inter, loaded once for the whole app — a font has to be registered before any screen
+   * that names it renders, and this is the only file above every screen.
+   *
+   * Four faces, imported one subpath at a time rather than from the package root: the
+   * root re-exports all eighteen weights plus italics, and Metro would bundle every TTF
+   * into the APK for the four we use. See `ui/fonts.ts` for why each weight is its own
+   * family name.
+   *
+   * THIS IS GATED, and the first version was not — the emulator is what settled it. React
+   * Navigation's bottom tab bar measures each label once and sizes the item from that
+   * measurement; rendering before the faces registered meant the first two tabs were
+   * measured in the platform font, re-rendered wider in Inter, and stayed ellipsised
+   * ("Ho...", "Practi...") for the life of the process while the other three were fine.
+   * Any component that measures text once has the same exposure, so the fix belongs here
+   * rather than in the tab bar.
+   *
+   * It costs nothing against this project's "never block the app opening" rule: these are
+   * bundled assets with no network, and they load in parallel with the SQLite migration
+   * below, which is slower and already gates. The screen shown while waiting is the
+   * migration's own.
+   */
+  const [fontsLoaded, fontError] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+  });
+
   // These two screens render BEFORE ThemeProvider exists, and they cannot be themed:
   // the theme preference lives in the same database whose migrations are the thing
   // that has not finished (or has failed). They stay on the light palette explicitly,
@@ -58,7 +92,10 @@ function RootLayout() {
     );
   }
 
-  if (!success) {
+  // `fontError` releases the gate rather than holding it: a font that genuinely failed to
+  // load is a cosmetic problem, and trapping the student on a loading screen over one would
+  // be far worse than rendering in the platform's own sans-serif.
+  if (!success || (!fontsLoaded && !fontError)) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: lightPalette.bg }}>
         <Text style={{ color: lightPalette.text.secondary }}>Setting up local database...</Text>

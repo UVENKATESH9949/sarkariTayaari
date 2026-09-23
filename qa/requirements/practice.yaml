@@ -1,0 +1,385 @@
+# PRACTICE module — requirement repository
+#
+# Scope: the mobile Practice browsing flow — how a student gets from an exam to a running
+# quiz. The quiz itself, its scoring, its timer and its session recording are NOT in scope
+# here; they are the practice engine, they were not changed, and QUESTIONS/USER-PROGRESS
+# already cover them.
+#
+# Why a new module rather than an extension of QUESTIONS: QUESTIONS is the content contract
+# (what a question is, how it syncs, how it is evaluated). This is navigation — which screen
+# leads where, and what a student has to tap to start. They fail for different reasons and
+# are fixed in different files.
+#
+# Every case here is ManualOnly. This project has no automated test runner for mobile —
+# confirmed, not assumed (see qa/README.md's standing rule and memory/STATUS.md).
+
+- id: REQ-PRACTICE-001
+  feature: Subject, topic and difficulty are chosen without leaving one screen
+  module: PRACTICE
+  system: [Mobile]
+  source_doc: reports/41-practice-navigation-redesign/practice-navigation-redesign.md
+  source_section: "The navigation change"
+  description: >
+    After picking an exam, a student lands on a single Practice screen carrying a subject
+    dropdown, the selected subject's topics, and a difficulty dialog. Choosing a subject
+    replaces the topic list in place; choosing a topic opens a centred, fixed difficulty
+    dialog over that list; choosing a difficulty opens the quiz. No intermediate route is
+    pushed.
+  business_rule: >
+    The screen imposes no order on the topics beyond the syllabus order the data already
+    carries, and locks nothing. A student may practise any topic of any subject at any
+    difficulty, in any order — this is a chooser, not a roadmap.
+  actor: Any student, signed in or signed out
+  preconditions:
+    - "The app has synced, or is online and reading live"
+    - "An exam with at least one syllabus subject carrying questions"
+  inputs:
+    - "A tap on a subject row, a topic row, and a difficulty row"
+  expected_outputs:
+    - "The topic list under the dropdown always belongs to the subject named in the dropdown"
+    - "The difficulty dialog names the tapped topic"
+    - "Selecting a difficulty opens the quiz for that exam/subject/topic/difficulty"
+  validations:
+    - "A subject with zero questions can be selected but lists no practisable topic"
+    - "A topic with zero questions is visible but not tappable"
+  permissions:
+    - "None — Practice works fully signed out, as it always has"
+  dependencies: []
+  error_conditions:
+    - "A failed read leaves the list empty with the existing empty state, never a crash"
+  edge_conditions:
+    - "Switching subject while the new topics are still loading must never show the previous subject's topics under the new subject's name"
+    - "A sync that removes the selected subject falls back to another rather than rendering empty"
+  offline_behavior: >
+    Unchanged from the screens this replaces. Local SQLite when synced, live HTTP before the
+    first sync completes, and OfflineNoDataNotice when neither is available.
+  acceptance_criteria:
+    - "Subject, topic and difficulty are all selectable without a screen transition"
+    - "No Subject screen, Topic screen or Level screen is reachable by browsing Practice"
+    - "The topic list and the subject name in the dropdown never disagree"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: >
+    No automated runner exists for mobile in this project. A future runner would assert the
+    keyed-loaded-state rule in browse.tsx (topics render only when their key matches the
+    selected subject).
+
+- id: REQ-PRACTICE-002
+  feature: The practice engine is entered unchanged
+  module: PRACTICE
+  system: [Mobile]
+  source_doc: reports/41-practice-navigation-redesign/practice-navigation-redesign.md
+  source_section: "What was deliberately not touched"
+  description: >
+    Choosing a difficulty pushes /practice/quiz with examCode, examLabel, subjectName,
+    topicId, topicName, levelKey and levelLabel — the identical parameter set the levels
+    screen has always pushed.
+  business_rule: >
+    This change is navigation and presentation only. Question selection, per-question
+    timing, scoring, session recording, topic-mastery updates, bookmarks and analytics are
+    the quiz's own and were not modified.
+  actor: Any student
+  preconditions:
+    - "A topic and difficulty chosen on the Practice screen"
+  inputs:
+    - "levelKey (a synced difficulty code, or 'all')"
+  expected_outputs:
+    - "The quiz opens with the right question set, and its header names the right topic"
+    - "Finishing produces a session in history with the same shape as before"
+  validations:
+    - "subjectName is passed through — the summary screen reads it back"
+  permissions:
+    - "None"
+  dependencies: [REQ-PRACTICE-001]
+  error_conditions:
+    - "A topic whose questions vanish between the count and the read shows the quiz's own existing empty state"
+  edge_conditions:
+    - "'All Levels' still resolves to a mixed set, as on the levels screen"
+  offline_behavior: "Unchanged — the quiz's own hybrid read"
+  acceptance_criteria:
+    - "A session started from the new screen is indistinguishable in history from one started from the old flow"
+    - "Per-question timing is still recorded"
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "No mobile runner. The parameter set is verified by reading the push against practice/quiz.tsx's useLocalSearchParams."
+
+- id: REQ-PRACTICE-003
+  feature: Difficulty options are synced data, and an empty one cannot be started
+  module: PRACTICE
+  system: [Mobile]
+  source_doc: reports/41-practice-navigation-redesign/practice-navigation-redesign.md
+  source_section: "The difficulty dialog"
+  description: >
+    A centred, fixed dialog lists whatever difficulty levels have synced, in the admin's
+    order, with each level's own label, icon and colours, plus a per-level question count
+    for the chosen topic and an 'All Levels' option summed from those counts.
+  business_rule: >
+    Never a hardcoded Easy/Medium/Hard. A level added or restyled by an admin appears after
+    a sync with no app release; a level with no questions for that topic is shown but
+    disabled, so the student can see it exists and cannot open an empty quiz.
+  actor: Any student
+  preconditions:
+    - "Difficulty levels synced"
+  inputs:
+    - "A topic id and the current exam scope"
+  expected_outputs:
+    - "One row per synced level, named only — per-level question counts are deliberately not shown"
+    - "A banner stating the session length, and that the questions are new each time"
+  validations:
+    - "count === 0 disables the row and is the only case that still shows a reason line"
+    - "A level with no admin colour falls back to the live theme, not a baked colour"
+  permissions:
+    - "None"
+  dependencies: [REQ-PRACTICE-001]
+  error_conditions:
+    - "A failed count read shows the levels with no counts rather than an error screen"
+  edge_conditions:
+    - "Opening the dialog for a second topic must never show the first topic's counts"
+  offline_behavior: "Local counts when synced, live counts otherwise — the same hybrid reads the levels screen used"
+  acceptance_criteria:
+    - "The levels shown match the admin's synced set, not a fixed three"
+    - "No per-level question count appears; the session-size banner is what states quantity"
+    - "A zero-count level cannot be opened"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "No mobile runner."
+
+- id: REQ-PRACTICE-004
+  feature: The existing deep links into the levels screen keep working
+  module: PRACTICE
+  system: [Mobile]
+  source_doc: reports/41-practice-navigation-redesign/practice-navigation-redesign.md
+  source_section: "Why the levels screen was kept"
+  description: >
+    /practice/levels remains a real route. Today's Plan, the Exam Guide, the weakness radar,
+    the study roadmap, Syllabus & Trends and the Home preparation-plan card all push it
+    directly with a topic the student chose elsewhere.
+  business_rule: >
+    The screen was removed from the BROWSING flow, not from the app. Deleting it would have
+    broken six shipped entry points that never pass through the new screen.
+  actor: Any student
+  preconditions:
+    - "One of the six entry points has a topic to offer"
+  inputs:
+    - "examCode, examLabel, subjectName, topicId, topicName"
+  expected_outputs:
+    - "The levels screen opens and its choices start the quiz as before"
+  validations:
+    - "No caller of /practice/subjects or /practice/topics remains anywhere in the app"
+  permissions:
+    - "None"
+  dependencies: [REQ-PRACTICE-002]
+  error_conditions:
+    - "None new"
+  edge_conditions:
+    - "Today's Plan's Mixed Topics card bypasses levels entirely and is unaffected"
+  offline_behavior: "Unchanged"
+  acceptance_criteria:
+    - "Each of the six deep links still reaches a working levels screen"
+    - "Nothing in the app references the two deleted routes"
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "A grep for the deleted route strings is the mechanical half; the six taps are manual."
+
+- id: REQ-PRACTICE-005
+  feature: The screen renders in Inter and follows the theme in both modes
+  module: PRACTICE
+  system: [Mobile]
+  source_doc: reports/41-practice-navigation-redesign/practice-navigation-redesign.md
+  source_section: "Typography and colour"
+  description: >
+    Text on the Practice screen, the subject dropdown and the difficulty dialog renders in
+    Inter (Regular/Medium/SemiBold/Bold), loaded once at the app root. Every colour comes
+    from the existing palette tokens rather than literal hex values.
+  business_rule: >
+    Colours are tokens specifically so dark mode keeps working. Hardcoding the light-mode
+    navy and pastels would have produced an unreadable screen in dark mode, which is the
+    exact failure a previous light-theme attempt in this project already made once.
+  actor: Any student
+  preconditions:
+    - "The app has launched"
+  inputs:
+    - "The theme toggle"
+  expected_outputs:
+    - "Inter renders at four weights"
+    - "Both themes are legible, with the same visual hierarchy"
+  validations:
+    - "No literal hex colour in the new styles except the modal backdrop wash"
+    - "Content zoom still scales this screen's text"
+  permissions:
+    - "None"
+  dependencies: [REQ-PRACTICE-001]
+  error_conditions:
+    - "If a font face has not finished loading, text falls back to the platform sans-serif and reflows once — never a blank screen"
+  edge_conditions:
+    - "Telugu text must still render; Inter has no Telugu coverage, so the platform font is expected to take over for those glyphs"
+  offline_behavior: "Fonts are bundled assets — no network"
+  acceptance_criteria:
+    - "The screen reads as Inter in light and dark mode"
+    - "Switching theme mid-screen repaints correctly"
+  priority: Medium
+  status: Active
+  ambiguity: >
+    REQUIRES CLARIFICATION: Inter is applied to this feature only, not app-wide. Whether the
+    rest of the app should follow is a product decision that has not been taken.
+  automation_status: ManualOnly
+  automation_hint: "Visual judgement — not automatable in this project."
+
+- id: REQ-PRACTICE-006
+  feature: A topic card carries what it is worth practising, not just what it is called
+  module: PRACTICE
+  system: [Mobile]
+  source_doc: reports/41-practice-navigation-redesign/practice-navigation-redesign.md
+  source_section: "The topic cards: dropped, then put back"
+  description: >
+    Each topic on the Practice screen is its own card showing, alongside its name and question
+    count, whatever Epic L knows about it: a priority chip, a mastery chip with accuracy, a trend
+    chip, a weightage chip, its parent topic, and a "Best after" notice naming unmet
+    prerequisites. Above the list, a By priority / Syllabus order toggle chooses the ordering.
+  business_rule: >
+    These chips are signal, not ornament. They are the only thing on the screen that answers
+    WHICH of a subject's topics is worth the next hour, as opposed to what exists — which is why
+    an earlier pass that flattened them into plain rows was reversed. A topic with no computed
+    insight renders no chips at all rather than a zero or a placeholder, so an exam with no
+    curated topic map degrades to a plain name-and-count list.
+  actor: Any student
+  preconditions:
+    - "Topic intelligence has synced for the exam (optional — the screen works without it)"
+  inputs:
+    - "A tap on the By priority / Syllabus order toggle"
+  expected_outputs:
+    - "Per-topic chips reflecting the synced intelligence rows"
+    - "Priority order ranks the whole subject flat, with the parent shown inline per card"
+    - "Syllabus order groups children under a parent heading, indented, with no inline parent"
+  validations:
+    - "The sort toggle is offered only when at least one topic has a priority to sort by"
+    - "A topic with no insight row shows no chips, not empty ones"
+  permissions:
+    - "None — insights are read from local SQLite and work signed out"
+  dependencies: [REQ-PRACTICE-001]
+  error_conditions:
+    - "A failed insight read logs and falls back to an empty map; the topic list still renders"
+  edge_conditions:
+    - "Insights are always read locally, even in live mode, so a device that has not synced them shows a plain list rather than blocking"
+    - "Mastery must refresh after a finished quiz — the read is keyed on progressVersion as well as syncVersion"
+  offline_behavior: "Local-only by design; nothing here needs a network"
+  acceptance_criteria:
+    - "A topic card shows its chips, its parent and its unmet prerequisites where the data exists"
+    - "Switching the toggle re-orders the list and switches between inline parent and grouped headings"
+    - "An exam with no curated intelligence still lists its topics"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: >
+    No automated runner exists for mobile. `groupByParent` in browse.tsx is pure and would be the
+    first thing worth unit-testing if one is ever added.
+
+- id: REQ-PRACTICE-007
+  feature: A practice session is a fixed twenty questions, drawn fresh each time
+  module: PRACTICE
+  system: [Mobile]
+  source_doc: reports/41-practice-navigation-redesign/practice-navigation-redesign.md
+  source_section: "A session is twenty questions"
+  description: >
+    Every practice session contains at most PRACTICE_QUESTION_LIMIT (20) questions, and the
+    difficulty dialog states that up front as a banner instead of showing a per-level question
+    count. On the local path the set is drawn with ORDER BY RANDOM(), so consecutive sessions on
+    the same topic and level are different questions.
+  business_rule: >
+    The limit was 200 and existed only to stop a crash, which in practice meant a session was
+    "however many questions this topic happens to hold" — a 117-question topic was a 117-question
+    sitting. Twenty is a session a student can finish, and it matches MIXED_PRACTICE_QUESTION_LIMIT
+    so both kinds of session are the same length. The cap itself must not be removed: the
+    translation lookup binds one SQLite parameter per question and an uncapped topic can exceed
+    SQLITE_MAX_VARIABLE_NUMBER.
+  actor: Any student
+  preconditions:
+    - "A topic with more than twenty questions, so the limit actually bites"
+  inputs:
+    - "A difficulty chosen in the dialog"
+  expected_outputs:
+    - "The quiz header reads 'Question 1 of 20'"
+    - "A second session on the same topic and level starts from a different question"
+  validations:
+    - "The banner's number comes from PRACTICE_QUESTION_LIMIT itself, so it cannot disagree with the engine"
+    - "The fresh-set clause is shown only when reading locally"
+  permissions:
+    - "None"
+  dependencies: [REQ-PRACTICE-002, REQ-PRACTICE-003]
+  error_conditions:
+    - "A topic with fewer than twenty questions yields a shorter session, not an error"
+  edge_conditions:
+    - >
+      THE LIVE PATH CANNOT PROMISE A FRESH SET. Before the first sync completes the app pages the
+      backend deterministically and only shuffles the page it received, so consecutive sessions
+      would be the same twenty in a different order. The banner drops that clause in live mode
+      rather than printing a claim the app cannot keep.
+    - "The limit applies to every practice session app-wide, including those deep-linked from Today's Plan, the Study Roadmap and the levels screen"
+  offline_behavior: "The local path is the one that guarantees a fresh set; it needs no network"
+  acceptance_criteria:
+    - "A session on a large topic is exactly twenty questions"
+    - "Two consecutive sessions on the same topic and level do not start with the same question"
+    - "The dialog shows no per-level counts"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "No mobile runner. The constant itself is trivially assertable if one is ever added."
+
+- id: REQ-PRACTICE-008
+  feature: A topic card shows how much of that topic has been practised
+  module: PRACTICE
+  system: [Mobile]
+  source_doc: reports/41-practice-navigation-redesign/practice-navigation-redesign.md
+  source_section: "The coverage bar"
+  description: >
+    Each topic card carries a 0-100% progress bar labelled "{practised}/{total} · {percent}%",
+    where the numerator is the number of DISTINCT questions of that topic the student has answered
+    in practice and the denominator is the questions that topic holds for the current exam.
+  business_rule: >
+    COVERAGE, NOT VOLUME. `user_topic_progress.attemptedCount` already exists and is the obvious
+    source, but it accumulates on every session, so a student who practises a 117-question topic
+    five times reaches 100 and would eventually read past 100%. Only a distinct-question count can
+    honestly drive a 0-100% bar. The coverage query applies exactly the same subject, exam and
+    is-deleted predicates as the question count, which is what guarantees the numerator is a
+    subset of the denominator.
+  actor: Any student
+  preconditions:
+    - "Local practice history on the device"
+  inputs:
+    - "None — derived"
+  expected_outputs:
+    - "A filled bar and a 'practised/total · percent' label per topic that has questions"
+  validations:
+    - "A topic with zero questions shows no bar at all, rather than an empty one"
+    - "The bar never renders past full"
+  permissions:
+    - "None — read from local SQLite, works signed out"
+  dependencies: [REQ-PRACTICE-006]
+  error_conditions:
+    - "A failed coverage read leaves every bar at zero; the list still renders"
+  edge_conditions:
+    - >
+      PRACTICE RESULTS ONLY. Mock attempts also answer questions, but combining them needs the
+      UNION of the two id sets — adding two count(distinct) results would double-count anything
+      answered in both and could render "134 of 117". The label makes the narrower claim.
+    - "Re-answering a question the student has already seen does not move the bar, which is the point"
+  offline_behavior: "Local-only by design; before the first sync there is no history, so every bar is at zero, which is correct"
+  acceptance_criteria:
+    - "The bar reflects distinct questions practised, and finishing a session with new questions moves it"
+    - "The bar cannot exceed 100%"
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "No mobile runner. getTopicCoverage is a pure query and would be testable against a seeded database."
+

@@ -1,4 +1,5 @@
 import { createElement } from "react";
+import { INTER } from "./fonts";
 import { DURATION } from "./motion";
 import { ThemeToggleButton } from "./ThemeToggleButton";
 import type { Palette } from "./palettes";
@@ -30,7 +31,11 @@ export const stackScreenOptions = (colors: Palette) =>
     // Test's own tab header, every drill-down screen, Revise/Account/Settings pushed from
     // the root Stack) keeps that default and disagrees with the theme.
     headerStyle: { backgroundColor: colors.surface },
-    headerTitleStyle: { color: colors.text.primary },
+    // The native header is rendered by react-native-screens, not by a themed style
+    // factory, so `useThemedStyles`' central typeface pass never reaches it. Named
+    // here explicitly — otherwise every screen title stays on the platform font while
+    // its content is Inter, which is exactly the seam a global typeface is meant to close.
+    headerTitleStyle: { color: colors.text.primary, fontFamily: INTER.semibold },
     headerTintColor: colors.brand.light,
     headerShadowVisible: false,
     // Every screen's actual background otherwise falls back to the OS default — cards

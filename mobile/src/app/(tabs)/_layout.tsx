@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { useActiveSession, type TabHref } from "../../practice/activeSessionContext";
 import { AppAlert } from "../../ui/AppDialog";
+import { INTER } from "../../ui/fonts";
 import { useTheme } from "../../ui/ThemeContext";
 import { useT } from "../../i18n/I18nContext";
 
@@ -43,6 +44,11 @@ export default function TabsLayout() {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
         },
+        // Same reason as the native header's title in ui/navigation.ts: the tab bar is not
+        // built from a themed style factory, so the central typeface pass in
+        // `useThemedStyles` never sees it and the six labels would stay on the platform
+        // font while every screen above them is Inter.
+        tabBarLabelStyle: { fontFamily: INTER.medium },
         // Tabs has its own background prop, separate from Stack's `contentStyle` —
         // without this each tab's scene falls back to the OS default light background.
         sceneStyle: { backgroundColor: colors.bg },

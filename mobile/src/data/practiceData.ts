@@ -4,6 +4,8 @@ import {
   getTopicStats as getTopicStatsLocal,
   getDifficultyCounts as getDifficultyCountsLocal,
   getPracticeQuestions as getPracticeQuestionsLocal,
+  getMixedPracticeQuestions as getMixedPracticeQuestionsLocal,
+  getTopicCoverage as getTopicCoverageLocal,
   PRACTICE_QUESTION_LIMIT,
   type ExamOption,
   type SubjectStat,
@@ -31,6 +33,11 @@ import { isIndexBasedType, resolveCorrectIndex } from "@sarkaritaiyaari/core/eva
 import type { HybridMode } from "./hybridSource";
 
 export type { ExamOption, SubjectStat, TopicStat, DifficultyCounts, PracticeQuestion, DifficultyLevel, ExamBadge };
+
+// Re-exported so a screen can state the session length without reaching past this facade
+// into `db/`. One definition, so the number a student is shown and the number the engine
+// actually uses cannot drift apart.
+export { PRACTICE_QUESTION_LIMIT };
 
 const ALL_EXAMS = "ALL";
 function examFilter(examCode: string | null): string | undefined {
@@ -102,6 +109,23 @@ export async function getTopicStats(subjectId: string, examCode: string | null, 
     getQuestionCounts({ groupBy: "topic", subjectId, examCode: exam }),
   ]);
   return subjectTopics.map((t) => ({ id: t.id, name: t.name, questionCount: counts[t.id] ?? 0 }));
+}
+
+/**
+ * How many of each topic's questions the student has practised — the numerator of the progress
+ * bar on a topic card.
+ *
+ * Deliberately NOT hybrid, and read locally even in live mode. It is answered from the device's
+ * own practice history, which is the only place that history exists before a sign-in; there is
+ * no server endpoint for it and inventing one would make a decoration block on a network call.
+ * Before the first sync there is no local history either, so this resolves to an empty map and
+ * every bar renders at zero, which is correct rather than merely graceful.
+ */
+export async function getTopicCoverage(
+  subjectId: string,
+  examCode: string | null,
+): Promise<Map<string, number>> {
+  return getTopicCoverageLocal(subjectId, examCode);
 }
 
 export async function getDifficultyCounts(topicId: string, examCode: string | null, mode: HybridMode): Promise<DifficultyCounts> {
@@ -178,4 +202,20 @@ export async function getPracticeQuestions(
     };
   });
   return shuffle(result);
+}
+
+/**
+ * A Mixed Topics session's question set (see db/practiceContent.ts's own comment for the
+ * sampling rule). Local-only for now — no live/HTTP path exists, because no backend endpoint
+ * accepts a set of topicIds (only single-topic `/live` and subject-scoped `/mock-sample` do,
+ * per TASK research). `"live"`/`"unavailable"` return empty rather than guessing at one; the
+ * quiz screen's existing "no questions" empty state covers that honestly.
+ */
+export async function getMixedPracticeQuestions(
+  topicIds: string[],
+  examCode: string | null,
+  mode: HybridMode,
+): Promise<PracticeQuestion[]> {
+  if (mode === "local") return getMixedPracticeQuestionsLocal(topicIds, examCode);
+  return [];
 }

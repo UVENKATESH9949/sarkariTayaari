@@ -16,8 +16,12 @@ export default function PracticeLayout() {
   return (
     <Stack screenOptions={stackScreenOptions(colors)}>
       <Stack.Screen name="index" options={{ title: t("nav.practice") }} />
-      <Stack.Screen name="subjects" options={{ title: t("nav.subjects") }} />
-      <Stack.Screen name="topics" options={{ title: t("nav.topics") }} />
+      {/* One screen now covers subject, topic and difficulty — the title is the exam's
+          own name, set by the screen itself. */}
+      <Stack.Screen name="browse" options={{ title: t("nav.practice") }} />
+      {/* Still registered, and still reachable: Today's Plan, the Exam Guide, the weakness
+          radar, the study roadmap and Syllabus & Trends all push straight here with a topic
+          the student already chose elsewhere. It is no longer a step in browsing. */}
       <Stack.Screen name="levels" options={{ title: t("nav.levels") }} />
       <Stack.Screen name="quiz" options={{ title: t("nav.quiz") }} />
       {/* A finished session is a result, not another step deeper — it slides up. */}

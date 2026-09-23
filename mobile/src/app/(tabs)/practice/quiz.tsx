@@ -20,7 +20,7 @@ import { QuestionSkeleton } from "../../../ui/Skeleton";
 import { radius, spacing } from "../../../ui/theme";
 import { useTheme, useThemedStyles, type Theme } from "../../../ui/ThemeContext";
 import { useT } from "../../../i18n/I18nContext";
-import { getPracticeQuestions, type PracticeQuestion } from "../../../data/practiceData";
+import { getPracticeQuestions, getMixedPracticeQuestions, type PracticeQuestion } from "../../../data/practiceData";
 import { useHybridMode } from "../../../data/hybridSource";
 import { OptionList } from "../../../questionRenderer/OptionList";
 import { MultiSelectOptionList } from "../../../questionRenderer/MultiSelectOptionList";
@@ -57,15 +57,24 @@ export default function Quiz() {
   const optionListStyles = useThemedStyles(revealLetterComfortableStyles);
   const t = useT();
   const router = useRouter();
-  const { examCode, examLabel, subjectName, topicId, topicName, levelKey, levelLabel } = useLocalSearchParams<{
-    examCode: string;
-    examLabel: string;
-    subjectName: string;
-    topicId: string;
-    topicName: string;
-    levelKey: string;
-    levelLabel: string;
-  }>();
+  const { examCode, examLabel, subjectName, topicId, topicName, levelKey, levelLabel, topicIds, topicNames } =
+    useLocalSearchParams<{
+      examCode: string;
+      examLabel: string;
+      subjectName: string;
+      topicId: string;
+      topicName: string;
+      levelKey: string;
+      levelLabel: string;
+      /**
+       * Mixed Topics only (from Today's Plan) — JSON-encoded string arrays, parallel by
+       * index. Present instead of `topicId`/`topicName`, never alongside them. expo-router
+       * params are always plain strings, which is why an array travels as JSON rather than
+       * a native param type.
+       */
+      topicIds?: string;
+      topicNames?: string;
+    }>();
   const { addSession } = useSessionHistory();
   const { isBookmarked, toggleBookmark } = useBookmarks();
   const { beginSession, endSession, resetSignal, pendingDestinationRef } = useActiveSession();
@@ -122,6 +131,31 @@ export default function Quiz() {
   const finishedRef = useRef(false);
   const [finishing, setFinishing] = useState(false);
 
+  // Mixed Topics: parsed once per param change rather than on every render. Malformed JSON
+  // (should never happen — only this app's own navigation code writes this param) falls back
+  // to null, i.e. an ordinary single-topic session, rather than crashing the screen.
+  const mixedTopicIds = useMemo<string[] | null>(() => {
+    if (!topicIds) return null;
+    try {
+      const parsed = JSON.parse(topicIds);
+      return Array.isArray(parsed) && parsed.length > 0 ? (parsed as string[]) : null;
+    } catch {
+      return null;
+    }
+  }, [topicIds]);
+  const mixedTopicNameById = useMemo<Map<string, string> | null>(() => {
+    if (!mixedTopicIds || !topicNames) return null;
+    try {
+      const parsed = JSON.parse(topicNames);
+      if (!Array.isArray(parsed)) return null;
+      const map = new Map<string, string>();
+      mixedTopicIds.forEach((id, i) => map.set(id, (parsed[i] as string | undefined) ?? "Mixed"));
+      return map;
+    } catch {
+      return null;
+    }
+  }, [mixedTopicIds, topicNames]);
+
   const mode = useHybridMode();
   // router.dismissAll() resolves "closest stack" against whichever tab currently
   // has focus, not against this screen's own position in the tree, so it only
@@ -146,16 +180,25 @@ export default function Quiz() {
   }, [resetSignal.practice, router, pendingDestinationRef]);
 
   useEffect(() => {
-    if (!topicId || !levelKey) return;
-    const difficulty = levelKey as "all" | "easy" | "medium" | "hard";
-    getPracticeQuestions(topicId, difficulty, examCode ?? null, mode).then((qs) => {
+    if (!levelKey) return;
+    // Mixed Topics takes priority when both are somehow present — the navigation that sets
+    // topicIds never also sets a real topicId, but preferring the plural is the safer default
+    // if that ever changes.
+    const loader =
+      mixedTopicIds !== null
+        ? getMixedPracticeQuestions(mixedTopicIds, examCode ?? null, mode)
+        : topicId
+          ? getPracticeQuestions(topicId, levelKey as "all" | "easy" | "medium" | "hard", examCode ?? null, mode)
+          : null;
+    if (!loader) return;
+    loader.then((qs) => {
       setQuestions(qs);
       if (qs.length > 0) {
         sessionStartRef.current = Date.now();
         beginSession("practice");
       }
     });
-  }, [topicId, levelKey, examCode, mode, beginSession]);
+  }, [topicId, mixedTopicIds, levelKey, examCode, mode, beginSession]);
 
   /**
    * Ends the session whenever this screen goes away, however it went away.
@@ -241,14 +284,21 @@ export default function Quiz() {
     // here rather than extended, so MULTIPLE_CHOICE/TRUE_FALSE questions just can't be
     // bookmarked yet instead of writing a meaningless index.
     if (!question || !translation || question.correctIndex === null) return;
+    // A mixed session has no one topic to credit — resolve this question's own, from the
+    // map built off the route's topicIds/topicNames — so a bookmark made mid-mix still
+    // records where it actually came from rather than a screen-level placeholder.
+    const resolvedTopicName =
+      mixedTopicNameById && question.topicId
+        ? (mixedTopicNameById.get(question.topicId) ?? "Mixed Practice")
+        : (topicName ?? "");
     toggleBookmark({
       questionId: question.id,
       questionText: translation.questionText,
       options: translation.options,
       correctIndex: question.correctIndex,
       explanation: translation.explanation,
-      subjectName: subjectName ?? "",
-      topicName: topicName ?? "",
+      subjectName: mixedTopicIds ? "Mixed" : (subjectName ?? ""),
+      topicName: resolvedTopicName,
       examLabel: examLabel ?? "",
       bookmarkedAt: Date.now(),
     });
@@ -563,6 +613,10 @@ export default function Quiz() {
     const correctCount = results.filter((r) => r.isCorrect).length;
     const sessionId = newPracticeSessionId();
     const durationMs = sessionStartRef.current !== null ? Date.now() - sessionStartRef.current : null;
+    // Mixed Topics has no single topic/subject to credit the session to — SessionRecord
+    // (and everywhere that reads its topicName: history, Wrong Answers, bookmarks) still
+    // gets one readable string rather than a schema change to carry several.
+    const mixedLabel = mixedTopicIds ? `Mixed Practice (${mixedTopicIds.length} topics)` : null;
     addSession({
       id: sessionId,
       completedAt: Date.now(),
@@ -573,9 +627,9 @@ export default function Quiz() {
       // "ALL" is the sentinel for the "All Government Exams" shortcut — that session
       // isn't attributable to one exam, so it's excluded from per-exam progress.
       examCode: examCode && examCode !== "ALL" ? examCode : null,
-      subjectName: subjectName ?? "",
-      topicName: topicName ?? "",
-      levelLabel: levelLabel ?? "",
+      subjectName: mixedLabel ? "Mixed" : (subjectName ?? ""),
+      topicName: mixedLabel ?? (topicName ?? ""),
+      levelLabel: mixedLabel ? "Mixed" : (levelLabel ?? ""),
       correctCount,
       totalCount: results.length,
       availableCount: total,
@@ -599,7 +653,28 @@ export default function Quiz() {
      * Fire-and-forget, matching addSession above: finishing a quiz must never wait on a
      * write, and a failure here costs a mastery update, not the session itself.
      */
-    if (topicId) {
+    if (mixedTopicIds) {
+      // A mixed session touches several topics at once, so mastery is credited per topic —
+      // aggregated from each answered question's own topicId, not split evenly. A topic that
+      // happened to get zero answered questions this round is simply not touched at all.
+      const byTopic = new Map<string, { correct: number; total: number }>();
+      for (const r of results) {
+        const q = questions.find((qq) => qq.id === r.questionId);
+        if (!q?.topicId) continue;
+        const entry = byTopic.get(q.topicId) ?? { correct: 0, total: 0 };
+        entry.total += 1;
+        if (r.isCorrect) entry.correct += 1;
+        byTopic.set(q.topicId, entry);
+      }
+      for (const [tId, agg] of byTopic) {
+        recordTopicPractice({
+          topicId: tId,
+          correctCount: agg.correct,
+          totalCount: agg.total,
+          durationMs: durationMs ?? undefined,
+        }).catch((err) => console.warn("Failed to record topic mastery", err));
+      }
+    } else if (topicId) {
       recordTopicPractice({
         topicId,
         correctCount,

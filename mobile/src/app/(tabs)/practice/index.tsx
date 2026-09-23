@@ -71,7 +71,7 @@ export default function Practice() {
   const badgeByCode = useMemo(() => new Map(badges.map((b) => [b.code, b])), [badges]);
 
   const openSubjects = (examCode: string, examLabel: string) => {
-    router.push({ pathname: "/practice/subjects", params: { examCode, examLabel } });
+    router.push({ pathname: "/practice/browse", params: { examCode, examLabel } });
   };
 
   // This box used to be decorative — it accepted text and changed nothing, which is

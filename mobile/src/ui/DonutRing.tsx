@@ -13,7 +13,7 @@ type DonutRingProps = {
   label?: string;
 };
 
-/** SVG-based circular progress ring — the readiness score visual on Progress. The one place react-native-svg gets used; AnimatedProgressBar/LoadingMark are both linear-only. */
+/** SVG-based circular progress ring — the readiness score visual on Progress. AnimatedProgressBar/LoadingMark are both linear-only; daily-plan.tsx's hero-card doodle is the other react-native-svg use in the app. */
 export function DonutRing({ percent, size = 70, strokeWidth = 7, trackColor, fillColor, label }: DonutRingProps) {
   // Resolved in the body, not as default parameter values: those evaluate at module load,
   // before a theme exists. Both stay overridable.

@@ -1,0 +1,340 @@
+# PRACTICE module — device pass for the navigation redesign, 2026-09-22
+#
+# Android emulator-5554 (AVD Pixel_7, launched with -memory 3072 reduced to 2048 for host
+# memory headroom), Expo dev client against Metro on 8081, a real Spring Boot backend on
+# 8080 against the real Neon dev database, signed in as a real account.
+#
+# Two defects were found during this pass, both in code written the same day —
+# DEF-PRACTICE-001 and -002 below.
+#
+# READ EXEC-PRACTICE-0009 BEFORE TRUSTING EXEC-PRACTICE-0004. 0004 was recorded as a Pass on
+# a layout that was only partially fixed; the owner then spotted from a screenshot that the
+# last difficulty row was still cut off by the footer. 0004 is left exactly as it was written
+# rather than rewritten — this register is append-only, and the same convention was applied to
+# EXEC-USERPROGRESS-0002 — and 0009 is the re-run that actually confirms the fix.
+#
+# TC-PRACTICE-003 and TC-PRACTICE-008 are deliberately absent: neither was run. See the
+# report's "What was NOT verified" section rather than inferring anything from their absence.
+
+- execution_id: EXEC-PRACTICE-0001
+  test_case_id: TC-PRACTICE-001
+  test_case_version: 1
+  environment: "Android emulator-5554 (Pixel_7), Expo dev client + Metro 8081, backend localhost:8080, real Neon dev DB"
+  build_version: "feature/on-device-llm-spike, uncommitted working tree"
+  tester: "Claude Opus 5 (automated device pass, driven via adb)"
+  executed_at: "2026-09-22T14:47:00+05:30"
+  actual_result: >
+    Practice tab -> SSC CGL opened the new single screen: native header "SSC CGL" with the
+    theme toggle, search field, "Practice" title, "Choose a subject and start practicing",
+    the subject dropdown showing Quantitative Aptitude / 3158 questions, and
+    "QUANTITATIVE APTITUDE  28 TOPICS" over one container of topic rows (General 140,
+    Number System 128, Simplification & Approximation 129, LCM & HCF 121, Percentage 115).
+    Tapping the dropdown expanded the four SSC CGL subjects in place, the selected one on a
+    tinted row with a blue checkmark and the trigger chevron flipped up; the topic list
+    stayed visible below. Selecting Reasoning collapsed it and replaced the list with
+    Reasoning's 25 topics, heading updated to "REASONING  25 TOPICS", with no screen
+    transition and no back button appearing. Tapping Analogy raised the difficulty sheet
+    over the still-visible list. Selecting Medium opened the quiz titled
+    "Analogy · Medium" reading "Question 1 of 33". One BACK press from the quiz returned
+    directly to the Practice screen with Reasoning still selected and its 25 topics listed.
+  status: Pass
+  defect_id: ""
+  evidence: "Screenshots browse.png, dropdown.png, switched.png, sheet-fixed.png, quiz.png; post-back uiautomator dump"
+  remarks: >
+    Step 6 is the measure of the change and it held: one back press, where the old
+    Subject -> Topic -> Level flow needed three. "Question 1 of 33" independently confirms
+    the topic and difficulty parameters reached the engine — 33 is exactly what the sheet
+    reported for Medium.
+
+- execution_id: EXEC-PRACTICE-0002
+  test_case_id: TC-PRACTICE-002
+  test_case_version: 1
+  environment: "Android emulator-5554, local SQLite (synced, 64MB device DB from 2026-09-21)"
+  build_version: "feature/on-device-llm-spike, uncommitted working tree"
+  tester: "Claude Opus 5 (automated device pass, driven via adb)"
+  executed_at: "2026-09-22T14:45:00+05:30"
+  actual_result: >
+    Switching Quantitative Aptitude -> Reasoning replaced the topic list and the uppercase
+    heading together; at no point were Quant topics visible under the Reasoning heading.
+    The per-topic icon tint also followed the subject (blue calculator -> purple bulb).
+  status: Pass
+  defect_id: ""
+  evidence: "browse.png then switched.png"
+  remarks: >
+    A WEAKER PASS THAN THE CASE ASKS FOR, recorded honestly: the device is fully synced, so
+    getTopicStats resolves from local SQLite too fast for the loading skeleton to be
+    observed. The guard is therefore verified as "the wrong list never appeared", not as
+    "the skeleton was seen". The case's own step 2 calls for live mode to widen the window;
+    that was not available here because the device reads locally.
+
+- execution_id: EXEC-PRACTICE-0003
+  test_case_id: TC-PRACTICE-004
+  test_case_version: 1
+  environment: "Android emulator-5554, backend localhost:8080"
+  build_version: "feature/on-device-llm-spike, uncommitted working tree"
+  tester: "Claude Opus 5 (automated device pass, driven via adb)"
+  executed_at: "2026-09-22T14:47:30+05:30"
+  actual_result: >
+    Quiz opened from the new screen with the correct header ("Analogy · Medium"), the
+    correct question count (33, matching the sheet), a real Analogy question, the language
+    picker, flag and bookmark controls, and the Previous/Finish bar — i.e. the unmodified
+    practice engine. A second run from a different path ("General · Medium") likewise read
+    "Question 1 of 62", matching that topic's Medium count of 62.
+  status: Blocked
+  defect_id: ""
+  evidence: "quiz.png, dark-sheet3.png"
+  remarks: >
+    BLOCKED, not Pass: steps 1-4 require finishing a session and reading it back in history,
+    and no session was completed during this pass. What is verified is that the engine opens
+    with the right topic, difficulty and question set, which is the parameter hand-off this
+    change actually touches. Session recording, per-question timing and the history entry
+    are unchanged code that this change never opened, but they were not observed.
+
+- execution_id: EXEC-PRACTICE-0004
+  test_case_id: TC-PRACTICE-005
+  test_case_version: 1
+  environment: "Android emulator-5554, local SQLite"
+  build_version: "feature/on-device-llm-spike, uncommitted working tree"
+  tester: "Claude Opus 5 (automated device pass, driven via adb)"
+  executed_at: "2026-09-22T14:47:00+05:30"
+  actual_result: >
+    The sheet listed exactly the synced levels in the admin's order with their own icons and
+    colours — Easy (green leaf), Medium (amber gauge), Hard (red flame) — never a hardcoded
+    set. For Analogy: 47 / 33 / 38, and "All Levels · 118 questions · mixed difficulty",
+    which is exactly 47+33+38. Re-checked on a second topic (Quant > General): 37 / 62 / 41
+    with All Levels 140, again exact, and 140 matches the count the topic row itself showed.
+    Selecting Medium opened a quiz of exactly 62 questions.
+  status: Pass
+  defect_id: DEF-PRACTICE-002
+  evidence: "sheet.png (pre-fix), sheet-fixed.png, dark-sheet2.png, uiautomator bounds dump"
+  remarks: >
+    Records the post-fix run. The first attempt exposed DEF-PRACTICE-002 (the sheet painting
+    outside its own card). Step 3 (a zero-count level shown dimmed and inert) was NOT
+    exercised — every level on both topics tried had questions — so that assertion remains
+    unverified.
+
+- execution_id: EXEC-PRACTICE-0005
+  test_case_id: TC-PRACTICE-006
+  test_case_version: 1
+  environment: "Android emulator-5554, local SQLite"
+  build_version: "feature/on-device-llm-spike, uncommitted working tree"
+  tester: "Claude Opus 5 (automated device pass, driven via adb)"
+  executed_at: "2026-09-22T15:04:00+05:30"
+  actual_result: >
+    Opened the sheet for Analogy (47/33/38, All Levels 118), closed it, then opened it for
+    Quant > General: it showed 37/62/41 with All Levels 140. Analogy's figures never
+    appeared under General's name.
+  status: Pass
+  defect_id: ""
+  evidence: "sheet-fixed.png then dark-sheet2.png"
+  remarks: >
+    Same caveat as EXEC-PRACTICE-0002: on a synced device the read is fast enough that the
+    loading skeleton was not observed, so this is verified as "stale counts never appeared"
+    rather than "the skeleton was seen".
+
+- execution_id: EXEC-PRACTICE-0006
+  test_case_id: TC-PRACTICE-007
+  test_case_version: 1
+  environment: "Android emulator-5554, backend localhost:8080, real Neon dev DB, signed in"
+  build_version: "feature/on-device-llm-spike, uncommitted working tree"
+  tester: "Claude Opus 5 (automated device pass, driven via adb)"
+  executed_at: "2026-09-22T14:52:00+05:30"
+  actual_result: >
+    Four of the six entry points were exercised and all four reached a working levels screen:
+    (1) Home's "Focus next" card -> Blood Relations -> "Choose a level", All Levels 167 with
+    Easy 40 / Medium 57 / Hard 70 (167 = 40+57+70);
+    (2) Today's Plan -> a task's chevron -> Awards & Honours -> All Levels 59, Easy 21;
+    (4) Study Roadmap -> Science & Technology -> All Levels 66, matching the roadmap card's
+    own "66 questions";
+    (5) Syllabus & Trends -> Number System -> All Levels 128, matching the new Practice
+    screen's own count for the same topic.
+    Two could not be reached with this account's data:
+    (3) the Exam Guide's prepare checklist — all five rows read "Complete prerequisites
+    first" and are `disabled={!item.prerequisitesMet}`, pre-existing gating unrelated to this
+    change; and (6) the Preparation Radar — it reports "0 of 61 topics practised / Your radar
+    is waiting", so no topic card exists to tap through to radar-topic.
+  status: Blocked
+  defect_id: ""
+  evidence: "levels-deeplink.png, uiautomator dumps for each of the four"
+  remarks: >
+    BLOCKED rather than Pass because two of the six were not exercised. Both are blocked by
+    this account's DATA, not by the change: all four that ran resolve the identical
+    /practice/levels route registration, so the route is demonstrably intact — but that is an
+    inference for the remaining two, not an observation. Worth re-running on an account with
+    practice history and met prerequisites.
+
+- execution_id: EXEC-PRACTICE-0007
+  test_case_id: TC-PRACTICE-009
+  test_case_version: 1
+  environment: "Android emulator-5554, both theme modes"
+  build_version: "feature/on-device-llm-spike, uncommitted working tree"
+  tester: "Claude Opus 5 (automated device pass, driven via adb)"
+  executed_at: "2026-09-22T15:03:00+05:30"
+  actual_result: >
+    Step 1: Inter renders. Confirmed by a before/after comparison across the font-gate fix —
+    the same Home screen re-rendered visibly wider and heavier once the faces were registered
+    ahead of first paint, which is what exposed DEF-PRACTICE-001. Native header titles and
+    the five tab labels are Inter too.
+    Step 2: toggling to dark repainted the page, the search field, the dropdown, the topic
+    container and the tab bar; hierarchy unchanged and every label legible. The selected
+    subject row became a dark blue tint with a blue checkmark.
+    Step 3: the sheet in dark mode is a dark surface over a dimmed list, with Easy/Medium/
+    Hard and their pastel icon circles all readable; a uiautomator bounds dump put the four
+    rows at y1245/1471/1697/1922 on a 2400px screen, i.e. all four fit clear of the tab bar.
+  status: Pass
+  defect_id: DEF-PRACTICE-001
+  evidence: "tabbar.png (pre-fix), tabbar-fixed.png, dark-browse2.png, dark-sheet2.png, final.png"
+  remarks: >
+    Step 4 (content zoom) was NOT run, so that assertion is unverified. One honest
+    observation, not a failure and not caused by this change: the subject/topic icon circles
+    keep their admin-synced light pastel fills in dark mode, so they read as bright discs on
+    the dark ground. `toSubjectMeta` has always behaved this way and the old subjects screen
+    did the same; the redesign makes it more prominent by using larger circles on every
+    topic row.
+
+- execution_id: EXEC-PRACTICE-0008
+  test_case_id: TC-PRACTICE-010
+  test_case_version: 1
+  environment: "Android emulator-5554"
+  build_version: "feature/on-device-llm-spike, uncommitted working tree"
+  tester: "Claude Opus 5 (automated device pass, driven via adb)"
+  executed_at: "2026-09-22T15:05:00+05:30"
+  actual_result: >
+    Not run. The search field rendered with its placeholder ("Search subjects or topics...")
+    on every visit and its clear affordance is wired, but no query was typed during this pass.
+  status: Skipped
+  defect_id: ""
+  evidence: ""
+  remarks: >
+    Recorded as Skipped rather than omitted so the gap is visible in the RTM. Search filtering
+    — of both the topic list and the dropdown options — has never been exercised on a device.
+
+- execution_id: EXEC-PRACTICE-0009
+  test_case_id: TC-PRACTICE-005
+  test_case_version: 1
+  environment: "Android emulator-5554 (1080x2400, density 420), local SQLite, light theme"
+  build_version: "feature/on-device-llm-spike, uncommitted working tree"
+  tester: "Claude Opus 5 (device pass, driven via adb)"
+  executed_at: "2026-09-22T15:24:00+05:30"
+  actual_result: >
+    RE-RUN after the owner spotted, from a screenshot, that the Hard row was still cut off by the
+    footer - i.e. EXEC-PRACTICE-0004 had been recorded as a Pass on an incompletely fixed layout.
+    Measured rather than eyeballed this time. Before: sheet 1231->2201px (370dp) holding ~573dp of
+    content, "All Levels" reported at inverted bounds y2332->y2201, i.e. clipped out. After the real
+    fix (rows in a plain View instead of a ScrollView, which has no intrinsic height): Easy
+    y1224->1282, Medium y1450->1508, Hard y1676->1734, All Levels y1901->1959 - all four valid and
+    non-inverted, with ~48dp of clearance above the tab bar. "All Levels 128 questions" equals
+    47+42+39. Confirmed visually as well as by bounds.
+  status: Pass
+  defect_id: DEF-PRACTICE-002
+  evidence: "sheet-final2.png; uiautomator bounds dumps before and after"
+  remarks: >
+    THE PROCESS LESSON, recorded because it cost two wrong fixes: EXEC-PRACTICE-0004 was marked Pass
+    on the strength of one bounds dump that happened to show four fitting rows. That measurement was
+    real but not reproducible - the sheet's height depended on whatever the ScrollView was handed on
+    that pass - and a nondeterministic layout that is right once is not right. The owner's screenshot
+    is what exposed it.
+
+- execution_id: EXEC-PRACTICE-0010
+  test_case_id: TC-PRACTICE-005
+  test_case_version: 1
+  environment: "Android emulator-5554 (1080x2400, density 420), local SQLite, light and dark"
+  build_version: "feature/on-device-llm-spike, uncommitted working tree"
+  tester: "Claude Opus 5 (device pass, driven via adb)"
+  executed_at: "2026-09-22T16:38:00+05:30"
+  actual_result: >
+    RE-RUN after the owner rejected the bottom sheet outright and asked for a fixed, medium-sized
+    card centred on the screen instead. The difficulty picker is now a centred dialog
+    (DifficultyPickerDialog). Light mode: card spans y706->1690 on a 2400px screen, so its centre
+    is y1198 against a screen centre of y1200; 361dp wide against a 380dp cap; all four rows fully
+    visible - Easy 47, Medium 42, Hard 39, All Levels 128 = 47+42+39 - with the topic list still
+    legible behind it and nothing near the tab bar. No drag handle, and it fades rather than
+    slides. Dark mode checked in the same pass.
+  status: Pass
+  defect_id: ""
+  evidence: "dialog2.png (light), dialog-dark.png (dark, pre-fix), dialog-dark2.png (dark, fixed)"
+  remarks: >
+    THE DARK-MODE PASS FOUND A THIRD PROBLEM, fixed in the same round rather than recorded as a
+    defect because it never left this session: as a floating centred card the dialog barely
+    separated from the page. `colors.surface` is #0F131C against a #0A0D14 background, and the
+    0.38 backdrop wash that works in light mode changes almost nothing on a near-black page, so
+    the card read as a faint outline. Fixed the way this palette says to (see the note in
+    packages/core/src/design/palettes.ts - in dark, a surface lifts by being BRIGHTER than its
+    ground): the card moved to the `elevated` Card variant's own tokens, `surfaceElevated` plus
+    `border`, and the backdrop is now theme-aware, rgba(2,4,8,0.66) in dark against
+    rgba(13,21,36,0.38) in light. A single wash for both themes is the trap here.
+
+- execution_id: EXEC-PRACTICE-0011
+  test_case_id: TC-PRACTICE-011
+  test_case_version: 1
+  environment: "Android emulator-5554, local SQLite, light theme"
+  build_version: "feature/on-device-llm-spike, uncommitted working tree"
+  tester: "Claude Opus 5 (device pass, driven via adb)"
+  executed_at: "2026-09-22T16:49:00+05:30"
+  actual_result: >
+    Run after the owner supplied a screenshot of the ORIGINAL topic cards and asked for them back -
+    an earlier pass of mine had flattened them into plain rows. Steps 1-4 pass and match the
+    reference exactly. Priority order: "Average / Pipes & Cisterns / 117 questions" with High
+    priority, Learning, Rising, 1.5% of paper and "Best after: Compound Interest"; then
+    "Time & Work / Problems on Trains / 127 questions" with its own chips and
+    "Best after: Boats & Streams". Tapping Syllabus order regrouped the list under an "Average"
+    folder heading with its children indented and the inline parent gone. Tapping Pipes & Cisterns
+    opened the difficulty dialog (Easy 42 ...), so the card behaves the same as the row it replaced.
+  status: Pass
+  defect_id: ""
+  evidence: "cards2.png (By priority), syllabus.png (Syllabus order); uiautomator dump for the dialog"
+  remarks: >
+    Step 5 NOT executed - every exam on this device has a curated topic map, so the
+    no-intelligence fallback (no chips, no toggle) is verified by reading the render guards rather
+    than by seeing it. Recorded rather than glossed.
+    THE REASON THIS CASE EXISTS: I removed these chips on my own reading of the brief's section 32
+    ("don't put a badge on every topic"). That note is about not inventing ornament; these chips
+    are existing, earned signal and the only thing on the screen that says WHICH topic is worth the
+    next hour. Only the navigation needed reducing - the card was already right.
+
+- execution_id: EXEC-PRACTICE-0012
+  test_case_id: TC-PRACTICE-012
+  test_case_version: 1
+  environment: "Android emulator-5554, local SQLite, light theme"
+  build_version: "feature/on-device-llm-spike, uncommitted working tree"
+  tester: "Claude Opus 5 (device pass, driven via adb)"
+  executed_at: "2026-09-22T17:06:00+05:30"
+  actual_result: >
+    Steps 1-3 pass. The dialog for Pipes & Cisterns (117 questions) shows
+    "20 questions each session - new questions every time" and NO per-level counts under Easy,
+    Medium or Hard; "All Levels" reads "Mixed difficulty" rather than a number. Choosing Medium
+    opened "Question 1 of 20". Backing out and re-entering the same topic and difficulty started
+    on a genuinely different question - session 1 began "A can complete a work in 19 days and B in
+    14 days...", session 2 "A can complete a work in 20 days and B in 7 days...".
+  status: Pass
+  defect_id: ""
+  evidence: "dialog3.png; uiautomator dumps of both quiz headers and first questions"
+  remarks: >
+    Step 3 was checked rather than assumed BECAUSE THE CLAIM IS PRINTED ON SCREEN. ORDER BY
+    RANDOM() makes it true on the local path; the live path pages the backend deterministically
+    and only shuffles what it got, which is why the banner drops that clause when reading live.
+    Step 4 (a topic with fewer than twenty questions at some level) was NOT run.
+
+- execution_id: EXEC-PRACTICE-0013
+  test_case_id: TC-PRACTICE-013
+  test_case_version: 1
+  environment: "Android emulator-5554, local SQLite (real practice history)"
+  build_version: "feature/on-device-llm-spike, uncommitted working tree"
+  tester: "Claude Opus 5 (device pass, driven via adb)"
+  executed_at: "2026-09-22T17:05:00+05:30"
+  actual_result: >
+    Step 1 passes against real history: Pipes & Cisterns reads "32/117 - 27%" with the bar filled
+    to match, Problems on Trains "5/127 - 4%". Both numerators are distinct-question counts from
+    the device's own practice_session_results, and both are well inside their denominators.
+  status: Blocked
+  defect_id: ""
+  evidence: "bars2.png"
+  remarks: >
+    BLOCKED, not Pass. Step 2 (finish a session and watch the numerator move by the number of
+    NEW questions) and step 3 (practise past the topic's question count and confirm the bar stops
+    at full) were not run - step 3 in particular would take several hundred answered questions on
+    one topic to reach honestly. Step 4 (a topic with zero questions) was not reached either.
+    So the bar is verified as CORRECT AT REST on real data, and its behaviour over time is
+    verified by construction only: numerator and denominator are built from identical subject,
+    exam and is-deleted predicates, and the render also clamps with Math.min.
+

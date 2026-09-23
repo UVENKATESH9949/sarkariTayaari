@@ -291,7 +291,7 @@ export default function Summary() {
       <Stack.Screen options={{ title: t("summary.title") }} />
       {/*
         Virtualized: this renders one expandable card per question of the session, and a
-        session is as long as the quiz was (capped at PRACTICE_QUESTION_LIMIT, 200). All
+        session is as long as the quiz was (PRACTICE_QUESTION_LIMIT, 20). All
         of the surrounding chrome moves into the header/footer slots so it still scrolls
         as one surface.
       */}

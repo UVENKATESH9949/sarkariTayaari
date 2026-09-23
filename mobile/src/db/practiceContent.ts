@@ -1,25 +1,43 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "./client";
-import { exams, questionExams, questions, questionTranslations, subjects, topics } from "./schema";
+import {
+  exams,
+  practiceSessionResults,
+  questionExams,
+  questions,
+  questionTranslations,
+  subjects,
+  topics,
+} from "./schema";
 import { getSyllabusSubjectIds } from "./examStructure";
 import { isIndexBasedType, resolveCorrectIndex } from "@sarkaritaiyaari/core/evaluation";
 
 const ALL_EXAMS = "ALL";
 
 /**
- * Hard cap on one practice session's question set.
+ * How many questions one practice session contains.
  *
- * This was previously unbounded, which was a latent crash rather than a slow query: the
- * `inArray` translation lookup below binds one parameter per matched question, so a topic
- * with more questions than SQLite's `SQLITE_MAX_VARIABLE_NUMBER` (999 on older builds)
- * would fail outright. It never surfaced only because the backend serves a temporary
- * ~500-question pool; lifting that pool would have exposed it immediately.
+ * NOW A PRODUCT DECISION, NOT JUST A SAFETY CAP. It was 200 — a ceiling chosen only to stop
+ * a crash (see below) — which in practice meant a session was "however many questions this
+ * topic happens to have", so a 117-question topic was a 117-question sitting. Twenty is a
+ * session a student can actually finish, and it matches `MIXED_PRACTICE_QUESTION_LIMIT`
+ * below, so the two kinds of practice session are the same length.
+ *
+ * The local read draws its set with `ORDER BY RANDOM()`, so consecutive sessions on the
+ * same topic are genuinely different questions rather than the same twenty re-shuffled.
+ * The LIVE path (before the first sync completes) cannot promise that — it pages the
+ * backend deterministically and only shuffles what it got — which is why the Practice
+ * screen states the fresh-set promise only when it is reading locally.
+ *
+ * The original reason for having a cap at all still holds and must not be removed: the
+ * `inArray` translation lookup below binds one parameter per matched question, so an
+ * uncapped topic with more questions than SQLite's `SQLITE_MAX_VARIABLE_NUMBER` (999 on
+ * older builds) would fail outright.
  *
  * Shared with the live path (`data/practiceData.ts`) so local and live can't drift into
- * returning materially different amounts for the same call — they already had, at
- * unbounded vs. 200.
+ * returning materially different amounts for the same call.
  */
-export const PRACTICE_QUESTION_LIMIT = 200;
+export const PRACTICE_QUESTION_LIMIT = 20;
 
 function examFilter(examCode: string | null) {
   return examCode && examCode !== ALL_EXAMS ? examCode : null;
@@ -156,6 +174,64 @@ export async function getTopicStats(subjectId: string, examCode: string | null):
 /** Keyed by difficulty code — whatever levels exist, not a fixed three. */
 export type DifficultyCounts = Record<string, number>;
 
+/**
+ * How many of each topic's questions the student has actually practised, for one subject.
+ *
+ * COUNT(DISTINCT question_id), not a running total of answers. `user_topic_progress`'s
+ * `attemptedCount` already exists and is the obvious thing to reach for, but it accumulates
+ * (`existing + totalCount` on every session), so a student who practises a 117-question topic
+ * five times has 100 against 117 and would eventually read past 100%. That figure measures
+ * VOLUME of practice; this one measures COVERAGE of the topic, and only the second can honestly
+ * drive a 0-100% bar.
+ *
+ * The predicates here are deliberately identical to `getTopicStats`'s: same subject, same exam
+ * filter, same `isDeleted` exclusion. That is what guarantees the numerator is a subset of the
+ * denominator — practise a topic under "All exams" and the questions you saw that are not tagged
+ * to THIS exam are excluded from both sides, so the bar cannot exceed full.
+ *
+ * Practice results only, and that is a real limitation rather than an oversight: mock attempts
+ * also answer questions, but combining the two needs the UNION of the two id sets, and adding
+ * two `count(distinct ...)` results would double-count anything answered in both and could
+ * render as "134 of 117". The honest union needs raw SQL this module has no precedent for, or
+ * pulling every attempted id into JS. Practice coverage on the Practice screen is the narrower
+ * claim, and it is the one the label makes.
+ */
+export async function getTopicCoverage(
+  subjectId: string,
+  examCode: string | null,
+): Promise<Map<string, number>> {
+  const exam = examFilter(examCode);
+  const projection = {
+    topicId: questions.topicId,
+    practised: sql<number>`count(distinct ${practiceSessionResults.questionId})`,
+  };
+
+  const rows = exam
+    ? await db
+        .select(projection)
+        .from(practiceSessionResults)
+        .innerJoin(questions, eq(questions.id, practiceSessionResults.questionId))
+        .innerJoin(questionExams, eq(questionExams.questionId, questions.id))
+        .where(
+          and(
+            eq(questions.subjectId, subjectId),
+            eq(questionExams.examCode, exam),
+            eq(questions.isDeleted, false),
+          ),
+        )
+        .groupBy(questions.topicId)
+        .all()
+    : await db
+        .select(projection)
+        .from(practiceSessionResults)
+        .innerJoin(questions, eq(questions.id, practiceSessionResults.questionId))
+        .where(and(eq(questions.subjectId, subjectId), eq(questions.isDeleted, false)))
+        .groupBy(questions.topicId)
+        .all();
+
+  return new Map(rows.map((r) => [r.topicId, r.practised]));
+}
+
 export async function getDifficultyCounts(topicId: string, examCode: string | null): Promise<DifficultyCounts> {
   const exam = examFilter(examCode);
 
@@ -217,6 +293,13 @@ export type PracticeQuestion = {
   isPyq?: boolean;
   pyqYear?: number | null;
   pyqShift?: string | null;
+  /**
+   * Which of the requested topics this question belongs to — set only by
+   * `getMixedPracticeQuestions` below. A single-topic session already knows its one topicId
+   * from its own route params, so `getPracticeQuestions` leaves this undefined rather than
+   * carrying a redundant column on every row.
+   */
+  topicId?: string;
 };
 
 export async function getPracticeQuestions(
@@ -307,6 +390,106 @@ export async function getPracticeQuestions(
       isPyq: q.isPyq,
       pyqYear: q.pyqYear,
       pyqShift: q.pyqShift,
+    };
+  });
+}
+
+/**
+ * A "Mixed Topics" session's question set — several topics in one sitting, capped small
+ * because this is a quick mixed drill, not a full practice set. Reuses `getPracticeQuestions`'s
+ * exact translation-join and answer-resolution logic; the only real difference is `inArray`
+ * over a topic set instead of `eq` on one, and carrying `topicId` on each returned row so the
+ * caller can tell which topic an answered question belonged to (a single-topic session never
+ * needs this — it already knows the one topic from its own route params).
+ *
+ * The sample size scales a little with how many topics were asked for (more topics, more
+ * questions), capped at `PRACTICE_QUESTION_LIMIT`'s usual ceiling divided down — this is a
+ * plain, honest random draw across the combined pool, not a per-topic balanced split. A topic
+ * with far more question coverage than the others can end up over-represented; stated here
+ * rather than quietly assumed even, since building genuine per-topic balancing would mean N
+ * separate queries (the N+1 shape this project has fixed as a real bug more than once).
+ */
+export const MIXED_PRACTICE_QUESTION_LIMIT = 20;
+
+export async function getMixedPracticeQuestions(
+  topicIds: string[],
+  examCode: string | null,
+): Promise<PracticeQuestion[]> {
+  if (topicIds.length === 0) return [];
+  const exam = examFilter(examCode);
+  const baseConditions = [inArray(questions.topicId, topicIds), eq(questions.isDeleted, false)];
+  const limit = Math.min(MIXED_PRACTICE_QUESTION_LIMIT, Math.max(10, topicIds.length * 4));
+
+  const projection = {
+    id: questions.id,
+    correctAnswer: questions.correctAnswer,
+    isPyq: questions.isPyq,
+    pyqYear: questions.pyqYear,
+    pyqShift: questions.pyqShift,
+    questionType: questions.questionType,
+    answerKey: questions.answerKey,
+    contentStructure: questions.contentStructure,
+    questionGroupId: questions.questionGroupId,
+    topicId: questions.topicId,
+  };
+
+  const matched = exam
+    ? await db
+        .select(projection)
+        .from(questions)
+        .innerJoin(questionExams, eq(questionExams.questionId, questions.id))
+        .where(and(...baseConditions, eq(questionExams.examCode, exam)))
+        .orderBy(sql`RANDOM()`)
+        .limit(limit)
+        .all()
+    : await db
+        .select(projection)
+        .from(questions)
+        .where(and(...baseConditions))
+        .orderBy(sql`RANDOM()`)
+        .limit(limit)
+        .all();
+
+  if (matched.length === 0) return [];
+
+  const questionIds = matched.map((q) => q.id);
+  const translationRows = await db
+    .select()
+    .from(questionTranslations)
+    .where(inArray(questionTranslations.questionId, questionIds))
+    .all();
+
+  const translationsByQuestion = new Map<string, Record<string, PracticeQuestionTranslation>>();
+  for (const row of translationRows) {
+    const forQuestion = translationsByQuestion.get(row.questionId) ?? {};
+    forQuestion[row.languageCode] = {
+      questionText: row.questionText,
+      options: row.options,
+      explanation: row.explanation ?? "",
+      content: row.content,
+    };
+    translationsByQuestion.set(row.questionId, forQuestion);
+  }
+
+  return matched.map((q) => {
+    const translations = translationsByQuestion.get(q.id) ?? {};
+    const englishOptions = translations.en?.options ?? Object.values(translations)[0]?.options ?? [];
+    const questionType = q.questionType ?? "SINGLE_CHOICE";
+    const correctIndex = isIndexBasedType(questionType)
+      ? resolveCorrectIndex(q.correctAnswer, englishOptions)
+      : null;
+    return {
+      id: q.id,
+      correctIndex,
+      questionType,
+      answerKey: q.answerKey,
+      contentStructure: q.contentStructure,
+      questionGroupId: q.questionGroupId,
+      translations,
+      isPyq: q.isPyq,
+      pyqYear: q.pyqYear,
+      pyqShift: q.pyqShift,
+      topicId: q.topicId,
     };
   });
 }

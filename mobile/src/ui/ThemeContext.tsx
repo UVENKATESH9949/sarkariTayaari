@@ -7,6 +7,7 @@ import {
   savePreferences,
   type ThemeMode,
 } from "../db/preferences";
+import { interFamilyForWeight } from "./fonts";
 import { darkPalette, darkShadow, lightPalette, lightShadow, type Palette, type ShadowTokens } from "./palettes";
 import { radius, spacing } from "./theme";
 
@@ -99,25 +100,42 @@ function scale(value: number, zoom: number): number {
 }
 
 /**
- * Applies the zoom to a finished style sheet, one level deep.
+ * Applies the zoom AND the app's typeface to a finished style sheet, one level deep.
  *
  * Doing it here rather than at each declaration is the whole design. There are 174
  * `fontSize` and 26 `lineHeight` declarations across 43 files; multiplying by a scale
  * factor at each one would be 200 opportunities to miss one, and every future style
  * added by anyone would have to remember to do it. Applied here it is impossible to
- * forget, because it happens to every style the factory returns.
+ * forget, because it happens to every style the factory returns. The typeface was added
+ * to the same pass for exactly the same reason — 334 text styles, one place to get right.
  *
- * Only `fontSize` and `lineHeight` are touched. Box dimensions are deliberately NOT
+ * ZOOM. Only `fontSize` and `lineHeight` are touched. Box dimensions are deliberately NOT
  * scaled, which is why this cannot break a layout the way a global transform would:
  * text grows inside containers that mostly have no fixed height, so rows get taller
  * rather than clipped. Vector icons keep their size for the same reason — they sit in
  * fixed-size circles, and growing the glyph without the circle looks broken.
  *
+ * TYPEFACE. A style that declares `fontSize`, `fontWeight` or `color` is a text style, and
+ * gets the Inter face matching its weight — after which its `fontWeight` is REMOVED. That
+ * removal is not tidiness: Android does not synthesise a weight from a family, so the face
+ * name is the only thing that carries the weight there, and leaving `fontWeight` beside it
+ * asks Android to embolden an already-bold face. See `ui/fonts.ts`.
+ *
+ * Why `color` counts as a text signal: it is a text-only property in React Native, so a
+ * style carrying it is being applied to a `Text`. That catches the nineteen styles that
+ * colour a label without restating its size.
+ *
+ * The one case this could get wrong is a nested `<Text>` whose child style sets a size but
+ * no weight inside a bold parent — it would be assigned Regular rather than inheriting
+ * Bold. All eight nested-`Text` sites in the app were checked before this landed and every
+ * one of their children declares its own `fontWeight`, so none is affected. A future nested
+ * `Text` that wants to inherit its parent's weight must not set `fontSize` either, which is
+ * already how it has to be written to inherit the size.
+ *
  * A style whose value is a nested object (`shadowOffset`, `transform`) is passed through
  * untouched; there are no font properties below the first level.
  */
-function applyZoom<T extends NamedStyles>(styles: T, zoom: number): T {
-  if (zoom === 1) return styles;
+function applyTypography<T extends NamedStyles>(styles: T, zoom: number): T {
   const out: Record<string, ViewStyle | TextStyle | ImageStyle> = {};
   for (const key of Object.keys(styles)) {
     const style = styles[key] as Record<string, unknown> | undefined;
@@ -125,9 +143,21 @@ function applyZoom<T extends NamedStyles>(styles: T, zoom: number): T {
       out[key] = styles[key];
       continue;
     }
+    const isTextStyle =
+      "fontSize" in style || "fontWeight" in style || typeof style.color === "string";
+    if (!isTextStyle && zoom === 1) {
+      out[key] = styles[key];
+      continue;
+    }
     const next: Record<string, unknown> = { ...style };
-    if (typeof next.fontSize === "number") next.fontSize = scale(next.fontSize, zoom);
-    if (typeof next.lineHeight === "number") next.lineHeight = scale(next.lineHeight, zoom);
+    if (zoom !== 1) {
+      if (typeof next.fontSize === "number") next.fontSize = scale(next.fontSize, zoom);
+      if (typeof next.lineHeight === "number") next.lineHeight = scale(next.lineHeight, zoom);
+    }
+    if (isTextStyle && next.fontFamily === undefined) {
+      next.fontFamily = interFamilyForWeight(next.fontWeight as TextStyle["fontWeight"]);
+      delete next.fontWeight;
+    }
     out[key] = next as ViewStyle;
   }
   return out as T;
@@ -154,7 +184,7 @@ export function useThemedStyles<T extends NamedStyles>(factory: (theme: Theme) =
   }
   const cached = perFactory.get(cacheKey);
   if (cached) return cached as T;
-  const built = applyZoom(StyleSheet.create(factory(theme)), theme.zoom);
+  const built = applyTypography(StyleSheet.create(factory(theme)), theme.zoom);
   perFactory.set(cacheKey, built);
   return built;
 }

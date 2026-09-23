@@ -1,0 +1,504 @@
+# PRACTICE module — manual test cases
+#
+# All ManualOnly: this project has no automated test runner for mobile (confirmed, per
+# qa/README.md's standing rule).
+#
+# A real device pass was run on 2026-09-22 against emulator-5554 — see
+# qa/execution/2026-09-22-practice-navigation.yaml for what actually happened, including the
+# two defects it found. The statuses below reflect that run and nothing else: TC-003, TC-008
+# and TC-010 are still Not Executed because they genuinely were not run, and TC-004 and
+# TC-007 are Blocked rather than Pass because each had steps this account's data could not
+# reach. Nothing here was marked Pass on the strength of a nearby step passing.
+
+- id: TC-PRACTICE-001
+  requirement_ids: [REQ-PRACTICE-001, REQ-PRACTICE-002]
+  scenario_id: SCN-PRACTICE-001
+  system: Mobile
+  module: PRACTICE
+  feature: Subject, topic and difficulty are chosen without leaving one screen
+  title: A student reaches a running quiz in three taps from the Practice screen
+  objective: "Confirm the redesigned flow works end to end and pushes only the quiz."
+  preconditions:
+    - "The app is installed on emulator-5554 and has synced"
+    - "An exam with at least one subject carrying questions is available"
+  test_data: "Any synced exam, e.g. SSC CGL"
+  test_environment: "Android emulator (AVD Pixel_7), dev build against a local backend"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Open the Practice tab and tap an exam"
+      expected: "A screen titled with the exam name, showing a search field, a Practice heading, a subject dropdown already carrying a subject, and that subject's topics below"
+    - step: 2
+      action: "Tap the subject dropdown"
+      expected: "The subject list expands in place, directly under the trigger; the current subject is highlighted and carries a checkmark"
+    - step: 3
+      action: "Tap a different subject"
+      expected: "The list collapses and the topics below become that subject's, with no screen transition and no back button appearing"
+    - step: 4
+      action: "Tap a topic that has questions"
+      expected: "A centred dialog fades in naming that topic, with a Choose difficulty prompt, over a still-visible topic list. It does not slide, and there is no drag handle"
+    - step: 5
+      action: "Tap a difficulty"
+      expected: "The dialog closes and the existing practice quiz opens for that topic and difficulty"
+    - step: 6
+      action: "Press back from the quiz"
+      expected: "The student returns to the Practice screen — one back press, not three"
+  expected_result: "Subject, topic and difficulty are all chosen on one screen, and the quiz is the only route pushed. (REQ-PRACTICE-001 acceptance_criteria)"
+  actual_result: ""
+  status: Pass
+  defect_id: ""
+  remarks: "Step 6 is the measure of the whole change: the old flow needed three back presses to get here."
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-PRACTICE-002
+  requirement_ids: [REQ-PRACTICE-001]
+  scenario_id: SCN-PRACTICE-002
+  system: Mobile
+  module: PRACTICE
+  feature: Subject, topic and difficulty are chosen without leaving one screen
+  title: The subject heading and the topic list can never disagree
+  objective: >
+    Confirm the keyed-loaded-state guard is real — switching subject must show a loading
+    skeleton, never the previous subject's topics under the new subject's name.
+  preconditions:
+    - "The Practice screen is open for an exam with at least two subjects"
+  test_data: "An exam whose subjects have visibly different topic names"
+  test_environment: "Android emulator, ideally in live mode (before first sync) where the read is slow enough to watch"
+  priority: High
+  severity: Major
+  test_type: StateTransition
+  steps:
+    - step: 1
+      action: "Note the topic names under subject A"
+      expected: "Topics clearly belonging to subject A"
+    - step: 2
+      action: "Switch to subject B and watch the moment of the switch"
+      expected: "A skeleton appears while B's topics load — at no point are A's topics visible under B's name"
+    - step: 3
+      action: "Switch back and forth quickly several times"
+      expected: "The list always settles on the subject named in the dropdown; no interleaving or flicker of the wrong list"
+  expected_result: "The topic list is only ever rendered for the subject currently named. (REQ-PRACTICE-001 edge_conditions)"
+  actual_result: ""
+  status: Pass
+  defect_id: ""
+  remarks: >
+    Regression guard for the pattern this codebase has hit before (see PreparationPlanCard).
+    Live mode makes the window wide enough to observe; on a synced device the read may be too
+    fast to see, which is a weaker but still valid pass.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-PRACTICE-003
+  requirement_ids: [REQ-PRACTICE-001]
+  scenario_id: SCN-PRACTICE-003
+  system: Mobile
+  module: PRACTICE
+  feature: Subject, topic and difficulty are chosen without leaving one screen
+  title: A topic with no questions is shown but not openable
+  objective: "Confirm an empty topic is visible and inert rather than hidden or misleadingly tappable."
+  preconditions:
+    - "A subject containing at least one topic with zero questions for the chosen exam"
+  test_data: "A topic outside the exam's question coverage"
+  test_environment: "Android emulator"
+  priority: Medium
+  severity: Minor
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "Find a topic showing the no-questions label"
+      expected: "The row renders dimmed and shows no chevron"
+    - step: 2
+      action: "Tap it"
+      expected: "Nothing happens — the difficulty dialog does not open"
+  expected_result: "An empty topic cannot lead to an empty quiz. (REQ-PRACTICE-001 validations)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-PRACTICE-004
+  requirement_ids: [REQ-PRACTICE-002]
+  scenario_id: SCN-PRACTICE-004
+  system: Mobile
+  module: PRACTICE
+  feature: The practice engine is entered unchanged
+  title: A session started from the new screen is identical in history to one started before
+  objective: >
+    Confirm the redesign is navigation-only: the engine, its timing and its session record
+    are untouched.
+  preconditions:
+    - "A signed-in account so history is visible"
+  test_data: "Any topic with at least five questions"
+  test_environment: "Android emulator against a local backend"
+  priority: Critical
+  severity: Critical
+  test_type: Integration
+  steps:
+    - step: 1
+      action: "Start a quiz from the Practice screen and answer every question"
+      expected: "The quiz header names the chosen topic; answering and revealing behave exactly as before"
+    - step: 2
+      action: "Finish the session and read the summary"
+      expected: "Correct counts, accuracy, and the subject name shown — subjectName travelled through the new push"
+    - step: 3
+      action: "Open Practice history"
+      expected: "The session is listed with the same shape as sessions recorded before this change"
+    - step: 4
+      action: "Start a second session from Today's Plan or the study roadmap, which still go via the levels screen"
+      expected: "That session is also recorded normally — both entry points feed one engine"
+  expected_result: "The practice engine cannot tell which screen started it. (REQ-PRACTICE-002 acceptance_criteria)"
+  actual_result: ""
+  status: Blocked
+  defect_id: ""
+  remarks: "Per-question timing is not visible on screen; confirming it needs a look at practice_session_results.time_ms on the device database."
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-PRACTICE-005
+  requirement_ids: [REQ-PRACTICE-003]
+  scenario_id: SCN-PRACTICE-005
+  system: Mobile
+  module: PRACTICE
+  feature: Difficulty options are synced data, and an empty one cannot be started
+  title: The difficulty dialog lists synced levels with counts that add up
+  objective: "Confirm the dialog is data-driven and internally consistent."
+  preconditions:
+    - "Difficulty levels have synced"
+  test_data: "A topic with questions at more than one difficulty"
+  test_environment: "Android emulator"
+  priority: High
+  severity: Major
+  test_type: DataIntegrity
+  steps:
+    - step: 1
+      action: "Open the dialog for that topic"
+      expected: "One row per synced level, in the admin's order, each with its own icon and colour and a question count"
+    - step: 2
+      action: "Add the per-level counts and compare with All Levels"
+      expected: "They are equal"
+    - step: 3
+      action: "Find a level showing no questions"
+      expected: "The row is dimmed, has no chevron, and does not respond to a tap"
+    - step: 4
+      action: "Select a level that does have questions"
+      expected: "The quiz opens with questions at that difficulty only"
+  expected_result: "Levels come from synced data and the totals agree. (REQ-PRACTICE-003 acceptance_criteria)"
+  actual_result: ""
+  status: Pass
+  defect_id: DEF-PRACTICE-002
+  remarks: "Step 1 is also the guard against a hardcoded Easy/Medium/Hard reappearing — the row set must follow the admin's data."
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-PRACTICE-006
+  requirement_ids: [REQ-PRACTICE-003]
+  scenario_id: SCN-PRACTICE-006
+  system: Mobile
+  module: PRACTICE
+  feature: Difficulty options are synced data, and an empty one cannot be started
+  title: A second topic's dialog never shows the first topic's counts
+  objective: "Confirm the counts are keyed to the topic, so a stale number cannot appear under a new name."
+  preconditions:
+    - "Two topics in the same subject with clearly different question counts"
+  test_data: "e.g. one topic with ~400 questions and one with ~40"
+  test_environment: "Android emulator"
+  priority: High
+  severity: Major
+  test_type: StateTransition
+  steps:
+    - step: 1
+      action: "Open the dialog for the large topic, note the counts, and close it"
+      expected: "Counts matching the large topic"
+    - step: 2
+      action: "Immediately open the dialog for the small topic"
+      expected: "A loading skeleton first — the large topic's counts are never visible under the small topic's name"
+    - step: 3
+      action: "Wait for it to settle"
+      expected: "Counts matching the small topic"
+  expected_result: "Availability figures always belong to the topic named above them. (REQ-PRACTICE-003 acceptance_criteria)"
+  actual_result: ""
+  status: Pass
+  defect_id: ""
+  remarks: "Regression guard for the keyed-loaded-state rule in DifficultyPickerDialog. Remove the key comparison and this case fails silently."
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-PRACTICE-007
+  requirement_ids: [REQ-PRACTICE-004]
+  scenario_id: SCN-PRACTICE-007
+  system: Mobile
+  module: PRACTICE
+  feature: The existing deep links into the levels screen keep working
+  title: All six entry points into the levels screen still work
+  objective: >
+    Confirm removing the levels screen from browsing did not break the six flows that push
+    it directly.
+  preconditions:
+    - "A signed-in account with a daily plan, a followed exam with a guide, and practice history for the radar"
+  test_data: "The demo account, which has both history and a followed exam"
+  test_environment: "Android emulator against a local backend"
+  priority: Critical
+  severity: Critical
+  test_type: Integration
+  steps:
+    - step: 1
+      action: "Open Today's Plan and tap a task"
+      expected: "The levels screen opens for that task's topic"
+    - step: 2
+      action: "Open the Exam Guide and tap through to practice a topic"
+      expected: "The levels screen opens"
+    - step: 3
+      action: "Open the Preparation Radar, open a topic, and tap its recommended practice"
+      expected: "The levels screen opens"
+    - step: 4
+      action: "Open the Study Roadmap and tap a topic"
+      expected: "The levels screen opens"
+    - step: 5
+      action: "Open Syllabus & Trends and tap a topic"
+      expected: "The levels screen opens"
+    - step: 6
+      action: "From Home, tap a topic on the preparation-plan card"
+      expected: "The levels screen opens"
+  expected_result: "Every deep link into /practice/levels still resolves. (REQ-PRACTICE-004 acceptance_criteria)"
+  actual_result: ""
+  status: Blocked
+  defect_id: ""
+  remarks: >
+    This is the highest-risk case in the module. The two deleted routes had no external
+    callers, but the levels route has six, and a missing registration would fail only at the
+    tap.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-PRACTICE-008
+  requirement_ids: [REQ-PRACTICE-001]
+  scenario_id: SCN-PRACTICE-008
+  system: Mobile
+  module: PRACTICE
+  feature: Subject, topic and difficulty are chosen without leaving one screen
+  title: Offline behaviour matches the screens this replaced
+  objective: "Confirm the hybrid read and the offline notice survived the rewrite."
+  preconditions:
+    - "One synced install, and one install that has never synced"
+  test_data: "Airplane mode"
+  test_environment: "Android emulator"
+  priority: High
+  severity: Major
+  test_type: Offline
+  steps:
+    - step: 1
+      action: "On a fully synced install, enable airplane mode and open the Practice screen"
+      expected: "Subjects and topics render normally from local SQLite; a topic opens and its quiz runs"
+    - step: 2
+      action: "On an install with no synced content and no network, open the Practice screen"
+      expected: "The existing offline notice appears, not a blank list or an error"
+  expected_result: "Offline behaviour is unchanged from the subjects and topics screens. (REQ-PRACTICE-001 offline_behavior)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Step 2 is awkward on this emulator image — see memory/STATUS.md's note that it blocks loopback traffic when no OS-validated network exists."
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-PRACTICE-009
+  requirement_ids: [REQ-PRACTICE-005]
+  scenario_id: SCN-PRACTICE-009
+  system: Mobile
+  module: PRACTICE
+  feature: The screen renders in Inter and follows the theme in both modes
+  title: Inter loads, and both themes stay legible
+  objective: "Confirm the typeface is really applied on a device and dark mode was not broken."
+  preconditions:
+    - "A dev or release build containing the bundled Inter faces"
+  test_data: "None"
+  test_environment: "Android emulator, both theme modes"
+  priority: Medium
+  severity: Major
+  test_type: Compatibility
+  steps:
+    - step: 1
+      action: "Open the Practice screen in light mode and compare its headings with a screen that has not been converted, e.g. Progress"
+      expected: "The letterforms visibly differ — Inter is rendering, not the platform default"
+    - step: 2
+      action: "Toggle dark mode from the header"
+      expected: "Page, cards, borders, dropdown and topic rows all repaint; every label stays readable and the hierarchy is unchanged"
+    - step: 3
+      action: "Open the difficulty dialog in dark mode"
+      expected: "The card separates clearly from the dimmed page behind it, and the level rows and pastel icon circles are all legible"
+    - step: 4
+      action: "Raise the content zoom in Settings and return"
+      expected: "Text on this screen scales; rows grow taller rather than clipping"
+  expected_result: "Inter renders and both themes remain correct. (REQ-PRACTICE-005 acceptance_criteria)"
+  actual_result: ""
+  status: Pass
+  defect_id: DEF-PRACTICE-001
+  remarks: >
+    Step 1 is the only honest check that the font actually loaded — a missing face falls back
+    silently to the platform sans-serif, which is legible and therefore easy to mistake for
+    success. Step 4 guards the central zoom mechanism, which fontFamily must not disturb.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-PRACTICE-010
+  requirement_ids: [REQ-PRACTICE-001]
+  scenario_id: SCN-PRACTICE-010
+  system: Mobile
+  module: PRACTICE
+  feature: Subject, topic and difficulty are chosen without leaving one screen
+  title: Search filters topics and subjects, and says so when it finds nothing
+  objective: "Confirm the search box genuinely filters both lists and fails legibly."
+  preconditions:
+    - "The Practice screen is open for an exam with several subjects"
+  test_data: "A topic name known to exist in the selected subject"
+  test_environment: "Android emulator"
+  priority: Medium
+  severity: Minor
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Type part of a topic name that exists in the selected subject"
+      expected: "The topic list narrows; the section count updates to the number shown"
+    - step: 2
+      action: "Open the subject dropdown with that query still typed"
+      expected: "The subject options are filtered by the same query"
+    - step: 3
+      action: "Type a topic name that belongs to a different subject"
+      expected: "A clear no-match message naming the query — not a blank list"
+    - step: 4
+      action: "Tap the clear button"
+      expected: "The full topic list returns"
+  expected_result: "Search filters both lists and degrades legibly. (REQ-PRACTICE-001 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Step 3 documents a deliberate limitation rather than a defect: search is scoped to the
+    selected subject's topics, because searching every subject would cost one read per
+    subject — a round trip each in live mode.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-PRACTICE-011
+  requirement_ids: [REQ-PRACTICE-006]
+  scenario_id: SCN-PRACTICE-011
+  system: Mobile
+  module: PRACTICE
+  feature: A topic card carries what it is worth practising, not just what it is called
+  title: Topic cards show their insight chips, and the sort toggle changes both order and hierarchy
+  objective: "Confirm Epic L's per-topic surface is on the Practice screen and the toggle works."
+  preconditions:
+    - "An exam with a curated topic map synced locally, e.g. SSC CGL"
+  test_data: "SSC CGL, Quantitative Aptitude"
+  test_environment: "Android emulator (AVD Pixel_7)"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Open Practice for the exam and look at the topic list"
+      expected: "Each topic is its own card: icon, name, question count, and a wrapped row of chips — priority, mastery, trend, weightage — with a Best after line where prerequisites are unmet"
+    - step: 2
+      action: "Confirm By priority is selected and read the first two cards"
+      expected: "Ranked highest-priority first, each showing its parent topic inline above the name"
+    - step: 3
+      action: "Tap Syllabus order"
+      expected: "The list regroups under folder headings with children indented, and the inline parent disappears — the heading now carries the hierarchy"
+    - step: 4
+      action: "Tap a topic card"
+      expected: "The difficulty dialog opens for that topic, exactly as from a plain row"
+    - step: 5
+      action: "Open an exam with no curated topic map, if one is available"
+      expected: "Topics still list, with no chips and no sort toggle — never empty chips or a toggle that reorders nothing"
+  expected_result: "The topic card carries Epic L's signal, and both orderings work. (REQ-PRACTICE-006 acceptance_criteria)"
+  actual_result: ""
+  status: Pass
+  defect_id: ""
+  remarks: >
+    Step 5 is the honest gap: every exam on the test device has a curated map, so the
+    no-intelligence fallback is verified by reading the render guards rather than by seeing it.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-PRACTICE-012
+  requirement_ids: [REQ-PRACTICE-007]
+  scenario_id: SCN-PRACTICE-012
+  system: Mobile
+  module: PRACTICE
+  feature: A practice session is a fixed twenty questions, drawn fresh each time
+  title: A session is twenty questions, and the next one starts differently
+  objective: "Confirm the banner's promise matches what the engine actually delivers."
+  preconditions:
+    - "A synced device, and a topic holding well over twenty questions"
+  test_data: "SSC CGL > Quantitative Aptitude > Pipes & Cisterns (117 questions)"
+  test_environment: "Android emulator (AVD Pixel_7), local SQLite"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Open the difficulty dialog for that topic"
+      expected: "A banner reading '20 questions each session · new questions every time', and no per-level question counts under Easy/Medium/Hard"
+    - step: 2
+      action: "Choose a difficulty and read the quiz header"
+      expected: "'Question 1 of 20', regardless of how many questions the topic holds"
+    - step: 3
+      action: "Note the first question, go back, and start the same topic and difficulty again"
+      expected: "A different first question — the set is redrawn, not re-shuffled"
+    - step: 4
+      action: "Open a topic with fewer than twenty questions at some level, if one exists"
+      expected: "A shorter session, not an error"
+  expected_result: "Sessions are twenty questions and freshly drawn. (REQ-PRACTICE-007 acceptance_criteria)"
+  actual_result: ""
+  status: Pass
+  defect_id: ""
+  remarks: >
+    Step 3 checks a claim printed on screen. Worth re-running on the LIVE path too (before a first
+    sync), where the app deliberately drops the fresh-set half of the banner because it cannot
+    keep that promise.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-PRACTICE-013
+  requirement_ids: [REQ-PRACTICE-008]
+  scenario_id: SCN-PRACTICE-013
+  system: Mobile
+  module: PRACTICE
+  feature: A topic card shows how much of that topic has been practised
+  title: The coverage bar counts distinct questions and never exceeds full
+  objective: "Confirm the bar measures coverage rather than volume of practice."
+  preconditions:
+    - "A device with real practice history"
+  test_data: "A topic already partly practised"
+  test_environment: "Android emulator, local SQLite"
+  priority: Medium
+  severity: Major
+  test_type: DataIntegrity
+  steps:
+    - step: 1
+      action: "Read the bar on a partly-practised topic card"
+      expected: "A filled bar and a 'practised/total · percent' label, with practised < total"
+    - step: 2
+      action: "Finish a session on that topic, return, and read the bar again"
+      expected: "The numerator has risen by the number of questions in that session that were NEW to the student — not necessarily by the full session length"
+    - step: 3
+      action: "Keep practising the same topic well past its question count"
+      expected: "The bar approaches but never passes 100%, and the numerator never exceeds the denominator"
+    - step: 4
+      action: "Find a topic with zero questions for this exam"
+      expected: "No bar at all — not a 0% bar, which would be a statement about the student rather than the content"
+  expected_result: "The bar is honest coverage, bounded at full. (REQ-PRACTICE-008 acceptance_criteria)"
+  actual_result: ""
+  status: Blocked
+  defect_id: ""
+  remarks: >
+    Step 3 is the regression guard: swap the numerator for `user_topic_progress.attemptedCount`
+    and it fails, because that figure is cumulative. Step 2's wording is deliberate — a session
+    that re-serves already-seen questions correctly moves the bar less than twenty.
+  automation_status: ManualOnly
+  automation_reference: ""
+

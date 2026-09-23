@@ -1,0 +1,81 @@
+# PRACTICE module — defects
+#
+# A defect record is created ONLY when a real test execution fails (qa/execution/*.yaml records a
+# failure) and someone determines it represents a genuine product defect, not an environment issue
+# or a known deviation. Never fabricated ahead of a real execution.
+#
+# Both records below were found during the 2026-09-22 device pass for the Practice navigation
+# redesign, in code written the same day. Neither ever shipped, so neither has a released-version
+# field; both are recorded anyway because both are regressions a future change could reintroduce.
+#
+# DEF-PRACTICE-002 took three attempts, and this record said "Fixed" after the first one. Its
+# remarks now carry the full sequence, because how the first two fixes looked right is more
+# useful to the next person than the line that finally worked.
+
+- id: DEF-PRACTICE-001
+  title: "Tab-bar labels ellipsised (\"Ho...\", \"Practi...\") because Inter registered after first paint"
+  severity: Medium
+  status: Fixed
+  found_in_execution: EXEC-PRACTICE-0007
+  test_case_id: TC-PRACTICE-009
+  requirement_ids: [REQ-PRACTICE-005]
+  description: >
+    After Inter was applied app-wide, the first two bottom-tab labels rendered permanently
+    truncated as "Ho..." and "Practi..." while "Mock Test", "Exams" and "More" — all longer —
+    were fine. React Navigation's bottom tab bar measures each label once and sizes the item from
+    that measurement; the app rendered before the font faces were registered, so those items were
+    measured in the platform sans-serif and then re-rendered in the wider Inter Medium, keeping
+    the narrower measured width for the life of the process.
+  external_ref: null
+  remarks: >
+    THE SCREENSHOT WAS THE AUTHORITY, NOT THE ACCESSIBILITY TREE. A uiautomator dump reported the
+    full text "Home"/"Practice" with bounds that fit, which reads as a clean pass; the rendered
+    pixels showed the ellipsis persisting for seconds afterwards. This project's own notes already
+    warn that uiautomator can serve a stale or misleading tree, and this is another instance.
+    Fixed by gating the app's first render on `useFonts` in app/_layout.tsx, so no component can
+    measure text before the faces exist — the fix belongs there rather than in the tab bar because
+    any measure-once component has the same exposure. It costs nothing against this project's
+    "never block the app opening" rule: the faces are bundled assets loading in parallel with the
+    SQLite migration, which is slower and already gates. `fontError` deliberately releases the gate
+    rather than holding it, so a genuinely failed font can never trap a student on a loading screen.
+    THE FIX ALSO REVEALED A LARGER PROBLEM IT HAD BEEN MASKING: before the gate, Inter was only
+    PARTIALLY applying — the same Home screen re-rendered visibly wider and heavier afterwards, so
+    parts of the app had been silently falling back to the platform font. Remove the gate and both
+    symptoms return, the second one invisibly.
+
+- id: DEF-PRACTICE-002
+  title: "Difficulty sheet could not size to its own rows, so the last one was cut off by the tab bar"
+  severity: Medium
+  status: Fixed
+  found_in_execution: EXEC-PRACTICE-0004
+  test_case_id: TC-PRACTICE-005
+  requirement_ids: [REQ-PRACTICE-003]
+  description: >
+    On a device the difficulty sheet rendered too short for its own content: the last difficulty row
+    was sliced by the bottom tab bar and "All Levels" was not visible at all. Root cause: the rows
+    lived in a `ScrollView`, and a ScrollView reports NO intrinsic height, so the sheet — which
+    sizes to its content — could never size to the rows. Its height came out as the header plus
+    whatever the ScrollView happened to be handed, and `flexShrink: 1` on that list let it collapse
+    further. Measured on emulator-5554 (1080x2400, density 420): a sheet 370dp tall holding roughly
+    573dp of content, with uiautomator reporting "All Levels" at inverted bounds (y2332 -> y2201,
+    bottom above top) because it was clipped out entirely.
+  external_ref: null
+  remarks: >
+    ONLY A DEVICE COULD HAVE FOUND THIS, AND IT TOOK THREE PASSES — the first two fixes were wrong,
+    and this record originally claimed the first one had worked. Recorded plainly because the
+    sequence is the lesson:
+    (1) `overflow: "hidden"` + `flexShrink: 1` — stopped the list PAINTING outside the card, which
+    looked like a fix and was really just hiding the overflow; the rows were still unreachable.
+    (2) Replacing `maxHeight: "80%"` with a concrete dp value from `useWindowDimensions()` — a real
+    improvement (a percentage resolves against a `flex: 1` backdrop inside a Modal, which Yoga does
+    not reliably treat as definite) and it moved everything up ~95px, but the cap was never the
+    binding constraint, so "All Levels" stayed clipped.
+    (3) The actual fix: the rows are a plain `View`. A View reports a height, so the sheet grows to
+    fit them; the dp cap survives only as a guard rail against a pathological number of synced
+    levels. Verified by bounds rather than by eye — all four rows now at y1224/1450/1676/1901 with
+    valid, non-inverted bounds and ~48dp of clearance above the tab bar.
+    WHAT MISLED THE FIRST TWO ATTEMPTS: an early bounds dump happened to show four fitting rows, so
+    the layout looked correct. It was not reproducible, because the sheet's height depended on
+    whatever the ScrollView was handed on that measure pass. A layout that is right only sometimes
+    is not right, and a single passing measurement is not evidence when the value is nondeterministic.
+    Restore the ScrollView without giving it a definite height and all of this returns.
