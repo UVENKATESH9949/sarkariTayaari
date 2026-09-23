@@ -842,3 +842,428 @@
     to "you told us you study" and re-read from the live screen.
   automation_status: ManualOnly
   automation_reference: ""
+
+# --------------------------------------------------------------------------------------------
+# TASK-3501 — five learning purposes.
+# --------------------------------------------------------------------------------------------
+
+- id: TC-DAILYPLAN-024
+  requirement_ids: [REQ-DAILYPLAN-010]
+  scenario_id: SCN-DAILYPLAN-024
+  system: Backend
+  module: DAILYPLAN
+  feature: A day is built from five learning purposes, not two
+  title: Every task carries one of the five declared purposes, and never the old PRACTICE value
+  objective: >
+    Confirm a client can switch exhaustively on source, and that migration V52 genuinely removed the
+    ambiguous old value rather than leaving it in the wire format.
+  preconditions:
+    - "An exam with four mapped topics, each holding questions"
+    - "A signed-in student with a ONE_TO_TWO profile"
+  test_data: "Four topics at priority 80.00, one question each"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Read the daily plan"
+      expected: "Tasks are returned"
+    - step: 2
+      action: "Inspect every task's source"
+      expected: "Each is NEW_TOPIC, REVISION, WEAK_TOPIC, STRENGTHEN or MISTAKE_REVIEW"
+    - step: 3
+      action: "Check no task carries the pre-V52 value"
+      expected: "No task has source PRACTICE"
+    - step: 4
+      action: "Check every task's reason"
+      expected: "Non-blank - the mobile card renders it directly"
+  expected_result: "The five purposes are a closed vocabulary on the wire. (REQ-DAILYPLAN-010 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "The PRACTICE assertion is the regression guard for V52's relabel."
+  automation_status: Automated
+  automation_reference: "DailyPlanTest.everyTaskCarriesOneOfTheFiveDeclaredPurposes"
+
+- id: TC-DAILYPLAN-025
+  requirement_ids: [REQ-DAILYPLAN-010]
+  scenario_id: SCN-DAILYPLAN-025
+  system: Backend
+  module: DAILYPLAN
+  feature: A day is built from five learning purposes, not two
+  title: A practised topic moves off New Topics into a state-driven purpose
+  objective: >
+    Confirm the New Topics section really means "not yet covered" rather than "high priority", which
+    is the distinction the five-purpose split exists to make.
+  preconditions:
+    - "Three mapped topics; the highest-priority one has eight questions, the others three each"
+    - "Three real practice sessions on that topic across the last six days, mostly wrong"
+  test_data: "Sessions of 8 answers with 2, 2 and 3 correct, dated 6, 4 and 2 days ago"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Upload the three practice sessions"
+      expected: "Accepted"
+    - step: 2
+      action: "Read the daily plan and find tasks for the practised topic"
+      expected: "At least one task names it"
+    - step: 3
+      action: "Check those tasks' sources"
+      expected: "None is NEW_TOPIC; each is WEAK_TOPIC, STRENGTHEN, REVISION or MISTAKE_REVIEW"
+  expected_result: "Practised ground is never presented as new. (REQ-DAILYPLAN-010 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Asserts a set rather than one source on purpose - which state the health model lands on depends
+    on thresholds and confidence this test does not control.
+  automation_status: Automated
+  automation_reference: "DailyPlanTest.apractisedTopicIsNotOfferedAsNewGround"
+
+- id: TC-DAILYPLAN-026
+  requirement_ids: [REQ-DAILYPLAN-011]
+  scenario_id: SCN-DAILYPLAN-026
+  system: Backend
+  module: DAILYPLAN
+  feature: The number of new topics a day opens is explicitly capped by the time band
+  title: A 90-minute student receives at most two new topics
+  objective: >
+    Confirm acceptance criterion 1 directly, on a fixture where the previous time-only arithmetic
+    would have opened more.
+  preconditions:
+    - "Six mapped topics, all untouched, each holding questions"
+    - "A fresh account with a ONE_TO_TWO profile (90 budgeted minutes)"
+  test_data: "Six topics at descending priority 95.00 to 90.00, one question each"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Read the daily plan"
+      expected: "budget.minutes is 90"
+    - step: 2
+      action: "Count tasks with source NEW_TOPIC"
+      expected: "At least one, and no more than two"
+  expected_result: "A 90-minute user cannot receive more than 2 NEW TOPIC tasks. (REQ-DAILYPLAN-011 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Six eligible topics is deliberately more than the cap, so the cap is what binds."
+  automation_status: Automated
+  automation_reference: "DailyPlanTest.aNinetyMinuteDayOpensAtMostTwoNewTopics"
+
+- id: TC-DAILYPLAN-027
+  requirement_ids: [REQ-DAILYPLAN-011]
+  scenario_id: SCN-DAILYPLAN-027
+  system: Backend
+  module: DAILYPLAN
+  feature: The number of new topics a day opens is explicitly capped by the time band
+  title: The ladder holds at both ends - one new topic under an hour, three on a long day
+  objective: >
+    Confirm the maximum is configured per band rather than emerging from whatever time is left.
+  preconditions:
+    - "One fixture with five untouched topics and an UNDER_1H profile"
+    - "One fixture with eight untouched topics and a TWO_TO_FOUR profile"
+  test_data: "Descending priorities from 95.00, one question per topic"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Major
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "Read the plan for the UNDER_1H student"
+      expected: "budget.minutes 45, and exactly one NEW_TOPIC task"
+    - step: 2
+      action: "Read the plan for the TWO_TO_FOUR student"
+      expected: "budget.minutes 180, and no more than three NEW_TOPIC tasks"
+  expected_result: "New-topic count is explicitly controlled by time-band configuration. (REQ-DAILYPLAN-011 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "The full 30/45/60/90/120/180 table is asserted in service.DailyPlanAllocationTest."
+  automation_status: Automated
+  automation_reference: "DailyPlanTest.aShortDayOpensOnlyOneNewTopic, DailyPlanTest.aLongDayStillStopsAtThreeNewTopics"
+
+- id: TC-DAILYPLAN-028
+  requirement_ids: [REQ-DAILYPLAN-012]
+  scenario_id: SCN-DAILYPLAN-028
+  system: Backend
+  module: DAILYPLAN
+  feature: The day's minutes are divided between the purposes
+  title: The plan fits the budget and no purpose consumes the day
+  objective: >
+    Confirm the allocation genuinely bounds each purpose in a real plan, not only in the rule table.
+  preconditions:
+    - "Six mapped topics with questions, ONE_TO_TWO profile"
+  test_data: "Six topics at descending priority 90.00 to 85.00"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Read the daily plan"
+      expected: "Tasks are returned"
+    - step: 2
+      action: "Compare plannedMinutes with budget.minutes, when more than one task was assigned"
+      expected: "plannedMinutes is at or below the budget"
+    - step: 3
+      action: "Sum minutes per source"
+      expected: "No single source's total reaches the whole budget"
+  expected_result: "The total plan stays close to the daily time budget. (REQ-DAILYPLAN-012 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Step 2 is conditional because the documented fallback may overshoot to avoid an empty day."
+  automation_status: Automated
+  automation_reference: "DailyPlanTest.thePlanStaysInsideTheBudgetAndNoPurposeTakesItAll"
+
+- id: TC-DAILYPLAN-029
+  requirement_ids: [REQ-DAILYPLAN-012]
+  scenario_id: SCN-DAILYPLAN-029
+  system: Backend
+  module: DAILYPLAN
+  feature: A task that does not fit gets fewer questions
+  title: Allocation sums to the budget, and question counts trim to the allowance
+  objective: >
+    Confirm the split arithmetic and the trimming rule, against constructed inputs rather than
+    whatever the shared database happens to contain.
+  preconditions:
+    - "None - plain JUnit, no Spring context, no database"
+  test_data: >
+    Budgets of 1, 7, 30, 45, 60, 90, 120, 180, 300, 360 and 599 minutes; seconds-per-question of
+    17, 30, 45, 61, 75, 90 and 150 against allowances of 1 to 40 minutes
+  test_environment: "Plain JUnit"
+  priority: High
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Allocate a 90-minute day"
+      expected: "25 new, 20 revision, 20 weak, 15 strengthen, 10 mistake review"
+    - step: 2
+      action: "Allocate every other budget and sum the shares"
+      expected: "Exactly the budget, never more and never less"
+    - step: 3
+      action: "Fit 15 recommended questions into a 10-minute allowance at 75s each"
+      expected: "8 - trimmed, not skipped"
+    - step: 4
+      action: "Repeat at 150s each"
+      expected: "4 - a slower pace yields fewer questions for the same time"
+    - step: 5
+      action: "Cost every fitted count with WorkloadEstimator.minutes"
+      expected: "Never more than the allowance it was measured against"
+  expected_result: "Question count is not hardcoded from daily time, and the day cannot be overbooked. (REQ-DAILYPLAN-012 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Step 5 is the contract with the estimator's round-up: without it a day could exceed its budget
+    one rounding at a time.
+  automation_status: Automated
+  automation_reference: "service.DailyPlanAllocationTest"
+
+- id: TC-DAILYPLAN-030
+  requirement_ids: [REQ-DAILYPLAN-013]
+  scenario_id: SCN-DAILYPLAN-030
+  system: Backend
+  module: DAILYPLAN
+  feature: Mistake review is built from the student's real wrong answers
+  title: An all-wrong session yesterday produces a mistake-review task for that topic
+  objective: >
+    Confirm the purpose is driven by genuine INCORRECT rows rather than by a placeholder, and that
+    it never claims more mistakes than were made.
+  preconditions:
+    - "Two mapped topics; the second holds six questions"
+    - "A practice session on the second topic, all six answered wrongly, dated yesterday"
+  test_data: "Six questions, zero correct, completedAt yesterday; ONE_TO_TWO profile"
+  test_environment: "Backend against the real dev database"
+  priority: Medium
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Upload the all-wrong session"
+      expected: "Accepted"
+    - step: 2
+      action: "Read the daily plan and find tasks with source MISTAKE_REVIEW"
+      expected: "At least one"
+    - step: 3
+      action: "Check the task's topic and count"
+      expected: "It names the practised topic, with between 1 and 6 mistakes"
+    - step: 4
+      action: "Check its minutes, estimate tier and reason"
+      expected: "Positive minutes, a declared estimate tier, and a reason containing 'wrong in'"
+  expected_result: "Mistake review uses actual user mistakes where the data supports it. (REQ-DAILYPLAN-013 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    The server sends only topic and count - the question text, chosen answer and explanation are
+    already on the device, which is why no new content endpoint was needed.
+  automation_status: Automated
+  automation_reference: "DailyPlanTest.mistakeReviewComesFromRealWrongAnswers"
+
+- id: TC-DAILYPLAN-031
+  requirement_ids: [REQ-DAILYPLAN-010]
+  scenario_id: SCN-DAILYPLAN-024
+  system: Mobile
+  module: DAILYPLAN
+  feature: A day is built from five learning purposes, not two
+  title: Today's Plan shows five sections, each in its own colour, on a device
+  objective: >
+    Confirm the screen renders one section per purpose with matching jump pills, and that a
+    mistake-review card opens Revise's Wrong Answers tab rather than fresh practice.
+  preconditions:
+    - "A signed-in account whose plan contains more than one purpose"
+    - "Emulator emulator-5554, real dev backend"
+  test_data: "A real account with recent wrong answers and at least one untouched topic"
+  test_environment: "Android emulator against a real dev backend"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Open Today's Plan"
+      expected: "The purposes present each render a titled section, in the order New, Revision, Weak, Practice, Mistake Review"
+    - step: 2
+      action: "Check the jump-pill row"
+      expected: "One pill per purpose in a single horizontal row, each pill's colour matching its section, a zero-count purpose dimmed"
+    - step: 3
+      action: "Tap a pill"
+      expected: "The page scrolls to that section"
+    - step: 4
+      action: "Tap a task card in New Topics, Weak Topics or Practice"
+      expected: "Practice's levels screen opens for that task's topic"
+    - step: 5
+      action: "Tap a Mistake Review card"
+      expected: "Revise opens on the Wrong Answers tab"
+  expected_result: "The five purposes are legible and each leads somewhere real. (REQ-DAILYPLAN-010 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Not executed - the mobile half of this change has been typechecked and linted only. No automated
+    runner exists for mobile, so this stays ManualOnly until one does.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-DAILYPLAN-032
+  requirement_ids: [REQ-DAILYPLAN-014]
+  scenario_id: SCN-DAILYPLAN-031
+  system: Mobile
+  module: DAILYPLAN
+  feature: The device keeps a snapshot of the plan the server decided
+  title: Today's Plan opens instantly the second time, labelled as stored
+  objective: "Confirm stale-while-revalidate works and says so."
+  preconditions:
+    - "A signed-in account with an active exam"
+    - "A reachable backend"
+  test_data: "The signed-in test account on SSC CGL"
+  test_environment: "Android emulator (AVD Pixel_7) against a local backend and the real dev database"
+  priority: High
+  severity: Major
+  test_type: Performance
+  steps:
+    - step: 1
+      action: "Open Today's Plan for the first time after installing migration 0031"
+      expected: "The usual loading state, then the plan - there is no snapshot yet"
+    - step: 2
+      action: "Go back and open it again, looking at the screen within about two seconds"
+      expected: "The full plan is already rendered, with a note reading 'Saved plan, last updated HH:MM. Your progress below is counted on this device.'"
+    - step: 3
+      action: "Wait a few seconds without touching anything"
+      expected: "The note disappears - the background refresh landed and replaced the snapshot with live data"
+    - step: 4
+      action: "Switch to a second exam, then back"
+      expected: "Both exams open from their own snapshots; switching does not evict the other"
+  expected_result: "A stored plan renders immediately and is replaced by the server's answer. (REQ-DAILYPLAN-014 acceptance_criteria)"
+  actual_result: ""
+  status: Blocked
+  defect_id: ""
+  remarks: "Step 1 only reproduces on a device with no snapshot for today; clearing app data or signing out resets it."
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-DAILYPLAN-033
+  requirement_ids: [REQ-DAILYPLAN-014]
+  scenario_id: SCN-DAILYPLAN-032
+  system: Mobile
+  module: DAILYPLAN
+  feature: The device keeps a snapshot of the plan the server decided
+  title: The plan survives offline, and a failed refresh does not replace it with an error
+  objective: "Confirm the cache is useful exactly when the network is not."
+  preconditions:
+    - "A stored plan for today on the device"
+  test_data: "Airplane mode"
+  test_environment: "Android emulator"
+  priority: High
+  severity: Critical
+  test_type: Offline
+  steps:
+    - step: 1
+      action: "Enable airplane mode and open Today's Plan"
+      expected: "The full plan renders from the snapshot with the 'Saved plan' note - NOT the 'No plan right now' error this screen used to show"
+    - step: 2
+      action: "Stay on the screen while the background refresh fails"
+      expected: "The plan stays on screen; the failure is silent"
+    - step: 3
+      action: "Pull to refresh while still offline"
+      expected: "The plan is still there afterwards - a failed pull must not swap a usable plan for an error"
+    - step: 4
+      action: "Turn airplane mode off and pull to refresh"
+      expected: "Live data, and the 'Saved plan' note disappears"
+  expected_result: "Offline the student keeps a usable plan. (REQ-DAILYPLAN-014 error_conditions)"
+  actual_result: ""
+  status: Blocked
+  defect_id: ""
+  remarks: >
+    Step 3 is the regression guard. The obvious implementation replaces state on every refresh
+    result, which would blank a working plan the moment the network drops.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-DAILYPLAN-034
+  requirement_ids: [REQ-DAILYPLAN-015]
+  scenario_id: SCN-DAILYPLAN-033
+  system: Mobile
+  module: DAILYPLAN
+  feature: A stored plan shows progress counted on the device, not frozen figures
+  title: Answers given offline show up on a stored plan
+  objective: "Confirm progress is re-derived locally rather than replayed frozen from the snapshot."
+  preconditions:
+    - "A stored plan whose tasks include a topic with questions available offline"
+  test_data: "Any planned topic with local questions"
+  test_environment: "Android emulator, airplane mode"
+  priority: Medium
+  severity: Major
+  test_type: DataIntegrity
+  steps:
+    - step: 1
+      action: "Offline, note a task's answered count on the stored plan"
+      expected: "Whatever the device has recorded so far today"
+    - step: 2
+      action: "Practise that topic offline and answer several questions, then return to Today's Plan"
+      expected: "The task's answered count has risen - it is counted from this device, not replayed from the snapshot"
+    - step: 3
+      action: "Go back online and let the plan refresh"
+      expected: "The server's figures take over and do not contradict what was shown offline"
+    - step: 4
+      action: "Check the task's status chip across both states"
+      expected: "Unchanged - status is settled server-side and deliberately not re-derived locally"
+  expected_result: "Offline progress is real, and agrees with the server once it is reachable. (REQ-DAILYPLAN-015 acceptance_criteria)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Step 3 is the one that would catch a mismatched rule. The local derivation deliberately mirrors
+    TaskOutcomeService - practice AND mock, same window, same UNATTEMPTED/PENDING_REVIEW exclusion -
+    so a divergence here means the two implementations have drifted.
+  automation_status: ManualOnly
+  automation_reference: ""
+

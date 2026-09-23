@@ -448,3 +448,318 @@
   automation_hint: >
     No automated runner exists for mobile. The server half is covered by DailyPlanTest's profile
     cases; the screen needs a device pass.
+
+# ---------------------------------------------------------------------------------------------
+# TASK-3501 — the day becomes five learning purposes instead of two.
+#
+# The caveat to carry forward here: the 25/20/20/15/10 split and the 1/2/3 new-topic ladder are
+# product judgements, declared and versioned in code. No test below asserts they are the RIGHT
+# numbers, and none could.
+# ---------------------------------------------------------------------------------------------
+
+- id: REQ-DAILYPLAN-010
+  feature: A day is built from five learning purposes, not two
+  module: DAILYPLAN
+  system: [Backend, Mobile]
+  source_doc: api/DAILY-PLAN.md
+  source_section: "The five purposes a day is built from"
+  description: >
+    Every task carries a source naming its learning purpose: NEW_TOPIC (ground not yet covered),
+    REVISION (work done and fading), WEAK_TOPIC (currently struggling), STRENGTHEN (encountered but
+    not yet strong) or MISTAKE_REVIEW (questions previously answered wrongly). The mobile screen
+    renders one section per purpose.
+  business_rule: >
+    No purpose has a ranking of its own. Revision comes from RevisionPlanService's due list, weak
+    and strengthening topics are walked in WeaknessRadarService's existing order (NEEDS_ATTENTION
+    then NEEDS_REVISION; IMPROVING then DEVELOPING), new ground comes from StudyRoadmapService's
+    priority-and-interleave order, and every question count is still the radar's own recommendation
+    sized by WorkloadEstimator. STRONG topics are never selected, so maintaining a reliable topic
+    cannot take time a developing one needs. No AI or LLM is involved at any point.
+  actor: Signed-in student
+  preconditions:
+    - "An exam with a topic map and practicable questions"
+  inputs:
+    - "GET /api/me/daily-plan?examCode=&zone="
+  expected_outputs:
+    - "Tasks whose source is one of the five declared values"
+  validations:
+    - "No task carries a source outside the five"
+    - "The pre-TASK-3501 value PRACTICE never appears - V52 relabelled it to NEW_TOPIC"
+    - "A topic the student has practised is not offered as new ground"
+  permissions:
+    - "User token required; the plan is scoped to the calling student"
+  dependencies: [REQ-DAILYPLAN-003, REQ-ROADMAP-001, REQ-REVISION-001]
+  error_conditions: []
+  edge_conditions:
+    - >
+      A topic selected for one of the four fresh-practice purposes is excluded from the others, so a
+      weak topic that is also revision-due becomes a REVISION task rather than appearing twice.
+      MISTAKE_REVIEW stands outside that rule deliberately - it assigns no question set, and
+      excluding it would make the purpose unreachable for exactly the students who have mistakes.
+  offline_behavior: "None - the plan is server-generated and stored; there is no local fallback."
+  acceptance_criteria:
+    - "A day can contain all five purposes"
+    - "Existing exam-priority, prerequisite, difficulty and performance logic is unchanged"
+  priority: High
+  status: Active
+  ambiguity: >
+    Which of WEAK_TOPIC, STRENGTHEN or REVISION a struggling topic lands in depends on health
+    thresholds and on whether it is revision-due, so it is not fixed per topic.
+  automation_status: Automated
+  automation_hint: >
+    DailyPlanTest.everyTaskCarriesOneOfTheFiveDeclaredPurposes and
+    DailyPlanTest.apractisedTopicIsNotOfferedAsNewGround.
+
+- id: REQ-DAILYPLAN-011
+  feature: The number of new topics a day opens is explicitly capped by the time band
+  module: DAILYPLAN
+  system: [Backend]
+  source_doc: api/DAILY-PLAN.md
+  source_section: "New topics have an explicit maximum"
+  description: >
+    A day opens at most 1 new topic at or below 45 budgeted minutes, at most 2 up to 120, and at
+    most 3 above that. These are maximums: a day with fewer eligible topics assigns fewer.
+  business_rule: >
+    The count must not emerge only from dividing the budget by an estimated question duration. A
+    fast solver on a long day would otherwise be handed six unfamiliar topics at once, which is a
+    worse day than three done properly - a judgement about learning rather than arithmetic, so it is
+    stated. Keyed on resolved budget MINUTES rather than on the band name, which is what also gives
+    the 60-minute DEFAULT a defined answer.
+  actor: Signed-in student
+  preconditions:
+    - "More eligible new topics than the cap allows"
+  inputs:
+    - "A preparation profile naming a study-time band, or none at all"
+  expected_outputs:
+    - "No more NEW_TOPIC tasks than the band's maximum"
+  validations:
+    - "45 minutes yields exactly 1; 90 yields at most 2; 180 yields at most 3"
+    - "An enormous budget still stops at 3"
+  permissions:
+    - "User token required"
+  dependencies: [REQ-DAILYPLAN-003]
+  error_conditions: []
+  edge_conditions:
+    - "Question counts inside a selected topic still come from measured pace, not from the cap"
+  offline_behavior: "None - server-computed"
+  acceptance_criteria:
+    - "A 90-minute student cannot receive more than 2 NEW_TOPIC tasks"
+    - "The maximum is configuration, not a side effect of time arithmetic"
+  priority: High
+  status: Active
+  ambiguity: >
+    Whether 1/2/3 are the right maximums is unmeasured - nobody has checked how many new topics a
+    student can absorb in a sitting.
+  automation_status: Automated
+  automation_hint: >
+    service.DailyPlanAllocationTest.theNewTopicMaximumFollowsTheStatedTimeBands and
+    .anEnormousBudgetStillOpensAtMostThreeNewTopics; DailyPlanTest.aNinetyMinuteDayOpensAtMostTwoNewTopics,
+    .aShortDayOpensOnlyOneNewTopic and .aLongDayStillStopsAtThreeNewTopics.
+
+- id: REQ-DAILYPLAN-012
+  feature: The day's minutes are divided between the purposes, and a task that does not fit gets fewer questions
+  module: DAILYPLAN
+  system: [Backend]
+  source_doc: api/DAILY-PLAN.md
+  source_section: "How the day's minutes are divided"
+  description: >
+    Each purpose receives a target share of the budget - 25/20/20/15/10 minutes at a 90-minute
+    reference, scaled for any other budget and always summing to exactly the budget. A purpose may
+    under-spend, leaving its remainder to later purposes, but never over-spend.
+  business_rule: >
+    Question counts are never a fixed number derived from the daily time. The radar's own 10/15
+    recommendation is the ceiling and the remaining allowance is the floor: a set that does not fit
+    is trimmed to what does, and only a topic that cannot fit even one question is passed over.
+    WorkloadEstimator remains the sole source of how long a question takes, walking its existing
+    personal then cohort-topic then cohort-difficulty then default ladder. This supersedes the
+    previous half-the-budget revision cap, which was a second, looser rule for the same decision.
+  actor: Signed-in student
+  preconditions:
+    - "Eligible topics in more than one purpose"
+  inputs:
+    - "A resolved time budget"
+  expected_outputs:
+    - "plannedMinutes at or below budget.minutes, with no purpose taking the whole day"
+  validations:
+    - "The five shares sum to exactly the budget at every band"
+    - "A slower measured pace yields fewer questions for the same allowance"
+    - "A fitted count never costs more minutes than its allowance"
+  permissions:
+    - "User token required"
+  dependencies: [REQ-DAILYPLAN-003, REQ-ROADMAP-002]
+  error_conditions: []
+  edge_conditions:
+    - >
+      If nothing fits at all, one task is still assigned and plannedMinutes exceeds the budget
+      honestly - an empty day is worse than a slightly long one. This is the only case where the
+      total may exceed the budget.
+  offline_behavior: "None - server-computed"
+  acceptance_criteria:
+    - "The total plan stays close to the student's daily time budget"
+    - "Question count is not globally hardcoded from the daily time"
+  priority: High
+  status: Active
+  ambiguity: >
+    The 25/20/20/15/10 split is a declared product judgement. Nothing measures whether it is the
+    right balance.
+  automation_status: Automated
+  automation_hint: >
+    service.DailyPlanAllocationTest.aNinetyMinuteDayIsSplitAsSpecified, .theSharesAlwaysSumToTheBudget,
+    .aRecommendationThatDoesNotFitIsTrimmedRatherThanDropped, .aFittedCountNeverCostsMoreThanItsAllowance;
+    DailyPlanTest.thePlanStaysInsideTheBudgetAndNoPurposeTakesItAll.
+
+- id: REQ-DAILYPLAN-013
+  feature: Mistake review is built from the student's real wrong answers
+  module: DAILYPLAN
+  system: [Backend, Mobile]
+  source_doc: api/DAILY-PLAN.md
+  source_section: "What Mistake Review does and does not know"
+  description: >
+    A MISTAKE_REVIEW task names a topic on which the student has genuinely answered questions
+    wrongly in the last 14 days, and how many are worth re-reading. Tapping it opens Revise's Wrong
+    Answers tab, which already shows each question with the answer chosen, the correct answer and
+    the explanation.
+  business_rule: >
+    Built from outcome = INCORRECT over rows that already exist, grouped by the topic_id V47 froze
+    onto every attempt - so a question retagged since cannot silently change what a past mistake
+    looks like. UNATTEMPTED and PENDING_REVIEW are excluded: running out of time on a timed paper is
+    a clock problem, not a mistake. The question text, chosen answer, correct answer and explanation
+    are deliberately NOT sent - the client already holds all four for every wrong answer it has
+    recorded, and a second copy would be two sources of truth for the same content.
+  actor: Signed-in student
+  preconditions:
+    - "Wrong answers recorded within the last 14 days on a topic in this exam's map"
+  inputs:
+    - "GET /api/me/daily-plan"
+  expected_outputs:
+    - "A MISTAKE_REVIEW task naming that topic, with a count no larger than the mistakes made"
+  validations:
+    - "Ordered most recent first, then most numerous"
+    - "A topic outside this exam's map is not offered, however many mistakes it holds"
+    - "The count never exceeds the number of mistakes actually made"
+  permissions:
+    - "User token required; only the calling student's own attempts are counted"
+  dependencies: [REQ-USERPROGRESS-001, REQ-ANALYTICS-001]
+  error_conditions: []
+  edge_conditions:
+    - "A student with no recent mistakes simply has no such task - the purpose is absent, not empty"
+  offline_behavior: >
+    The task itself needs the server, but the content it points at is already on the device - Revise
+    reads local session history, so the review works offline once the plan has been read.
+  acceptance_criteria:
+    - "Mistake review uses actual user mistakes where the data supports it"
+    - "It consumes a small share of the day rather than dominating it"
+  priority: Medium
+  status: Active
+  ambiguity: >
+    Review time is estimated as solving time. Re-reading a question with its explanation is probably
+    not the same work, but this app has never measured review time and a separate constant would be
+    invented. Settlement also judges these tasks by topic activity, since there is no per-question
+    reviewed signal.
+  automation_status: Automated
+  automation_hint: "DailyPlanTest.mistakeReviewComesFromRealWrongAnswers"
+
+- id: REQ-DAILYPLAN-014
+  feature: The device keeps a snapshot of the plan the server decided
+  module: DAILYPLAN
+  system: [Mobile]
+  source_doc: reports/42-daily-plan-snapshot-cache/daily-plan-snapshot-cache.md
+  source_section: "The policy"
+  description: >
+    After a successful read of GET /api/me/daily-plan the response is stored verbatim in the local
+    `remote_snapshots` table (migration 0031), keyed by user, exam, plan date and zone. Opening
+    Today's Plan renders any stored snapshot immediately and refreshes in the background;
+    a screen showing a snapshot says so and gives the time it was taken.
+  business_rule: >
+    THE DEVICE NEVER COMPUTES A PLAN. It stores and displays one the server decided. Re-deriving
+    the allocation on the device is the drift D5.1 exists to prevent, and nothing in this feature
+    may cross that line. A snapshot is never a source of truth; the server's answer always wins
+    when the server answers.
+  actor: Signed-in student
+  preconditions:
+    - "One successful daily-plan fetch has happened on this device"
+  inputs:
+    - "Opening Today's Plan"
+  expected_outputs:
+    - "A stored plan renders without waiting on the network"
+    - "A background refresh replaces it with the server's answer when one arrives"
+    - "The snapshot state is labelled, with the time it was taken"
+  validations:
+    - "The key includes the user id, so another account cannot see this plan"
+    - "The key includes plan date and zone, so yesterday's snapshot can never render as today's"
+    - "Sign-out clears snapshots"
+  permissions:
+    - "Signed-in only, exactly as the endpoint itself is"
+  dependencies: [REQ-DAILYPLAN-001]
+  error_conditions:
+    - >
+      A FAILED BACKGROUND REFRESH MUST NOT REPLACE A USABLE PLAN WITH AN ERROR. Offline, the
+      student keeps the stored plan; swapping it for an error screen would make the cache
+      actively harmful.
+  edge_conditions:
+    - >
+      Offline on a NEW day there is no snapshot for that date, so the screen reports it cannot
+      build one and no plan is generated server-side. That is the correct record - the student
+      genuinely was not assigned a day - and Phase 6 settlement reads study_tasks, so the absence
+      does not confuse it.
+    - "Switching exam must not evict the other exam's snapshot; both are keyed separately"
+  offline_behavior: "The whole point: a stored plan is readable and usable with no connection"
+  acceptance_criteria:
+    - "A second open of Today's Plan shows the plan without a loading state"
+    - "Offline, a stored plan still renders, labelled"
+    - "A failed refresh leaves the stored plan on screen"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "No mobile runner. snapshotStore.ts is a thin, pure read/write layer and would be the first thing testable."
+
+- id: REQ-DAILYPLAN-015
+  feature: A stored plan shows progress counted on the device, not frozen figures
+  module: DAILYPLAN
+  system: [Mobile]
+  source_doc: reports/42-daily-plan-snapshot-cache/daily-plan-snapshot-cache.md
+  source_section: "Definition and progress are cached differently"
+  description: >
+    A task's `answeredToday` and `accuracyToday` are server-computed from real attempts. When a
+    plan is rendered from a snapshot those figures are RE-DERIVED from the device's own practice
+    and mock history rather than replayed from the stored JSON.
+  business_rule: >
+    Cache the progress verbatim and a student who answered twelve questions offline still reads
+    "0 of 15", which looks like their work was lost. The local derivation mirrors
+    TaskOutcomeService.observedOn exactly - practice AND mock, the same day window, the same
+    exclusion of UNATTEMPTED and PENDING_REVIEW - so the same task cannot read one way online and
+    another offline. `status` is deliberately NOT re-derived: settlement applies a threshold that
+    belongs in one place.
+  actor: Signed-in student
+  preconditions:
+    - "A stored plan, and practice history for one of its topics today"
+  inputs:
+    - "Answering questions on a planned topic"
+  expected_outputs:
+    - "The answered count on a stored plan reflects what this device has recorded today"
+  validations:
+    - "A fresh server response is never overwritten by the local derivation"
+    - "status is left as the server last reported it"
+  permissions:
+    - "None beyond being signed in"
+  dependencies: [REQ-DAILYPLAN-014]
+  error_conditions:
+    - "A failed local derivation costs the overlay only; the plan still renders"
+  edge_conditions:
+    - >
+      TWO KNOWN DIVERGENCES FROM THE SERVER, both stated in the code. The server reads topic_id
+      frozen onto each result row at upload (V47); local rows carry no topic, so this joins
+      questions live and a retagged question moves here and not there. And a null local `outcome`
+      is counted, which is right for practice rows (a row exists only if answered) and harmless
+      for mock rows (genuinely unattempted ones carry a real UNATTEMPTED outcome).
+  offline_behavior: "This is the offline path; it reads only local tables"
+  acceptance_criteria:
+    - "Progress on a stored plan reflects work done on this device"
+    - "Online figures and offline figures do not contradict each other for the same task"
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "getTopicActivityForDay is a pure query, testable against a seeded local database."
+

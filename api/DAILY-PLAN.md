@@ -50,7 +50,7 @@ ranking** — a third opinion about what matters is the drift this program spent
   "tasks": [
     {
       "taskId": "…", "displayOrder": 0,
-      "source": "REVISION",           // or PRACTICE
+      "source": "REVISION",           // one of the five purposes below
       "action": "TIMED_PRACTICE",
       "topicId": "…", "topicName": "Percentages",
       "subjectId": "…", "subjectName": "Quantitative Aptitude",
@@ -88,14 +88,91 @@ Reporting `dailyStudyTime` beside `minutes` is what makes that visible: a studen
 hours" and sees a 90-minute plan can see where 90 came from. Whether the mid-points are *right* is
 unmeasured — nobody has checked what a student who says "1–2 hours" actually does.
 
-## How a day is filled
+## The five purposes a day is built from
 
-1. **Revision that is due**, in the revision plan's order (most overdue first), capped at **half the
-   budget**. A topic already learned and now fading is cheaper to recover than a new one is to
-   build — but revision never takes the whole day, or a student with a long backlog never moves
-   forward. The cap is a judgement, named as a constant.
-2. **New ground**, in the roadmap's order — already priority-ranked and already balanced across
-   subjects.
+`source` says which learning purpose a task serves. All five are selected from state that already
+existed — no purpose has a ranking of its own:
+
+| `source` | Purpose | Which topics | Whose recommendation |
+|---|---|---|---|
+| `REVISION` | work done and now fading | [`REVISION-PLAN.md`](REVISION-PLAN.md)'s `DUE` list, most overdue first | its own `retest` |
+| `WEAK_TOPIC` | currently struggling | the radar's order — `NEEDS_ATTENTION`, then `NEEDS_REVISION` | [`WEAKNESS-RADAR.md`](WEAKNESS-RADAR.md)'s action steps |
+| `NEW_TOPIC` | ground not yet covered | the roadmap's order, filtered to `NOT_STARTED` / never-measured | [`STUDY-ROADMAP.md`](STUDY-ROADMAP.md)'s steps |
+| `STRENGTHEN` | encountered, not yet strong | the radar's order — `IMPROVING`, then `DEVELOPING` | the radar's action steps |
+| `MISTAKE_REVIEW` | questions actually got wrong | topics with real wrong answers in the last 14 days | the count of mistakes itself |
+
+> ⚠️ **`NEW_TOPIC` was called `PRACTICE`** before this change. Migration **V52** relabelled every
+> stored row, because the new fifth purpose genuinely *is* practice-for-strengthening and one value
+> meaning two different things depending on the day it was written is the one thing a historical
+> record must not do. Every old `PRACTICE` row really was a new-ground task, so the relabel
+> preserves its meaning rather than rewriting it.
+
+**`STRONG` topics are never selected.** Keeping a reliable topic reliable must not take time a
+developing one needs.
+
+**A `MISTAKE_REVIEW` task reports `action: "REVISION"`** — the closest existing value, so the radar's
+own action vocabulary did not have to grow a value it never produces. `source` is what carries the
+distinction.
+
+## How the day's minutes are divided
+
+Each purpose gets a target share. At the 90-minute reference:
+
+| Purpose | Target | Share |
+|---|---|---|
+| `NEW_TOPIC` | 25 min | 27.8% |
+| `REVISION` | 20 min | 22.2% |
+| `WEAK_TOPIC` | 20 min | 22.2% |
+| `STRENGTHEN` | 15 min | 16.7% |
+| `MISTAKE_REVIEW` | 10 min | 11.1% |
+
+Any other budget scales from that reference, and the shares always sum to exactly `budget.minutes`.
+Two rules follow:
+
+- **A purpose may under-spend but never over-spend.** Its unspent minutes are available to whatever
+  is filled after it — which is how a day still fills when one purpose has nothing eligible — but no
+  purpose can take the whole day.
+- **A task that does not fit gets fewer questions, not skipped.** The radar's own 10/15-question
+  recommendation is the ceiling and the remaining allowance is the floor; only a topic that cannot
+  fit even one question is passed over.
+
+This **supersedes** the old half-the-budget revision cap, which was a second, looser rule for the
+same decision.
+
+### New topics have an explicit maximum
+
+Question counts still come from measured pace, but the **number of new topics** does not: it is
+capped outright, because six unfamiliar topics in one sitting is a worse day than two done properly.
+That is a judgement about learning, not arithmetic, so it is stated rather than derived from
+dividing the budget by an estimated question duration.
+
+| Budget | Max new topics |
+|---|---|
+| ≤ 45 min | 1 |
+| 46–120 min | 2 |
+| > 120 min | 3 |
+
+Keyed on the **resolved budget minutes**, not on the band name — that is what also gives the
+60-minute `DEFAULT` a defined answer.
+
+### One purpose per topic per day
+
+A topic selected for one of the four **fresh-practice** purposes is excluded from the others.
+Because revision is filled first, a weak topic that also happens to be revision-due becomes a
+`REVISION` task rather than appearing twice under two headings.
+
+**`MISTAKE_REVIEW` stands outside that rule, on purpose.** It assigns no question set — it points at
+questions already answered wrongly, to be re-read with their explanations — so it is not competing
+for the topic's practice time. Excluding it would also have made the feature almost unreachable:
+a topic with recent mistakes is by definition one the student has been practising, which is exactly
+what weak-topic or strengthening selection claims first. So the same topic can legitimately appear
+once under Weak Topics and once under Mistake Review, which is the natural pairing rather than
+duplication.
+
+### Fill order
+
+`REVISION` → `WEAK_TOPIC` → `NEW_TOPIC` → `STRENGTHEN` → `MISTAKE_REVIEW`. This is both the priority
+order and what the exclusion set resolves ties with.
 
 **One step per topic, not a topic's whole ladder.** A recommendation like "10 foundational, then 15
 medium, then 10 PYQ" spans days; putting all of it in one day would blow the budget and misrepresent
@@ -108,6 +185,23 @@ a plan stops meaning anything.
 **If nothing fits, one task is assigned anyway** — a student with 45 minutes whose smallest available
 piece of work is 50 gets that piece, and `plannedMinutes` exceeds `budget.minutes` honestly rather
 than the overshoot being hidden. An empty day is worse than a slightly long one.
+
+### What Mistake Review does and does not know
+
+The server knows **which** questions were answered wrongly, **when**, and **on which topic** —
+`outcome` plus the `topic_id` frozen onto every attempt row by V47. It deliberately does not send the
+question text, the chosen answer, the correct answer or the explanation: the client already holds all
+four for every wrong answer it has recorded, and Revise's Wrong Answers tab already renders them. A
+second copy over the wire would be two sources of truth for the same content.
+
+**Two limits, stated rather than left to be discovered:**
+
+1. **Review time is estimated as solving time.** Re-reading a question and its explanation is
+   probably not the same work as solving a fresh one, but this app has never measured review time,
+   and inventing a separate constant for it would be a fabricated figure.
+2. **Settlement judges it by topic activity**, like every other task — there is no per-question
+   "reviewed" signal, so a mistake-review task settles on whether the student answered questions on
+   that topic that day.
 
 ## A day is planned once
 

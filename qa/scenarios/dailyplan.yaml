@@ -256,3 +256,132 @@
   systems: [Mobile]
   status: Ready
   notes: "Beside a band the student did choose, the prompt would be noise."
+
+# --------------------------------------------------------------------------------------------
+# TASK-3501 — five learning purposes. Nothing here asserts the 25/20/20/15/10 split or the
+# 1/2/3 new-topic ladder are the right numbers; they are declared product judgements.
+# --------------------------------------------------------------------------------------------
+
+- id: SCN-DAILYPLAN-024
+  requirement_ids: [REQ-DAILYPLAN-010]
+  category: Functional
+  title: Every task carries one of the five declared purposes
+  objective: >
+    Verify the payload's source is always one of NEW_TOPIC, REVISION, WEAK_TOPIC, STRENGTHEN or
+    MISTAKE_REVIEW, and that the pre-V52 value PRACTICE never appears - a client switching on the
+    five would silently drop anything still carrying it.
+  systems: [Backend]
+  status: Ready
+  notes: "Also checks every task has a stored reason, which the mobile card renders."
+
+- id: SCN-DAILYPLAN-025
+  requirement_ids: [REQ-DAILYPLAN-010]
+  category: Functional
+  title: A topic the student has practised is not offered as new ground
+  objective: >
+    Verify that once a topic has real attempts behind it, it moves to a state-driven purpose
+    (weak, strengthening or revision) instead of being presented as something not yet started.
+  systems: [Backend]
+  status: Ready
+  notes: >
+    Deliberately asserts membership of a set rather than one exact source - which of the three a
+    topic lands in depends on health thresholds the test does not control, and this project has
+    already been bitten once by asserting a tier against uncontrolled database contents.
+
+- id: SCN-DAILYPLAN-026
+  requirement_ids: [REQ-DAILYPLAN-011]
+  category: Functional
+  title: A 90-minute day opens at most two new topics
+  objective: >
+    Verify the headline cap holds with six eligible untouched topics available - the case where the
+    old "budget divided by question duration" behaviour would have opened four or five.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-DAILYPLAN-027
+  requirement_ids: [REQ-DAILYPLAN-011]
+  category: Boundary
+  title: The short and long ends of the new-topic ladder
+  objective: >
+    Verify 45 budgeted minutes opens exactly one new topic and 180 opens no more than three, so the
+    cap is a configured ladder rather than an artefact of how much time happens to be left.
+  systems: [Backend]
+  status: Ready
+  notes: "The 30/45/60/90/120/180 table itself is asserted in the plain-JUnit rule test."
+
+- id: SCN-DAILYPLAN-028
+  requirement_ids: [REQ-DAILYPLAN-012]
+  category: Functional
+  title: The plan stays inside the budget and no purpose takes it all
+  objective: >
+    Verify plannedMinutes does not exceed budget.minutes when more than one task was assigned, and
+    that no single purpose spends the whole day.
+  systems: [Backend]
+  status: Ready
+  notes: >
+    Conditional on more than one task, because the documented last-resort fallback deliberately
+    overshoots rather than returning an empty day.
+
+- id: SCN-DAILYPLAN-029
+  requirement_ids: [REQ-DAILYPLAN-012]
+  category: Functional
+  title: Question counts are trimmed to the allowance rather than dropped or fixed
+  objective: >
+    Verify the allocation shares sum to the budget at every band, that a recommendation too large
+    for its allowance is trimmed instead of skipped, and that a slower measured pace yields fewer
+    questions for the same time - the rule that keeps question count dependent on real solving
+    speed rather than on a per-band constant.
+  systems: [Backend]
+  status: Ready
+  notes: "Plain-JUnit decision table; no database involved, so no uncontrolled inputs."
+
+- id: SCN-DAILYPLAN-030
+  requirement_ids: [REQ-DAILYPLAN-013]
+  category: Functional
+  title: Mistake review comes from real wrong answers
+  objective: >
+    Verify that after a genuinely all-wrong practice session, the plan carries a MISTAKE_REVIEW task
+    naming that topic, with a count no larger than the mistakes actually made and minutes sized by
+    the existing estimator.
+  systems: [Backend]
+  status: Ready
+  notes: "Uses a session dated yesterday, inside the 14-day window and on a closed day."
+
+- id: SCN-DAILYPLAN-031
+  requirement_ids: [REQ-DAILYPLAN-014]
+  category: Performance
+  title: A second open renders the stored plan without a loading state
+  objective: >
+    Verify stale-while-revalidate: the plan appears immediately from the snapshot, is labelled as
+    stored, and the label clears once the background refresh lands.
+  systems: [Mobile]
+  status: Ready
+  notes: >
+    The measurable claim. Before the cache this screen showed "Working out your day..." for
+    roughly 2-3 seconds on a re-read and ~17 seconds on the first read of a new day.
+
+- id: SCN-DAILYPLAN-032
+  requirement_ids: [REQ-DAILYPLAN-014]
+  category: Offline
+  title: A stored plan survives having no connection, and a failed refresh does not destroy it
+  objective: >
+    Verify the plan still renders offline, and that the failing background refresh leaves it on
+    screen rather than replacing it with an error.
+  systems: [Mobile]
+  status: Ready
+  notes: >
+    The second half is the one worth guarding. A cache that turns into an error screen the moment
+    the network drops is worse than no cache, because the student had something usable and lost it.
+
+- id: SCN-DAILYPLAN-033
+  requirement_ids: [REQ-DAILYPLAN-015]
+  category: DataIntegrity
+  title: A stored plan counts today's answers from this device
+  objective: >
+    Verify per-task progress on a snapshot is re-derived locally rather than replayed frozen, and
+    that it does not contradict what the server reports for the same task.
+  systems: [Mobile]
+  status: Ready
+  notes: "Guards against the obvious simplification of caching the response wholesale."
+

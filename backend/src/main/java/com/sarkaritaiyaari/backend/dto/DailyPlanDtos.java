@@ -63,9 +63,18 @@ public final class DailyPlanDtos {
     }
 
     /**
-     * @param source      {@code REVISION} (from the revision plan — work done and fading) or
-     *                    {@code PRACTICE} (from the roadmap — work not yet done)
-     * @param action      the {@code RecommendedAction} this resolves to
+     * @param source      which learning purpose this task serves — one of {@code NEW_TOPIC} (ground
+     *                    not yet covered, from the roadmap), {@code REVISION} (work done and fading,
+     *                    from the revision plan), {@code WEAK_TOPIC} (currently struggling, from the
+     *                    radar), {@code STRENGTHEN} (encountered but not yet strong) or
+     *                    {@code MISTAKE_REVIEW} (specific questions previously answered wrongly).
+     *                    <b>{@code NEW_TOPIC} was called {@code PRACTICE} before TASK-3501</b>;
+     *                    migration V52 relabelled the stored rows rather than let one value mean
+     *                    two different things depending on the day it was written
+     * @param action      the {@code RecommendedAction} this resolves to. A {@code MISTAKE_REVIEW}
+     *                    task reports {@code REVISION} — the closest existing value, chosen so the
+     *                    radar's own action vocabulary did not have to grow a value it never
+     *                    produces; {@code source} is what distinguishes the purpose
      * @param estimate    which tier of the workload ladder produced {@code plannedMinutes}, carried
      *                    through unchanged so a task is as honest about its numbers as the roadmap
      *                    that produced it

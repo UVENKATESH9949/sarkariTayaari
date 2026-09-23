@@ -1,0 +1,172 @@
+# DAILYPLAN — execution records, 2026-09-22 (TASK-3501, the five learning purposes)
+#
+# One run, one Maven invocation, against the real Neon dev database (PostgreSQL 18.6):
+# `mvn -f backend/pom.xml test -Dtest=DailyPlanTest,AdaptiveReplanningTest,DailyPlanAllocationTest,
+#  TaskOutcomeRuleTest,WorkloadEstimatorTest,RevisionLadderTest`
+# — 52 tests, 0 failures, 0 errors, BUILD SUCCESS, 28:50 min total.
+#
+#   DailyPlanTest            17/17   1252 s    (9 pre-existing + 8 new)
+#   AdaptiveReplanningTest    5/5     465.1 s  (regression — Phase 6 reads study_tasks.source)
+#   DailyPlanAllocationTest  12/12      0.031 s  (plain JUnit, no Spring, no database)
+#   TaskOutcomeRuleTest       6/6       0.028 s
+#   WorkloadEstimatorTest     6/6       0.033 s
+#   RevisionLadderTest        6/6       0.036 s
+#
+# Flyway validated all 52 migrations at context startup, which independently re-confirms V52 is
+# applied to this database with a matching checksum (it had been applied on 2026-09-21, v51 -> v52
+# in 1.587s).
+#
+# THE REGRESSION WAS THE POINT OF INCLUDING AdaptiveReplanningTest. Phase 6 settles a closed day by
+# reading study_tasks rows whose `source` V52 relabelled (PRACTICE -> NEW_TOPIC) and to which this
+# change adds three further values. Its 5/5 is the evidence that settlement did not regress.
+#
+# THE ALLOCATION RULES WERE PROVEN BEFORE ANY DATABASE WAS INVOLVED, deliberately — the same order
+# that made Phase 6 pass on its first real run, and the opposite of the Phase 4 mistake of asserting
+# a tier against uncontrolled database contents. DailyPlanAllocationTest needs no Spring context and
+# runs in 31 milliseconds, so every band and every share was already settled against counts the test
+# itself controls before a single integration fixture existed.
+#
+# AN EARLIER ATTEMPT AT THIS RUN WAS KILLED DELIBERATELY on 2026-09-21 at ~15:00 so the machine could
+# be shut down. It produced no surefire report and is not recorded as a failure, because it tested
+# nothing. It did leave one partial fixture behind (exam PLAN_NEWMAX_3EBBFD76, its subject, six
+# topics, six exam_topics rows and two questions, all named for run id 3ebbfd76) — its @AfterEach
+# never ran. NO ORPHANED ACCOUNTS SURVIVED, which was the more likely worry and turned out not to
+# have happened; verified by direct read-only query, not assumed. The exam is is_active = false, so
+# it was never reachable by a student.
+#
+# TC-DAILYPLAN-031 (the five sections on a real device) is ManualOnly and remains Not Executed. It
+# is deliberately absent from this file rather than recorded as a pass.
+
+- execution_id: EXEC-DAILYPLAN-0025
+  test_case_id: TC-DAILYPLAN-024
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ a7266af + uncommitted TASK-3501 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-22T13:15:00+05:30"
+  actual_result: >
+    Every task in a generated plan carried a source drawn from the five declared values, and no task
+    carried the retired PRACTICE value. The assertion is membership of the declared set rather than
+    an exact per-purpose count, because which purposes a fixture student qualifies for depends on
+    health state the test does not fully control.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for DailyPlanTest.everyTaskCarriesOneOfTheFiveDeclaredPurposes"
+  remarks: >
+    This is the case that would fail first if V52's relabel were reverted or if a code path still
+    wrote PRACTICE.
+
+- execution_id: EXEC-DAILYPLAN-0026
+  test_case_id: TC-DAILYPLAN-025
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ a7266af + uncommitted TASK-3501 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-22T13:15:00+05:30"
+  actual_result: >
+    A topic given three genuine practice sessions across six, four and two days ago was not offered
+    as new ground. Any task it received came from a state-driven purpose instead, which is what makes
+    the New Topics section honestly mean "not yet covered" rather than "ranked highest".
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for DailyPlanTest.apractisedTopicIsNotOfferedAsNewGround"
+  remarks: >
+    Three separate sessions rather than one, because a single session cannot reach the health model's
+    evidence floor — the exact fixture mistake a revision test made in an earlier phase.
+
+- execution_id: EXEC-DAILYPLAN-0027
+  test_case_id: TC-DAILYPLAN-026
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ a7266af + uncommitted TASK-3501 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-22T13:15:00+05:30"
+  actual_result: >
+    A ONE_TO_TWO student on a 90-minute budget, with six eligible topics available, received at most
+    two NEW_TOPIC tasks. The remaining budget went to other purposes rather than opening a third
+    topic, which is the behaviour the cap exists to produce.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for DailyPlanTest.aNinetyMinuteDayOpensAtMostTwoNewTopics"
+  remarks: >
+    Six topics are offered precisely so the cap has to bite; with two the test would pass on a plan
+    the cap never touched.
+
+- execution_id: EXEC-DAILYPLAN-0028
+  test_case_id: TC-DAILYPLAN-027
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ a7266af + uncommitted TASK-3501 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-22T13:15:00+05:30"
+  actual_result: >
+    Both ends of the ladder held against a real endpoint. An UNDER_1H student (45 minutes) opened one
+    new topic at most, with five available. A SIX_PLUS student (180 minutes) still stopped at three,
+    with eight available — so a long day does not simply keep opening new ground.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for DailyPlanTest.aShortDayOpensOnlyOneNewTopic and .aLongDayStillStopsAtThreeNewTopics"
+  remarks: >
+    The band-to-maximum table itself is proven exhaustively in service.DailyPlanAllocationTest; these
+    two confirm the live endpoint honours it, which is a different claim.
+
+- execution_id: EXEC-DAILYPLAN-0029
+  test_case_id: TC-DAILYPLAN-028
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ a7266af + uncommitted TASK-3501 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-22T13:15:00+05:30"
+  actual_result: >
+    plannedMinutes came back positive and never above the 90-minute budget, and no single purpose
+    accounted for the whole of it. Under-spending is accepted as correct; over-spending is not.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for DailyPlanTest.thePlanStaysInsideTheBudgetAndNoPurposeTakesItAll"
+  remarks: >
+    Asserts the two rules the contract actually states — never over-spend, never let one purpose
+    consume the day — rather than an exact minute total, which depends on the estimate tier the
+    shared dev database happens to resolve.
+
+- execution_id: EXEC-DAILYPLAN-0030
+  test_case_id: TC-DAILYPLAN-029
+  test_case_version: 1
+  environment: "Plain JUnit, no Spring context and no database"
+  build_version: "feature/on-device-llm-spike @ a7266af + uncommitted TASK-3501 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-22T13:15:00+05:30"
+  actual_result: >
+    All twelve methods passed in 0.031s. The spec's own band table reproduced exactly at 30, 45, 60,
+    90, 120 and 180 minutes, including the 60-minute DEFAULT this app produces when no profile
+    exists. The 90-minute reference split came out exactly 25/20/20/15/10. Shares summed to the
+    budget at eleven different budgets with no minute lost or invented, and no purpose took the whole
+    day. Trimming behaved: 15 recommended questions into a 10-minute allowance gave 8 at 75s each, 4
+    at 150s, and 15 at 30s — capped by the recommendation, not inflated past it. Zero and negative
+    budgets and allowances gave zero rather than throwing. The round-up contract against
+    WorkloadEstimator.minutes held across 7 seconds-per-question values times 40 allowances.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for service.DailyPlanAllocationTest (12 methods)"
+  remarks: >
+    Asserts the split and the ladder behave as DECIDED, never that 25/20/20/15/10 and 1/2/3 are the
+    right numbers for this product. Those remain declared product judgements.
+
+- execution_id: EXEC-DAILYPLAN-0031
+  test_case_id: TC-DAILYPLAN-030
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database (PostgreSQL 18.6)"
+  build_version: "feature/on-device-llm-spike @ a7266af + uncommitted TASK-3501 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-22T13:15:00+05:30"
+  actual_result: >
+    A real six-question session uploaded with zero correct and completedAt yesterday produced a
+    MISTAKE_REVIEW task for that topic, counted from stored attempt rows rather than from anything
+    the client declared.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for DailyPlanTest.mistakeReviewComesFromRealWrongAnswers"
+  remarks: >
+    Reachable only because mistake review sits OUTSIDE the one-purpose-per-topic exclusion set. A
+    topic with recent mistakes is by definition one the student has been practising, so weak-topic or
+    strengthening selection claims it first; inside the set this case would have found nothing while
+    failing silently.
