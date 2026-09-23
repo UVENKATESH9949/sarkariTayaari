@@ -24,11 +24,12 @@ type TopicRow = TopicStat & { insight: TopicInsight | null };
  * reached from Exam Guide's "Syllabus & Trends" button (renamed from "Syllabus &
  * Practice", which used to jump straight into Practice with no overview at all).
  *
- * Deliberately reuses Epic L's existing topic-intelligence data (`getTopicInsights`,
- * the same local-only read `(tabs)/practice/topics.tsx` already uses) rather than
- * building a second intelligence model — this screen adds an exam-wide overview one
- * level above that per-subject screen, not a competing one. Tapping a topic still opens
- * the same Practice topic screen everything else does.
+ * Deliberately reuses Epic L's existing topic-intelligence data (`getTopicInsights`) rather
+ * than building a second intelligence model. It shares that read with the Practice browse
+ * screen (`(tabs)/practice/browse.tsx`, which absorbed the old per-subject topics screen):
+ * both render the same four chips from the same local rows, and this one adds the exam-wide
+ * overview a level above. Tapping a topic still opens the same levels screen every other
+ * entry point does.
  */
 export default function SyllabusTrendsScreen() {
   const { colors } = useTheme();

@@ -1,0 +1,107 @@
+# DAILYPLAN — device pass for the snapshot cache (migration 0031), 2026-09-22
+#
+# Android emulator-5554 (1080x2400, density 420), Expo dev client on Metro, a real Spring Boot
+# backend on localhost:8080 against the real Neon dev database, signed in.
+
+- execution_id: EXEC-DAILYPLAN-0032
+  test_case_id: TC-DAILYPLAN-032
+  test_case_version: 1
+  environment: "Android emulator-5554, dev client + Metro, backend localhost:8080, real Neon dev DB"
+  build_version: "feature/on-device-llm-spike, uncommitted working tree"
+  tester: "Claude Opus 5 (device pass, driven via adb)"
+  executed_at: "2026-09-22T18:57:00+05:30"
+  actual_result: >
+    Migration 0031 applied to the device's real 64MB populated database with no failure screen and
+    no data loss - confirmed by the app starting normally with streak, active exam, readiness and
+    Focus next all rendering, and the file unchanged in size. Steps 1-3 then pass. First open after
+    the migration showed the usual loading state and then the plan, and the database mtime moved,
+    consistent with the snapshot write. Re-opening and screenshotting at 1.5 seconds showed the
+    FULL plan already rendered - hero card, section switch, all three task cards - with the note
+    "Saved plan, last updated 6:56 PM. Your progress below is counted on this device." Eight
+    seconds later the note was gone, i.e. the background refresh had landed and replaced the
+    snapshot with live data.
+  status: Blocked
+  defect_id: ""
+  evidence: "migrated.png, cached-open.png; uiautomator dump confirming the note cleared"
+  remarks: >
+    BLOCKED rather than Pass: step 4 (two exams, each keeping its own snapshot) was not run. The
+    key includes the exam code so it is correct by construction, but that is an inference, not an
+    observation. Before this change the same re-open showed "Working out your day..." for roughly
+    2-3 seconds, and ~17 seconds on the first read of a new day.
+
+- execution_id: EXEC-DAILYPLAN-0033
+  test_case_id: TC-DAILYPLAN-033
+  test_case_version: 1
+  environment: "Android emulator-5554, airplane mode"
+  build_version: "feature/on-device-llm-spike, uncommitted working tree"
+  tester: "Claude Opus 5 (device pass, driven via adb)"
+  executed_at: "2026-09-22T18:58:00+05:30"
+  actual_result: >
+    Steps 1-2 pass. With airplane mode enabled (confirmed by the status-bar icon) Today's Plan
+    rendered the full stored plan - "3 things to do today", the 180m/6m/3 stats, the purpose
+    switch and all task cards - with the note "Saved plan, last updated 6:57 PM." The background
+    refresh failed silently and did NOT replace the plan with the "No plan right now" error this
+    screen used to show in exactly this situation. Airplane mode was then disabled and the backend
+    confirmed reachable again.
+  status: Blocked
+  defect_id: ""
+  evidence: "offline-plan.png"
+  remarks: >
+    BLOCKED rather than Pass: step 3 (pull to refresh WHILE offline and confirm the plan survives)
+    and step 4 (refresh after reconnecting) were not run. Step 3 is the regression guard for the
+    deliberate rule that a failed refresh must not replace a usable plan - that rule is implemented
+    in both the background callback and the pull handler, but only the background path was actually
+    observed failing.
+
+- execution_id: EXEC-DAILYPLAN-0034
+  test_case_id: TC-DAILYPLAN-034
+  test_case_version: 1
+  environment: "Android emulator-5554"
+  build_version: "feature/on-device-llm-spike, uncommitted working tree"
+  tester: "Claude Opus 5 (device pass, driven via adb)"
+  executed_at: "2026-09-22T18:58:00+05:30"
+  actual_result: >
+    Not run. The local progress overlay is wired and typechecks, and the cached plan rendered with
+    its note stating that progress is counted on the device - but no questions were answered
+    offline during this pass, so the numerator was never seen to move.
+  status: Not Executed
+  defect_id: ""
+  evidence: ""
+  remarks: >
+    Recorded as Not Executed rather than omitted so the gap is visible in the RTM. THIS IS THE
+    LARGEST UNVERIFIED PIECE of the snapshot work: the whole reason for splitting definition from
+    progress is that a student answering questions offline should see the count move, and nobody
+    has watched that happen. The rule it implements mirrors TaskOutcomeService deliberately, but
+    "mirrors by reading" is not "agrees when run".
+
+- execution_id: EXEC-CATALOG-0050
+  test_case_id: TC-CATALOG-050
+  test_case_version: 1
+  environment: "Android emulator-5554, dev client on Metro, backend on the host via 10.0.2.2"
+  build_version: "feature/on-device-llm-spike, uncommitted working tree"
+  tester: "Claude Opus 5 (device pass, driven via adb)"
+  executed_at: "2026-09-22T19:44:00+05:30"
+  actual_result: >
+    Steps 1-3 pass. First open showed "Loading exams..." then the catalogue, as expected with no
+    snapshot yet. A second sort was loaded to cache its key. Airplane mode was then enabled and the
+    sort switched back to the already-cached one: the full catalogue rendered - Applications Open
+    with SSC CGL, Recommended For You with IBPS PO and IBPS Clerk, the filter and sort chips, the
+    follow stars - with the note "Saved list, last updated 7:44 PM. Deadlines are counted for
+    today." Before this change that situation produced "Couldn't load exams".
+  status: Blocked
+  defect_id: ""
+  evidence: "exams-offline-final.png; three earlier invalid attempts kept as exams-cached2.png, exams-offline.png, exams-coldstart-offline.png"
+  remarks: >
+    BLOCKED, not Pass: step 4 (check a countdown against the real date) and step 5 (refresh after
+    reconnecting) were not run. The re-derivation is pure and mirrors ExamDiscoveryService's rule
+    including the 14-day threshold, but no card's countdown was actually checked against a calendar.
+    THREE EARLIER ATTEMPTS AT THIS WERE INVALID AND ARE WORTH RECORDING, because both causes are
+    environmental traps rather than product bugs:
+    (1) TAB SCREENS STAY MOUNTED - switching Home -> Exams does not re-run the load effect, so what
+    looked like a cache hit was in-memory state from an earlier online load. Changing SORT is what
+    forces a genuine re-read.
+    (2) 10.0.2.2 BYPASSES adb reverse - this dev build targets the emulator's host-loopback alias,
+    so removing the tcp:8080 tunnel did NOT make the backend unreachable; the app reached the host
+    directly and the "offline" test was really an online one. This project's own notes already
+    record this trap once. Airplane mode does block it, but ALSO blocks Metro, so a dev build
+    cannot be cold-started offline - go offline after the app is running.

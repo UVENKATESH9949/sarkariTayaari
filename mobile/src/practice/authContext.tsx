@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { AppState } from "react-native";
 import { clearSession, loadSession, saveSession } from "../db/authSession";
+import { clearSnapshots } from "../data/snapshotStore";
 import {
   login as apiLogin,
   logout as apiLogout,
@@ -287,6 +288,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     await clearSession();
+    /*
+     * Only the personal namespace. Daily-plan snapshots are keyed by user id already, so a
+     * leftover row is unreadable by the next account — this is the second line of defence, not
+     * the only one, and it is kept because a stale server-computed plan surfacing under someone
+     * else's name would look like a data leak whether or not it technically was one.
+     *
+     * `exams-discover` is deliberately NOT cleared: it is a public catalogue taking no token and
+     * containing nothing about anybody, so wiping it would only make the next sign-in slower.
+     */
+    await clearSnapshots("daily-plan");
     /*
      * The cached Weakness Radar is this student's own diagnosis, not device state -- leaving
      * it behind would show the next person to pick up the phone someone else's weaknesses.

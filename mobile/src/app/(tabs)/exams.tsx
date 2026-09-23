@@ -3,7 +3,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { Pressable, RefreshControl, ScrollView, Text, TextInput, View, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { discoverExams, type ExamCard as ExamCardData, type ExamSortOption } from "@sarkaritaiyaari/core/api";
+import { type ExamCard as ExamCardData, type ExamSortOption } from "@sarkaritaiyaari/core/api";
+import {
+  getExamDiscoveryMore,
+  getExamDiscoveryPage,
+  type ExamDiscoveryResult,
+} from "../../data/examDiscoveryData";
 import { useActiveExam } from "../../examsModule/activeExamContext";
 import { useHybridMode } from "../../data/hybridSource";
 import { getSubjectStats } from "../../data/practiceData";
@@ -20,7 +25,6 @@ import { useTheme, useThemedStyles, type Theme } from "../../ui/ThemeContext";
 import { ThemeToggleButton } from "../../ui/ThemeToggleButton";
 import { trackEvent } from "../../telemetry/analytics";
 
-const PAGE_SIZE = 100;
 
 type Segment = "ALL" | "MY_EXAMS" | "OPEN" | "UPCOMING";
 
@@ -55,6 +59,15 @@ const OPEN_STATUSES = new Set(["APPLICATION_OPEN", "APPLICATION_CLOSING_SOON"]);
  * synthetic CLOSING_SOON bucket, at a time — both already exercised directly in
  * ExamDiscoveryTest).
  */
+/** Same short form Today's Plan uses: a time today, a date once it is older. */
+function formatSnapshotTime(at: number): string {
+  const when = new Date(at);
+  const sameDay = new Date().toDateString() === when.toDateString();
+  return sameDay
+    ? when.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
+    : when.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}
+
 export default function ExamsScreen() {
   const { colors } = useTheme();
   const styles = useThemedStyles(buildStyles);
@@ -92,6 +105,8 @@ export default function ExamsScreen() {
     totalElements: number;
   } | null>(null);
   const [loadError, setLoadError] = useState<{ key: string; message: string } | null>(null);
+  /** Non-null while a stored page is on screen — drives the note, cleared when live data lands. */
+  const [snapshotAt, setSnapshotAt] = useState<number | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -106,37 +121,45 @@ export default function ExamsScreen() {
     items: { exam: ExamCardData; reason: string }[];
   } | null>(null);
 
-  const fetchPage = useCallback(
-    async (targetPage: number, append: boolean) => {
-      const result = await discoverExams({
-        page: targetPage,
-        size: PAGE_SIZE,
-        sort,
-        category: category ?? undefined,
-      });
-      setLoadedPage((prev) => ({
-        key: fetchKey,
-        content: append && prev?.key === fetchKey ? [...prev.content, ...result.content] : result.content,
-        page: result.page,
-        hasMore: result.hasMore,
-        totalElements: result.totalElements,
-      }));
-      return result;
+  /**
+   * Applies whatever the facade returned.
+   *
+   * A FAILED result is deliberately ignored when a page is already on screen. Offline, replacing
+   * a perfectly usable catalogue with an error would make the cache actively harmful — the
+   * student had something to browse and now has nothing. Same rule as Today's Plan.
+   */
+  const apply = useCallback(
+    (result: ExamDiscoveryResult, key: string) => {
+      if (result.status === "unavailable") {
+        setLoadedPage((prev) => {
+          if (prev?.key === key) return prev;
+          setLoadError({ key, message: result.message });
+          return prev;
+        });
+        return;
+      }
+      setLoadError(null);
+      setSnapshotAt(result.status === "cached" ? result.fetchedAt : null);
+      setLoadedPage({ key, ...result.page });
     },
-    [sort, category, fetchKey],
+    [],
   );
+
+  const discoveryQuery = useMemo(() => ({ sort, category }), [sort, category]);
 
   useEffect(() => {
     let cancelled = false;
+    const key = fetchKey;
     (async () => {
-      await fetchPage(0, false);
-    })().catch((err) => {
-      if (!cancelled) setLoadError({ key: fetchKey, message: err.message ?? String(err) });
-    });
+      const first = await getExamDiscoveryPage(discoveryQuery, (fresh) => {
+        if (!cancelled) apply(fresh, key);
+      });
+      if (!cancelled) apply(first, key);
+    })();
     return () => {
       cancelled = true;
     };
-  }, [fetchPage, fetchKey]);
+  }, [discoveryQuery, fetchKey, apply]);
 
   const current = loadedPage?.key === fetchKey ? loadedPage : null;
   const cards = useMemo(() => current?.content ?? [], [current]);
@@ -149,9 +172,9 @@ export default function ExamsScreen() {
   async function onRefresh() {
     setRefreshing(true);
     try {
-      await fetchPage(0, false);
-    } catch (err) {
-      setLoadError({ key: fetchKey, message: (err as Error).message ?? String(err) });
+      // `getExamDiscoveryPage` without a callback still writes the snapshot on success; a
+      // failure is handled by `apply`, which leaves an existing page alone.
+      apply(await getExamDiscoveryPage(discoveryQuery), fetchKey);
     } finally {
       setRefreshing(false);
     }
@@ -161,7 +184,12 @@ export default function ExamsScreen() {
     if (!hasMore || loadingMore) return;
     setLoadingMore(true);
     try {
-      await fetchPage(page + 1, true);
+      const next = await getExamDiscoveryMore(discoveryQuery, page + 1);
+      setLoadedPage((prev) =>
+        prev?.key === fetchKey
+          ? { ...prev, content: [...prev.content, ...next.content], page: next.page, hasMore: next.hasMore }
+          : prev,
+      );
     } catch {
       // Silent — the button just stays available to retry, the already-loaded page is unaffected.
     } finally {
@@ -301,7 +329,7 @@ export default function ExamsScreen() {
   if (error && cards.length === 0) {
     return (
       <View style={[styles.screen, { paddingTop: insets.top + spacing.xl }]}>
-        <ErrorState title="Couldn't load exams" body={error} onRetry={() => fetchPage(0, false).catch(() => {})} />
+        <ErrorState title="Couldn't load exams" body={error} onRetry={() => { void onRefresh(); }} />
       </View>
     );
   }
@@ -311,6 +339,21 @@ export default function ExamsScreen() {
       contentContainerStyle={[styles.container, { paddingTop: insets.top + spacing.xl }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand.light} />}
     >
+      {/*
+        Shown only while a stored catalogue is on screen. Deadlines are the whole point of this
+        tab, so a student reading a saved copy should be told — the countdowns themselves are
+        recomputed for today (see `data/examDiscoveryData.ts`), but a cycle added or a status
+        changed since the snapshot would not be here yet.
+      */}
+      {snapshotAt !== null && (
+        <View style={styles.snapshotNote}>
+          <Ionicons name="cloud-offline-outline" size={15} color={colors.text.secondary} />
+          <Text style={styles.snapshotNoteText}>
+            {`Saved list, last updated ${formatSnapshotTime(snapshotAt)}. Deadlines are counted for today.`}
+          </Text>
+        </View>
+      )}
+
       <View style={styles.headerRow}>
         <Text style={styles.title}>Exams</Text>
         <View style={styles.headerActions}>
@@ -446,6 +489,22 @@ export default function ExamsScreen() {
 
 const buildStyles = ({ colors }: Theme) =>
   StyleSheet.create({
+    snapshotNote: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+      backgroundColor: colors.surfaceElevated2,
+      borderRadius: radius.md,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      marginBottom: spacing.md,
+    },
+    snapshotNoteText: {
+      flex: 1,
+      fontSize: 12,
+      lineHeight: 17,
+      color: colors.text.secondary,
+    },
     screen: {
       flex: 1,
       justifyContent: "center",

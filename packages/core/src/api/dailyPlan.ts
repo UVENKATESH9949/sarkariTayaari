@@ -24,12 +24,34 @@ export type DailyPlanBudget = {
   basis: "STATED_BAND" | "DEFAULT";
 };
 
+/**
+ * Which learning purpose a task serves (see `api/DAILY-PLAN.md`).
+ *
+ * **`NEW_TOPIC` was called `PRACTICE`** before the five-purpose plan; migration V52 relabelled
+ * every stored row, so a server on that version never sends the old value. A client that still
+ * needs to read a pre-V52 payload should treat an unrecognised source as new ground.
+ */
+export type DailyPlanTaskSource =
+  /** Ground not yet covered, from the roadmap. */
+  | "NEW_TOPIC"
+  /** Work done and now fading, from the revision plan. */
+  | "REVISION"
+  /** Currently struggling, from the weakness radar. */
+  | "WEAK_TOPIC"
+  /** Encountered but not yet strong — retrieval practice. */
+  | "STRENGTHEN"
+  /** Specific questions previously answered wrongly. */
+  | "MISTAKE_REVIEW";
+
 export type DailyPlanTask = {
   taskId: string;
   displayOrder: number;
-  /** REVISION (work done and fading) or PRACTICE (new ground). */
-  source: "REVISION" | "PRACTICE";
-  /** One of RecommendedAction's values — PRACTICE_FOUNDATIONAL, TIMED_PRACTICE, and so on. */
+  source: DailyPlanTaskSource;
+  /**
+   * One of RecommendedAction's values — PRACTICE_FOUNDATIONAL, TIMED_PRACTICE, and so on. A
+   * MISTAKE_REVIEW task reports REVISION, the closest existing value; `source` is what carries the
+   * distinction.
+   */
   action: string;
   topicId: string;
   topicName: string;

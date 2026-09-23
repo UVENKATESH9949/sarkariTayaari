@@ -1,5 +1,441 @@
 # Project Status — Resume Point
 
+## Session of 2026-09-22 (3) — the daily plan becomes a device snapshot, and an audit saved half the work
+
+**Mobile only. ZERO backend changes — the server already did the part that mattered.** Full account:
+`reports/42-daily-plan-snapshot-cache/daily-plan-snapshot-cache.md`. Migration **0031**.
+
+**THE AUDIT IS THE HEADLINE. The owner proposed a cache architecture whose centrepiece — "stop
+regenerating the plan on every request" — WAS ALREADY BUILT.** `DailyPlanService` line 220 does
+`findForDay` and returns the existing tasks with `generated: false`; only an empty result generates.
+This file already records the measurements that prove it: **16.7 s to generate a new day, 2.1-2.9 s
+to re-read one.** So the 17 seconds is the FIRST read of a new day, once per user per exam per day,
+not every open. The cache was still worth building — for instant open and offline — but not for
+the reason proposed. Two further corrections, both of which would have been regressions:
+**`UNIQUE(user_id, exam_code, plan_date, zone)` on `study_tasks` would permit exactly ONE TASK per
+day** (that table is one row per task, not per plan; expressing "one plan per day" needs a parent
+row that does not exist), and **putting `zone` in the lookup key would give a traveller two plans
+for the same calendar day** — `plan_zone` is recorded but deliberately excluded from `findForDay`,
+and that is correct as it stands. The concurrent double-generation gap is real and is **left open
+and flagged** rather than half-fixed.
+
+**Shipped:** one GENERIC `remote_snapshots` table (0031) rather than one per feature — the roadmap,
+revision plan and learning state are the same shape of problem; `data/snapshotStore.ts` (the
+reusable read/write/clear layer); `data/dailyPlanProgress.ts`; the stale-while-revalidate policy in
+`dailyPlanData.ts`; the screen's "saved plan" note; and sign-out clearing snapshots.
+
+**THE DESIGN POINT WORTH CARRYING FORWARD: definition and progress are cached DIFFERENTLY.** The
+definition (which topics, which purpose, how many questions, why) is what the server decides and the
+device cannot — that is what gets stored. The progress (`status`, `answeredToday`, `accuracyToday`)
+is server-computed from real attempts, so caching it verbatim means a student who answered twelve
+questions offline still reads "0 of 15" — which looks like their work was lost. A CACHED plan
+therefore has its progress **re-derived on the device**, mirroring `TaskOutcomeService.observedOn`
+line for line: practice AND mock, same day window, same `UNATTEMPTED`/`PENDING_REVIEW` exclusion.
+**Server values always win when the server answers**; the local derivation fills a gap, never
+competes — otherwise the same task reads one way online and another offline. **`status` is
+deliberately NOT re-derived**: settlement's 60% threshold belongs in one place.
+
+**Two honest divergences from the server, both written into the code:** local result rows carry no
+`topic_id` (the server freezes it at upload, V47), so this joins `questions` live and a retagged
+question moves here and not there; and a null local `outcome` is counted, which is right for
+practice rows and harmless for mock.
+
+**THE RULE THAT MAKES THE CACHE SAFE RATHER THAN HARMFUL: a failed refresh must never replace a
+usable plan with an error.** Implemented in both the background callback and the pull handler. The
+obvious version — set state on every refresh result — would blank a working plan the moment the
+network drops, which is worse than no cache at all.
+
+**Verified on `emulator-5554`:** migration 0031 applied to the **real 64MB populated database** with
+no failure screen and no data loss (the riskiest item — a failed local migration is a hard gate that
+stops the app starting); a second open screenshotted **at 1.5 s showed the FULL plan already
+rendered** with "Saved plan, last updated 6:56 PM", where that window used to show "Working out your
+day..."; the note **cleared ~8 s later** when the background refresh landed; and in **airplane mode**
+the full plan still rendered, labelled, with the failing refresh leaving it alone — where that exact
+situation used to produce "No plan right now".
+
+**⚠️ NOT VERIFIED, and the first item is the largest gap:** **`TC-DAILYPLAN-034` was not run at
+all** — the entire reason for splitting definition from progress is that a student answering
+questions offline should watch the count move, and nobody has seen that happen. Also unrun: two
+exams each keeping their own snapshot (correct by construction, the exam is in the key, but not
+observed); pull-to-refresh WHILE offline; and no second account was signed in, so the per-user key
+isolation is reasoning rather than observation.
+
+**THE EXAMS TAB GOT THE SAME TREATMENT, on the same snapshot layer** — which is what the reusable
+store was for. It was calling `discoverExams` **directly from the screen**, no data facade at all,
+so every open and every sort/category change was a round trip. Now `data/examDiscoveryData.ts`.
+Two deliberate differences: **no user in the key** (discover is public, takes no token, and follow
+state lives in local `followed_exams` — so sign-out clears only the `daily-plan` namespace), and
+**only page 0 is cached** ("load more" stays live). And the same definition-versus-derived split
+for a different reason: **`daysUntilDeadline` and `closingSoon` are recomputed on the device**,
+because both are relative to when the server answered — a stale `closingSoon` files an exam under
+the wrong SECTION heading, not just a wrong number. Mirrors `ExamDiscoveryService` including its
+14-day threshold. Verified in airplane mode: "Saved list, last updated 7:44 PM. Deadlines are
+counted for today." where that situation used to give "Couldn't load exams".
+
+**⚠️ TWO ENVIRONMENT TRAPS COST THREE INVALID TESTS, and both are worth knowing before testing any
+cache on this emulator.** I reported the exams cache as broken twice before finding the real cause;
+the implementation had been correct throughout.
+
+1. **TAB SCREENS STAY MOUNTED.** Switching Home -> Exams does NOT re-run the load effect, so what
+   looked like a cache hit was in-memory state from an earlier online load. Changing the **sort** is
+   what forces a genuine re-read, because that changes the effect's key. (Pushed routes like
+   Today's Plan do remount on navigation, which is why its test was valid.)
+2. **`10.0.2.2` BYPASSES `adb reverse` — this file already records the trap once, and it caught me
+   again.** The dev build sets `EXPO_PUBLIC_API_BASE_URL` to the emulator's host-loopback alias, so
+   removing the `tcp:8080` tunnel does NOT make the backend unreachable; the app talks straight to
+   the host and an "offline" test is really an online one. **Airplane mode does block it — but also
+   blocks Metro, so a dev build CANNOT be cold-started offline.** Go offline after the app is
+   already running.
+
+**QA:** `REQ-DAILYPLAN-014/015` + `REQ-CATALOG-048`, `SCN-DAILYPLAN-031..033` +
+`SCN-CATALOG-049`, `TC-DAILYPLAN-032..034` + `TC-CATALOG-050`, and `EXEC-DAILYPLAN-0032..0034` +
+`EXEC-CATALOG-0050`. Three **Blocked**, one **Not Executed** — nothing marked Pass on the strength
+of a neighbouring step. RTM 167/319/342 -> **170/323/346**. Nothing committed.
+
+## Session of 2026-09-22 (2) — Practice navigation: four screens became one
+
+**No backend, admin or database change.** Mostly UI and navigation — but NOT purely: the practice
+session length changed from 200 questions to 20, which reaches every practice session in the app,
+not just this screen. `quiz.tsx` itself was never opened.** Full account: `reports/41-practice-navigation-redesign/practice-navigation-redesign.md`.
+
+**The flow.** `Exam → Subject screen → Topic screen → Level screen → Quiz` is now
+`Exam → one screen → Quiz`. Subject is a dropdown that expands in place; choosing one replaces
+the topic list beneath it with no transition; tapping a topic opens a centred, fixed dialog **over** the
+still-visible list; tapping a difficulty opens the quiz. One route is pushed in the whole flow, and
+**one** back press returns from the quiz to the chooser instead of three.
+
+**Shipped:** `mobile/src/app/(tabs)/practice/browse.tsx`, `practice/SubjectSelect.tsx`,
+`practice/DifficultyPickerDialog.tsx`, `ui/fonts.ts`. **Deleted:** `practice/subjects.tsx` and
+`practice/topics.tsx` (neither had an external caller). Nine new i18n keys in both catalogues;
+eleven removed whose only consumers were the deleted screens.
+
+**`practice/levels.tsx` was deliberately KEPT, and this is the decision most worth knowing.** The
+brief asked for no separate level screen; it is gone from *browsing* but the route still exists,
+because **six** shipped surfaces deep-link straight into it with a topic chosen elsewhere —
+Today's Plan, the Exam Guide, radar-topic, the Study Roadmap, Syllabus & Trends and Home's
+preparation-plan card. Deleting it to satisfy a literal reading would have broken all six,
+including the uncommitted TASK-3501 work sitting beside this. `TC-PRACTICE-007` walks all six.
+
+**FOUR MORE CHANGES THE OWNER ASKED FOR, all device-verified.**
+
+**1. A practice session is now 20 questions, app-wide.** `PRACTICE_QUESTION_LIMIT` was **200** —
+a number picked only to stop a crash, never a product decision — which meant a session was
+"however many questions this topic happens to hold": a 117-question topic was a 117-question
+sitting. Now 20, matching `MIXED_PRACTICE_QUESTION_LIMIT`. **This reaches every practice session,
+not just this screen** — Today's Plan, the Study Roadmap and the levels screen all feed the same
+engine. The cap's original reason still holds and must not be removed: the translation lookup
+binds one SQLite parameter per question, so an uncapped topic can exceed
+`SQLITE_MAX_VARIABLE_NUMBER`.
+
+**2. The difficulty dialog stops counting and starts explaining.** Per-level question counts are
+gone — they answered a question nobody was asking (someone picking "Medium" does not care that
+the topic holds 42, only how long this takes and whether it repeats). One banner instead:
+**"20 questions each session · new questions every time"**, with the number read from
+`PRACTICE_QUESTION_LIMIT` itself so what the student is told cannot drift from what the engine
+does. An empty level still says so.
+
+**THE FRESH-SET CLAUSE IS CONDITIONAL, AND THAT IS THE POINT.** It is true locally —
+`getPracticeQuestions` draws with `ORDER BY RANDOM()`, **checked on the device rather than
+assumed**: the same topic and difficulty opened twice gave "A can complete a work in 19 days..."
+then "...in 20 days...". It is **NOT** true on the live path used before the first sync, which
+pages the backend deterministically and only shuffles what it got. So the clause is dropped in
+live mode rather than printing a promise the app cannot keep.
+
+**3. A coverage bar on every topic card** — `{practised}/{total} · {percent}%`; real history on the
+test device reads "32/117 · 27%" and "5/127 · 4%". **The numerator is COUNT(DISTINCT question_id),
+and that choice is the whole design.** `user_topic_progress.attemptedCount` already exists and is
+the obvious source, but it ACCUMULATES (`existing + totalCount` per session), so five passes over a
+117-question topic reaches 100 and would eventually read past 100%. That measures VOLUME; a
+0-100% bar needs COVERAGE. New `getTopicCoverage` uses **identical** subject/exam/is-deleted
+predicates to the question count, which is what guarantees numerator ⊆ denominator; the render
+also clamps with `Math.min`.
+
+**A stated limitation: practice results only.** Mock attempts also answer questions, but combining
+them needs the UNION of the two id sets — adding two `count(distinct ...)` results would
+double-count anything answered in both and could render "134 of 117". The narrower claim is the
+one the label makes. A topic with zero questions shows no bar rather than a 0% one: an empty bar
+there would be a statement about the student, not the content.
+
+**4. Not fully verified:** `TC-PRACTICE-013` is recorded **Blocked**, not Pass — the bar is
+confirmed correct AT REST on real data, but nobody watched the numerator move after a finished
+session, and "practise past the topic's question count and confirm it stops at full" would take
+several hundred answers on one topic. Its over-time behaviour is verified by construction only.
+`TC-PRACTICE-012` step 4 (a topic with fewer than twenty questions) was also not run.
+
+**THE TOPIC CARDS WERE DROPPED AND THEN PUT BACK, at the owner's instruction, and the reversal is
+the most useful thing in this entry.** The old topics screen carried four Epic L chips (priority /
+mastery / trend / weightage), an inline parent breadcrumb, "Best after" prerequisite notices and a
+priority-vs-syllabus sort toggle on every row. **I flattened all of it into plain rows in the first
+pass**, reading the brief's §32 ("don't put a badge on every topic") literally. The owner rejected
+that with the right reason: those chips are not ornament, they are the only thing on the screen
+that answers **which** of twenty-eight topics is worth the next hour — a different question from
+what exists. §32 is about not inventing ornament; this was existing, earned signal.
+
+`renderTopicCard` and `groupByParent` are back in `browse.tsx`, **moved out of the deleted screen
+rather than rewritten** so the two could not drift. Verified on the device against the owner's own
+reference screenshot: breadcrumb + name + count + four chips + "Best after", the By priority /
+Syllabus order toggle, and in syllabus order the folder headings with indented children.
+
+**The generalisable lesson: only the NAVIGATION needed reducing — the card was already right.**
+Flattening it was scope added on my own reading of a design note, and it cost real information.
+
+**Inter is a new dependency** (`@expo-google-fonts/inter`, four faces, imported by subpath so Metro
+does not bundle all eighteen weights), and at the owner's decision it is **app-wide**: injected
+centrally in `useThemedStyles`, in the same pass that applies zoom (`applyZoom` is now
+`applyTypography`). Screens keep writing ordinary `fontWeight` and never name a face; the pass
+resolves the weight to a family and **drops the `fontWeight`** — Android does not synthesise a
+weight from one family name, so `fontFamily: "Inter"` + `fontWeight: "600"` renders Regular there
+and SemiBold on iOS, a disagreement only a device shows. A style counts as text if it declares
+`fontSize`, `fontWeight` or `color`. **The one risk — a nested `<Text>` child with a size but no
+weight inside a bold parent — was checked rather than assumed: all eight nested-`Text` sites in
+the app were enumerated and every one of their children declares its own weight.** The native
+header title and the tab-bar labels are named explicitly in `ui/navigation.ts` and
+`(tabs)/_layout.tsx`, because neither is built from a themed style factory.
+
+**Colours are existing palette tokens, not the brief's hex values — and that is not a deviation.**
+The light palette already IS the requested system: `brand.primary` is `#2563EB` exactly, `bg` is
+`#F2F5FA` vs the brief's `#F4F7FC`, `border` `#DBE2EC` vs `#DCE4EF`. Hardcoding the brief's navy
+and pastels would have produced an unreadable dark mode — the exact failure this project's first
+light-theme attempt already made once. The pastel icon circles come from the **synced subject row**,
+so an admin restyling a subject restyles it here, and every topic under a subject shares one tint.
+
+**Two defects avoided by construction, both the `PreparationPlanCard` pattern:** switching subject
+cannot render the previous subject's topics under the new subject's name, and the difficulty sheet
+cannot render one topic's counts under another topic's name — in both cases rows are held with
+the key they were loaded for, so a mismatch renders as loading rather than as the wrong answer.
+Subject selection is *derived*, not stored by an effect, which also means a sync that removes the
+chosen subject falls back instead of emptying the screen.
+
+**Verified:** `packages/core` `tsc` clean; mobile `tsc` clean; `expo lint` at the **exact 9-problem
+baseline**, all nine in files this change never touched. Three lint violations were introduced and
+**fixed rather than suppressed** — an unused import, a `useMemo` dependency that changed every
+render, and a genuine synchronous `setState` in an effect, the last rewritten into the keyed form
+above (which closed the lint rule and the stale-counts defect together).
+
+**The expo-router typed-routes trap, hit again exactly as this file predicts it:** `tsc` rejected
+`router.push("/practice/browse")` with the file on disk, because `.expo/types/router.d.ts` is
+generated. A brief Metro run on a scratch port fixed it (browse present, topics/subjects gone,
+levels retained) and that instance was stopped afterwards, confirmed by PID. **Never cast the path.**
+
+**THE DEVICE PASS RAN, and it found two real defects — both in code written the same day, both
+fixed and re-verified.** `emulator-5554` (Pixel_7, `-memory 2048` for host headroom), dev client on
+Metro, a real backend on `localhost:8080` against the real Neon dev database, signed in. Records:
+`qa/execution/2026-09-22-practice-navigation.yaml`.
+
+**The headline claim held on a real screen: ONE back press from the quiz returns to the Practice
+screen**, where the old flow needed three. Several numbers cross-checked exactly, which is better
+evidence than any one of them: the sheet's Medium count (33) matched the quiz's "Question 1 of 33";
+"All Levels 118" = 47+33+38; a second topic gave 140 = 37+62+41 and its quiz read 62; and
+"Number System 128" agreed across the new screen, Syllabus & Trends and the levels screen.
+
+**DEF-PRACTICE-001 — Inter was only PARTIALLY applying, and it surfaced as clipped tab labels.**
+The first two tab labels rendered permanently as **"Ho..." and "Practi..."** while the three longer
+ones were fine: React Navigation's tab bar measures each label once and sizes the item from it, and
+the app rendered before the faces registered, so those two were measured in the platform font and
+re-rendered wider in Inter. **The accessibility tree said it was fine** — `uiautomator` reported
+full text with bounds that fit, while the pixels showed the ellipsis persisting; this file already
+warns that the screenshot is the authority, and here it is again. Fixed by **gating first render on
+`useFonts`** in `app/_layout.tsx` rather than patching the tab bar, because any measure-once
+component has the same exposure; a font *error* releases the gate so a failed font cannot trap a
+student on a loading screen. **The fix then exposed the bigger thing it was masking:** the same
+Home screen re-rendered visibly heavier afterwards, i.e. parts of the app had been silently falling
+back to the platform font. Without the gate, "Inter app-wide" was only partly true.
+
+**DEF-PRACTICE-002 — the sheet could not size to its own rows, AND IT TOOK THREE ATTEMPTS; the
+owner caught it from a screenshot after I had already recorded it fixed.** The last difficulty row
+was sliced by the tab bar and "All Levels" was not visible at all. **Root cause: the rows lived in
+a `ScrollView`, which reports NO intrinsic height** — so the sheet, which sizes to its content,
+could never size to the rows; its height came out as header-plus-whatever-the-ScrollView-was-handed
+and `flexShrink: 1` let that collapse further. Measured: a 370dp sheet holding ~573dp of content,
+with uiautomator reporting "All Levels" at **inverted bounds** (y2332 -> y2201, bottom above top).
+Attempt 1 (`overflow: "hidden"` + `flexShrink: 1`) only stopped it PAINTING outside the card — it
+hid the overflow rather than fixing it. Attempt 2 (a concrete dp `maxHeight` from
+`useWindowDimensions()` instead of `"80%"`, which cannot resolve against a `flex: 1` backdrop
+inside a Modal) was a real improvement but the cap was never the binding constraint. Attempt 3, the
+fix: **the rows are a plain `View`**, which does report a height. Verified by bounds — four valid
+rows at y1224/1450/1676/1901 with ~48dp clearance above the tab bar.
+
+**THE GENERALISABLE LESSON, and it is the reason this is written out in full: an early bounds dump
+happened to show four fitting rows, so I wrote it up as verified. That measurement was real but
+NOT REPRODUCIBLE** — the sheet's height depended on whatever the ScrollView was handed on that
+pass. A layout that is right only sometimes is not right, and **a single passing measurement is not
+evidence when the underlying value is nondeterministic.** `EXEC-PRACTICE-0004` is deliberately left
+in the register as the Pass it was recorded as, with `EXEC-PRACTICE-0009` as the re-run that
+supersedes it — same append-only convention this file already applied to `EXEC-USERPROGRESS-0002`.
+
+**THEN THE OWNER REJECTED THE BOTTOM SHEET OUTRIGHT, and that was the right call.** A sheet has to
+fight for the bottom of the screen against the tab bar and the gesture bar — precisely where it kept
+losing rows. It is now a **centred, fixed dialog** (`DifficultyPickerDialog`, renamed from
+`DifficultyPickerSheet` so the name is not a lie): sized to its content, capped at 380dp wide,
+fading in rather than sliding, no drag handle to imply a gesture that does not exist. Measured in
+light mode — card spans y706-1690 on a 2400px screen (centre y1198 vs screen centre y1200), 361dp
+wide, all four rows visible, topic list still legible behind, nothing near the footer. **The whole
+class of bug goes away with the edge it was fighting.**
+
+**The dark-mode pass found a third problem, fixed the same round.** As a floating card it barely
+separated from the page: `colors.surface` is `#0F131C` on a `#0A0D14` background, and the 0.38
+backdrop wash that works in light mode does almost nothing on a near-black page — the card read as
+a faint outline. Fixed the way this palette's own note says to (in dark, a surface lifts by being
+BRIGHTER than its ground): the card moved onto the `elevated` Card variant's tokens
+(`surfaceElevated` + `border`), and the backdrop is now theme-aware — `rgba(2,4,8,0.66)` dark vs
+`rgba(13,21,36,0.38)` light. **One wash for both themes is the trap.**
+
+**Neither defect was reachable by reading** — both files typecheck and lint clean; both bugs live
+in how RN resolves measurement at paint time.
+
+**Deep links: four of six exercised, all four pass.** Home's Focus-next card (167 = 40+57+70),
+Today's Plan (59), the Study Roadmap (66, matching its own card) and Syllabus & Trends (128). The
+other two are blocked by this ACCOUNT'S DATA, not by the change: the Exam Guide's checklist rows
+are all `disabled` ("Complete prerequisites first"), and the Preparation Radar reports "0 of 61
+topics practised" so no topic card exists. All four that ran resolve the same route registration —
+but that is an inference for the other two, not an observation.
+
+**Dark mode verified** on the screen, dropdown, sheet and quiz; theme returned to light as found.
+
+**A PRE-EXISTING defect observed and deliberately NOT fixed:** on the **levels** screen in light
+mode the "All Levels" card paints `text.onAccent` (white) on `Card variant="filled"` =
+`surfaceElevated2` = `#EAEFF7`. White on near-white. `levels.tsx` and `Card.tsx` are both untouched
+by this change (checked via `git status`), so it predates it; fixing unrelated visual bugs
+mid-feature is the scope creep AI_RULES §3.10 warns against, so it is flagged rather than fixed.
+
+**⚠️ STILL NOT VERIFIED:** `TC-PRACTICE-003` (a zero-question topic — every topic tried had
+questions), `TC-PRACTICE-008` (airplane mode and the never-synced empty state), `TC-PRACTICE-010`
+(search — no query was ever typed). **`TC-PRACTICE-004` is Blocked, not Pass:** the quiz opened
+with the right topic/difficulty/question set, but no session was finished, so session recording,
+per-question timing and the history entry were not observed. **`TC-PRACTICE-002`/`006` are weaker
+passes than written** — on a synced device the reads resolve too fast for the loading skeleton to
+be seen, so they are verified as "the wrong list never appeared". Content zoom was not re-checked,
+which now matters more because `applyTypography` touches every text style in the app. **The rest of
+the app was not swept after the typeface went global** — 43 screens changed; the ones actually seen
+were Home, Practice, the quiz, Today's Plan, the Study Roadmap, Syllabus & Trends, the Exam Guide,
+More and the Radar. The two Telugu strings are mine and unreviewed.
+
+**QA:** new `PRACTICE` module — `REQ-PRACTICE-001..005`, `SCN-PRACTICE-001..010`,
+`TC-PRACTICE-001..010` (all **ManualOnly**; mobile has no automated runner), plus
+`EXEC-PRACTICE-0001..0008` and **`DEF-PRACTICE-001`/`002`** both recorded Fixed. Five cases Pass,
+two Blocked, one Skipped, two Not Executed — nothing marked Pass on the strength of a neighbouring
+step. RTM 159/306/329 -> **164/316/339**.
+
+**NEXT for this work, in order:** (1) finish the unrun cases above, especially search and a
+completed session; (2) re-walk the two blocked deep links on an account with practice history and
+met prerequisites; (3) decide on the pre-existing white-on-pale "All Levels" card; (4) sweep the
+rest of the app now that the typeface is global; (5) the exam-list screen is deliberately
+unrestyled, so there is a visual seam behind the new screen; (6) **nothing is committed.**
+
+## Session of 2026-09-22 — the daily plan now has FIVE task purposes, and the suite is GREEN
+
+**This closes the entry that had been sitting here marked "stopped mid-verification".** The one
+outstanding item was a single integration-test run; it has now run to completion. **Nothing is
+committed.**
+
+**Verified: 52 tests, 0 failures, 0 errors, BUILD SUCCESS, 28:50 min**, one Maven invocation against
+the real Neon dev database (PostgreSQL 18.6):
+
+| Class | Result | Time |
+|---|---|---|
+| `DailyPlanTest` | **17/17** (9 pre-existing + 8 new) | 1252 s |
+| `AdaptiveReplanningTest` | **5/5** | 465.1 s |
+| `service.DailyPlanAllocationTest` | **12/12** | 0.031 s |
+| `service.TaskOutcomeRuleTest` | **6/6** | 0.028 s |
+| `service.WorkloadEstimatorTest` | **6/6** | 0.033 s |
+| `service.RevisionLadderTest` | **6/6** | 0.036 s |
+
+**`AdaptiveReplanningTest` was in the run deliberately, not for completeness.** Phase 6 settles a
+closed day by reading `study_tasks.source` — the exact column V52 relabelled, and the one this
+change adds three further values to. Its 5/5 is the evidence that **settlement did not regress.**
+Flyway **validated all 52 migrations** at startup, which independently re-confirms V52 is applied
+here with a matching checksum.
+
+**What changed (TASK-3501):** the daily plan's two task kinds became five learning purposes —
+`NEW_TOPIC`, `REVISION`, `WEAK_TOPIC`, `STRENGTHEN`, `MISTAKE_REVIEW` — with an explicit cap on
+how many new topics a day may open, a per-purpose time allocation, and question counts **trimmed to
+fit** rather than skipped. Full account:
+`reports/40-five-purpose-daily-plan/five-purpose-daily-plan.md`. Contract: `api/DAILY-PLAN.md`.
+
+**Everything the owner asked to preserve is untouched:** `TopicIntelligenceService`,
+`LearningStateService`, `WeaknessRadarService`, `RevisionPlanService`, `StudyRoadmapService`,
+`WorkloadEstimator`, `TopicHealthService`, `TaskOutcomeService`, the `RecommendedAction` enum, the
+`StudyTask` entity. The radar's 10/15-question recommendations survive as the **ceiling** a task's
+count is trimmed from. No AI is anywhere near the selection.
+
+**THE DATABASE NEEDED ONE `UPDATE`, NOT A SCHEMA CHANGE.** `study_tasks.source` is a bare
+`VARCHAR(20)` with no CHECK constraint (V49 said so on purpose), so three new values cost nothing.
+**V52 exists only to relabel `source=PRACTICE` -> `NEW_TOPIC`** — because the new fifth purpose
+genuinely *is* practice-for-strengthening, and leaving the old value would have made a stored row's
+meaning depend on the day it was written, in a table whose whole justification is faithful history.
+Every old `PRACTICE` row really was new ground, so the relabel preserves meaning. **V52 applied
+cleanly to the real Neon dev database (v51 -> v52, 1.587s).**
+
+**A CORRECTION TO MY OWN FIRST DESIGN, made before it shipped.** I first put mistake review inside
+the one-purpose-per-topic exclusion set, reading acceptance criterion 9 literally. That would have
+made the feature **almost unreachable**: a topic with recent mistakes is by definition one the
+student has been practising, which is exactly what weak-topic or strengthening selection claims
+first — so Mistake Review would have been empty for precisely the students who have mistakes.
+The exclusion set now covers the four purposes that assign **fresh practice**; mistake review stands
+outside it, because it assigns no question set at all. **Remove that carve-out and the feature goes
+quiet without failing** — which is why `TC-DAILYPLAN-030` exists and why its own remarks say so.
+
+**Mistake Review needed no new content endpoint.** `outcome` + the `topic_id` V47 froze onto every
+attempt row already say which questions were wrong, when, and on which topic; the question text,
+chosen answer and explanation are already on the device and already rendered by Revise's Wrong
+Answers tab. So the task carries a topic and a count, and taps through to that screen.
+
+**Also verified:** `packages/core` `tsc` clean and **284/284**; mobile `tsc` clean; `expo lint` at
+the **exact 9-problem baseline**. `mvn compile` / `test-compile` clean.
+
+**The shared dev database was checked afterwards, not assumed.** `AbstractIntegrationTest.cleanup()`
+hard-deletes the questions, topics, subjects and exams a test creates, so **the successful run left
+nothing behind** — confirmed by direct read-only query. **The orphaned-accounts worry this file
+recorded yesterday did not happen: zero `plan.*@example.com` accounts remain.** What does remain is
+one partial fixture from the killed run — exam `PLAN_NEWMAX_3EBBFD76` (`is_active = false`, so
+never reachable by a student), its subject, six topics, six `exam_topics` rows and two questions, all
+carrying run id `3ebbfd76`. **Not yet deleted** — 16 rows of provable test data on a shared
+database, so it is offered rather than removed unilaterally.
+
+**Production's AI flags were read before and after the run and came back byte-identical**
+(`MISTAKE_ANALYSIS`, `SESSION_FEEDBACK`, `PROFILE_SUMMARY` on; the other eight off). No AI test class
+ran, so this was expected — but this file records a test run silently disabling AI in production
+once, so it is checked every time now rather than reasoned about.
+
+**A fixture-cost lesson, applied rather than re-learned.** The first attempt at this run passed 12
+minutes and was killed so the laptop could be closed. Before re-running, the multi-topic loops were
+cut to **one** question per topic, keeping the higher volume only where the mistake-review (6) and
+practised-topic (8) cases genuinely need it. Same trap this file already documents once — Phase
+5's 305 questions -> 61 minutes. The re-run came in at 1252 s for 17 tests.
+
+**QA**: `REQ-DAILYPLAN-010..013`, `SCN-DAILYPLAN-024..030`, `TC-DAILYPLAN-024..031`, and now
+`EXEC-DAILYPLAN-0025..0031` (all **Pass**) in `qa/execution/2026-09-22-dailyplan-five-purposes.yaml`
+for the seven automated cases that genuinely ran. `TC-DAILYPLAN-031` (the device case) stays
+`Not Executed` and is deliberately absent from that file. RTM **159/306/329**; the dashboard now
+records 86 real execution records across 81 test cases. Three `test_data` lines saying "three
+questions each" were corrected in place to match the reduced fixtures, per AI_RULES §6.
+
+**⚠️ STILL NOT VERIFIED:**
+
+1. **No device pass for the mobile half.** Five sections, five jump pills, one colour per purpose,
+   and a Mistake Review card that opens Revise -> Wrong Answers: all typechecked and linted, none of
+   it seen on a screen. `TC-DAILYPLAN-031` exists for exactly that, `Not Executed`. **This is now
+   the single largest gap in this work.**
+2. **The split and the ladder are declared judgements.** 25/20/20/15/10 and 1/2/3 are product
+   decisions; the tests assert they behave as decided, never that they are right.
+3. **Mistake Review points at the whole Wrong Answers list, not that topic's slice.** `revise.tsx`
+   takes no topic filter today. Small, easy follow-up.
+4. **`asOffsetDateTime`'s fallback branches are unexercised.** The green run shows this JDBC driver
+   returns a type the plain path handles, so the other branches are defensive and untested.
+5. **Review time is estimated as solving time** — this app has never measured review time, and a
+   separate constant would have been invented.
+
+**Also changed on the mobile side, worth knowing:** the client-side weak-topic and wrong-answer
+*previews* added earlier are **gone** — they are the server's own task categories now, and
+keeping both would have shown weak topics twice. The "Mixed Topics" card is **kept**, below the five
+sections; it is not a sixth purpose and the server never assigns it.
+
+**NEXT, in order:** (1) device pass on the five sections; (2) delete the one leftover
+`PLAN_NEWMAX_*` fixture set if wanted; (3) commit — nothing from TASK-3501 is committed;
+(4) **merge `feature/on-device-llm-spike` into `main`**, which is still ~35 commits behind while
+production runs from the feature branch; (5) then the pre-existing list below.
+
+
 **Last updated:** 2026-09-21 — **AN ACCOUNT IS NOW REQUIRED.** The app's first screen is sign-in
 with a one-time code emailed to a Gmail address (migration **V51**), which reverses this project's
 founding "accounts are optional" decision at the owner's request. Also today: the daily plan, the

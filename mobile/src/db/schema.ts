@@ -1035,3 +1035,29 @@ export const clientConfigAiTasks = sqliteTable("client_config_ai_tasks", {
   taskId: text("task_id").primaryKey(),
   enabled: integer("enabled", { mode: "boolean" }).notNull().default(false),
 });
+
+/**
+ * The last answer the server gave us, for screens the server computes and the device cannot.
+ *
+ * MIGRATION 0031. One generic table rather than one per feature: the daily plan is the first
+ * caller, but the study roadmap, the revision plan and the learning state are the same shape of
+ * problem — an expensive, server-owned read with nowhere on the device to put the result.
+ *
+ * `key` carries everything that makes a snapshot distinct, the user id included. Signing in as a
+ * different account must never surface the previous account's plan, and encoding that in the key
+ * is safer than relying on a sign-out hook somebody could forget to call.
+ *
+ * `payload` is the response JSON verbatim. Deliberately NOT normalised into typed columns: this
+ * caches someone else's contract, and typed columns would need a migration every time that
+ * contract gains a field. See `data/snapshotStore.ts` for the read/write layer and
+ * `data/dailyPlanData.ts` for the stale-while-revalidate policy built on it.
+ *
+ * NOT a source of truth, and nothing in the app may treat it as one — it is a copy of a decision
+ * taken on the server, kept so a student can see and use it instantly and offline.
+ */
+export const remoteSnapshots = sqliteTable("remote_snapshots", {
+  key: text("key").primaryKey(),
+  payload: text("payload").notNull(),
+  /** Epoch millis. Drives both the "last updated" line and any staleness policy a caller wants. */
+  fetchedAt: integer("fetched_at").notNull(),
+});

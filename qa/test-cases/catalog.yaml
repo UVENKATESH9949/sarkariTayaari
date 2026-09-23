@@ -1697,7 +1697,7 @@
     their sum. (REQ-CATALOG-023 acceptance_criteria — display only, enforcement explicitly
     out of scope for this case per the requirement's own documented, disclosed gap)
   actual_result: ""
-  status: Not Executed
+  status: Blocked
   defect_id: ""
   remarks: >
     Do NOT fail this test case for the absence of per-section lock/auto-advance during the
@@ -1910,3 +1910,53 @@
     active exam, so Home rendered blank) sit exactly in the gap. It now asserts the active exam.
   automation_status: ManualOnly
   automation_reference: null
+
+- id: TC-CATALOG-050
+  requirement_ids: [REQ-CATALOG-048]
+  scenario_id: SCN-CATALOG-049
+  system: Mobile
+  module: CATALOG
+  feature: The Exams tab keeps a snapshot of the catalogue the server returned
+  title: The Exams tab opens from its snapshot and works offline
+  objective: "Confirm the catalogue is stored, rendered instantly, and usable with no connection."
+  preconditions:
+    - "A reachable backend for the first load"
+  test_data: "The seeded exam catalogue"
+  test_environment: "Android emulator (AVD Pixel_7), dev client on Metro"
+  priority: Medium
+  severity: Major
+  test_type: Offline
+  steps:
+    - step: 1
+      action: "Open the Exams tab for the first time"
+      expected: "The usual 'Loading exams...' state, then the catalogue - there is no snapshot yet"
+    - step: 2
+      action: "Tap a different sort, then tap back to the first one"
+      expected: "Both render; each sort keeps its own snapshot"
+    - step: 3
+      action: "Enable airplane mode, then switch sort to one already loaded"
+      expected: "The catalogue renders from the snapshot with a note reading 'Saved list, last updated HH:MM. Deadlines are counted for today.' - NOT the 'Couldn't load exams' error"
+    - step: 4
+      action: "Check a card's deadline against the real date"
+      expected: "The countdown is for today, not for when the snapshot was taken"
+    - step: 5
+      action: "Disable airplane mode and pull to refresh"
+      expected: "Live data, and the note disappears"
+  expected_result: "A stored catalogue renders instantly and offline, with current countdowns. (REQ-CATALOG-048 acceptance_criteria)"
+  actual_result: ""
+  status: Blocked
+  defect_id: ""
+  remarks: >
+    HOW TO TEST THIS WITHOUT FOOLING YOURSELF - three attempts were invalid before one worked, and
+    both reasons are environmental rather than product bugs:
+    (1) TAB SCREENS STAY MOUNTED. Switching Home -> Exams does NOT re-run the load effect, so the
+    catalogue on screen may just be in-memory state from an earlier online load. Step 3 changes
+    SORT precisely because that changes the effect's key and forces a real re-read.
+    (2) 10.0.2.2 BYPASSES adb reverse. This dev build sets EXPO_PUBLIC_API_BASE_URL to the
+    emulator's host-loopback alias, so removing an adb reverse tunnel does NOT make the backend
+    unreachable - the app talks straight to the host. Airplane mode does block it, which is why
+    step 3 uses airplane mode. Note that airplane mode ALSO blocks Metro, so a dev build cannot be
+    cold-started offline; go offline after the app is already running.
+  automation_status: ManualOnly
+  automation_reference: ""
+

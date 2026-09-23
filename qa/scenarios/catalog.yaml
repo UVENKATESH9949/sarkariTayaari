@@ -514,3 +514,17 @@
   notes: >
     Removing the last exam leaves no active exam until the next sync, because ensureExamFollowed
     auto-follows the first exam again -- existing behaviour, not a rule introduced here.
+
+- id: SCN-CATALOG-049
+  requirement_ids: [REQ-CATALOG-048]
+  category: Offline
+  title: The Exams tab renders a stored catalogue, with countdowns counted for today
+  objective: >
+    Verify the tab opens from the snapshot, survives having no connection, and that the deadline
+    countdowns are recomputed rather than replayed stale.
+  systems: [Mobile]
+  status: Ready
+  notes: >
+    TESTING THIS CORRECTLY IS NOT OBVIOUS - three attempts were invalid before one was not. See the
+    test case's remarks: tab screens stay mounted, and 10.0.2.2 bypasses adb reverse.
+

@@ -71,7 +71,7 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 
 ## CATALOG
 
-25 requirements, 45 scenarios, 55 test cases.
+26 requirements, 46 scenarios, 56 test cases.
 
 | Requirement | Priority | Status | Scenario(s) | Test Case(s) | Execution | Defect |
 |---|---|---|---|---|---|---|
@@ -97,13 +97,14 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 | REQ-CATALOG-020: Exam Badges: read-only vocabulary, active/all split, no CRUD | Low | Active | SCN-CATALOG-037<br>SCN-CATALOG-043 | TC-CATALOG-046 (Not Executed)<br>TC-CATALOG-047 (Not Executed) |  |  |
 | REQ-CATALOG-021: Cross-cutting: public-vs-admin auth split across the whole catalog | Critical | Active | SCN-CATALOG-003<br>SCN-CATALOG-038 | TC-CATALOG-048 (Not Executed) |  |  |
 | REQ-CATALOG-022: Mobile — entire catalog syncs for full offline browsing and mock-test generation | Critical | Active | SCN-CATALOG-039 | TC-CATALOG-049 (Not Executed) |  |  |
-| REQ-CATALOG-023: Known limitation: per-section timers not enforced during a live mock test | Medium | Active | SCN-CATALOG-040 | TC-CATALOG-050 (Not Executed) |  |  |
+| REQ-CATALOG-023: Known limitation: per-section timers not enforced during a live mock test | Medium | Active | SCN-CATALOG-040 | TC-CATALOG-050 (Blocked) | EXEC-CATALOG-0050 |  |
 | REQ-CATALOG-024: Admin nested structure editor — inherited-value display and cascade-delete confirmation | Medium | Active | SCN-CATALOG-041<br>SCN-CATALOG-042 | TC-CATALOG-051 (Not Executed)<br>TC-CATALOG-052 (Not Executed) |  |  |
 | REQ-CATALOG-025: One active exam out of several followed, with every screen agreeing on which | High | Active | SCN-CATALOG-044<br>SCN-CATALOG-045 | TC-CATALOG-053 (Pass)<br>TC-CATALOG-054 (Pass)<br>TC-CATALOG-055 (Pass) | EXEC-CATALOG-0001<br>EXEC-CATALOG-0002<br>EXEC-CATALOG-0003<br>EXEC-CATALOG-0004 | DEF-CATALOG-001 |
+| REQ-CATALOG-048: The Exams tab keeps a snapshot of the catalogue the server returned | Medium | Active | SCN-CATALOG-049 | TC-CATALOG-050 (Blocked) | EXEC-CATALOG-0050 |  |
 
 ## DAILYPLAN
 
-9 requirements, 23 scenarios, 23 test cases.
+15 requirements, 33 scenarios, 34 test cases.
 
 | Requirement | Priority | Status | Scenario(s) | Test Case(s) | Execution | Defect |
 |---|---|---|---|---|---|---|
@@ -116,6 +117,12 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 | REQ-DAILYPLAN-007: The phone sends the preparation profile, so the planner budgets the student's real time | High | Active | SCN-DAILYPLAN-014<br>SCN-DAILYPLAN-015<br>SCN-DAILYPLAN-016<br>SCN-DAILYPLAN-017 | TC-DAILYPLAN-014 (Pass)<br>TC-DAILYPLAN-015 (Not Executed)<br>TC-DAILYPLAN-016 (Pass)<br>TC-DAILYPLAN-017 (Pass) | EXEC-DAILYPLAN-0014<br>EXEC-DAILYPLAN-0016<br>EXEC-DAILYPLAN-0015 |  |
 | REQ-DAILYPLAN-008: A student can see today's plan in the app | High | Active | SCN-DAILYPLAN-018<br>SCN-DAILYPLAN-019<br>SCN-DAILYPLAN-020<br>SCN-DAILYPLAN-021 | TC-DAILYPLAN-018 (Pass)<br>TC-DAILYPLAN-019 (Pass)<br>TC-DAILYPLAN-020 (Pass)<br>TC-DAILYPLAN-021 (Blocked) | EXEC-DAILYPLAN-0017<br>EXEC-DAILYPLAN-0022<br>EXEC-DAILYPLAN-0018<br>EXEC-DAILYPLAN-0021<br>EXEC-DAILYPLAN-0019<br>EXEC-DAILYPLAN-0020 |  |
 | REQ-DAILYPLAN-009: A student can change the study time the planner budgets from | High | Active | SCN-DAILYPLAN-022<br>SCN-DAILYPLAN-023 | TC-DAILYPLAN-022 (Pass)<br>TC-DAILYPLAN-023 (Pass) | EXEC-DAILYPLAN-0023<br>EXEC-DAILYPLAN-0024 |  |
+| REQ-DAILYPLAN-010: A day is built from five learning purposes, not two | High | Active | SCN-DAILYPLAN-024<br>SCN-DAILYPLAN-025 | TC-DAILYPLAN-024 (Pass)<br>TC-DAILYPLAN-025 (Pass)<br>TC-DAILYPLAN-031 (Not Executed) | EXEC-DAILYPLAN-0025<br>EXEC-DAILYPLAN-0026 |  |
+| REQ-DAILYPLAN-011: The number of new topics a day opens is explicitly capped by the time band | High | Active | SCN-DAILYPLAN-026<br>SCN-DAILYPLAN-027 | TC-DAILYPLAN-026 (Pass)<br>TC-DAILYPLAN-027 (Pass) | EXEC-DAILYPLAN-0027<br>EXEC-DAILYPLAN-0028 |  |
+| REQ-DAILYPLAN-012: The day's minutes are divided between the purposes, and a task that does not fit gets fewer questions | High | Active | SCN-DAILYPLAN-028<br>SCN-DAILYPLAN-029 | TC-DAILYPLAN-028 (Pass)<br>TC-DAILYPLAN-029 (Pass) | EXEC-DAILYPLAN-0029<br>EXEC-DAILYPLAN-0030 |  |
+| REQ-DAILYPLAN-013: Mistake review is built from the student's real wrong answers | Medium | Active | SCN-DAILYPLAN-030 | TC-DAILYPLAN-030 (Pass) | EXEC-DAILYPLAN-0031 |  |
+| REQ-DAILYPLAN-014: The device keeps a snapshot of the plan the server decided | High | Active | SCN-DAILYPLAN-031<br>SCN-DAILYPLAN-032 | TC-DAILYPLAN-032 (Blocked)<br>TC-DAILYPLAN-033 (Blocked) | EXEC-DAILYPLAN-0032<br>EXEC-DAILYPLAN-0033 |  |
+| REQ-DAILYPLAN-015: A stored plan shows progress counted on the device, not frozen figures | Medium | Active | SCN-DAILYPLAN-033 | TC-DAILYPLAN-034 (Not Executed) | EXEC-DAILYPLAN-0034 |  |
 
 ## LEARNING-STATE
 
@@ -148,6 +155,21 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 | REQ-ONBOARDING-011: One source of truth for the active exam, reflected on Home with no reload | Critical | Active | SCN-ONBOARDING-018 | TC-ONBOARDING-009 (Not Executed)<br>TC-ONBOARDING-018 (Not Executed) |  |  |
 | REQ-ONBOARDING-012: The preparation profile is device-local, and a reinstall re-onboards | Medium | Active | SCN-ONBOARDING-019 | TC-ONBOARDING-019 (Not Executed) |  |  |
 | REQ-ONBOARDING-013: CONTENT languages -- one or two, chosen independently of the app language | Critical | Active | SCN-ONBOARDING-021<br>SCN-ONBOARDING-022<br>SCN-ONBOARDING-023<br>SCN-ONBOARDING-024<br>SCN-ONBOARDING-025 | TC-ONBOARDING-021 (Not Executed)<br>TC-ONBOARDING-022 (Not Executed)<br>TC-ONBOARDING-023 (Not Executed)<br>TC-ONBOARDING-024 (Not Executed)<br>TC-ONBOARDING-025 (Not Executed) |  |  |
+
+## PRACTICE
+
+8 requirements, 13 scenarios, 13 test cases.
+
+| Requirement | Priority | Status | Scenario(s) | Test Case(s) | Execution | Defect |
+|---|---|---|---|---|---|---|
+| REQ-PRACTICE-001: Subject, topic and difficulty are chosen without leaving one screen | High | Active | SCN-PRACTICE-001<br>SCN-PRACTICE-002<br>SCN-PRACTICE-003<br>SCN-PRACTICE-008<br>SCN-PRACTICE-010 | TC-PRACTICE-001 (Pass)<br>TC-PRACTICE-002 (Pass)<br>TC-PRACTICE-003 (Not Executed)<br>TC-PRACTICE-008 (Not Executed)<br>TC-PRACTICE-010 (Skipped) | EXEC-PRACTICE-0001<br>EXEC-PRACTICE-0002<br>EXEC-PRACTICE-0008 |  |
+| REQ-PRACTICE-002: The practice engine is entered unchanged | Critical | Active | SCN-PRACTICE-004 | TC-PRACTICE-001 (Pass)<br>TC-PRACTICE-004 (Blocked) | EXEC-PRACTICE-0001<br>EXEC-PRACTICE-0003 |  |
+| REQ-PRACTICE-003: Difficulty options are synced data, and an empty one cannot be started | High | Active | SCN-PRACTICE-005<br>SCN-PRACTICE-006 | TC-PRACTICE-005 (Pass)<br>TC-PRACTICE-006 (Pass) | EXEC-PRACTICE-0004<br>EXEC-PRACTICE-0009<br>EXEC-PRACTICE-0010<br>EXEC-PRACTICE-0005 | DEF-PRACTICE-002 |
+| REQ-PRACTICE-004: The existing deep links into the levels screen keep working | Critical | Active | SCN-PRACTICE-007 | TC-PRACTICE-007 (Blocked) | EXEC-PRACTICE-0006 |  |
+| REQ-PRACTICE-005: The screen renders in Inter and follows the theme in both modes | Medium | Active | SCN-PRACTICE-009 | TC-PRACTICE-009 (Pass) | EXEC-PRACTICE-0007 | DEF-PRACTICE-001 |
+| REQ-PRACTICE-006: A topic card carries what it is worth practising, not just what it is called | High | Active | SCN-PRACTICE-011 | TC-PRACTICE-011 (Pass) | EXEC-PRACTICE-0011 |  |
+| REQ-PRACTICE-007: A practice session is a fixed twenty questions, drawn fresh each time | High | Active | SCN-PRACTICE-012 | TC-PRACTICE-012 (Pass) | EXEC-PRACTICE-0012 |  |
+| REQ-PRACTICE-008: A topic card shows how much of that topic has been practised | Medium | Active | SCN-PRACTICE-013 | TC-PRACTICE-013 (Blocked) | EXEC-PRACTICE-0013 |  |
 
 ## QUESTIONS
 
@@ -247,9 +269,9 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 
 | Metric | Value |
 |---|---|
-| Total requirements | 155 |
-| Total scenarios | 299 |
-| Total test cases | 321 |
+| Total requirements | 170 |
+| Total scenarios | 323 |
+| Total test cases | 346 |
 | Requirements with zero scenarios | 0  |
-| Real executions recorded | 79 |
-| Real defects logged | 3 |
+| Real executions recorded | 103 |
+| Real defects logged | 5 |

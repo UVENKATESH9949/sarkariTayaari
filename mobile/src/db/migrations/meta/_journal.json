@@ -218,6 +218,13 @@
       "when": 1788432006040,
       "tag": "0030_profile_updated_at",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1788518406040,
+      "tag": "0031_remote_snapshots",
+      "breakpoints": true
     }
   ]
 }

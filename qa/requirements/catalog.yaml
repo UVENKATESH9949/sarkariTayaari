@@ -1256,3 +1256,58 @@
     and an API change, which this work did not take on.
   automation_status: ManualOnly
   automation_hint: "No automated UI test runner exists for mobile in this project"
+
+- id: REQ-CATALOG-048
+  feature: The Exams tab keeps a snapshot of the catalogue the server returned
+  module: CATALOG
+  system: [Mobile]
+  source_doc: reports/42-daily-plan-snapshot-cache/daily-plan-snapshot-cache.md
+  source_section: "The same treatment for the Exams tab"
+  description: >
+    The first page of GET /api/exams/discover is stored in the local `remote_snapshots` table
+    (migration 0031), keyed by sort and category. Opening the Exams tab renders any stored page
+    immediately and refreshes in the background; a screen showing a snapshot says so with the time
+    it was taken. Later pages ("load more") are always live and never cached.
+  business_rule: >
+    Same architecture as the daily plan and the same rule: the device stores and displays what the
+    server decided, and never derives a catalogue itself. `daysUntilDeadline` and `closingSoon` are
+    the exception and are RE-DERIVED on the device, because both are computed relative to the
+    moment the server answered - replay them from a stale snapshot and a card reads
+    "closes in 12 days" when it is really 8, and `closingSoon` files the exam under the wrong
+    section heading entirely. The re-derivation mirrors ExamDiscoveryService exactly, including
+    its fourteen-day threshold.
+  actor: Any student, signed in or signed out
+  preconditions:
+    - "One successful discover fetch has happened for that sort and category"
+  inputs:
+    - "Opening the Exams tab, or changing sort or category"
+  expected_outputs:
+    - "A stored page renders without waiting on the network"
+    - "Countdowns and the closing-soon flag are correct for today, not for when the snapshot was taken"
+    - "The snapshot state is labelled with the time it was taken"
+  validations:
+    - "The key includes sort and category, so each filter keeps its own snapshot"
+    - "Only page 0 is cached"
+  permissions:
+    - "None - discover is a public endpoint taking no token"
+  dependencies: [REQ-DAILYPLAN-014]
+  error_conditions:
+    - "A failed refresh must not replace a usable catalogue with an error"
+  edge_conditions:
+    - >
+      NO USER IN THE KEY, deliberately. The payload contains nothing personal - follow state lives
+      in the local followed_exams table and never travels in it - so keying by user would fragment
+      one shared answer per account for no benefit. This is why sign-out clears only the
+      `daily-plan` namespace and leaves `exams-discover` alone.
+    - "A card with no applicationEnd keeps the server's null/false, which do not decay"
+  offline_behavior: "A stored page is readable and browsable with no connection"
+  acceptance_criteria:
+    - "A second open renders the catalogue without a loading state"
+    - "Offline, a stored catalogue still renders, labelled"
+    - "Countdowns shown from a snapshot are counted for today"
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "No mobile runner. The countdown re-derivation in examDiscoveryData.ts is pure and would be unit-testable."
+

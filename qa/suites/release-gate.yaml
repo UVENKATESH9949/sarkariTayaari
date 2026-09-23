@@ -2,7 +2,7 @@
 #
 # Critical + High priority test cases, excluding Ambiguous cases (no determinate pass/fail to gate on) and a short, explicitly-listed set of cases that need a special/controlled environment to reproduce reliably on demand (see HARD_TO_REPRODUCE in the generator script) — a release gate must be reliably executable every time, not aspirational.
 #
-# 203 test case(s). Membership rule: priority in [Critical, High] AND test_type != Ambiguous AND id not in HARD_TO_REPRODUCE.
+# 217 test case(s). Membership rule: priority in [Critical, High] AND test_type != Ambiguous AND id not in HARD_TO_REPRODUCE.
 
 suite: Release Gate
 test_case_ids:
@@ -118,6 +118,13 @@ test_case_ids:
   - TC-DAILYPLAN-019
   - TC-DAILYPLAN-020
   - TC-DAILYPLAN-022
+  - TC-DAILYPLAN-024
+  - TC-DAILYPLAN-025
+  - TC-DAILYPLAN-026
+  - TC-DAILYPLAN-027
+  - TC-DAILYPLAN-028
+  - TC-DAILYPLAN-029
+  - TC-DAILYPLAN-031
   - TC-LEARNINGSTATE-001
   - TC-LEARNINGSTATE-003
   - TC-LEARNINGSTATE-004
@@ -145,6 +152,13 @@ test_case_ids:
   - TC-ONBOARDING-023
   - TC-ONBOARDING-024
   - TC-ONBOARDING-025
+  - TC-PRACTICE-001
+  - TC-PRACTICE-002
+  - TC-PRACTICE-004
+  - TC-PRACTICE-005
+  - TC-PRACTICE-006
+  - TC-PRACTICE-007
+  - TC-PRACTICE-008
   - TC-QUESTIONS-001
   - TC-QUESTIONS-002
   - TC-QUESTIONS-003
