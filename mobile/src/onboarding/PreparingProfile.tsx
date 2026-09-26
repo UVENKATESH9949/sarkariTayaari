@@ -12,6 +12,8 @@ import { useT } from "../i18n/I18nContext";
 import { LoadingMark } from "../ui/LoadingMark";
 import { spacing } from "../ui/theme";
 import { useTheme, useThemedStyles, type Theme } from "../ui/ThemeContext";
+import { captureError } from "../telemetry/analytics";
+import { startupLog, withCeiling } from "../telemetry/startupLog";
 import { useOnboarding } from "./OnboardingContext";
 
 /**
@@ -49,6 +51,13 @@ const WELCOME_MS = 1600;
 /** Guards against a broken/never-resolving sync leaving someone here. Never reached in normal use. */
 const WORK_CEILING_MS = 12000;
 
+/**
+ * Per-step ceiling for the best-effort steps (following the exam, warming the dashboard). The shared
+ * API client has no request timeout, so without this a network that accepts a connection and never
+ * answers would hold the student here indefinitely.
+ */
+const STEP_CEILING_MS = 8000;
+
 type StepState = "pending" | "active" | "done" | "skipped";
 
 function ChecklistRow({ label, state }: { label: string; state: StepState }) {
@@ -82,81 +91,123 @@ export function PreparingProfile() {
   const [dashboardState, setDashboardState] = useState<StepState>("pending");
   const [showWelcome, setShowWelcome] = useState(false);
 
-  // The whole sequence runs once. The sync state changes underneath it while it runs, and
-  // re-running would re-follow the exam on every tick.
+  /*
+   * THE SEQUENCE RUNS EXACTLY ONCE, AND ONLY UNMOUNTING CAN CANCEL IT.
+   *
+   * This is the fix for the "stuck on Preparing" bug (2026-09-24). The previous version listed
+   * `addExam`, `setActiveExam` and `mode` as effect dependencies, and guarded re-entry with a
+   * `started` ref. But step 2 itself changes those values: following the exam re-renders the
+   * active-exam provider, which rebuilds `setActiveExam` (it closes over `activeExam`/`myExams`),
+   * and the first sync finishing flips `mode` from "live" to "local". Each change ran the effect's
+   * cleanup — setting `cancelled` — and the re-run returned early on the `started` guard. The
+   * in-flight sequence then hit `if (cancelled) return` and stopped for good, so `finish()` was
+   * never called. The 12-second ceiling lived inside the loop that had already exited, so it could
+   * not help either. Relaunching "fixed" it only because onboarding was already stamped complete
+   * and this screen was skipped.
+   *
+   * So everything the sequence needs is read through refs that always hold the latest value, the
+   * effect has no dependencies, and `cancelled` means "this component unmounted" and nothing else.
+   * Do not add dependencies back to this effect.
+   */
   const started = useRef(false);
-  // Read inside the loop below without making it a dependency — same reason SyncContext keeps
-  // `isOnlineRef`: this effect is set up once and must see the latest value, not the mounted one.
-  const preparingRef = useRef(firstLaunchSyncActive);
+  const latest = useRef({ draft, addExam, setActiveExam, mode, refreshContentLanguages, firstLaunchSyncActive });
   useEffect(() => {
-    preparingRef.current = firstLaunchSyncActive;
-  }, [firstLaunchSyncActive]);
+    latest.current = { draft, addExam, setActiveExam, mode, refreshContentLanguages, firstLaunchSyncActive };
+  });
 
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    let cancelled = false;
+    let unmounted = false;
 
     (async () => {
       const deadline = Date.now() + WORK_CEILING_MS;
+      const examCode = latest.current.draft.primaryExamCode;
+      startupLog("PREPARATION_STEP", { step: "start", hasExam: examCode !== null });
 
       // The content-language provider sits above onboarding in the tree, so it read an empty
       // selection before the student had answered. Telling it to re-read is what makes the
       // choice reach the quiz in this session rather than only after the next app start.
-      await refreshContentLanguages().catch((err) =>
-        console.warn("Failed to refresh content languages", err),
-      );
+      try {
+        await withCeiling("content-languages", latest.current.refreshContentLanguages(), STEP_CEILING_MS, undefined);
+      } catch (err) {
+        console.warn("Failed to refresh content languages", err);
+      }
 
       // 2. The exam.
-      if (draft.primaryExamCode) {
+      if (examCode) {
         try {
-          await addExam(draft.primaryExamCode);
+          await withCeiling("follow-exam", latest.current.addExam(examCode), STEP_CEILING_MS, undefined);
           // Silent: this screen is already the progress UI, and the switching overlay exists to
-          // cover a dashboard being swapped out. There is no previous dashboard here.
-          await setActiveExam(draft.primaryExamCode, { silent: true });
+          // cover a dashboard being swapped out. There is no previous dashboard here. The provider
+          // may not have re-rendered since the follow; that is fine, because setActiveExam re-reads
+          // the followed list from SQLite when its in-memory copy lacks the exam.
+          await withCeiling(
+            "activate-exam",
+            latest.current.setActiveExam(examCode, { silent: true }),
+            STEP_CEILING_MS,
+            undefined,
+          );
         } catch (err) {
           console.warn("Failed to set the onboarding exam", err);
         }
-        if (cancelled) return;
+        if (unmounted) return;
         setExamState("done");
       } else {
         // No exam was chosen, because there was nothing to choose from. Nothing is claimed.
         setExamState("skipped");
       }
+      startupLog("PREPARATION_STEP", { step: "exam" });
       setContentState("active");
 
       // 3. Reference data — waited on through the SAME signal the startup gate releases on, not a
       // similar-looking one. That is what stops the generic preparation screen appearing for a
-      // frame after this one: by the time this loop exits, that gate is already open.
-      while (preparingRef.current && Date.now() < deadline) {
+      // frame after this one: by the time this loop exits, that gate is already open. The gate
+      // itself has a 5 s ceiling, so this cannot outlive it by much; WORK_CEILING_MS is a backstop.
+      while (latest.current.firstLaunchSyncActive && Date.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, 150));
-        if (cancelled) return;
+        if (unmounted) return;
       }
       setContentState("done");
       setDashboardState("active");
+      startupLog("PREPARATION_STEP", { step: "content" });
 
       // 4. Warm what Home reads first. allSettled: each of these is an enhancement whose own
-      // screen renders correctly without it, so a failure must not hold the student here.
-      if (draft.primaryExamCode) {
-        await Promise.allSettled([
-          getExamGuideHybrid(draft.primaryExamCode, mode),
-          getPriorityTopics(draft.primaryExamCode, 4),
-        ]);
+      // screen renders correctly without it, so a failure must not hold the student here — and
+      // the ceiling means a request that never answers cannot either.
+      if (examCode) {
+        const mode = latest.current.mode;
+        await withCeiling(
+          "warm-dashboard",
+          Promise.allSettled([getExamGuideHybrid(examCode, mode), getPriorityTopics(examCode, 4)]).then(() => undefined),
+          STEP_CEILING_MS,
+          undefined,
+        );
       }
-      if (cancelled) return;
+      if (unmounted) return;
       setDashboardState("done");
+      startupLog("PREPARATION_READY");
       setShowWelcome(true);
-    })();
+    })().catch((err) => {
+      // Nothing above should throw past its own try/allSettled, but if something does, the
+      // student still goes Home. Being stuck here is the one outcome this screen must never have.
+      console.warn("Preparation sequence failed; continuing to the app", err);
+      captureError(err, { context: "PreparingProfile.sequence" });
+      if (!unmounted) setShowWelcome(true);
+    });
 
     return () => {
-      cancelled = true;
+      unmounted = true;
     };
-  }, [draft.primaryExamCode, addExam, setActiveExam, mode, refreshContentLanguages]);
+  }, []);
 
   // The welcome beat, and then the app.
   useEffect(() => {
     if (!showWelcome) return;
-    const id = setTimeout(finish, WELCOME_MS);
+    const id = setTimeout(() => {
+      startupLog("NAVIGATING_HOME", { from: "onboarding" });
+      finish();
+    }, WELCOME_MS);
     return () => clearTimeout(id);
   }, [showWelcome, finish]);
 

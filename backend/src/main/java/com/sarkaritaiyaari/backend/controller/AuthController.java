@@ -2,10 +2,12 @@ package com.sarkaritaiyaari.backend.controller;
 
 import com.sarkaritaiyaari.backend.dto.AuthResponse;
 import com.sarkaritaiyaari.backend.dto.EmailOtpDtos;
+import com.sarkaritaiyaari.backend.dto.GoogleSignInRequest;
 import com.sarkaritaiyaari.backend.dto.LoginRequest;
 import com.sarkaritaiyaari.backend.dto.RegisterRequest;
 import com.sarkaritaiyaari.backend.service.AuthService;
 import com.sarkaritaiyaari.backend.service.EmailOtpService;
+import com.sarkaritaiyaari.backend.service.GoogleSignInService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -23,10 +25,13 @@ public class AuthController {
 
     private final AuthService authService;
     private final EmailOtpService emailOtpService;
+    private final GoogleSignInService googleSignInService;
 
-    public AuthController(AuthService authService, EmailOtpService emailOtpService) {
+    public AuthController(AuthService authService, EmailOtpService emailOtpService,
+                          GoogleSignInService googleSignInService) {
         this.authService = authService;
         this.emailOtpService = emailOtpService;
+        this.googleSignInService = googleSignInService;
     }
 
     /**
@@ -52,6 +57,17 @@ public class AuthController {
     @PostMapping("/otp/verify")
     public AuthResponse verifyCode(@Valid @RequestBody EmailOtpDtos.VerifyCodeRequest request) {
         return emailOtpService.verifyCode(request.getEmail(), request.getCode(), request.getDeviceLabel());
+    }
+
+    /**
+     * "Continue with Google" (2026-09-25). Verifies the Google ID token server-side and returns the
+     * same session shape as every other sign-in. Same Gmail -> same account as an emailed code.
+     * 401 for any token that fails verification; 400 for a non-Gmail account or when Google
+     * sign-in is not configured on this server.
+     */
+    @PostMapping("/google")
+    public AuthResponse google(@Valid @RequestBody GoogleSignInRequest request) {
+        return googleSignInService.signIn(request.getIdToken(), request.getDeviceLabel());
     }
 
     @PostMapping("/register")

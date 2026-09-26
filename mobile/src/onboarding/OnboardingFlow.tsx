@@ -136,15 +136,25 @@ export function OnboardingFlow() {
 
   useEffect(() => {
     let cancelled = false;
+    /*
+     * A list the student has already seen is never replaced by an empty one. Found on the emulator
+     * (2026-09-25): an exam was chosen online, the network dropped, `mode` went "live" ->
+     * "unavailable", this re-ran and set []. Finishing then failed validation ("not an available
+     * exam") and bounced back to the exam step, whose offline notice says "just Continue" — but
+     * the saved choice still failed, so the student looped there until the network returned.
+     * The exam was real when they picked it; losing the connection does not make it less so.
+     */
+    const keepKnown = (next: ExamOption[]) =>
+      setExams((previous) => (next.length === 0 && previous && previous.length > 0 ? previous : next));
     getSyncedExams(mode)
       .then((list) => {
-        if (!cancelled) setExams(list);
+        if (!cancelled) keepKnown(list);
       })
       .catch((err) => {
         // An empty list and a failed fetch are shown the same way, because to the student they
         // are the same thing: there is nothing to choose from, and that must not be a dead end.
         console.warn("Failed to load exams for onboarding", err);
-        if (!cancelled) setExams([]);
+        if (!cancelled) keepKnown([]);
       });
     return () => {
       cancelled = true;

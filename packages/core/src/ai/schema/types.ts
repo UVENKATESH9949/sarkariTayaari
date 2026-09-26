@@ -115,6 +115,40 @@ export type ProfileSummary = {
   narrative: string;
 };
 
+/** Closed set, matching the Practice Result screen's own primary actions — see `summary.tsx`. */
+export type RecommendedResultAction = "RETRY" | "NEXT_LEVEL" | "NEXT_TOPIC" | "PRACTICE_WEAK_AREA";
+
+export const RECOMMENDED_RESULT_ACTIONS: readonly RecommendedResultAction[] = [
+  "RETRY",
+  "NEXT_LEVEL",
+  "NEXT_TOPIC",
+  "PRACTICE_WEAK_AREA",
+] as const;
+
+export function isRecommendedResultAction(value: string): value is RecommendedResultAction {
+  return (RECOMMENDED_RESULT_ACTIONS as readonly string[]).includes(value);
+}
+
+/**
+ * The Practice Result screen's "AI Feedback" tab. Deliberately structured rather than one
+ * narrative field (unlike `SessionFeedback`/`ProfileSummary`) — the whole point of this task is
+ * interpretation the app can render into distinct UI blocks (§13 of the spec), not a paragraph
+ * dumped on screen. `strengths`/`weakAreas` are short bullet lists, not full sentences.
+ */
+export type PracticeResultInsight = {
+  taskId: "PRACTICE_RESULT_INSIGHT";
+  /** One concise paragraph — the overall interpretation. */
+  summary: string;
+  /** 0-3 short points. Empty when nothing in the session stood out as a strength. */
+  strengths: string[];
+  /** 0-3 short points. Empty when nothing in the session stood out as weak. */
+  weakAreas: string[];
+  /** Null when the time data did not reveal anything meaningful — never a filler sentence. */
+  timeInsight: string | null;
+  recommendation: string;
+  recommendedAction: RecommendedResultAction;
+};
+
 /** Every shape a `GENERATED` or `CACHED` tier can produce. */
 export type AiTaskResponse =
   | QuestionExplanation
@@ -124,7 +158,8 @@ export type AiTaskResponse =
   | PersonalizedExplanation
   | QuestionClassification
   | SessionFeedback
-  | ProfileSummary;
+  | ProfileSummary
+  | PracticeResultInsight;
 
 /**
  * The tasks that actually return a model-shaped payload. The rest
@@ -145,6 +180,7 @@ export function isGenerativeTaskId(id: AiTaskId): id is GenerativeTaskId {
     id === "PERSONALIZED_EXPLANATION" ||
     id === "QUESTION_CLASSIFICATION" ||
     id === "SESSION_FEEDBACK" ||
-    id === "PROFILE_SUMMARY"
+    id === "PROFILE_SUMMARY" ||
+    id === "PRACTICE_RESULT_INSIGHT"
   );
 }

@@ -1,0 +1,19 @@
+{{APP_NAME}}
+
+Verify your email
+
+Your verification code is:
+
+    {{CODE}}
+
+This code expires in {{MINUTES}} minutes and can be used only once.
+
+For your security, never share this code with anyone. {{APP_NAME}} will never
+ask you for it by phone, message or email.
+
+If you didn't request this code, you can safely ignore this email. Nobody can
+sign in to your account without it.
+
+--
+This code was requested for {{EMAIL}}.
+(c) {{YEAR}} {{APP_NAME}}. All rights reserved.

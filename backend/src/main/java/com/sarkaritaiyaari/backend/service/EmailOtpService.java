@@ -2,10 +2,7 @@ package com.sarkaritaiyaari.backend.service;
 
 import com.sarkaritaiyaari.backend.dto.AuthResponse;
 import com.sarkaritaiyaari.backend.entity.EmailOtpCode;
-import com.sarkaritaiyaari.backend.entity.Role;
-import com.sarkaritaiyaari.backend.entity.User;
 import com.sarkaritaiyaari.backend.repository.EmailOtpCodeRepository;
-import com.sarkaritaiyaari.backend.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,7 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
-import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -60,13 +56,20 @@ public class EmailOtpService {
     static final int RESEND_COOLDOWN_SECONDS = 60;
 
     /**
+     * Most codes one address can be sent per rolling hour (2026-09-24). The cooldown alone still
+     * allowed sixty emails an hour to one inbox — a spam vector — and, at five guesses per code, far
+     * more guesses per hour than any real student needs. Five an hour covers every honest retry.
+     */
+    static final int MAX_CODES_PER_HOUR = 5;
+
+    /**
      * Only Gmail addresses, for now, at the project owner's explicit instruction. Enforced in one
      * place so widening it later is a one-line change rather than a hunt.
      */
     private static final String ALLOWED_DOMAIN = "@gmail.com";
 
     private final EmailOtpCodeRepository codeRepository;
-    private final UserRepository userRepository;
+    private final PasswordlessAccountService accounts;
     private final AuthService authService;
     private final OtpMailSender mailSender;
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
@@ -74,12 +77,12 @@ public class EmailOtpService {
     private final boolean returnCodeInResponse;
 
     public EmailOtpService(EmailOtpCodeRepository codeRepository,
-                           UserRepository userRepository,
+                           PasswordlessAccountService accounts,
                            AuthService authService,
                            OtpMailSender mailSender,
                            @Value("${app.mail.expose-code-in-response:false}") boolean returnCodeInResponse) {
         this.codeRepository = codeRepository;
-        this.userRepository = userRepository;
+        this.accounts = accounts;
         this.authService = authService;
         this.mailSender = mailSender;
         this.returnCodeInResponse = returnCodeInResponse;
@@ -112,6 +115,12 @@ public class EmailOtpService {
                     "A code was just sent. Please wait " + Math.max(1, wait) + " seconds before asking for another.");
         }
 
+        long sentThisHour = codeRepository.countIssuedSince(email, now.minusHours(1));
+        if (sentThisHour >= MAX_CODES_PER_HOUR) {
+            throw new IllegalArgumentException(
+                    "Too many codes requested for this email. Please try again in about an hour.");
+        }
+
         // Retire anything still live, so exactly one code per address can ever be redeemed.
         List<EmailOtpCode> live = codeRepository.findLiveForEmail(email, now);
         for (EmailOtpCode stale : live) {
@@ -125,6 +134,11 @@ public class EmailOtpService {
         row.setExpiresAt(now.plusMinutes(CODE_TTL_MINUTES));
         codeRepository.save(row);
 
+        /*
+         * Throws EmailDeliveryException when mail is on and the send failed. This method is
+         * transactional, so that also rolls back the new row AND the retirement above: the student's
+         * previous code (if any) stays usable, and the failed attempt does not start a cooldown.
+         */
         mailSender.sendCode(email, code, CODE_TTL_MINUTES);
 
         // Opportunistic cleanup while we are already writing. Bounded and cheap; nothing depends on
@@ -181,34 +195,14 @@ public class EmailOtpService {
 
         row.setConsumedAt(now);
 
-        Optional<User> existing = userRepository.findByEmail(email);
-        User user = existing.orElseGet(() -> createPasswordlessUser(email));
-        log.info("otp.verified email={} newAccount={}", email, existing.isEmpty());
+        // Shared with Google sign-in, so the same address is always the same account.
+        PasswordlessAccountService.Result account = accounts.findOrCreate(email);
+        log.info("otp.verified email={} newAccount={}", OtpMailSender.maskEmail(email), account.created());
 
-        return authService.issueTokenFor(user, deviceLabel);
+        return authService.issueTokenFor(account.user(), deviceLabel);
     }
 
     /* ------------------------------------------------------------------- internals */
-
-    /**
-     * Creates an account that can only ever be entered by email code.
-     *
-     * <p>{@code users.password_hash} is NOT NULL and deliberately left that way — relaxing a column
-     * on the busiest table in the schema to serve a new sign-in path is a bigger change than this
-     * needs. Instead the row gets a hash of random bytes nobody has ever seen, so password sign-in
-     * for this account can never succeed. The standard "unusable password" pattern.
-     */
-    private User createPasswordlessUser(String email) {
-        byte[] unguessable = new byte[32];
-        random.nextBytes(unguessable);
-
-        User user = new User();
-        user.setEmail(email);
-        user.setPasswordHash(encoder.encode(Base64.getEncoder().encodeToString(unguessable)));
-        user.setRole(Role.STUDENT);
-        userRepository.save(user);
-        return user;
-    }
 
     /** Six digits, uniformly distributed, from a cryptographic source. */
     private String generateCode() {

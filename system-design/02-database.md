@@ -251,7 +251,7 @@ phone and are never uploaded:
 | `practice_sessions` + `practice_session_results` | past practice sessions, question by question |
 | `mock_test_attempts` + `mock_test_attempt_results` | past mock tests, with scores |
 | `bookmarks` | questions the student saved |
-| `app_preferences` | one row, keyed `"current"`, holding everything that describes this *device* rather than the account: theme/zoom/UI language, which of the followed exams is the **active** one (migration 0026), and the **first-time onboarding profile** — display name, chosen exam, exam stage, target year, preparation level, daily study time, and the two onboarding timestamps (migration 0027). Deliberately never synced and never cleared on sign-out (see `05-why-its-built-this-way.md`). Being a single row is what makes "exactly one active exam" and "one profile per device" true by construction rather than by a constraint |
+| `app_preferences` | one row, keyed `"current"`, holding everything that describes this *device* rather than the account: theme/zoom/UI language, which of the followed exams is the **active** one (migration 0026), and the **first-time onboarding profile** — display name, chosen exam, exam stage, target year, preparation level, daily study time, and the two onboarding timestamps (migration 0027). Theme/zoom/language/active exam are device settings and are never cleared on sign-out (see `05-why-its-built-this-way.md`). **The onboarding profile is different since 2026-09-25**: it belongs to the person, is synced to `user_preparation_profiles` (including onboarding completion, V53), and is cleared on sign-out after being pushed, so a second account on the same phone never inherits it (DEF-ONBOARDING-001). Being a single row is what makes "exactly one active exam" and "one profile per device" true by construction rather than by a constraint |
 | `radar_cache` | the last Weakness Radar the server sent, one JSON payload per exam, so the radar screens still work offline. Account data, not a device setting — it's cleared on sign-out, unlike `app_preferences` above |
 
 **If the student is signed out, all of this is local-only** — uninstalling the app loses
@@ -336,6 +336,8 @@ V48__preparation_profile.sql                  user_preparation_profiles — the 
 V49__study_tasks.sql                          study_tasks — what today's plan assigned, the one phase that stores its output
 V50__study_task_reason.sql                    study_tasks.reason — why a task was chosen, stored at the moment it was chosen
 V51__email_otp.sql                            email_otp_codes — one-time sign-in codes, no FK to users by design
+V52__study_task_sources.sql                   study_tasks.source relabel PRACTICE -> NEW_TOPIC (five learning purposes, TASK-3501)
+V53__onboarding_completed_at.sql              user_preparation_profiles.onboarding_completed_at — onboarding completion as an account fact, monotonic
 ```
 
 V8–V24 add whole feature areas ("Epic L" topic intelligence, "Exam Guide", the Exams

@@ -24,12 +24,35 @@ import { loadPreparationProfile, savePreparationProfile } from "../db/onboarding
  *
  * <h2>What is deliberately not synced</h2>
  * `contentLanguages` (its own table, and a content-rendering preference rather than a planning
- * input), the interface language, theme and zoom — all device preferences. And the two onboarding
- * timestamps, which answer "has this install been onboarded", a question about the device and not
- * about the account.
+ * input), the interface language, theme and zoom — all device preferences. And `onboardingStartedAt`,
+ * which only matters to the install that is mid-flow.
+ *
+ * <h2>Onboarding completion IS synced (V53, 2026-09-24)</h2>
+ * This used to be listed above as device-only, on the reasoning that "has this install been
+ * onboarded" is a question about the device. That reasoning broke on reinstall: uninstalling wipes
+ * the device, so a student who had onboarded was asked everything again. Completion is now an
+ * account fact the server keeps monotonically, and an install that has not finished only ever
+ * downloads (see below).
  */
 export async function syncPreparationProfile(token: string): Promise<"uploaded" | "pulled" | "noop"> {
   const local = await loadPreparationProfile();
+
+  /*
+   * AN INSTALL THAT HAS NOT FINISHED ONBOARDING NEVER UPLOADS. It only downloads.
+   *
+   * Fixed 2026-09-24, and it was a data-loss bug, not a nicety. `savePreparationProfile` stamps
+   * `profileUpdatedAt` on every write — including the "onboarding started" stamp written the
+   * moment a fresh install launches, and every answer written through mid-flow. So a REINSTALLED
+   * app, signing in with an empty profile, carried a timestamp newer than the server's real copy
+   * and won last-write-wins: the student's exam, study time and name were overwritten with nulls.
+   * The same thing sent half-finished profiles up whenever the app was backgrounded mid-flow.
+   *
+   * Until this install is stamped complete, the only thing it can usefully do is take the account's
+   * copy — which is also how a reinstalled app learns onboarding was already done (see applyRemote).
+   */
+  if (!local.onboardingCompletedAt) {
+    return (await pullIfFinished(token)) ? "pulled" : "noop";
+  }
 
   /*
    * When the student actually stated this profile.
@@ -41,21 +64,9 @@ export async function syncPreparationProfile(token: string): Promise<"uploaded" 
    * Found by the device pass, not by review. The first version treated a missing timestamp as
    * "nothing to say" and pushed nothing — so a real device carrying a real "1-2 hours" answer from
    * onboarding would have kept it to itself forever, and the planner would have budgeted the
-   * 60-minute default for exactly the students this change exists to serve. The instinct behind it
-   * was right, but it only matters when the server already holds something, which the ordering
-   * below preserves: a genuine later edit on another device still wins, because its timestamp is
-   * newer than this onboarding moment.
+   * 60-minute default for exactly the students this change exists to serve.
    */
   const editedAt = local.profileUpdatedAt ?? local.onboardingCompletedAt;
-
-  /*
-   * No timestamp at all means this install has never completed onboarding, so there is genuinely
-   * nothing to say about this student. Take the server's copy if it has one, and push nothing —
-   * inventing a "now" here would beat a real edit made on their other device.
-   */
-  if (!editedAt) {
-    return (await pullIfPresent(token)) ? "pulled" : "noop";
-  }
 
   const payload: PreparationProfilePayload = {
     displayName: local.displayName?.trim() ? local.displayName.trim() : null,
@@ -65,6 +76,8 @@ export async function syncPreparationProfile(token: string): Promise<"uploaded" 
     preparationLevel: local.preparationLevel,
     dailyStudyTime: local.dailyStudyTime,
     updatedAt: editedAt,
+    // The server keeps this monotonically (never cleared), so sending it every time is safe.
+    onboardingCompletedAt: local.onboardingCompletedAt,
   };
 
   const result = await uploadPreparationProfile(token, payload);
@@ -80,10 +93,28 @@ export async function syncPreparationProfile(token: string): Promise<"uploaded" 
   return "uploaded";
 }
 
-/** True when the server had a profile and it was written locally. */
-async function pullIfPresent(token: string): Promise<boolean> {
+/**
+ * Whether the server's copy says onboarding was finished, and when.
+ *
+ * A server from V53 on answers directly (a string, or null for "not finished"). An older server
+ * does not send the field at all — the APK and the backend deploy separately, so that window is
+ * real. There, a stored profile carrying a display name is taken as finished, matching exactly how
+ * V53 backfills: the name is the first answer, and devices only uploaded after completing.
+ */
+export function remoteCompletedAt(remote: PreparationProfilePayload): string | null {
+  if (remote.onboardingCompletedAt !== undefined) return remote.onboardingCompletedAt;
+  return remote.displayName?.trim() ? remote.updatedAt : null;
+}
+
+/**
+ * True when the server held a FINISHED profile and it was written locally.
+ *
+ * An unfinished server copy is left alone: this install is itself mid-onboarding, and writing a
+ * partial remote profile into SQLite would overwrite the answers the student is typing right now.
+ */
+async function pullIfFinished(token: string): Promise<boolean> {
   const remote = await fetchPreparationProfile(token);
-  if (!remote.profile) return false;
+  if (!remote.profile || !remoteCompletedAt(remote.profile)) return false;
   await applyRemote(remote.profile);
   return true;
 }
@@ -94,6 +125,8 @@ async function pullIfPresent(token: string): Promise<boolean> {
  * did not earn.
  */
 async function applyRemote(remote: PreparationProfilePayload): Promise<void> {
+  const local = await loadPreparationProfile();
+  const completedAt = remoteCompletedAt(remote);
   await savePreparationProfile({
     displayName: remote.displayName ?? "",
     primaryExamCode: remote.primaryExamCode,
@@ -104,5 +137,9 @@ async function applyRemote(remote: PreparationProfilePayload): Promise<void> {
     // The one caller that passes an explicit timestamp: savePreparationProfile honours it rather
     // than stamping now, so this device does not look like the most recent editor.
     profileUpdatedAt: remote.updatedAt,
+    // What lets a reinstalled app (or a second phone) skip onboarding: the account says it was
+    // finished, so this install is too. Only ever SET here — a remote "not finished" never clears
+    // a completion this device stamped itself. OnboardingProvider re-reads this after sign-in.
+    ...(completedAt && !local.onboardingCompletedAt ? { onboardingCompletedAt: completedAt } : {}),
   });
 }

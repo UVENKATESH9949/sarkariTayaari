@@ -1,12 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { AppState } from "react-native";
 import { clearSession, loadSession, saveSession } from "../db/authSession";
+import { resetProfileForSignOut } from "../db/onboarding";
 import { clearSnapshots } from "../data/snapshotStore";
 import {
   login as apiLogin,
   logout as apiLogout,
   register as apiRegister,
   requestEmailOtp,
+  signInWithGoogleIdToken,
   verifyEmailOtp,
   type AuthUser,
 } from "@sarkaritaiyaari/core/api";
@@ -19,8 +21,13 @@ import {
   uploadPendingTopicProgress,
 } from "../sync/topicProgressSync";
 import { captureError, trackEvent } from "../telemetry/analytics";
+import { startupLog } from "../telemetry/startupLog";
+import { signOutOfGoogle } from "../auth/googleSignIn";
 import { registerForPushNotifications } from "../notifications/pushRegistration";
 import { clearCachedRadars } from "../db/radarCache";
+
+/** Longest the start gate waits for a sign-in's account restore before showing onboarding anyway. */
+const RESTORE_WAIT_MS = 10_000;
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -39,6 +46,8 @@ type AuthContextValue = {
   requestSignInCode: (email: string) => Promise<{ expiresInMinutes: number; emailed: boolean }>;
   /** Redeems a code and signs in, creating the account if this is the first time. */
   signInWithCode: (email: string, code: string) => Promise<void>;
+  /** Signs in with a Google ID token; the same Gmail is the same account as a code sign-in. */
+  signInWithGoogle: (idToken: string) => Promise<void>;
   signOut: () => Promise<void>;
   /** Push anything pending; safe to call when signed out (does nothing). */
   pushProgress: () => Promise<void>;
@@ -49,6 +58,19 @@ type AuthContextValue = {
    * like the restore failing.
    */
   progressVersion: number;
+  /**
+   * True from the moment a sign-in succeeds until its first full sync has finished (or given up).
+   * The start gate waits on this before deciding onboarding is owed, so a returning student on a
+   * reinstalled app is not shown step 1 for the second it takes their account to come back.
+   */
+  restoringAccount: boolean;
+  /**
+   * Bumped whenever a sync writes the account's preparation profile into SQLite. The onboarding
+   * provider re-reads completion on it — that is how a reinstall learns onboarding was done.
+   */
+  profileVersion: number;
+  /** Bumped on every sign-out, so the onboarding provider can reset to the next person's state. */
+  signOutCount: number;
 };
 
 const AuthContext = createContext<AuthContextValue>({
@@ -60,9 +82,13 @@ const AuthContext = createContext<AuthContextValue>({
   signIn: async () => {},
   requestSignInCode: async () => ({ expiresInMinutes: 0, emailed: false }),
   signInWithCode: async () => {},
+  signInWithGoogle: async () => {},
   signOut: async () => {},
   pushProgress: async () => {},
   progressVersion: 0,
+  restoringAccount: false,
+  profileVersion: 0,
+  signOutCount: 0,
 });
 
 export function useAuth() {
@@ -81,6 +107,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [syncing, setSyncing] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [progressVersion, setProgressVersion] = useState(0);
+  const [restoringAccount, setRestoringAccount] = useState(false);
+  const [profileVersion, setProfileVersion] = useState(0);
+  const [signOutCount, setSignOutCount] = useState(0);
 
   // A ref, not state: the launch and foreground triggers can fire in the same tick.
   const inFlight = useRef(false);
@@ -93,6 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setToken(stored.token);
           setUser(stored.user);
         }
+        startupLog("AUTH_RESTORED", { signedIn: stored !== null && stored !== undefined });
       } finally {
         setLoading(false);
       }
@@ -106,7 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLastError(null);
     try {
       if (full) {
-        const [progressResult, bookmarkResult, followedExamResult, restoredTopics] = await Promise.all([
+        const [progressResult, bookmarkResult, followedExamResult, restoredTopics, profileResult] = await Promise.all([
           syncProgress(activeToken),
           syncBookmarks(activeToken),
           // New endpoint (Exams module Phase 2/3) — same 404-tolerant reasoning as the
@@ -152,6 +182,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return "noop" as const;
           }),
         ]);
+        if (profileResult === "pulled") setProfileVersion((v) => v + 1);
         // Only nudge the UI when something actually landed locally.
         if (
           progressResult.restoredSessions > 0 ||
@@ -181,10 +212,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }),
           // Same batch, same reasoning. A profile edited in Settings while offline goes up on the
           // next push rather than waiting for a full sync.
-          syncPreparationProfile(activeToken).catch((err) => {
-            captureError(err, { context: "authContext.preparationProfileSync", full: false });
-            return "noop" as const;
-          }),
+          syncPreparationProfile(activeToken)
+            .then((result) => {
+              if (result === "pulled") setProfileVersion((v) => v + 1);
+              return result;
+            })
+            .catch((err) => {
+              captureError(err, { context: "authContext.preparationProfileSync", full: false });
+              return "noop" as const;
+            }),
         ]);
       }
     } catch (err) {
@@ -220,15 +256,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const adopt = useCallback(async (result: Awaited<ReturnType<typeof apiLogin>>, source: "sign_up" | "sign_in") => {
     await saveSession(result);
+    // Raised BEFORE the user is set, in the same batch, so the start gate never sees a signed-in
+    // user with the restore not yet announced — that one render is exactly when it would decide
+    // onboarding is owed.
+    setRestoringAccount(true);
     setToken(result.token);
     setUser(result.user);
     trackEvent(source);
+    startupLog("SIGNED_IN");
     // Not awaited: a denied permission or a slow registration must not delay sign-in for
     // a feature (reminders) nobody has asked for yet. Errors are swallowed internally.
     registerForPushNotifications(result.token);
     // Full sync on sign-in: upload what this device has, then pull down anything it
-    // is missing. This is the moment a new phone gets its history back.
-    await runSync(result.token, true);
+    // is missing. This is the moment a new phone gets its history back — and, since V53, the
+    // moment a reinstalled app learns onboarding was already done.
+    startupLog("ACCOUNT_RESTORE_STARTED");
+    /*
+     * The flag, not the sync, has a ceiling. The shared API client has no request timeout, so a
+     * network that never answers must not hold the start gate on "restoring" forever. After
+     * RESTORE_WAIT_MS the gate falls through to onboarding; if the account's profile lands later,
+     * `profileVersion` still ends onboarding the moment it does.
+     */
+    let announced = false;
+    const endRestore = (reason: string) => {
+      if (announced) return;
+      announced = true;
+      setRestoringAccount(false);
+      startupLog("ACCOUNT_RESTORE_FINISHED", { reason });
+    };
+    const ceiling = setTimeout(() => endRestore("ceiling"), RESTORE_WAIT_MS);
+    try {
+      await runSync(result.token, true);
+    } finally {
+      clearTimeout(ceiling);
+      endRestore("synced");
+    }
   }, [runSync]);
 
   const signUp = useCallback(async (email: string, password: string, displayName?: string) => {
@@ -252,6 +314,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithCode = useCallback(async (email: string, code: string) => {
     adoptOrThrow(await verifyEmailOtp(email.trim(), code.trim()), (result) => adopt(result, "sign_in"));
+  }, [adopt]);
+
+  /*
+   * "Continue with Google" (2026-09-25). Through the same `adopt` as every other sign-in, for the
+   * same reason as the code path above: one session shape, one restore, one push registration.
+   */
+  const signInWithGoogle = useCallback(async (idToken: string) => {
+    adoptOrThrow(await signInWithGoogleIdToken(idToken), (result) => adopt(result, "sign_in"));
   }, [adopt]);
 
   const signOut = useCallback(async () => {
@@ -288,6 +358,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     await clearSession();
+    // So the next "Continue with Google" shows the account chooser rather than reusing this one.
+    await signOutOfGoogle();
+    /*
+     * The onboarding answers belong to the person signing out, not to the phone. The profile was
+     * pushed to their account just above, so forgetting it here loses nothing — and not forgetting
+     * it let the next account inherit it and upload it over their own (found on the emulator).
+     */
+    await resetProfileForSignOut().catch((err) =>
+      captureError(err, { context: "authContext.resetProfileForSignOut", full: false }),
+    );
     /*
      * Only the personal namespace. Daily-plan snapshots are keyed by user id already, so a
      * leftover row is unreadable by the next account — this is the second line of defence, not
@@ -312,6 +392,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
     setToken(null);
     setUser(null);
+    setSignOutCount((n) => n + 1);
   }, [token]);
 
   const pushProgress = useCallback(async () => {
@@ -323,8 +404,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         user, loading, syncing, lastError,
-        signUp, signIn, requestSignInCode, signInWithCode, signOut,
-        pushProgress, progressVersion,
+        signUp, signIn, requestSignInCode, signInWithCode, signInWithGoogle, signOut,
+        pushProgress, progressVersion, restoringAccount, profileVersion, signOutCount,
       }}
     >
       {children}

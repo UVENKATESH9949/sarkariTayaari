@@ -65,11 +65,14 @@ public class QuestionRepositoryImpl implements QuestionRepositoryCustom {
     }
 
     @Override
-    public long countForMock(String examCode, List<UUID> subjectIds, boolean poolEnabled) {
+    public long countForMock(String examCode, List<UUID> subjectIds, List<UUID> topicIds, String difficultyCode,
+                              boolean pyqOnly, boolean poolEnabled) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<Long> cq = cb.createQuery(Long.class);
         Root<Question> root = cq.from(Question.class);
-        Predicate predicate = QuestionSpecifications.examAndSubjectsIn(examCode, subjectIds).toPredicate(root, cq, cb);
+        Predicate predicate = QuestionSpecifications
+                .examAndSubjectsIn(examCode, subjectIds, topicIds, difficultyCode, pyqOnly)
+                .toPredicate(root, cq, cb);
         predicate = cb.and(predicate, poolPredicate(cb, cq, root, poolEnabled));
         cq.select(cb.count(root)).where(predicate);
         return entityManager.createQuery(cq).getSingleResult();
@@ -85,11 +88,14 @@ public class QuestionRepositoryImpl implements QuestionRepositoryCustom {
     private static final int MAX_SAMPLE_POOL_SIZE = 5000;
 
     @Override
-    public List<Question> sampleForMock(String examCode, List<UUID> subjectIds, int limit, boolean poolEnabled) {
+    public List<Question> sampleForMock(String examCode, List<UUID> subjectIds, List<UUID> topicIds,
+                                         String difficultyCode, boolean pyqOnly, int limit, boolean poolEnabled) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<Question> cq = cb.createQuery(Question.class);
         Root<Question> root = cq.from(Question.class);
-        Predicate predicate = QuestionSpecifications.examAndSubjectsIn(examCode, subjectIds).toPredicate(root, cq, cb);
+        Predicate predicate = QuestionSpecifications
+                .examAndSubjectsIn(examCode, subjectIds, topicIds, difficultyCode, pyqOnly)
+                .toPredicate(root, cq, cb);
         predicate = cb.and(predicate, poolPredicate(cb, cq, root, poolEnabled));
         // Genuine random ordering (Postgres's random(), zero-arg) — the same requirement
         // the local SQLite mock-test builder solves with `ORDER BY RANDOM()` (see

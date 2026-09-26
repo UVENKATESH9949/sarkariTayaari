@@ -1,13 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
-import { FlatList, Text, View, StyleSheet } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { FlatList, Pressable, Text, View, StyleSheet } from "react-native";
+import { computePracticeResultAnalytics, type AnalyticsQuestionInput, type PracticeResultAnalytics } from "@sarkaritaiyaari/core/analytics";
 import { useSessionHistory } from "../../../practice/sessionHistory";
-import type { QuestionResult, SessionRecord } from "../../../practice/sessionHistory";
+import type { QuestionResult } from "../../../practice/sessionHistory";
 import { useAppLanguage } from "../../../practice/appLanguage";
-import { getOrBuildSessionFeedback } from "../../../ai/sessionFeedback";
-import { accuracyBand, feedbackBadge, focusSubtitle, nextStepTiles } from "../../../ai/feedbackPresentation";
-import { AiCard, AiFocusRow, AiScoreSummary, AiTiles } from "../../../ui/AiCard";
+import { getQuestionSubtopicMeta } from "../../../db/questionMeta";
+import { getDifficultyCounts, getDifficultyLevels, type DifficultyLevel, type DifficultyCounts } from "../../../data/practiceData";
+import { useHybridMode } from "../../../data/hybridSource";
+import { AnalyticsTab } from "../../../practice/AnalyticsTab";
+import { AiFeedbackTab } from "../../../practice/AiFeedbackTab";
 import { Button } from "../../../ui/Button";
 import { Card } from "../../../ui/Card";
 import { EmptyState } from "../../../ui/EmptyState";
@@ -20,100 +23,7 @@ import { FreeTextAnswerInput } from "../../../questionRenderer/FreeTextAnswerInp
 import { revealLetterCompactStyles } from "../../../questionRenderer/optionListStyles";
 import { describeYourAnswer, describeCorrectAnswer } from "../../../questionRenderer/answerSummary";
 
-/**
- * TASK-2701 Phase 7.1 — the AI-phrased feedback narrative, loaded after the screen's own
- * (always-present) stat blocks render. Keyed on `sessionId` rather than a plain boolean, the
- * same `PreparationPlanCard` pattern this codebase already uses to dodge the
- * `react-hooks/set-state-in-effect` cascading-render violation: comparing the stored id
- * against the current one (rather than clearing state synchronously) means a slow response
- * for a previously-viewed session can never flash onto a different one.
- *
- * Presented through the shared `AiCard` family so every AI surface in the app reads as one
- * feature. The narrative is the only model-authored part; the ring, the focus topic and the
- * counts all come from `session`, which this screen already renders correctly on its own, and
- * the next-step tiles are fixed copy chosen by band (see `ai/feedbackPresentation.ts`).
- */
-function SessionFeedbackNarrative({
-  session,
-  topicId,
-  examCode,
-}: {
-  session: SessionRecord;
-  topicId: string | null;
-  examCode: string | null;
-}) {
-  const styles = useThemedStyles(buildStyles);
-  const router = useRouter();
-  const t = useT();
-  const { defaultLanguageCode } = useAppLanguage();
-  const [loaded, setLoaded] = useState<{ sessionId: string; narrative: string | null } | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    getOrBuildSessionFeedback({ session, topicId, examCode, languageCode: defaultLanguageCode })
-      .then((narrative) => {
-        if (!cancelled) setLoaded({ sessionId: session.id, narrative });
-      })
-      .catch((err) => {
-        // Additive only — a failure here must never take down a screen whose stat blocks are
-        // already complete and correct without it.
-        console.warn("Failed to load session feedback", err);
-        if (!cancelled) setLoaded({ sessionId: session.id, narrative: null });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [session, topicId, examCode, defaultLanguageCode]);
-
-  const narrative = loaded && loaded.sessionId === session.id ? loaded.narrative : null;
-  if (!narrative) return null;
-
-  const accuracyPercent = Math.round((session.correctCount / session.totalCount) * 100);
-  const incorrectCount = session.totalCount - session.correctCount;
-  const band = accuracyBand(accuracyPercent);
-
-  return (
-    <AiCard
-      title={t("summary.feedbackLabel")}
-      subtitle={t("summary.feedbackSubtitle")}
-      badge={feedbackBadge(band, t)}
-      footer={t("ai.footer")}
-      style={styles.aiCard}
-    >
-      <AiScoreSummary
-        percent={accuracyPercent}
-        ringCaption={t("ai.ringCaption")}
-        headline={t("summary.feedbackHeadline", { percent: accuracyPercent })}
-        body={narrative}
-      />
-      {/* The topic this session was scoped to — the screen's own data, not a diagnosis. Tappable
-          only when the route params carried a topic id, i.e. when there is somewhere real to go. */}
-      <AiFocusRow
-        label={t("ai.focusArea")}
-        title={session.topicName}
-        subtitle={focusSubtitle(band, t)}
-        icon="locate"
-        tone={band === "low" ? "warning" : "brand"}
-        onPress={
-          topicId
-            ? () =>
-                router.push({
-                  pathname: "/practice/levels",
-                  params: {
-                    examCode: examCode ?? session.examCode ?? "",
-                    examLabel: session.examLabel ?? "",
-                    subjectName: session.subjectName,
-                    topicId,
-                    topicName: session.topicName,
-                  },
-                })
-            : undefined
-        }
-      />
-      <AiTiles heading={t("ai.whatToFocusOn")} items={nextStepTiles(band, incorrectCount, t)} />
-    </AiCard>
-  );
-}
+type ResultTab = "question" | "analytics" | "ai";
 
 // Takes the palette: these are semantic colours, which differ between themes.
 function scoreTone(accuracyPercent: number, colors: Theme["colors"]): { text: string; bg: string } {
@@ -148,7 +58,32 @@ function StatCell({ label, value, color }: { label: string; value: string; color
   );
 }
 
-function ResultCard({ result, index }: { result: QuestionResult; index: number }) {
+function TabButton({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="tab"
+      accessibilityState={{ selected: active }}
+      style={[styles.tabButton, active && { backgroundColor: colors.brand.primary }]}
+    >
+      <Text style={[styles.tabButtonText, { color: active ? colors.text.onAccent : colors.text.secondary }]} numberOfLines={1}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function ResultCard({
+  result,
+  index,
+  meta,
+}: {
+  result: QuestionResult;
+  index: number;
+  meta?: { topicName: string | null; difficultyCode: string | null };
+}) {
   const { colors } = useTheme();
   const styles = useThemedStyles(buildStyles);
   const optionListStyles = useThemedStyles(revealLetterCompactStyles);
@@ -173,6 +108,20 @@ function ResultCard({ result, index }: { result: QuestionResult; index: number }
           </Text>
         </View>
       </View>
+
+      {/* Sub-topic / difficulty / time — the extra facts the Analytics tab is built from,
+          surfaced here too so Question Wise stays a complete record on its own. */}
+      {(meta?.topicName || meta?.difficultyCode || result.timeMs) && (
+        <View style={styles.metaRow}>
+          {meta?.topicName && <Text style={styles.metaText}>{meta.topicName}</Text>}
+          {meta?.difficultyCode && <Text style={styles.metaText}>{t("common.difficulty")}: {meta.difficultyCode}</Text>}
+          {result.timeMs !== null && result.timeMs !== undefined && (
+            <Text style={styles.metaText}>
+              <Ionicons name="time-outline" size={11} color={colors.text.muted} /> {formatDuration(result.timeMs)}
+            </Text>
+          )}
+        </View>
+      )}
 
       <Text style={styles.resultQuestionText}>{result.questionText}</Text>
 
@@ -259,13 +208,84 @@ export default function Summary() {
   const styles = useThemedStyles(buildStyles);
   const t = useT();
   const router = useRouter();
-  const { sessionId, topicId, examCode } = useLocalSearchParams<{
+  const { sessionId, topicId, examCode, examLabel, subjectName, topicName, levelKey, levelLabel } = useLocalSearchParams<{
     sessionId: string;
     topicId?: string;
     examCode?: string;
+    examLabel?: string;
+    subjectName?: string;
+    topicName?: string;
+    levelKey?: string;
+    levelLabel?: string;
   }>();
-  const { getSession } = useSessionHistory();
+  const { getSession, sessions } = useSessionHistory();
+  const { defaultLanguageCode } = useAppLanguage();
+  const mode = useHybridMode();
   const session = getSession(sessionId ?? "");
+
+  const [tab, setTab] = useState<ResultTab>("question");
+
+  // Each question's own sub-topic/difficulty, joined from the local questions table by id —
+  // see db/questionMeta.ts for why no new column was needed for this.
+  const [meta, setMeta] = useState<{ sessionId: string; byId: Map<string, { topicName: string | null; difficultyCode: string | null }> } | null>(
+    null,
+  );
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    getQuestionSubtopicMeta(session.results.map((r) => r.questionId)).then((byId) => {
+      if (!cancelled) setMeta({ sessionId: session.id, byId });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
+
+  // The Next Level action's data — fetched in the background, never blocking the rest of the
+  // screen (§15). Hidden entirely when unavailable rather than shown disabled.
+  const [levelData, setLevelData] = useState<{ topicId: string; levels: DifficultyLevel[]; counts: DifficultyCounts } | null>(null);
+  useEffect(() => {
+    if (!topicId) return;
+    let cancelled = false;
+    Promise.all([getDifficultyLevels(mode), getDifficultyCounts(topicId, examCode ?? null, mode)])
+      .then(([levels, counts]) => {
+        if (!cancelled) setLevelData({ topicId, levels, counts });
+      })
+      .catch(() => {
+        /* Next Level simply doesn't appear — never an error state for a secondary action. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [topicId, examCode, mode]);
+
+  const nextLevel = useMemo(() => {
+    if (!levelData || !topicId || levelData.topicId !== topicId || !levelKey) return null;
+    const ordered = levelData.levels.filter((l) => (levelData.counts[l.code] ?? 0) > 0);
+    const currentIndex = ordered.findIndex((l) => l.code === levelKey);
+    if (currentIndex === -1 || currentIndex === ordered.length - 1) return null;
+    return ordered[currentIndex + 1];
+  }, [levelData, topicId, levelKey]);
+
+  const analytics: PracticeResultAnalytics | null = useMemo(() => {
+    if (!session || !meta || meta.sessionId !== session.id) return null;
+    const questions: AnalyticsQuestionInput[] = session.results.map((r, i) => ({
+      questionId: r.questionId,
+      questionNumber: i + 1,
+      isCorrect: r.isCorrect,
+      timeMs: r.timeMs ?? null,
+      subtopicName: meta.byId.get(r.questionId)?.topicName ?? null,
+      difficultyCode: meta.byId.get(r.questionId)?.difficultyCode ?? null,
+    }));
+
+    // A cheap, on-device "previous performance" signal: the most recent other session for the
+    // same topic, from history already held in memory — no extra query. `computePracticeResultAnalytics`
+    // derives the current session's own accuracy itself from `questions`.
+    const previous = sessions.find((s) => s.id !== session.id && s.topicName === session.topicName);
+    const previousAccuracyPercent = previous && previous.totalCount > 0 ? Math.round((previous.correctCount / previous.totalCount) * 100) : null;
+
+    return computePracticeResultAnalytics({ questions, previousAccuracyPercent });
+  }, [session, meta, sessions]);
 
   if (!session) {
     return (
@@ -279,80 +299,155 @@ export default function Summary() {
   const accuracyPercent = Math.round((session.correctCount / session.totalCount) * 100);
   const incorrectCount = session.totalCount - session.correctCount;
   const tone = scoreTone(accuracyPercent, colors);
-  // Only worth a line when the two actually differ — i.e. the session was finished early.
-  // Null on sessions predating the column and on anything restored from the server.
   const skippedCount =
     session.availableCount !== null && session.availableCount > session.totalCount
       ? session.availableCount - session.totalCount
       : 0;
 
+  const retry = () => {
+    if (!topicId || !levelKey) return;
+    router.replace({
+      pathname: "/practice/quiz",
+      params: {
+        examCode: examCode ?? "",
+        examLabel: examLabel ?? "",
+        subjectName: subjectName ?? "",
+        topicId,
+        topicName: topicName ?? session.topicName,
+        levelKey,
+        levelLabel: levelLabel ?? session.levelLabel,
+      },
+    });
+  };
+
+  const goNextLevel = () => {
+    if (!nextLevel || !topicId) return;
+    router.replace({
+      pathname: "/practice/quiz",
+      params: {
+        examCode: examCode ?? "",
+        examLabel: examLabel ?? "",
+        subjectName: subjectName ?? "",
+        topicId,
+        topicName: topicName ?? session.topicName,
+        levelKey: nextLevel.code,
+        levelLabel: nextLevel.label,
+      },
+    });
+  };
+
+  const goNextTopic = () => {
+    router.replace({ pathname: "/practice/browse", params: { examCode: examCode ?? "", examLabel: examLabel ?? "" } });
+  };
+
+  const header = (
+    <View style={styles.headerBlock}>
+      <View style={[styles.scoreCircle, { backgroundColor: tone.bg }]}>
+        <Text style={[styles.scoreText, { color: tone.text }]}>
+          {session.correctCount}/{session.totalCount}
+        </Text>
+      </View>
+      <Text style={[styles.accuracyText, { color: tone.text }]}>{t("summary.accuracyLine", { percent: accuracyPercent })}</Text>
+      <Text style={styles.contextText}>
+        {session.examLabel ? `${session.examLabel} · ` : ""}
+        {session.subjectName} · {session.topicName} · {session.levelLabel}
+      </Text>
+      <Text style={styles.dateText}>{formatDateTime(session.completedAt)}</Text>
+
+      {skippedCount > 0 && (
+        <Text style={styles.earlyFinishText}>
+          {t("summary.earlyFinish", {
+            answered: session.totalCount,
+            available: session.availableCount ?? session.totalCount,
+            skipped: skippedCount,
+          })}
+        </Text>
+      )}
+
+      <View style={styles.statsRow}>
+        <StatCell label={t("common.answered")} value={String(session.totalCount)} />
+        <StatCell label={t("common.correct")} value={String(session.correctCount)} color={colors.semantic.success} />
+        <StatCell label={t("common.incorrect")} value={String(incorrectCount)} color={colors.semantic.error} />
+        <StatCell label={t("common.accuracy")} value={`${accuracyPercent}%`} />
+      </View>
+
+      {session.durationMs !== null && (
+        <View style={styles.durationRow}>
+          <Ionicons name="time-outline" size={14} color={colors.text.muted} />
+          <Text style={styles.durationText}>Time taken: {formatDuration(session.durationMs)}</Text>
+        </View>
+      )}
+
+      {/* Primary actions — §1 of the spec. Retry/Next Level only appear when this session
+          carries the route context they need (a fresh session, not one reopened from History). */}
+      <View style={styles.actionsRow}>
+        {topicId && levelKey && (
+          <Button variant="secondary" size="md" onPress={retry} style={styles.actionButton}>
+            {t("common.retry")}
+          </Button>
+        )}
+        {nextLevel && (
+          <Button variant="secondary" size="md" onPress={goNextLevel} style={styles.actionButton}>
+            {t("summary.nextLevel")}
+          </Button>
+        )}
+        <Button size="md" onPress={goNextTopic} style={styles.actionButton}>
+          {t("summary.nextTopic")}
+        </Button>
+      </View>
+
+      <View style={styles.tabBar}>
+        <TabButton label={t("summary.tabQuestionWise")} active={tab === "question"} onPress={() => setTab("question")} />
+        <TabButton label={t("summary.tabAnalytics")} active={tab === "analytics"} onPress={() => setTab("analytics")} />
+        <TabButton label={t("summary.tabAiFeedback")} active={tab === "ai"} onPress={() => setTab("ai")} />
+      </View>
+
+      {tab === "question" && <Text style={[typography.label, styles.sectionLabel]}>{t("summary.questionByQuestion")}</Text>}
+
+      {tab === "analytics" &&
+        (analytics ? (
+          <View style={styles.tabContent}>
+            <AnalyticsTab analytics={analytics} />
+          </View>
+        ) : (
+          <View style={styles.tabContent} />
+        ))}
+
+      {tab === "ai" &&
+        (analytics ? (
+          <View style={styles.tabContent}>
+            <AiFeedbackTab
+              session={session}
+              analytics={analytics}
+              examCode={examCode ?? session.examCode}
+              subjectName={subjectName ?? session.subjectName}
+              topicName={topicName ?? session.topicName}
+              levelLabel={levelLabel ?? session.levelLabel}
+              languageCode={defaultLanguageCode}
+            />
+          </View>
+        ) : (
+          <View style={styles.tabContent} />
+        ))}
+    </View>
+  );
+
   return (
     <>
       <Stack.Screen options={{ title: t("summary.title") }} />
       {/*
-        Virtualized: this renders one expandable card per question of the session, and a
-        session is as long as the quiz was (PRACTICE_QUESTION_LIMIT, 20). All
-        of the surrounding chrome moves into the header/footer slots so it still scrolls
-        as one surface.
+        Question Wise is virtualized (one card per question); Analytics/AI Feedback render as
+        part of the header instead, since their content isn't a long per-question list. This
+        keeps one scroll surface for all three tabs rather than three separate screens.
       */}
       <FlatList
-        data={session.results}
+        data={tab === "question" ? session.results : []}
         keyExtractor={(result) => result.questionId}
         contentContainerStyle={styles.container}
-        renderItem={({ item, index }) => <ResultCard result={item} index={index} />}
-        ListHeaderComponent={
-          <View style={styles.headerBlock}>
-            <View style={[styles.scoreCircle, { backgroundColor: tone.bg }]}>
-              <Text style={[styles.scoreText, { color: tone.text }]}>
-                {session.correctCount}/{session.totalCount}
-              </Text>
-            </View>
-            <Text style={[styles.accuracyText, { color: tone.text }]}>
-              {t("summary.accuracyLine", { percent: accuracyPercent })}
-            </Text>
-            <Text style={styles.contextText}>
-              {session.examLabel ? `${session.examLabel} · ` : ""}
-              {session.subjectName} · {session.topicName} · {session.levelLabel}
-            </Text>
-            <Text style={styles.dateText}>{formatDateTime(session.completedAt)}</Text>
-
-            {/* Shown rather than folded into accuracy on purpose: the student chose to stop,
-                and the set having had more questions is context, not a penalty. */}
-            {skippedCount > 0 && (
-              <Text style={styles.earlyFinishText}>
-                {t("summary.earlyFinish", {
-                  answered: session.totalCount,
-                  available: session.availableCount ?? session.totalCount,
-                  skipped: skippedCount,
-                })}
-              </Text>
-            )}
-
-            <SessionFeedbackNarrative
-              session={session}
-              topicId={topicId ?? null}
-              examCode={examCode ?? session.examCode}
-            />
-
-            <View style={styles.statsRow}>
-              {/* "Answered", not "Total" — with early finishing the two are different, and
-                  this cell is the accuracy denominator. */}
-              <StatCell label={t("common.answered")} value={String(session.totalCount)} />
-              <StatCell label={t("common.correct")} value={String(session.correctCount)} color={colors.semantic.success} />
-              <StatCell label={t("common.incorrect")} value={String(incorrectCount)} color={colors.semantic.error} />
-              <StatCell label={t("common.accuracy")} value={`${accuracyPercent}%`} />
-            </View>
-
-            {session.durationMs !== null && (
-              <View style={styles.durationRow}>
-                <Ionicons name="time-outline" size={14} color={colors.text.muted} />
-                <Text style={styles.durationText}>Time taken: {formatDuration(session.durationMs)}</Text>
-              </View>
-            )}
-
-            <Text style={[typography.label, styles.sectionLabel]}>{t("summary.questionByQuestion")}</Text>
-          </View>
-        }
+        renderItem={({ item, index }) => (
+          <ResultCard result={item} index={index} meta={meta && meta.sessionId === session.id ? meta.byId.get(item.questionId) : undefined} />
+        )}
+        ListHeaderComponent={header}
         ListFooterComponent={
           <View style={styles.footerBlock}>
             <Button
@@ -387,9 +482,6 @@ const buildStyles = ({ colors, typography }: Theme) =>
       alignItems: "center",
       justifyContent: "center",
     },
-    emptyText: {
-      ...typography.secondary,
-    },
     scoreCircle: {
       width: 120,
       height: 120,
@@ -423,11 +515,6 @@ const buildStyles = ({ colors, typography }: Theme) =>
       marginTop: spacing.xs,
       fontSize: 12,
       color: colors.text.muted,
-    },
-    /* Only placement — everything else about the card is owned by `ui/AiCard.tsx`. */
-    aiCard: {
-      width: "100%",
-      marginTop: spacing.lg,
     },
     statsRow: {
       flexDirection: "row",
@@ -465,13 +552,46 @@ const buildStyles = ({ colors, typography }: Theme) =>
       fontSize: 12,
       color: colors.text.muted,
     },
+    actionsRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      justifyContent: "center",
+      gap: spacing.sm,
+      width: "100%",
+      marginTop: spacing.lg,
+    },
+    actionButton: {
+      flexGrow: 1,
+      minWidth: 100,
+    },
+    tabBar: {
+      flexDirection: "row",
+      width: "100%",
+      marginTop: spacing.xl,
+      backgroundColor: colors.surfaceElevated2,
+      borderRadius: radius.lg,
+      padding: 3,
+      gap: 3,
+    },
+    tabButton: {
+      flex: 1,
+      paddingVertical: spacing.sm,
+      borderRadius: radius.md,
+      alignItems: "center",
+    },
+    tabButtonText: {
+      fontSize: 12.5,
+      fontWeight: "700",
+    },
+    tabContent: {
+      width: "100%",
+      marginTop: spacing.lg,
+    },
     sectionLabel: {
       alignSelf: "flex-start",
       marginTop: spacing["2xl"],
       marginBottom: spacing.md,
     },
-    // The header/footer slots carry the centring that the old single ScrollView container
-    // applied to everything at once.
     headerBlock: {
       width: "100%",
       alignItems: "center",
@@ -507,6 +627,15 @@ const buildStyles = ({ colors, typography }: Theme) =>
     statusPillText: {
       fontSize: 11,
       fontWeight: "700",
+    },
+    metaRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing.sm,
+    },
+    metaText: {
+      fontSize: 11.5,
+      color: colors.text.muted,
     },
     resultQuestionText: {
       fontSize: 15,

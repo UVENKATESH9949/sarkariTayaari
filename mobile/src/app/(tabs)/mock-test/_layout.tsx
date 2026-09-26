@@ -16,6 +16,8 @@ export default function MockTestLayout() {
   return (
     <Stack screenOptions={stackScreenOptions(colors)}>
       <Stack.Screen name="index" options={{ title: t("nav.mockTest") }} />
+      <Stack.Screen name="hub" options={{ title: t("mock.hub.title") }} />
+      <Stack.Screen name="builder" options={{ title: t("mock.hub.builderTitle") }} />
       <Stack.Screen name="papers" options={{ title: t("mock.papersTitle") }} />
       <Stack.Screen name="start" options={{ title: t("nav.testDetails") }} />
       {/* Entering a timed test is a mode change, not a drill-down. Fading into it (and

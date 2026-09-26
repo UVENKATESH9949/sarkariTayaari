@@ -28,6 +28,11 @@ public final class PreparationProfileDtos {
      *                         assumption and is labelled as one
      * @param updatedAt        when the device recorded this edit. Client-supplied on upload, and
      *                         what last-write-wins compares
+     * @param onboardingCompletedAt when this student first finished onboarding on any device, or
+     *                         null when that is not known (V53). Monotonic on the server: an upload
+     *                         can set it but never clear it, whichever side wins last-write-wins.
+     *                         Optional on upload, so an older app that never sends it is unaffected.
+     *                         This is what lets a reinstalled app skip onboarding
      */
     public record PreparationProfile(String displayName,
                                      String primaryExamCode,
@@ -35,7 +40,8 @@ public final class PreparationProfileDtos {
                                      Integer targetYear,
                                      String preparationLevel,
                                      String dailyStudyTime,
-                                     OffsetDateTime updatedAt) {
+                                     OffsetDateTime updatedAt,
+                                     OffsetDateTime onboardingCompletedAt) {
     }
 
     /**

@@ -1030,5 +1030,409 @@
   remarks: >
     Step 3 matters as a guard in the other direction: the attempt counter must bound guessing
     without breaking a student who fat-fingers one digit.
+  automation_status: PartiallyAutomated
+  automation_reference: "backend/src/test/java/com/sarkaritaiyaari/backend/EmailOtpTest.java (aNonGmailAddressIsRejected, aSecondRequestInsideTheCooldownIsRefused, theRightCodeSignsInAndCannotBeUsedTwice; step 3's wrong-then-right success is not automated)"
+
+- id: TC-AUTH-030
+  requirement_ids: [REQ-AUTH-016]
+  scenario_id: SCN-AUTH-027
+  system: Backend
+  module: AUTH
+  feature: A professional, safe sign-in email
+  title: The sixth code request inside an hour is refused
+  objective: "Confirm the hourly send cap protects an inbox and bounds guessing."
+  preconditions:
+    - "A reachable backend"
+  test_data: "Five codes already issued to one address in the last hour, all older than the cooldown"
+  test_environment: "Backend test suite against the real Neon dev database"
+  priority: High
+  severity: Major
+  test_type: Security
+  steps:
+    - step: 1
+      action: "Request a code for that address"
+      expected: "400, 'Too many codes requested for this email...'"
+  expected_result: "The cap holds without touching the 60-second cooldown rule."
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Before this, the cooldown alone allowed sixty emails an hour to one inbox."
+  automation_status: Automated
+  automation_reference: "backend/src/test/java/com/sarkaritaiyaari/backend/EmailOtpTest.java (theHourlySendCapIsEnforced)"
+
+- id: TC-AUTH-031
+  requirement_ids: [REQ-AUTH-016]
+  scenario_id: SCN-AUTH-027
+  system: Backend
+  module: AUTH
+  feature: A professional, safe sign-in email
+  title: The email has HTML and text parts, and a failed send is reported
+  objective: "Confirm the message content and that delivery failures are never silent or logged with the code."
+  preconditions:
+    - "None - plain unit test"
+  test_data: "Code 482913, 10 minutes, an address containing <script>"
+  test_environment: "Plain JUnit, no Spring, no SMTP"
+  priority: High
+  severity: Major
+  test_type: Security
+  steps:
+    - step: 1
+      action: "Send through a capturing mail sender"
+      expected: "Subject '482913 is your SarkariTaiyaari verification code'; one HTML and one text part, both with the code and the 10-minute expiry"
+    - step: 2
+      action: "Inspect the HTML part"
+      expected: "The code is one unbroken '482913'; no '{{' placeholders; the address is HTML-escaped"
+    - step: 3
+      action: "Send through a sender that always fails"
+      expected: "EmailDeliveryException, whose message does not contain the code"
+    - step: 4
+      action: "Enable mail with no sender address"
+      expected: "EmailDeliveryException - NOT the old behaviour of logging the code"
+  expected_result: "All four hold."
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: ""
+  automation_status: Automated
+  automation_reference: "backend/src/test/java/com/sarkaritaiyaari/backend/service/OtpMailSenderTest.java"
+
+- id: TC-AUTH-032
+  requirement_ids: [REQ-AUTH-015]
+  scenario_id: SCN-AUTH-026
+  system: Backend
+  module: AUTH
+  feature: Sign in or sign up with a one-time code emailed to a Gmail address
+  title: Wrong, expired, reused and brute-forced codes are refused
+  objective: "Automated counterpart of TC-AUTH-029, plus expiry and the brute-force cap."
+  preconditions:
+    - "A reachable backend"
+  test_data: "Code rows inserted with known codes"
+  test_environment: "Backend test suite against the real Neon dev database"
+  priority: Critical
+  severity: Critical
+  test_type: Security
+  steps:
+    - step: 1
+      action: "Submit a wrong code"
+      expected: "401"
+    - step: 2
+      action: "Submit an expired code"
+      expected: "401"
+    - step: 3
+      action: "Submit a correct code twice"
+      expected: "Success, then 401"
+    - step: 4
+      action: "Submit five wrong codes then the correct one"
+      expected: "Five 401s, then 401 - the cap holds (DEF-AUTH-001 guard)"
+    - step: 5
+      action: "Request a code"
+      expected: "200, and the response has no code; the stored row is a bcrypt hash"
+  expected_result: "Every refusal holds and nothing leaks the code."
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: ""
+  automation_status: Automated
+  automation_reference: "backend/src/test/java/com/sarkaritaiyaari/backend/EmailOtpTest.java"
+
+- id: TC-AUTH-033
+  requirement_ids: [REQ-AUTH-016]
+  scenario_id: SCN-AUTH-027
+  system: Backend
+  module: AUTH
+  feature: A professional, safe sign-in email
+  title: The email looks right in a real inbox
+  objective: "Confirm rendering in the Gmail app and Gmail on the web, and that copying the code works."
+  preconditions:
+    - "Production or a backend with real SMTP credentials"
+    - "A Gmail inbox you own"
+  test_data: "Your own Gmail address"
+  test_environment: "Gmail app on a phone; Gmail in a desktop browser"
+  priority: High
+  severity: Minor
+  test_type: Compatibility
+  steps:
+    - step: 1
+      action: "Request a code from the app"
+      expected: "An email arrives with the code in the subject"
+    - step: 2
+      action: "Open it on the phone"
+      expected: "Brand, 'Verify your email', a large code, expiry, security note, footer; nothing cut off"
+    - step: 3
+      action: "Long-press the code and copy it (or use Gmail's 'Copy code')"
+      expected: "All six digits are copied, with no spaces"
+    - step: 4
+      action: "Open it in Gmail on a desktop browser"
+      expected: "The same layout, centred, no broken images"
+    - step: 5
+      action: "View the plain-text version (or a client that blocks HTML)"
+      expected: "The code and the expiry are readable"
+  expected_result: "It looks like an email from an established product."
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: ""
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-AUTH-034
+  requirement_ids: [REQ-AUTH-017]
+  scenario_id: SCN-AUTH-028
+  system: Mobile
+  module: AUTH
+  feature: Redesigned sign-in and code screens
+  title: The email screen validates inline and sends only a valid Gmail address
+  objective: "Confirm each validation message and the loading state."
+  preconditions:
+    - "Signed out, fresh install"
+  test_data: "An empty field; 'abc'; 'you@yahoo.com'; your Gmail address"
+  test_environment: "Android emulator emulator-5554 (AVD Pixel_7), dev build, real dev backend"
+  priority: High
+  severity: Major
+  test_type: Validation
+  steps:
+    - step: 1
+      action: "Tap Continue with the field empty"
+      expected: "'Enter your email address.' under the field, red border, nothing sent"
+    - step: 2
+      action: "Type 'abc' and leave the field"
+      expected: "'That doesn't look like an email address.'"
+    - step: 3
+      action: "Type 'you@yahoo.com' and tap Continue"
+      expected: "'Only Gmail addresses (@gmail.com) are supported right now.'"
+    - step: 4
+      action: "Type your Gmail address"
+      expected: "A green tick appears in the field"
+    - step: 5
+      action: "Tap Continue twice quickly"
+      expected: "One loading state, one request, then the code screen"
+  expected_result: "Only a valid Gmail address reaches the server."
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Check light and dark themes."
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-AUTH-035
+  requirement_ids: [REQ-AUTH-017]
+  scenario_id: SCN-AUTH-028
+  system: Mobile
+  module: AUTH
+  feature: Redesigned sign-in and code screens
+  title: "The six-box code input: typing, backspace and paste"
+  objective: "Confirm the code field behaves natively."
+  preconditions:
+    - "On the code screen"
+  test_data: "The code from the email (or the server log in a dev build)"
+  test_environment: "Android emulator emulator-5554 (AVD Pixel_7), dev build, real dev backend"
+  priority: Critical
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Look at the screen"
+      expected: "The keyboard is a number pad, the first box shows a blue caret"
+    - step: 2
+      action: "Type three digits, then press backspace once"
+      expected: "Each digit fills the next box; backspace removes the last digit"
+    - step: 3
+      action: "Clear it, copy '482 913' somewhere, long-press the boxes and choose Paste"
+      expected: "All six boxes fill with 482913"
+    - step: 4
+      action: "Type the correct code"
+      expected: "It submits by itself on the sixth digit and shows 'Verifying...'"
+    - step: 5
+      action: "Try a wrong code instead"
+      expected: "Red boxes and the server's message; nothing is retried automatically"
+  expected_result: "Typing, backspace and paste all work; a wrong code is shown once and left alone."
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Android has no OS autofill for EMAIL codes; iOS 17+ may offer one above the keyboard."
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-AUTH-036
+  requirement_ids: [REQ-AUTH-017]
+  scenario_id: SCN-AUTH-028
+  system: Mobile
+  module: AUTH
+  feature: Redesigned sign-in and code screens
+  title: Resend countdown, change email, expiry and offline
+  objective: "Confirm the secondary actions and failure states on the code screen."
+  preconditions:
+    - "On the code screen"
+  test_data: "Your Gmail address"
+  test_environment: "Android emulator emulator-5554 (AVD Pixel_7), dev build, real dev backend"
+  priority: High
+  severity: Major
+  test_type: ErrorHandling
+  steps:
+    - step: 1
+      action: "Look under the button"
+      expected: "'Resend code in 0:59', counting down every second"
+    - step: 2
+      action: "Wait until it reaches zero and tap 'Resend code'"
+      expected: "A new code is sent; the countdown restarts"
+    - step: 3
+      action: "Tap 'Change email'"
+      expected: "Back on the email screen with the address kept"
+    - step: 4
+      action: "Turn on airplane mode and request a code"
+      expected: "'You seem to be offline. Check your connection and try again.'"
+    - step: 5
+      action: "Leave a code unused for more than 10 minutes"
+      expected: "'This code has expired. Ask for a new one below.'"
+  expected_result: "Every state is clear and none of them strands the student."
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: ""
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-AUTH-037
+  requirement_ids: [REQ-AUTH-018]
+  scenario_id: SCN-AUTH-029
+  system: Backend
+  module: AUTH
+  feature: Continue with Google
+  title: Every Google ID-token rule rejects on its own
+  objective: "Prove the verifier accepts a genuine token and rejects each kind of bad one."
+  preconditions:
+    - "None - plain unit test with a fixture RSA key standing in for Google"
+  test_data: "Tokens minted by FixtureGoogleSigningKeys"
+  test_environment: "Plain JUnit"
+  priority: Critical
+  severity: Critical
+  test_type: Security
+  steps:
+    - step: 1
+      action: "Verify a genuine token for this app"
+      expected: "Accepted; email and subject returned"
+    - step: 2
+      action: "Wrong issuer / wrong audience / expired / email_verified false"
+      expected: "Each refused with the one generic message"
+    - step: 3
+      action: "Signed by another key, or payload edited after signing"
+      expected: "Refused"
+    - step: 4
+      action: "Unknown key id, alg none, or garbage"
+      expected: "Refused"
+    - step: 5
+      action: "No client id configured"
+      expected: "Nothing accepted"
+  expected_result: "Only a genuine, current token for this app with a verified email is accepted."
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: ""
+  automation_status: Automated
+  automation_reference: "backend/src/test/java/com/sarkaritaiyaari/backend/service/GoogleIdTokenVerifierTest.java"
+
+- id: TC-AUTH-038
+  requirement_ids: [REQ-AUTH-018]
+  scenario_id: SCN-AUTH-029
+  system: Backend
+  module: AUTH
+  feature: Continue with Google
+  title: POST /api/auth/google creates, links and refuses correctly
+  objective: "Prove the endpoint end to end, especially one account per Gmail."
+  preconditions:
+    - "A reachable backend"
+  test_data: "Fixture-minted tokens; a Gmail that first signed in by code"
+  test_environment: "Backend test suite against the real Neon dev database"
+  priority: Critical
+  severity: Critical
+  test_type: Security
+  steps:
+    - step: 1
+      action: "Post a genuine token for a new Gmail"
+      expected: "200 with a session; the account exists"
+    - step: 2
+      action: "Sign in by code, then post a Google token for the same Gmail in upper case"
+      expected: "200 with the SAME user id; one users row"
+    - step: 3
+      action: "Post a token for a non-Gmail address"
+      expected: "400; no account created"
+    - step: 4
+      action: "Post a forged token, and one for another app"
+      expected: "401 both; no account created"
+    - step: 5
+      action: "Post no token"
+      expected: "400"
+  expected_result: "Google sign-in behaves like a code sign-in and never duplicates an account."
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: ""
+  automation_status: Automated
+  automation_reference: "backend/src/test/java/com/sarkaritaiyaari/backend/GoogleSignInTest.java"
+
+- id: TC-AUTH-039
+  requirement_ids: [REQ-AUTH-018]
+  scenario_id: SCN-AUTH-030
+  system: Mobile
+  module: AUTH
+  feature: Continue with Google
+  title: "Continue with Google on the phone: cancel, then a real sign-in"
+  objective: "Confirm Google's chooser opens, cancelling is harmless, and a Google account signs in."
+  preconditions:
+    - "Signed out; a Google account added to the phone"
+    - "The Android OAuth clients are live in Google Cloud"
+  test_data: "A Gmail account on the emulator"
+  test_environment: "Android emulator emulator-5554 (AVD Pixel_7) with Google Play services, debug build, real dev backend"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Look at the sign-in screen"
+      expected: "An 'or' divider and a 'Continue with Google' button under Continue"
+    - step: 2
+      action: "Tap it, then back out of Google's chooser"
+      expected: "Back on the sign-in screen, no error shown"
+    - step: 3
+      action: "Tap it and choose the Gmail account"
+      expected: "Signed in: onboarding for a new account, Home for one that finished it"
+    - step: 4
+      action: "Sign out in the app and tap Continue with Google again"
+      expected: "Google's account chooser appears again rather than reusing the account"
+  expected_result: "Google sign-in works on a device and cancelling does nothing."
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "A 'Google sign-in didn't work' error with DEVELOPER_ERROR (10) in the Metro log means the package name or SHA-1 registered in Google Cloud does not match this build."
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-AUTH-040
+  requirement_ids: [REQ-AUTH-018]
+  scenario_id: SCN-AUTH-030
+  system: Mobile
+  module: AUTH
+  feature: Continue with Google
+  title: An account created by email code is reopened by Google, with its history
+  objective: "Confirm linking on a real phone: no second account, no second onboarding."
+  preconditions:
+    - "A Gmail that signed up with a code and finished onboarding; that Google account on the phone"
+  test_data: "That Gmail"
+  test_environment: "Android emulator emulator-5554 (AVD Pixel_7) with Google Play services, debug build, real dev backend"
+  priority: High
+  severity: Critical
+  test_type: DataIntegrity
+  steps:
+    - step: 1
+      action: "Sign out, then Continue with Google with the same Gmail"
+      expected: "No onboarding; Home greets the same name with the same exam"
+    - step: 2
+      action: "Compare the user id from GET /api/auth/me before and after"
+      expected: "The same id"
+  expected_result: "The same Gmail is one account whichever way it signs in."
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: ""
   automation_status: ManualOnly
   automation_reference: ""

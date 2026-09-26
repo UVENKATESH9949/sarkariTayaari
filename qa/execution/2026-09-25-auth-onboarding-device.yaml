@@ -1,0 +1,195 @@
+# AUTH + ONBOARDING — device execution records, 2026-09-24/25 (emulator pass)
+#
+# Real runs on emulator-5554 of the manual cases written on 2026-09-24. Real uninstall/reinstall
+# of the dev-client APK was used for the reinstall cases (the APK was pulled off the device first
+# and re-installed with adb). "Clear app data" (pm clear) was used for later fresh-install runs;
+# it removes exactly what an uninstall removes from the app's point of view.
+#
+# Two runs are recorded as Fail and kept as such (append-only): each found a real defect, which was
+# fixed and re-run. Cases with a step that did not run are Blocked, never Pass.
+# Codes came from the local backend's log (mail is off locally); no real email was sent.
+
+- execution_id: EXEC-AUTH-0007
+  test_case_id: TC-AUTH-034
+  test_case_version: 1
+  environment: "Android emulator emulator-5554 (AVD Pixel_7), dev build on Metro, local backend on :8080 against the real Neon dev database"
+  build_version: "main @ ec51285 + uncommitted 2026-09-24/25 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-24T23:46:00+05:30"
+  actual_result: >
+    Steps 1-4 as expected: empty -> 'Enter your email address.' with a red border and nothing sent; 'you@yahoo.com' -> 'Only Gmail addresses (@gmail.com) are supported right now.'; a valid Gmail address showed the green tick and Continue showed the loading state, then the code screen. Step 5 (a deliberate double tap) was not performed. Light and dark themes both looked right.
+  status: Blocked
+  defect_id: ""
+  evidence: "screenshots t1b, t1c, t1d, t8b (dark)"
+  remarks: >
+    Blocked only because step 5 was not run; the in-flight guard is in code but unobserved.
+
+- execution_id: EXEC-AUTH-0008
+  test_case_id: TC-AUTH-035
+  test_case_version: 1
+  environment: "Android emulator emulator-5554 (AVD Pixel_7), dev build on Metro, local backend on :8080 against the real Neon dev database"
+  build_version: "main @ ec51285 + uncommitted 2026-09-24/25 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-24T23:48:00+05:30"
+  actual_result: >
+    Number pad and blue caret shown; '777' then backspace left '77'; a wrong code auto-submitted once and was refused with red boxes and no retry. A grey strip and a speck of hidden text appeared behind the boxes after the submit.
+  status: Fail
+  defect_id: "DEF-AUTH-002"
+  evidence: "screenshots t1f, t1g, t1h; uiautomator focus dump"
+  remarks: >
+    Visual defect only; behaviour was correct.
+
+- execution_id: EXEC-AUTH-0009
+  test_case_id: TC-AUTH-035
+  test_case_version: 1
+  environment: "Android emulator emulator-5554 (AVD Pixel_7), dev build on Metro, local backend on :8080 against the real Neon dev database"
+  build_version: "main @ ec51285 + uncommitted 2026-09-24/25 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-24T23:52:00+05:30"
+  actual_result: >
+    After the fix: no strip or speck; only the text field held focus. Paste: the code was cut from the field (clipboard showed 771234) and pasted back - all six boxes filled at once and it auto-submitted (refused, as a wrong code). Typing the correct code signed in on the sixth digit.
+  status: Pass
+  defect_id: ""
+  evidence: "screenshots t1i, t1j, t1k; startup log SIGNED_IN"
+  remarks: >
+    Paste was exercised with a code cut from the same field, not pasted from an email, and without a space; the digit-cleaning path for '482 913' is in code but unobserved.
+
+- execution_id: EXEC-AUTH-0010
+  test_case_id: TC-AUTH-036
+  test_case_version: 1
+  environment: "Android emulator emulator-5554 (AVD Pixel_7), dev build on Metro, local backend on :8080 against the real Neon dev database"
+  build_version: "main @ ec51285 + uncommitted 2026-09-24/25 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-25T21:25:00+05:30"
+  actual_result: >
+    The countdown ran ('Resend code in 0:25', '0:10'), 'Resend code' appeared at zero, and tapping it sent a new code and restarted the countdown at 0:55; the new code signed in. 'Change email', the offline request and the 10-minute expiry were not exercised.
+  status: Blocked
+  defect_id: ""
+  evidence: "startup log; ui text dumps"
+  remarks: >
+    Also observed: once, the server verified a code and created the account but the phone reported 'Could not reach the server' (the emulator's network changed at that moment). The code was used up, so Resend was the way forward - it worked.
+
+- execution_id: EXEC-ONBOARDING-0005
+  test_case_id: TC-ONBOARDING-026
+  test_case_version: 1
+  environment: "Android emulator emulator-5554 (AVD Pixel_7), dev build on Metro, local backend on :8080 against the real Neon dev database"
+  build_version: "main @ ec51285 + uncommitted 2026-09-24/25 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-24T23:56:45+05:30"
+  actual_result: >
+    Fresh install (real uninstall and reinstall), new account, all seven steps answered, IBPS PO chosen. Every checklist row ticked and Home opened by itself about 2 seconds after 'Start preparing' - ONBOARDING_COMPLETED, PREPARATION_STEP x3, PREPARATION_READY, NAVIGATING_HOME in order. Home: 'Good evening, Asha', preparing for IBPS PO. Back on Home went to the launcher, not onboarding.
+  status: Pass
+  defect_id: ""
+  evidence: "screenshot t3b; startup log"
+  remarks: >
+    The regression guard for the stuck 'Preparing' screen passed first time on the fixed build.
+
+- execution_id: EXEC-ONBOARDING-0006
+  test_case_id: TC-ONBOARDING-027
+  test_case_version: 1
+  environment: "Android emulator emulator-5554 (AVD Pixel_7), dev build on Metro, local backend on :8080 against the real Neon dev database"
+  build_version: "main @ ec51285 + uncommitted 2026-09-24/25 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-25T00:10:00+05:30"
+  actual_result: >
+    Step 1 (airplane mode before the last answer) failed: 'Start preparing' sent the student back to the exam step, which said 'you are offline - just Continue', but continuing failed validation again, in a loop.
+  status: Fail
+  defect_id: "DEF-ONBOARDING-002"
+  evidence: "screenshot t5c; ui text dumps"
+  remarks: >
+    Existing behaviour exposed by the offline test.
+
+- execution_id: EXEC-ONBOARDING-0007
+  test_case_id: TC-ONBOARDING-027
+  test_case_version: 1
+  environment: "Android emulator emulator-5554 (AVD Pixel_7), dev build on Metro, local backend on :8080 against the real Neon dev database"
+  build_version: "main @ ec51285 + uncommitted 2026-09-24/25 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-25T00:30:24+05:30"
+  actual_result: >
+    After the fix: step 1 - with airplane mode on, Home opened about 3 seconds after 'Start preparing' ('Good evening, Ravi', SSC CHSL). Step 3 - the app force-closed 0.4 s into preparation, then reopened: no onboarding, the 5-second 'Preparing' screen, then Home ('Good evening, Chitra', RRB NTPC). Step 4 - milestones logged once each, no code, token or email in any line. Step 2 (backgrounding mid-preparation) was not run.
+  status: Blocked
+  defect_id: ""
+  evidence: "screenshots t6c, t6d; startup log"
+  remarks: >
+    Blocked only because step 2 did not run. Note: the developer-build warning toast covered the Start preparing button and swallowed taps until closed - dev builds only.
+
+- execution_id: EXEC-ONBOARDING-0008
+  test_case_id: TC-ONBOARDING-028
+  test_case_version: 1
+  environment: "Android emulator emulator-5554 (AVD Pixel_7), dev build on Metro, local backend on :8080 against the real Neon dev database"
+  build_version: "main @ ec51285 + uncommitted 2026-09-24/25 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-25T00:04:44+05:30"
+  actual_result: >
+    Real uninstall + reinstall, then sign-in with the same address: no onboarding ('Restoring your account' then Home), greeting 'Asha', IBPS PO active. The server profile was byte-identical before and after (same name, exam, study time and updatedAt), with onboardingCompletedAt set. Run twice; on the second run the new ONBOARDING_SHOWN line confirmed step 1 never appeared even briefly.
+  status: Pass
+  defect_id: ""
+  evidence: "screenshot t4c; GET /api/me/preparation-profile before and after; startup log"
+  remarks: >
+    The first run showed a ~0.5 s gap in which step 1 could flash; closed with the checkingAccount state before the second run.
+
+- execution_id: EXEC-ONBOARDING-0009
+  test_case_id: TC-ONBOARDING-029
+  test_case_version: 1
+  environment: "Android emulator emulator-5554 (AVD Pixel_7), dev build on Metro, local backend on :8080 against the real Neon dev database"
+  build_version: "main @ ec51285 + uncommitted 2026-09-24/25 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-25T00:16:25+05:30"
+  actual_result: >
+    A on a cleared phone skipped onboarding. New account B got onboarding. B's half-finished onboarding was never uploaded (server returned profile: null). After clearing the phone, B was asked the questions again. After B finished (offline), the profile reached the server as soon as the phone was online and backgrounded.
+  status: Pass
+  defect_id: ""
+  evidence: "GET /api/me/preparation-profile for B before and after; startup log"
+  remarks: >
+    
+
+- execution_id: EXEC-ONBOARDING-0010
+  test_case_id: TC-ONBOARDING-031
+  test_case_version: 1
+  environment: "Android emulator emulator-5554 (AVD Pixel_7), dev build on Metro, local backend on :8080 against the real Neon dev database"
+  build_version: "main @ ec51285 + uncommitted 2026-09-24/25 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-25T00:34:44+05:30"
+  actual_result: >
+    After C signed out and A signed in on the same phone, Home greeted A as 'Chitra' with RRB NTPC and A's server profile was overwritten with C's answers.
+  status: Fail
+  defect_id: "DEF-ONBOARDING-001"
+  evidence: "GET /api/me/preparation-profile for A; ui text dump"
+  remarks: >
+    A's server profile was restored by hand afterwards.
+
+- execution_id: EXEC-ONBOARDING-0011
+  test_case_id: TC-ONBOARDING-031
+  test_case_version: 1
+  environment: "Android emulator emulator-5554 (AVD Pixel_7), dev build on Metro, local backend on :8080 against the real Neon dev database"
+  build_version: "main @ ec51285 + uncommitted 2026-09-24/25 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-25T21:25:51+05:30"
+  actual_result: >
+    After the fix: signing out of A left the phone's onboarding answers empty; C signed in and was greeted as 'Chitra' with RRB NTPC, restored from C's account; A's server profile was unchanged; brand-new D then got onboarding step 1 with an empty name field.
+  status: Pass
+  defect_id: ""
+  evidence: "local SQLite read after sign-out; GET for A; startup log (ONBOARDING_RESTORED_FROM_ACCOUNT, ONBOARDING_SHOWN)"
+  remarks: >
+    
+
+- execution_id: EXEC-AUTH-0011
+  test_case_id: TC-AUTH-039
+  test_case_version: 1
+  environment: "Android emulator emulator-5554 (AVD Pixel_7, Google Play services present, NO Google account added), debug build rebuilt with the native Google Sign-In module, local backend with /api/auth/google"
+  build_version: "main @ ec51285 + uncommitted 2026-09-24/25 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-25T23:56:00+05:30"
+  actual_result: >
+    Step 1: the sign-in screen showed the "or" divider and "Continue with Google". Step 2: tapping it
+    showed the button's loading state, then Google's own sign-in activity (MinuteMaidActivity,
+    "Sign in with ease") opened; backing out returned to the sign-in screen with no error and the
+    button ready again. Steps 3-4 could not run: the emulator has no Google account, and adding one
+    needs the owner's own Google credentials.
+  status: Blocked
+  defect_id: ""
+  evidence: "screenshots g2, g3, g4; dumpsys window focus"
+  remarks: >
+    The server side was separately checked live: a well-formed fake token made the server fetch
+    Google's real JWKS and refuse it (unknown kid). A real end-to-end Google sign-in is still unobserved.

@@ -5,10 +5,14 @@ import { ScrollView, Text, View, StyleSheet } from "react-native";
 import {
   getPaperById,
   getSectionAvailability,
+  getMockablePapers,
   type SectionAvailability,
   type SyncedPaper,
 } from "../../../data/mockTestAccess";
+import { countAdHocMock } from "../../../data/adHocMockData";
 import { useHybridMode } from "../../../data/hybridSource";
+import { decodeAdHocSpec, encodeAdHocSpec } from "../../../mockHub/adHocSpecParams";
+import { estimateAdHocMinutes, DEFAULT_MARKS_CORRECT, DEFAULT_MARKS_WRONG } from "../../../mockHub/estimate";
 import { Button } from "../../../ui/Button";
 import { Card } from "../../../ui/Card";
 import { ContextualLoading } from "../../../ui/ContextualLoading";
@@ -18,43 +22,111 @@ import { radius, spacing } from "../../../ui/theme";
 import { useTheme, useThemedStyles, type Theme } from "../../../ui/ThemeContext";
 import { useT } from "../../../i18n/I18nContext";
 
+/**
+ * A unified view of either a real `SyncedPaper` (Full Length Mock, unchanged) or an ad-hoc
+ * mock spec (the Hub's other 8 formats) — computed once so the JSX below never branches on
+ * which one it is. `sections` is empty for an ad-hoc mock, which is what makes the Sections
+ * card disappear rather than needing its own conditional.
+ */
+type StartSummary = {
+  title: string;
+  totalAvailable: number | null;
+  totalRequested: number;
+  totalMinutes: number | null;
+  sectionallyTimed: boolean;
+  marksCorrect: number | null;
+  marksWrong: number | null;
+  sections: { id: string; name: string; durationMinutes: number | null; isSectionallyTimed: boolean; available: number | null }[];
+};
+
 export default function MockTestStart() {
   const { colors, typography } = useTheme();
   const styles = useThemedStyles(buildStyles);
   const t = useT();
   const router = useRouter();
-  const { paperId, examLabel, paperName } = useLocalSearchParams<{
-    paperId: string;
-    examCode: string;
+  const { paperId, examLabel, paperName, adhoc } = useLocalSearchParams<{
+    paperId?: string;
+    examCode?: string;
     examLabel: string;
-    paperName: string;
+    paperName?: string;
+    adhoc?: string;
   }>();
-  const [paper, setPaper] = useState<SyncedPaper | null>(null);
-  const [sections, setSections] = useState<SectionAvailability[] | null>(null);
-  const [loading, setLoading] = useState(true);
   const mode = useHybridMode();
+  const adHocSpec = decodeAdHocSpec(adhoc);
+
+  const [summary, setSummary] = useState<StartSummary | null>(null);
+  const [notFound, setNotFound] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!paperId) return;
+    let cancelled = false;
     (async () => {
       setLoading(true);
+      setNotFound(false);
       try {
-        const loaded = await getPaperById(paperId, mode);
-        setPaper(loaded);
-        if (loaded) {
-          setSections(await getSectionAvailability(loaded, mode));
+        if (adHocSpec) {
+          const available = await countAdHocMock(adHocSpec, mode);
+          const officialPapers = await getMockablePapers(adHocSpec.examCode, mode);
+          const officialMarking = officialPapers.find((p) => p.marksCorrect != null);
+          if (cancelled) return;
+          setSummary({
+            title: adHocSpec.title,
+            totalAvailable: available,
+            totalRequested: adHocSpec.questionCount,
+            totalMinutes: estimateAdHocMinutes(adHocSpec.format, Math.min(available, adHocSpec.questionCount) || adHocSpec.questionCount),
+            sectionallyTimed: false,
+            marksCorrect: officialMarking?.marksCorrect ?? DEFAULT_MARKS_CORRECT,
+            marksWrong: officialMarking?.marksWrong ?? DEFAULT_MARKS_WRONG,
+            sections: [],
+          });
+          return;
         }
+
+        if (!paperId) return;
+        const loaded: SyncedPaper | null = await getPaperById(paperId, mode);
+        if (!loaded) {
+          if (!cancelled) setNotFound(true);
+          return;
+        }
+        const availability: SectionAvailability[] = await getSectionAvailability(loaded, mode);
+        if (cancelled) return;
+        const totalAvailable = availability.reduce((sum, s) => sum + s.available, 0);
+        const sectionallyTimed = loaded.sections.some((s) => s.isSectionallyTimed);
+        setSummary({
+          title: loaded.name,
+          totalAvailable,
+          totalRequested: loaded.sections.reduce((sum, s) => sum + s.questionCount, 0),
+          totalMinutes: sectionallyTimed
+            ? loaded.sections.reduce((sum, s) => sum + (s.durationMinutes ?? 0), 0)
+            : loaded.durationMinutes,
+          sectionallyTimed,
+          marksCorrect: loaded.marksCorrect,
+          marksWrong: loaded.marksWrong,
+          sections: loaded.sections.map((s) => ({
+            id: s.id,
+            name: s.name,
+            durationMinutes: s.durationMinutes,
+            isSectionallyTimed: s.isSectionallyTimed,
+            available: availability.find((a) => a.sectionName === s.name)?.available ?? null,
+          })),
+        });
       } catch (err) {
         // A live fetch can fail (connectivity dropped between screens) where the local
-        // read never could — treat it the same as "paper not found" rather than an
+        // read never could — treat it the same as "not available" rather than an
         // unhandled rejection, since this screen already has a graceful empty state for that.
-        console.warn("Failed to load mock test paper", err);
-        setPaper(null);
+        console.warn("Failed to load mock test details", err);
+        if (!cancelled) setNotFound(true);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
-  }, [paperId, mode]);
+    return () => {
+      cancelled = true;
+    };
+    // adhoc is re-decoded on every render but its content is stable per navigation — decoding
+    // it inside the effect key would need a deep-equality check for no real benefit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paperId, adhoc, mode]);
 
   if (loading) {
     return (
@@ -76,36 +148,40 @@ export default function MockTestStart() {
     );
   }
 
-  if (!paper) {
+  if (notFound || !summary) {
     return (
       <View style={styles.centered}>
-        <EmptyState
-          icon="alert-circle-outline"
-          title={t("mock.notAvailable")}
-          body={t("mock.notAvailableBody")}
-        />
+        <EmptyState icon="alert-circle-outline" title={t("mock.notAvailable")} body={t("mock.notAvailableBody")} />
       </View>
     );
   }
 
-  const totalAvailable = sections?.reduce((sum, s) => sum + s.available, 0) ?? null;
-  const totalRequested = paper.sections.reduce((sum, s) => sum + s.questionCount, 0);
+  const { totalAvailable, totalRequested, totalMinutes, sectionallyTimed, marksCorrect, marksWrong, sections } = summary;
   const isCapped = totalAvailable !== null && totalAvailable < totalRequested;
   const canStart = totalAvailable !== null && totalAvailable > 0;
-  // Sections with their own limit are summed; otherwise the paper's overall time applies.
-  const sectionallyTimed = paper.sections.some((s) => s.isSectionallyTimed);
-  const totalMinutes = sectionallyTimed
-    ? paper.sections.reduce((sum, s) => sum + (s.durationMinutes ?? 0), 0)
-    : paper.durationMinutes;
 
   const startTest = () => {
+    if (adHocSpec) {
+      router.push({
+        pathname: "/mock-test/test",
+        params: {
+          examLabel,
+          adhoc: encodeAdHocSpec(adHocSpec),
+          // Resolved here (official-paper marking, or the stated default) rather than
+          // re-derived in test.tsx — one place decides an ad-hoc mock's marking scheme.
+          marksCorrect: String(summary.marksCorrect ?? DEFAULT_MARKS_CORRECT),
+          marksWrong: String(summary.marksWrong ?? DEFAULT_MARKS_WRONG),
+        },
+      });
+      return;
+    }
     router.push({ pathname: "/mock-test/test", params: { paperId, examLabel, paperName } });
   };
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.examName}>
-        {examLabel} — {paper.name}
+        {examLabel} — {summary.title}
       </Text>
 
       <View style={styles.summaryRow}>
@@ -122,11 +198,15 @@ export default function MockTestStart() {
         <View style={styles.summaryCard}>
           <Ionicons name="ribbon-outline" size={20} color={colors.brand.primary} />
           <Text style={styles.summaryValue}>
-            {paper.marksCorrect != null ? `+${paper.marksCorrect}/-${paper.marksWrong ?? 0}` : "—"}
+            {marksCorrect != null ? `+${marksCorrect}/-${marksWrong ?? 0}` : "—"}
           </Text>
           <Text style={styles.summaryLabel}>{t("mock.marking")}</Text>
         </View>
       </View>
+
+      {adHocSpec && (
+        <Text style={styles.adHocNote}>{t("mock.hub.markingNote")}</Text>
+      )}
 
       {isCapped && (
         <View style={styles.cappedNote}>
@@ -138,34 +218,35 @@ export default function MockTestStart() {
         </View>
       )}
 
-      <Text style={typography.label}>{t("mock.sections")}</Text>
-      <View style={styles.sectionsList}>
-        {paper.sections.map((section) => {
-          const availability = sections?.find((s) => s.sectionName === section.name);
-          return (
-            <Card key={section.id} style={styles.sectionRow}>
-              <View style={styles.sectionIconCircle}>
-                <Ionicons name="layers-outline" size={18} color={colors.text.secondary} />
-              </View>
-              <Text style={styles.sectionName}>
-                {section.name}
-                {section.isSectionallyTimed ? ` · ${section.durationMinutes} min` : ""}
-              </Text>
-              <Text style={styles.sectionCount}>
-                {availability ? `${availability.available} questions` : "…"}
-              </Text>
-            </Card>
-          );
-        })}
-      </View>
+      {sections.length > 0 && (
+        <>
+          <Text style={typography.label}>{t("mock.sections")}</Text>
+          <View style={styles.sectionsList}>
+            {sections.map((section) => (
+              <Card key={section.id} style={styles.sectionRow}>
+                <View style={styles.sectionIconCircle}>
+                  <Ionicons name="layers-outline" size={18} color={colors.text.secondary} />
+                </View>
+                <Text style={styles.sectionName}>
+                  {section.name}
+                  {section.isSectionallyTimed ? ` · ${section.durationMinutes} min` : ""}
+                </Text>
+                <Text style={styles.sectionCount}>
+                  {section.available !== null ? `${section.available} questions` : "…"}
+                </Text>
+              </Card>
+            ))}
+          </View>
+        </>
+      )}
 
       <View style={styles.instructionsBox}>
         <Text style={styles.instructionsTitle}>{t("mock.beforeYouStart")}</Text>
         <Text style={styles.instructionsItem}>• The timer starts as soon as you tap Start and auto-submits at zero.</Text>
-        <Text style={styles.instructionsItem}>• Answers aren't shown right or wrong until you submit — just like the real exam.</Text>
-        {paper.marksWrong != null && paper.marksWrong > 0 && (
+        <Text style={styles.instructionsItem}>• Answers aren&apos;t shown right or wrong until you submit — just like the real exam.</Text>
+        {marksWrong != null && marksWrong > 0 && (
           <Text style={styles.instructionsItem}>
-            • Wrong answers cost {paper.marksWrong} marks — skip if you're unsure rather than guessing blindly.
+            • Wrong answers cost {marksWrong} marks — skip if you&apos;re unsure rather than guessing blindly.
           </Text>
         )}
         {sectionallyTimed && (
@@ -228,6 +309,12 @@ const buildStyles = ({ colors, typography }: Theme) =>
     summaryLabel: {
       fontSize: 11,
       color: colors.text.secondary,
+    },
+    adHocNote: {
+      fontSize: 11.5,
+      color: colors.text.muted,
+      marginBottom: spacing.base,
+      lineHeight: 16,
     },
     cappedNote: {
       flexDirection: "row",

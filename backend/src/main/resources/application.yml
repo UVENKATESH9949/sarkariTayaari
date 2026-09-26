@@ -106,6 +106,12 @@ app:
     # re-login every few weeks is friction with no security benefit while tokens are
     # revocable server-side.
     token-ttl-days: 365
+    # "Continue with Google" (2026-09-25). The WEB OAuth client id from Google Cloud Console: Google
+    # ID tokens minted for the Android app carry it as their audience, and the server rejects any
+    # token whose audience is not this value. Not a secret - it ships inside the app. Blank switches
+    # Google sign-in off (the endpoint answers 400) without affecting email-code sign-in.
+    google:
+      web-client-id: ${GOOGLE_WEB_CLIENT_ID:815653276881-bgt8v5luik1jfee7c941510i1d20sb9u.apps.googleusercontent.com}
 
   # Sending the one-time sign-in code (migration V51).
   #

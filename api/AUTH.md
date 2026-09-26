@@ -37,7 +37,7 @@ they signed up.
 **Auth:** none
 **Request:** `{ email: string }`
 **Response:** `200 OK` — `{ message: string, expiresInMinutes: 10, emailed: boolean, code: string|null }`
-**Errors:** 400 for a non-Gmail address (`"Please use a Gmail address for now."`) or a resend inside the 60-second cooldown (`"A code was just sent. Please wait N seconds…"`).
+**Errors:** 400 for a non-Gmail address (`"Please use a Gmail address for now."`), a resend inside the 60-second cooldown (`"A code was just sent. Please wait N seconds…"`), or a sixth code inside a rolling hour (`"Too many codes requested for this email…"`, 2026-09-24). 503 `"We couldn't send the email right now…"` when mail is on and the send failed — the new code is rolled back and any earlier live code stays usable (2026-09-24; it used to be swallowed and reported as sent).
 **Business rules:** **Answers identically whether or not the address has an account** — anything else turns this into a membership oracle for any address someone cares to try, the same reasoning behind `login`'s single error message. Requesting a code **retires every earlier live code** for that address, so exactly one can ever be redeemed. `emailed` is false when the deployment has no mail account configured and wrote the code to its log instead; `code` is non-null **only** where `app.mail.expose-code-in-response` is on, which is a developer convenience and never a real deployment.
 **Consumers:** Mobile (`auth/SignInFlow.tsx`).
 
@@ -60,6 +60,7 @@ numbers:
 | Expiry | 10 minutes | a code stays guessable indefinitely |
 | Wrong guesses per code | 5, then the code is dead | **unlimited brute force** |
 | Resend cooldown | 60 seconds | the endpoint becomes an inbox flooder |
+| Codes per address per hour | 5 (2026-09-24) | sixty emails an hour to one inbox, and far more guesses |
 
 **⚠️ The attempt counter is fragile in a specific way, and it broke once.** A wrong guess reports
 failure by throwing `UnauthorizedException` — a `RuntimeException`, which Spring rolls back on by
@@ -71,6 +72,12 @@ not by reading it — an earlier comment in that file asserted the opposite and 
 
 The code itself is **never stored**, only a BCrypt hash of it, for the same reason passwords are:
 this project's dev and production environments share one database.
+
+The email itself (2026-09-24) is a branded HTML message with a plain-text alternative
+(`resources/mail/otp-code.html` / `.txt`). The subject leads with the code (what phone notifications
+and mail apps' "copy code" read); the code is one unbroken run of text in the body so a long-press
+copy gets all six digits. No logo image, support address or policy links yet — none exist, and none
+are invented. Logs mask addresses (`v***h@gmail.com`).
 
 ### Configuring mail
 
@@ -89,6 +96,34 @@ SPRING_MAIL_PASSWORD=<16-character Google app password, NOT the account password
 Nothing in the code is Gmail-specific beyond those defaults — `SPRING_MAIL_HOST`/`PORT` point it at
 any SMTP provider. Note the `APP_`/`SPRING_` prefixes: Spring relaxed binding needs them, and this
 project has already been bitten once by comments that named the bare form.
+
+## Sign in with Google (2026-09-25)
+
+### POST /api/auth/google
+**Purpose:** Exchange a Google ID token (from the Google Sign-In SDK on the device) for a session.
+**Auth:** none
+**Request:** `{ idToken: string, deviceLabel?: string }`
+**Response:** `200 OK` — the same `{ token, expiresAt, user }` shape as `login` and `otp/verify`.
+**Errors:** 400 when the request has no token, the Google account is not a Gmail address
+(`"Please use a Gmail account for now."`), or Google sign-in is not configured on this server.
+401 `"Google sign-in could not be verified. Please try again."` for **every** token failure; the
+reason is logged, never returned.
+**Business rules:**
+- **Verified on the server, with only the JDK** (`GoogleIdTokenVerifier`) — no Google client library
+  (ADR-003's hand-rolled-auth posture). Every rule Google documents: RS256 signature by a key Google
+  publishes at `https://www.googleapis.com/oauth2/v3/certs` (cached per its `max-age`; an unknown
+  key id refreshes at most once a minute), `iss` is Google, **`aud` is this app's web client id**,
+  not expired (60 s skew), and `email_verified` is true.
+- **Account linking is by verified email.** `PasswordlessAccountService` finds or creates the
+  account for the lower-cased address, and is also what `otp/verify` uses — so a student who signed
+  up with a code and later uses Google (or the reverse) gets **one** account, never two. Safe only
+  because both paths prove control of the address first.
+- **Gmail only**, the same rule as the code sign-in, so a Workspace address is not a way around it.
+- Config: `app.auth.google.web-client-id` / `GOOGLE_WEB_CLIENT_ID` — the **web** OAuth client id
+  (not secret; it ships in the app). The Android OAuth clients registered in Google Cloud (package
+  `com.sarkaritaiyaari.app` + the SHA-1 of the release and debug signing keys) are what authorise the
+  app to request tokens; they are not configured here.
+**Consumers:** Mobile (`auth/googleSignIn.ts` -> `authContext.signInWithGoogle`).
 
 ---
 

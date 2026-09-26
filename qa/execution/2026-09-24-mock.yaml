@@ -1,0 +1,52 @@
+- execution_id: EXEC-MOCK-0001
+  test_case_id: TC-MOCK-003
+  test_case_version: 1
+  environment: "Backend integration test, real Neon dev database"
+  build_version: "working tree, mock-count/mock-sample topicIds narrowing (2026-09-24)"
+  tester: "Automated — mockCountAndMockSample_narrowByTopicId"
+  executed_at: "2026-09-24T14:58:00+05:30"
+  actual_result: >
+    Created one question in the fixture topic and one in a sibling topic of the same
+    subject. GET /api/questions/mock-count with topicIds set to only the fixture topic
+    returned count: 1. GET /api/questions/mock-sample with the same params returned the
+    fixture-topic question and did not contain the sibling topic's question.
+  status: Pass
+  defect_id: ""
+  evidence: "mvn test -Dtest=LiveQuestionsTest — 10/10 tests pass, BUILD SUCCESS"
+  remarks: "Part of the same LiveQuestionsTest run as EXEC-MOCK-0002/0003."
+
+- execution_id: EXEC-MOCK-0002
+  test_case_id: TC-MOCK-004
+  test_case_version: 1
+  environment: "Backend integration test, real Neon dev database"
+  build_version: "working tree, mock-sample difficultyCode narrowing (2026-09-24)"
+  tester: "Automated — mockSample_narrowByDifficultyCode"
+  executed_at: "2026-09-24T14:58:00+05:30"
+  actual_result: >
+    Created a "hard" question and an "easy" question in the same subject. GET
+    /api/questions/mock-sample with difficultyCode=hard returned the hard question and did
+    not contain the easy one.
+  status: Pass
+  defect_id: ""
+  evidence: "mvn test -Dtest=LiveQuestionsTest — 10/10 tests pass, BUILD SUCCESS"
+  remarks: "Part of the same LiveQuestionsTest run as EXEC-MOCK-0001/0003."
+
+- execution_id: EXEC-MOCK-0003
+  test_case_id: TC-MOCK-005
+  test_case_version: 1
+  environment: "Backend integration test, real Neon dev database"
+  build_version: "working tree, mock-count/mock-sample pyqOnly narrowing (2026-09-24)"
+  tester: "Automated — mockCountAndMockSample_narrowByPyqOnly"
+  executed_at: "2026-09-24T14:58:00+05:30"
+  actual_result: >
+    Created a PYQ-tagged question and an ordinary question in the same subject. GET
+    /api/questions/mock-count with pyqOnly=true returned count: 1. GET
+    /api/questions/mock-sample with the same params returned only the PYQ-tagged question.
+  status: Pass
+  defect_id: ""
+  evidence: "mvn test -Dtest=LiveQuestionsTest — 10/10 tests pass, BUILD SUCCESS"
+  remarks: >
+    Part of the same LiveQuestionsTest run as EXEC-MOCK-0001/0002. The pre-existing
+    mockCount_and_mockSample_spanMultipleSubjects and mockSample_excludesDeletedQuestions
+    tests also passed unchanged in this same run, confirming the un-narrowed (subject-only)
+    call shape is unaffected by these additions.

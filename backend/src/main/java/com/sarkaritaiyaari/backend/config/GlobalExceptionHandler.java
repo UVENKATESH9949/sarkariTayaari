@@ -10,6 +10,7 @@ import com.sarkaritaiyaari.backend.ai.exception.AIRateLimitException;
 import com.sarkaritaiyaari.backend.ai.exception.AITimeoutException;
 import com.sarkaritaiyaari.backend.ai.exception.AIUnknownProviderException;
 import com.sarkaritaiyaari.backend.service.ForbiddenException;
+import com.sarkaritaiyaari.backend.service.EmailDeliveryException;
 import com.sarkaritaiyaari.backend.service.UnauthorizedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -40,6 +41,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, String>> handleBadRequest(IllegalArgumentException ex) {
         return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+    }
+
+    /** The sign-in email could not be sent; retrying shortly is the right advice, so 503. */
+    @ExceptionHandler(EmailDeliveryException.class)
+    public ResponseEntity<Map<String, String>> handleEmailDelivery(EmailDeliveryException ex) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("error", ex.getMessage()));
     }
 
     @ExceptionHandler(UnauthorizedException.class)

@@ -1,4 +1,5 @@
 export * from "./ai";
+export * from "./analytics";
 export * from "./evaluation";
 export * from "./intelligence";
 export * from "./i18n";

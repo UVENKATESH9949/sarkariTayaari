@@ -33,7 +33,8 @@ narrower than being authoritative for the profile.
     "targetYear": 2027,
     "preparationLevel": "PRACTICING",
     "dailyStudyTime": "ONE_TO_TWO",
-    "updatedAt": "2026-09-19T04:02:11.882Z"
+    "updatedAt": "2026-09-19T04:02:11.882Z",
+    "onboardingCompletedAt": "2026-09-19T04:02:11.882Z"
   }
 }
 ```
@@ -68,6 +69,27 @@ now.
 **A losing upload is not an error.** It returns `200` with `stored: false` **and the winning
 profile**, so the device that just lost can correct itself in the same round trip rather than
 discovering the disagreement later.
+
+### `onboardingCompletedAt` is monotonic, and outside last-write-wins (V53, 2026-09-24)
+
+When this student first finished onboarding on **any** device, or `null` when that is not known.
+This is what lets a reinstalled app, or a second phone, skip onboarding after signing in.
+
+- An upload may **set** it. When both sides have one, the **earlier** moment is kept.
+- It is **never cleared** — not by a newer upload carrying `null`, and not by an older app that
+  omits the field entirely (the field is optional on upload).
+- It is recorded **even when the upload loses** last-write-wins: it is a fact about the student,
+  not an edit to a field.
+
+V53 backfilled it (`= updated_at`) for every existing row with a non-blank `displayName`; a row
+without one stays `null`, because those are the rows a half-finished upload produced.
+
+**Client rule that goes with it (mobile, 2026-09-24):** an install that has not finished onboarding
+never uploads — it only downloads, and only a finished profile. Before this, a reinstalled app
+uploaded its empty profile with a newer timestamp and overwrote the student's real one.
+
+A server that predates V53 does not return the field at all; mobile then treats a stored profile
+with a display name as finished (`remoteCompletedAt` in `sync/preparationProfileSync.ts`).
 
 ### An upload replaces every field, including with null
 

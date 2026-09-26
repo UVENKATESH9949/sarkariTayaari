@@ -304,3 +304,39 @@
   systems: [Backend]
   status: Ready
   notes: "Every verify failure must read identically, or the endpoint leaks which codes are live."
+
+- id: SCN-AUTH-027
+  requirement_ids: [REQ-AUTH-016]
+  category: Security
+  title: The sign-in email is well formed, capped and never leaks a code
+  objective: "Verify the HTML+text email, the hourly cap, and that a failed send is reported."
+  systems: [Backend]
+  status: Ready
+  notes: ""
+
+- id: SCN-AUTH-028
+  requirement_ids: [REQ-AUTH-017]
+  category: Positive
+  title: Sign in with the redesigned email and code screens
+  objective: "Verify validation, the six-box code input (type, paste), the resend countdown and errors."
+  systems: [Mobile]
+  status: Ready
+  notes: ""
+
+- id: SCN-AUTH-029
+  requirement_ids: [REQ-AUTH-018]
+  category: Security
+  title: Only a genuine Google token for this app signs in, and it links to the existing account
+  objective: "Verify every token rule, Gmail-only, and one account per address across both sign-in methods."
+  systems: [Backend]
+  status: Ready
+  notes: ""
+
+- id: SCN-AUTH-030
+  requirement_ids: [REQ-AUTH-018]
+  category: Positive
+  title: Continue with Google on a phone
+  objective: "Verify the button, Google's chooser, cancel, a new account, and an existing code account."
+  systems: [Mobile]
+  status: Ready
+  notes: ""

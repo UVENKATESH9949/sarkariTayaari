@@ -660,7 +660,10 @@
   dependencies: [REQ-AUTH-001]
   error_conditions:
     - "Five wrong guesses kill the code; the correct one is refused afterwards"
-    - "A delivery failure never fails the request, so SMTP cannot leak whether an address exists"
+    - >
+      A delivery failure is a 503 "We couldn't send the email" (changed 2026-09-24; it used to be
+      logged and swallowed, so the app claimed a code was sent when none was). It still cannot leak
+      whether an address exists: it happens for every address alike.
   edge_conditions:
     - >
       A first-time address gets a password hash of random bytes nobody has seen - the "unusable
@@ -678,8 +681,149 @@
   ambiguity: >
     Only Gmail is accepted, at the owner's instruction. Widening it later is a one-line change in
     EmailOtpService, which is why the restriction lives in exactly one place.
-  automation_status: ManualOnly
+  automation_reference: "backend/src/test/java/com/sarkaritaiyaari/backend/EmailOtpTest.java"
+  automation_status: Automated
   automation_hint: >
-    No automated test exists yet for this flow. It was exercised end to end with curl against the
-    real dev database and then on emulator-5554; a backend test class is the obvious next step and
-    is NOT written.
+    Automated 2026-09-24 by EmailOtpTest (10 tests: non-Gmail, cooldown, hourly cap,
+    retire-on-resend, single use, wrong, expired, five-wrong-then-right, same address same account,
+    code never returned). Before that it had only been exercised with curl and on emulator-5554.
+
+- id: REQ-AUTH-016
+  feature: A professional, safe sign-in email
+  module: AUTH
+  system: [Backend]
+  source_doc: api/AUTH.md
+  source_section: "Passwordless sign-in (one-time code)"
+  description: >
+    The sign-in code is sent as a branded HTML email with a plain-text alternative
+    (backend/src/main/resources/mail/otp-code.html and .txt): app name, "Verify your email", the
+    code in one large copyable block, the 10-minute expiry, a never-share-this-code warning, an
+    "if you didn't request this" line, and a footer with the address and copyright. The subject
+    leads with the code. At most 5 codes per address per rolling hour. A failed send is a 503, not
+    a silent success. Logs mask email addresses and never contain a code unless mail is switched OFF.
+  business_rule: >
+    No invented company details: there is no public logo, support address or policy page yet, so
+    the email uses a text wordmark and carries no links. Add them to both templates when they exist.
+  actor: Student
+  preconditions:
+    - "app.mail.enabled=true with SMTP credentials (production)"
+  inputs:
+    - "A code request for a Gmail address"
+  expected_outputs:
+    - "One multipart/alternative email: HTML + plain text, both carrying the code"
+  validations:
+    - "The sixth code request inside an hour is refused with 400"
+    - "The email address is HTML-escaped in the HTML part"
+  permissions:
+    - "None"
+  dependencies: [REQ-AUTH-015]
+  error_conditions:
+    - "SMTP failure -> 503; the new code is rolled back and any earlier live code stays usable"
+    - "Mail switched on but misconfigured (no sender) -> 503, and the code is NOT written to the log"
+  edge_conditions:
+    - "The code is one unbroken run of text, so a long-press copy or a mail client's code detection gets all six digits"
+  offline_behavior: "Not applicable (server side)."
+  acceptance_criteria:
+    - "The email looks like one from an established product, on phone and desktop mail clients"
+    - "A code is never exposed in an API response or a production log"
+  priority: High
+  status: Active
+  ambiguity: >
+    The code in the subject is visible on a lock screen. That is the industry norm for a short-lived
+    single-use code and is what makes mail-app "copy code" work; revisit if the owner prefers otherwise.
+  automation_reference: "backend/src/test/java/com/sarkaritaiyaari/backend/service/OtpMailSenderTest.java; EmailOtpTest.theHourlySendCapIsEnforced"
+  automation_status: PartiallyAutomated
+  automation_hint: "Content and failure paths are automated; how it renders in real Gmail/Outlook apps is manual."
+
+- id: REQ-AUTH-017
+  feature: Redesigned sign-in and code screens
+  module: AUTH
+  system: [Mobile]
+  source_doc: mobile/src/auth/SignInFlow.tsx
+  source_section: "EmailStep / CodeStep / OtpCodeInput"
+  description: >
+    Two screens sharing one layout (AuthLayout). Email: brand mark, "Sign in or create an account",
+    an email field with an icon, focus/valid/error states and inline messages (empty, not an email,
+    not Gmail), shown only after blur or Continue. Code: "Verify your email" with the address, six
+    boxes backed by ONE text field (so paste, OS code suggestions, auto-advance and backspace work
+    natively), automatic submit on the sixth digit, a live "Resend code in 0:42" countdown,
+    expired/wrong/offline messages, and "Change email".
+  business_rule: >
+    Never auto-retry a wrong code (5 wrong guesses kill it). Never read the clipboard without the
+    student pasting. A double tap never sends two requests.
+  actor: Student
+  preconditions:
+    - "Signed out"
+  inputs:
+    - "Email, then a 6-digit code (typed, pasted or autofilled)"
+  expected_outputs:
+    - "A signed-in session"
+  validations:
+    - "Continue with an empty, malformed or non-Gmail address shows the matching inline message and sends nothing"
+  permissions:
+    - "None"
+  dependencies: [REQ-AUTH-015]
+  error_conditions:
+    - "Offline -> 'You seem to be offline...' rather than a raw transport error"
+  edge_conditions:
+    - "Pasting '482 913', or a sentence containing the code, fills all six boxes with the digits"
+  offline_behavior: "Requests fail with a clear offline message; nothing is queued."
+  acceptance_criteria:
+    - "Looks premium in light and dark themes at phone width, with the keyboard up"
+  priority: High
+  status: Active
+  ambiguity: >
+    Android has no OS autofill for codes that arrive by EMAIL (its one-time-code hint is for SMS);
+    there the path is Gmail's "Copy code" plus paste. iOS 17+ can suggest codes it finds in Mail.
+  automation_reference: ""
+  automation_status: ManualOnly
+  automation_hint: "Mobile has no automated UI runner."
+
+- id: REQ-AUTH-018
+  feature: Continue with Google
+  module: AUTH
+  system: [Backend, Mobile]
+  source_doc: api/AUTH.md
+  source_section: "Sign in with Google (2026-09-25)"
+  description: >
+    The email screen offers "Continue with Google" under an "or" divider. The device gets a Google
+    ID token from Google's account chooser (@react-native-google-signin/google-signin) and posts it
+    to POST /api/auth/google, which verifies it server-side with the JDK only and returns the same
+    session as a code sign-in.
+  business_rule: >
+    One account per verified Gmail however the student signs in (PasswordlessAccountService is
+    shared with otp/verify). Gmail only, same as the code path. The token must be RS256-signed by a
+    key Google publishes, issued by Google, for THIS app's web client id, unexpired, with
+    email_verified true. Every failure is one generic 401.
+  actor: Student
+  preconditions:
+    - "A build containing the native Google Sign-In module; Google Play services on the phone"
+    - "Android OAuth clients registered for com.sarkaritaiyaari.app with the release and debug SHA-1"
+  inputs:
+    - "A Google account chosen in Google's own account chooser"
+  expected_outputs:
+    - "A signed-in session; a new account on first use, the existing one otherwise"
+  validations:
+    - "A token for another app, expired, unverified, forged or edited is refused with 401"
+    - "A non-Gmail Google account is refused with 400 and no account is created"
+  permissions:
+    - "None"
+  dependencies: [REQ-AUTH-015, REQ-AUTH-017]
+  error_conditions:
+    - "Cancelling the chooser shows nothing and changes nothing"
+    - "Google's key endpoint unreachable with nothing cached: Google sign-in fails closed; email codes still work"
+  edge_conditions:
+    - "A build without the native module hides the button rather than showing one that cannot work"
+    - "App sign-out also signs out of Google in the app, so the next attempt shows the account chooser"
+  offline_behavior: "Unavailable offline, like the code sign-in."
+  acceptance_criteria:
+    - "A new student can sign up with Google; a returning student lands in their existing account"
+    - "Google sign-in never creates a duplicate account for a Gmail that already signed up with a code"
+  priority: High
+  status: Active
+  ambiguity: >
+    Play Store distribution will re-sign the app with Google's app-signing key; its SHA-1 must then be
+    added as a third Android OAuth client, or Google sign-in fails for Play installs only.
+  automation_reference: "backend/src/test/java/com/sarkaritaiyaari/backend/service/GoogleIdTokenVerifierTest.java; GoogleSignInTest.java"
+  automation_status: PartiallyAutomated
+  automation_hint: "Server verification and linking are automated; the on-device Google flow is manual."

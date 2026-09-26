@@ -1,7 +1,44 @@
 # ONBOARDING module — defects
 #
-# Empty by design. A defect here must trace to a real failed execution in qa/execution/,
+# A defect here must trace to a real failed execution in qa/execution/,
 # never to a bug found while writing the code — those are fixed in the same change and
 # written up in the report. See qa/defects/auth.yaml for the schema.
 
-[]
+
+- id: DEF-ONBOARDING-001
+  title: "Signing in as a second account on the same phone showed, then uploaded, the first account's profile"
+  severity: Critical
+  status: Fixed
+  found_in_execution: EXEC-ONBOARDING-0010
+  test_case_id: TC-ONBOARDING-031
+  requirement_ids: [REQ-ONBOARDING-015]
+  description: >
+    The onboarding answers lived in device-wide app_preferences and were never cleared on sign-out.
+    After account C signed out and account A signed in on the same emulator, Home greeted A as
+    "Chitra" with C's exam, onboarding was skipped on C's answers, and the next sync uploaded C's
+    answers over A's real server profile (C's edit was newer, so it won last-write-wins).
+  external_ref: null
+  remarks: >
+    Older than the 2026-09-24 work, but made reachable more often by it. Fixed 2026-09-25:
+    sign-out now clears the onboarding answers after pushing them to the account
+    (db/onboarding.ts resetProfileForSignOut), and OnboardingProvider resets to "collecting" on
+    sign-out so the next account either restores its own finished profile or gets onboarding.
+    Re-verified in EXEC-ONBOARDING-0011. A's corrupted server profile was restored by hand.
+
+- id: DEF-ONBOARDING-002
+  title: "Finishing onboarding offline looped back to the exam step forever"
+  severity: High
+  status: Fixed
+  found_in_execution: EXEC-ONBOARDING-0006
+  test_case_id: TC-ONBOARDING-027
+  requirement_ids: [REQ-ONBOARDING-014]
+  description: >
+    On a fresh install whose first sync had not finished, the exam list is read live. When the
+    network dropped before the last answer, the list reloaded as empty, so submit's validation
+    rejected the already-chosen exam and sent the student back to the exam step. That step says
+    "you're offline - just Continue", but the saved choice failed again, so the student looped
+    there until the network returned.
+  external_ref: null
+  remarks: >
+    Existing behaviour, found by the emulator. Fixed in OnboardingFlow.tsx: a list the student has
+    already seen is never replaced by an empty one. Re-verified in EXEC-ONBOARDING-0007.

@@ -691,7 +691,18 @@ export default function Quiz() {
     // reads topicId here instead of from SessionRecord.
     router.replace({
       pathname: "/practice/summary",
-      params: { sessionId, ...(topicId ? { topicId } : {}), ...(examCode ? { examCode } : {}) },
+      params: {
+        sessionId,
+        ...(topicId ? { topicId } : {}),
+        ...(examCode ? { examCode } : {}),
+        // Carried through for the Retry/Next Level/Next Topic actions on Summary — none of
+        // this is persisted, the same reasoning already documented above for topicId/examCode.
+        ...(examLabel ? { examLabel } : {}),
+        ...(subjectName ? { subjectName } : {}),
+        ...(topicName ? { topicName } : {}),
+        ...(levelKey ? { levelKey } : {}),
+        ...(levelLabel ? { levelLabel } : {}),
+      },
     });
   };
 

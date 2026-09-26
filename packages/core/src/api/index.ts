@@ -18,6 +18,7 @@ export * from "./reference";
 export * from "./reminders";
 export * from "./sessionFeedback";
 export * from "./studyRoadmap";
+export * from "./practiceResultInsight";
 export * from "./preparationProfile";
 export * from "./topicProgress";
 export * from "./weaknessRadar";

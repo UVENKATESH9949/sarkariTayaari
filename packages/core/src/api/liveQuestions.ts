@@ -49,12 +49,38 @@ export function getQuestionCounts(params: {
   return apiFetch<Record<string, number>>(`/questions/counts?${query.toString()}`);
 }
 
-export function getMockAvailabilityCount(examCode: string, subjectIds: string[]) {
+/**
+ * Mock Test Hub's ad-hoc formats narrow the same subject-scoped pool further — all three are
+ * optional so the Full-Length-mock-live-path callers above (no narrowing at all) are unaffected.
+ */
+export type MockNarrowing = {
+  topicIds?: string[];
+  difficultyCode?: string;
+  pyqOnly?: boolean;
+};
+
+function appendMockNarrowing(query: URLSearchParams, narrowing?: MockNarrowing) {
+  if (!narrowing) return;
+  if (narrowing.topicIds && narrowing.topicIds.length > 0) query.set("topicIds", narrowing.topicIds.join(","));
+  if (narrowing.difficultyCode) query.set("difficultyCode", narrowing.difficultyCode);
+  if (narrowing.pyqOnly) query.set("pyqOnly", "true");
+}
+
+export function getMockAvailabilityCount(examCode: string, subjectIds: string[], narrowing?: MockNarrowing) {
   const query = new URLSearchParams({ examCode, subjectIds: subjectIds.join(",") });
+  appendMockNarrowing(query, narrowing);
   return apiFetch<{ count: number }>(`/questions/mock-count?${query.toString()}`);
 }
 
-export function getMockSample(examCode: string, subjectIds: string[], limit: number) {
+export function getMockSample(examCode: string, subjectIds: string[], limit: number, narrowing?: MockNarrowing) {
   const query = new URLSearchParams({ examCode, subjectIds: subjectIds.join(","), limit: String(limit) });
+  appendMockNarrowing(query, narrowing);
   return apiFetch<QuestionResponse[]>(`/questions/mock-sample?${query.toString()}`);
+}
+
+/** Revision Mock's exact-list hydration, live — the same endpoint the web app and bookmark/session-review screens already use to turn bare question ids into content. */
+export function getQuestionsByIds(ids: string[]) {
+  if (ids.length === 0) return Promise.resolve<QuestionResponse[]>([]);
+  const query = new URLSearchParams({ ids: ids.join(",") });
+  return apiFetch<QuestionResponse[]>(`/questions/by-ids?${query.toString()}`);
 }

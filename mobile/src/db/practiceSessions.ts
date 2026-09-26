@@ -71,6 +71,14 @@ export type SessionRecord = {
    */
   feedbackNarrative?: string | null;
   feedbackGeneratedAt?: number | null;
+  /**
+   * The Practice Result "AI Feedback" tab's structured response, JSON-encoded and cached
+   * on-device only after the student explicitly opens the tab. Parsed by the caller
+   * (`ai/practiceResultInsight.ts`) — kept as a raw string here so this module stays
+   * agnostic of the response shape, the same separation `feedbackNarrative` already keeps.
+   */
+  insightJson?: string | null;
+  insightGeneratedAt?: number | null;
 };
 
 const MAX_SESSIONS = 50;
@@ -145,6 +153,8 @@ export async function loadSessions(): Promise<SessionRecord[]> {
     results: resultsBySession.get(row.id) ?? [],
     feedbackNarrative: row.feedbackNarrative,
     feedbackGeneratedAt: row.feedbackGeneratedAt ? row.feedbackGeneratedAt.getTime() : null,
+    insightJson: row.insightJson,
+    insightGeneratedAt: row.insightGeneratedAt ? row.insightGeneratedAt.getTime() : null,
   }));
 }
 
@@ -236,5 +246,18 @@ export async function saveSessionFeedback(sessionId: string, narrative: string):
   await db
     .update(practiceSessions)
     .set({ feedbackNarrative: narrative, feedbackGeneratedAt: new Date() })
+    .where(eq(practiceSessions.id, sessionId));
+}
+
+/**
+ * Caches the AI Feedback tab's structured response so reopening this session (from History, or
+ * switching tabs back and forth) doesn't regenerate it — the on-device counterpart of
+ * `saveSessionFeedback`. `insightJson` is the caller's own `JSON.stringify`d payload; this
+ * module stays agnostic of its shape.
+ */
+export async function saveResultInsight(sessionId: string, insightJson: string): Promise<void> {
+  await db
+    .update(practiceSessions)
+    .set({ insightJson, insightGeneratedAt: new Date() })
     .where(eq(practiceSessions.id, sessionId));
 }

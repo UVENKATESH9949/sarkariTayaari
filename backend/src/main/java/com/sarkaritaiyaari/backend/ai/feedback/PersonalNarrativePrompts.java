@@ -2,6 +2,9 @@ package com.sarkaritaiyaari.backend.ai.feedback;
 
 import com.sarkaritaiyaari.backend.ai.AIMessage;
 import com.sarkaritaiyaari.backend.dto.MistakeAnalysisDtos.MistakeAnalysisRequest;
+import com.sarkaritaiyaari.backend.dto.PracticeResultInsightDtos.FlaggedQuestionDto;
+import com.sarkaritaiyaari.backend.dto.PracticeResultInsightDtos.PracticeResultInsightRequest;
+import com.sarkaritaiyaari.backend.dto.PracticeResultInsightDtos.SubtopicSnapshotDto;
 import com.sarkaritaiyaari.backend.dto.ProfileSummaryDtos.ProfileSummaryRequest;
 import com.sarkaritaiyaari.backend.dto.SessionFeedbackDtos.SessionFeedbackRequest;
 import com.sarkaritaiyaari.backend.dto.SessionFeedbackDtos.TopicSnapshotDto;
@@ -110,6 +113,47 @@ public final class PersonalNarrativePrompts {
             - Write only in the requested language.
             - Keep it short: this is read on a phone, under a question they already know they got wrong.""";
 
+    /**
+     * The Practice Result screen's "AI Feedback" tab. The facts are the deterministic Analytics
+     * tab's own output, already computed on-device — never invent a number, sub-topic name or
+     * trend not given. The job here is interpretation: turn measured facts into a short verdict
+     * and one next step, the same "facts given, model phrases them" rule every prompt in this
+     * file follows.
+     */
+    private static final String PRACTICE_RESULT_INSIGHT_SYSTEM = """
+            You interpret a just-finished Practice session's already-computed performance data \
+            for a student in an Indian government exam preparation app. You are given the exact \
+            accuracy, per-sub-topic breakdown and time patterns already measured -- never invent a \
+            number, sub-topic name, or previous-session trend not given to you.
+
+            Return ONLY a JSON object with this exact shape, no prose outside the JSON, no markdown fence:
+            {
+              "summary": "<one concise paragraph interpreting the overall performance>",
+              "strengths": ["<short point>", "..."],
+              "weakAreas": ["<short point>", "..."],
+              "timeInsight": "<one sentence, or null if time data reveals nothing meaningful>",
+              "recommendation": "<one clear, concrete next step>",
+              "recommendedAction": "<exactly one of RETRY, NEXT_LEVEL, NEXT_TOPIC, PRACTICE_WEAK_AREA>"
+            }
+
+            Rules:
+            - Every sub-topic name you mention must be one already given to you.
+            - "strengths" is 0-3 short points; "weakAreas" is 0-3 short points. Leave either empty \
+            (an empty array) rather than inventing one when nothing genuinely stood out.
+            - "timeInsight" must be null unless the given high-time or fast-accurate data actually \
+            shows something worth saying -- never a filler sentence like "you answered at a normal pace."
+            - "recommendation" may propose a practice amount (e.g. "10-15 questions") as a concrete \
+            suggestion -- that is an action item, not a claimed statistic about the student, and is \
+            not required to match any number you were given.
+            - Choose PRACTICE_WEAK_AREA when a specific weak sub-topic stands out; RETRY only when the \
+            session was short/inconclusive or a repeat would clearly help; NEXT_LEVEL only when \
+            performance was strong; NEXT_TOPIC when this sub-topic looks solid and moving on makes sense.
+            - Do not repeat every number back at the student -- the screen above you already shows the \
+            raw statistics; your job is to say what they mean.
+            - Tone: a topic needs attention, the student is not deficient.
+            - Write only in the requested language.
+            - Keep it concise -- this is read on a phone right after a session ends.""";
+
     private PersonalNarrativePrompts() {
     }
 
@@ -123,6 +167,10 @@ public final class PersonalNarrativePrompts {
 
     public static String profileSummarySystemPrompt() {
         return PROFILE_SUMMARY_SYSTEM;
+    }
+
+    public static String practiceResultInsightSystemPrompt() {
+        return PRACTICE_RESULT_INSIGHT_SYSTEM;
     }
 
     public static AIMessage sessionFeedbackUserMessage(SessionFeedbackRequest session, String languageName) {
@@ -241,5 +289,70 @@ public final class PersonalNarrativePrompts {
                 weaknessLines.isBlank() ? "(none)" : weaknessLines);
 
         return AIMessage.user(prompt);
+    }
+
+    public static AIMessage practiceResultInsightUserMessage(PracticeResultInsightRequest result, String languageName) {
+        String subtopicLines = result.subtopics().stream()
+                .map(PersonalNarrativePrompts::subtopicLine)
+                .collect(Collectors.joining("\n"));
+        String highTimeLines = result.highTimeQuestions().stream()
+                .map(PersonalNarrativePrompts::flaggedQuestionLine)
+                .collect(Collectors.joining("\n"));
+        String fastAccurateLines = result.fastAccurateQuestions().stream()
+                .map(PersonalNarrativePrompts::flaggedQuestionLine)
+                .collect(Collectors.joining("\n"));
+
+        String previousLine = result.previousPerformance() != null && result.previousPerformance().available()
+                ? "Previous accuracy for this sub-topic: %d%% -> now %d%% (trend: %s)".formatted(
+                        result.previousPerformance().previousAccuracyPercent(),
+                        result.previousPerformance().currentAccuracyPercent(),
+                        result.previousPerformance().trend())
+                : "No previous session data is available for comparison -- base feedback only on this session.";
+
+        String prompt = """
+                Language: %s
+                Exam: %s
+                Subject: %s
+                Topic: %s
+                Difficulty level: %s
+
+                Overall: %d%% accuracy, %d of %d correct, %d incorrect%s
+
+                Sub-topic breakdown (already computed, includes a performance label you must not \
+                contradict):
+                %s
+
+                Questions that took much longer than this session's own typical pace:
+                %s
+
+                Questions answered both quickly and correctly:
+                %s
+
+                %s""".formatted(
+                languageName,
+                result.examCode() == null ? "(not specified)" : result.examCode(),
+                result.subjectName() == null ? "(not specified)" : result.subjectName(),
+                result.topicName() == null ? "(not specified)" : result.topicName(),
+                result.levelLabel() == null ? "(not specified)" : result.levelLabel(),
+                result.accuracyPercent(), result.correctCount(), result.questionsAttempted(), result.incorrectCount(),
+                result.averageTimeMs() != null ? ", average %ds/question".formatted(result.averageTimeMs() / 1000) : "",
+                subtopicLines.isBlank() ? "(none)" : subtopicLines,
+                highTimeLines.isBlank() ? "(none)" : highTimeLines,
+                fastAccurateLines.isBlank() ? "(none)" : fastAccurateLines,
+                previousLine);
+
+        return AIMessage.user(prompt);
+    }
+
+    private static String subtopicLine(SubtopicSnapshotDto s) {
+        return "- %s: %d%% accuracy (%d attempted, %d incorrect), label: %s%s".formatted(
+                s.name(), s.accuracyPercent(), s.attempted(), s.incorrectCount(), s.performanceLabel(),
+                s.averageTimeMs() != null ? ", avg %ds/question".formatted(s.averageTimeMs() / 1000) : "");
+    }
+
+    private static String flaggedQuestionLine(FlaggedQuestionDto q) {
+        return "- Q%d: %ds%s%s".formatted(q.questionNumber(), q.timeMs() / 1000,
+                q.isCorrect() != null ? (q.isCorrect() ? ", correct" : ", incorrect") : "",
+                q.subtopicName() != null ? " (" + q.subtopicName() + ")" : "");
     }
 }

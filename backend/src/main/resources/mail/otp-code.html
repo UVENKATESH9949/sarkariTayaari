@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<!-- Stops iOS Mail turning the six digits into a tappable phone number. -->
+<meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>Your {{APP_NAME}} verification code</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F2F5FA;-webkit-text-size-adjust:100%;">
+<!-- Preheader: the line most inboxes show under the subject. Hidden in the body itself. -->
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#F2F5FA;font-size:1px;line-height:1px;">
+Your verification code is {{CODE}}. It expires in {{MINUTES}} minutes.
+</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F2F5FA;">
+  <tr>
+    <td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;">
+
+        <!-- Brand. A text wordmark rather than an image: there is no publicly hosted logo yet, and
+             an image many clients block by default would leave a broken box at the top. -->
+        <tr>
+          <td align="left" style="padding:0 4px 20px 4px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td width="36" height="36" align="center" valign="middle"
+                    style="width:36px;height:36px;background-color:#2563EB;border-radius:10px;font-family:Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:18px;font-weight:700;color:#FFFFFF;line-height:36px;">S</td>
+                <td style="padding-left:10px;font-family:Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:18px;font-weight:700;color:#0D1524;letter-spacing:-0.2px;">{{APP_NAME}}</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Card -->
+        <tr>
+          <td style="background-color:#FFFFFF;border:1px solid #DBE2EC;border-radius:16px;padding:32px 28px;">
+            <h1 style="margin:0 0 8px 0;font-family:Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:22px;line-height:30px;font-weight:700;color:#0D1524;">Verify your email</h1>
+            <p style="margin:0 0 24px 0;font-family:Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:23px;color:#4A5568;">
+              Use this code to sign in to {{APP_NAME}}.
+            </p>
+
+            <!-- The code: ONE unbroken run of text, so a long-press, "copy", or a mail client's own
+                 code detection gets all six digits. Spacing is letter-spacing, never separate cells. -->
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td align="center" style="background-color:#EEF3FE;border:1px solid #C9D8FB;border-radius:12px;padding:20px 12px;">
+                  <div style="font-family:SFMono-Regular,Menlo,Consolas,'Courier New',monospace;font-size:34px;line-height:40px;font-weight:700;letter-spacing:8px;padding-left:8px;color:#1D4ED8;">{{CODE}}</div>
+                </td>
+              </tr>
+            </table>
+
+            <p style="margin:20px 0 0 0;font-family:Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:21px;color:#4A5568;">
+              This code expires in <strong style="color:#0D1524;">{{MINUTES}} minutes</strong> and can be used only once.
+            </p>
+
+            <!-- Security notice -->
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:24px;">
+              <tr>
+                <td style="border-top:1px solid #E6EBF2;padding-top:20px;font-family:Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:20px;color:#5B6B82;">
+                  <strong style="color:#0D1524;">For your security, never share this code with anyone.</strong>
+                  {{APP_NAME}} will never ask you for it by phone, message or email.
+                  <br><br>
+                  If you didn't request this code, you can safely ignore this email. Nobody can sign in
+                  to your account without it.
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Footer. Only facts that are true: no invented address, phone, support email or links. -->
+        <tr>
+          <td align="center" style="padding:20px 8px 0 8px;font-family:Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#8593A8;">
+            This code was requested for {{EMAIL}}.<br>
+            &copy; {{YEAR}} {{APP_NAME}}. All rights reserved.
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>

@@ -23,5 +23,7 @@ public enum AiTaskId {
     /** Phase 7 -- one short narrative over a just-finished Practice/Mock session's facts. */
     SESSION_FEEDBACK,
     /** Phase 7 -- the narrative behind the Profile screen's strengths/weaknesses. */
-    PROFILE_SUMMARY
+    PROFILE_SUMMARY,
+    /** The Practice Result screen's on-demand, structured "AI Feedback" tab. */
+    PRACTICE_RESULT_INSIGHT
 }

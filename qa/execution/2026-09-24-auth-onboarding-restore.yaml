@@ -1,0 +1,70 @@
+# AUTH + ONBOARDING — execution records, 2026-09-24 (stuck preparation, reinstall restore, OTP email)
+#
+# Three backend test classes, run against the real Neon dev database (which production shares):
+#   PreparationProfileCompletionTest   5/5    (applied V53: v52 -> v53 in 1.845 s)
+#   EmailOtpTest                      10/10
+#   OtpMailSenderTest                  5/5    (plain JUnit, no Spring, no SMTP)
+# Command: mvn -o test -Dtest=EmailOtpTest,PreparationProfileCompletionTest, then -Dtest=OtpMailSenderTest.
+#
+# OtpMailSenderTest's FIRST run had 1 error, in the test's own helper (it read an unsaved MimeMessage,
+# whose default type is text/plain, as a string). Fixed in the test; the product code was unchanged.
+#
+# Every ManualOnly case added today (TC-AUTH-033..036, TC-ONBOARDING-026..029) is Not Executed and
+# deliberately absent here: no emulator pass has happened yet (the emulator was in use by another task).
+
+- execution_id: EXEC-AUTH-0004
+  test_case_id: TC-AUTH-030
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database"
+  build_version: "main @ ec51285 + uncommitted 2026-09-24 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-24T23:28:00+05:30"
+  actual_result: "With five codes issued in the last hour, a sixth request returned 400 'Too many codes requested for this email'."
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for EmailOtpTest.theHourlySendCapIsEnforced"
+  remarks: ""
+
+- execution_id: EXEC-AUTH-0005
+  test_case_id: TC-AUTH-031
+  test_case_version: 1
+  environment: "Plain JUnit, no Spring context, no SMTP"
+  build_version: "main @ ec51285 + uncommitted 2026-09-24 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-24T23:32:00+05:30"
+  actual_result: >
+    Subject '482913 is your SarkariTaiyaari verification code'; one HTML and one text part, both with
+    the code and expiry; no leftover placeholders; the address HTML-escaped; a failing sender and a
+    misconfigured (no sender address) one both raised EmailDeliveryException without the code.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for OtpMailSenderTest (5 tests)"
+  remarks: "The HTML was also rendered in Chromium at 390 px and 800 px and checked by eye."
+
+- execution_id: EXEC-AUTH-0006
+  test_case_id: TC-AUTH-032
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database"
+  build_version: "main @ ec51285 + uncommitted 2026-09-24 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-24T23:28:00+05:30"
+  actual_result: >
+    Wrong 401; expired 401; correct then reuse 200 then 401; five wrong then correct all 401;
+    a request returned no code and stored a bcrypt hash; the same address reached the same user id.
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for EmailOtpTest (10 tests)"
+  remarks: "Server logs showed masked addresses (s***5@gmail.com), as intended."
+
+- execution_id: EXEC-ONBOARDING-0004
+  test_case_id: TC-ONBOARDING-030
+  test_case_version: 1
+  environment: "Backend test suite against the real Neon dev database"
+  build_version: "main @ ec51285 + uncommitted 2026-09-24 work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-24T23:22:00+05:30"
+  actual_result: "All five steps as expected: set, not cleared by null, not cleared by an old app, recorded on a losing upload, earliest kept."
+  status: Pass
+  defect_id: ""
+  evidence: "surefire output for PreparationProfileCompletionTest (5 tests)"
+  remarks: "This run applied migration V53 to the shared database."

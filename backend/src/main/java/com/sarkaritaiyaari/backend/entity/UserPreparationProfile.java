@@ -71,6 +71,13 @@ public class UserPreparationProfile {
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
 
+    /**
+     * When this student first finished onboarding on any device (V53). Monotonic: set once, never
+     * cleared, and deliberately outside last-write-wins — see PreparationProfileService.
+     */
+    @Column(name = "onboarding_completed_at")
+    private OffsetDateTime onboardingCompletedAt;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
@@ -105,6 +112,12 @@ public class UserPreparationProfile {
     public OffsetDateTime getUpdatedAt() { return updatedAt; }
 
     public void setUpdatedAt(OffsetDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public OffsetDateTime getOnboardingCompletedAt() { return onboardingCompletedAt; }
+
+    public void setOnboardingCompletedAt(OffsetDateTime onboardingCompletedAt) {
+        this.onboardingCompletedAt = onboardingCompletedAt;
+    }
 
     public OffsetDateTime getCreatedAt() { return createdAt; }
 

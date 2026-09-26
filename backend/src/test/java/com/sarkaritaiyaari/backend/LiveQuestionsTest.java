@@ -136,6 +136,83 @@ class LiveQuestionsTest extends AbstractIntegrationTest {
         assertThat(ids).doesNotContain(deleted.getId().toString());
     }
 
+    /**
+     * The Mock Test Hub's ad-hoc formats (Topic/Difficulty/PYQ Mock) narrow this same
+     * subject-scoped endpoint further — all three are optional and additive, proven here
+     * against the exact same fixture shape {@link #mockCount_and_mockSample_spanMultipleSubjects}
+     * already uses for the un-narrowed case, so a regression in either would show up as an
+     * asymmetry between these tests rather than each looking correct in isolation.
+     */
+    @Test
+    void mockCountAndMockSample_narrowByTopicId() {
+        Subject defaultSubject = topicRepository.findById(testTopicId).orElseThrow().getSubject();
+        Topic secondTopic = new Topic();
+        secondTopic.setSubject(defaultSubject);
+        secondTopic.setName("Automated Test Second Topic For Mock Narrowing");
+        secondTopic = topicRepository.save(secondTopic);
+        createdTopicIds.add(secondTopic.getId());
+
+        QuestionResponse inFirstTopic = createQuestion(sampleRequest());
+
+        CreateQuestionRequest secondTopicRequest = sampleRequest();
+        secondTopicRequest.setTopicId(secondTopic.getId());
+        QuestionResponse inSecondTopic = createQuestion(secondTopicRequest);
+
+        Map<?, ?> countBody = getForMap("/api/questions/mock-count?examCode=" + TEST_EXAM_CODE
+                + "&subjectIds=" + inFirstTopic.getSubjectId() + "&topicIds=" + testTopicId);
+        assertThat(((Number) countBody.get("count")).longValue()).isEqualTo(1L);
+
+        ResponseEntity<List> sampleResponse = restTemplate.getForEntity(
+                "/api/questions/mock-sample?examCode=" + TEST_EXAM_CODE
+                        + "&subjectIds=" + inFirstTopic.getSubjectId() + "&topicIds=" + testTopicId + "&limit=50",
+                List.class);
+        List<String> ids = ((List<Map<String, Object>>) (List<?>) sampleResponse.getBody()).stream()
+                .map(q -> (String) q.get("id"))
+                .toList();
+        assertThat(ids).contains(inFirstTopic.getId().toString());
+        assertThat(ids).doesNotContain(inSecondTopic.getId().toString());
+    }
+
+    @Test
+    void mockSample_narrowByDifficultyCode() {
+        CreateQuestionRequest hardRequest = sampleRequest();
+        hardRequest.setDifficulty("hard");
+        QuestionResponse hard = createQuestion(hardRequest);
+        QuestionResponse easy = createQuestion(sampleRequest()); // sampleRequest() defaults to "easy"
+
+        ResponseEntity<List> response = restTemplate.getForEntity(
+                "/api/questions/mock-sample?examCode=" + TEST_EXAM_CODE
+                        + "&subjectIds=" + hard.getSubjectId() + "&difficultyCode=hard&limit=50",
+                List.class);
+        List<String> ids = ((List<Map<String, Object>>) (List<?>) response.getBody()).stream()
+                .map(q -> (String) q.get("id"))
+                .toList();
+        assertThat(ids).contains(hard.getId().toString());
+        assertThat(ids).doesNotContain(easy.getId().toString());
+    }
+
+    @Test
+    void mockCountAndMockSample_narrowByPyqOnly() {
+        CreateQuestionRequest pyqRequest = sampleRequest();
+        pyqRequest.setPyq(true);
+        QuestionResponse pyq = createQuestion(pyqRequest);
+        QuestionResponse nonPyq = createQuestion(sampleRequest());
+
+        Map<?, ?> countBody = getForMap("/api/questions/mock-count?examCode=" + TEST_EXAM_CODE
+                + "&subjectIds=" + pyq.getSubjectId() + "&pyqOnly=true");
+        assertThat(((Number) countBody.get("count")).longValue()).isEqualTo(1L);
+
+        ResponseEntity<List> sampleResponse = restTemplate.getForEntity(
+                "/api/questions/mock-sample?examCode=" + TEST_EXAM_CODE
+                        + "&subjectIds=" + pyq.getSubjectId() + "&pyqOnly=true&limit=50",
+                List.class);
+        List<String> ids = ((List<Map<String, Object>>) (List<?>) sampleResponse.getBody()).stream()
+                .map(q -> (String) q.get("id"))
+                .toList();
+        assertThat(ids).contains(pyq.getId().toString());
+        assertThat(ids).doesNotContain(nonPyq.getId().toString());
+    }
+
     private Map<?, ?> getForMap(String url) {
         ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);

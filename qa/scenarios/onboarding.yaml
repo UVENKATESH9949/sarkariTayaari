@@ -318,3 +318,30 @@
   notes: >
     Capture and storage only. The multilingual sync that will consume this is explicitly out of
     scope per the brief's section 14.
+
+- id: SCN-ONBOARDING-026
+  requirement_ids: [REQ-ONBOARDING-014]
+  category: Positive
+  title: A new student finishes onboarding and lands on Home without restarting
+  objective: "Verify the preparation screen completes by itself, including on a slow or failing network."
+  systems: [Mobile]
+  status: Ready
+  notes: "The regression guard for the stuck 'Preparing' screen."
+
+- id: SCN-ONBOARDING-027
+  requirement_ids: [REQ-ONBOARDING-015]
+  category: DataIntegrity
+  title: Reinstalling, or a second phone, skips onboarding and keeps the server profile
+  objective: "Verify onboarding completion comes back from the account and nothing is overwritten."
+  systems: [Backend, Mobile]
+  status: Ready
+  notes: "Mandatory per the owner's brief."
+
+- id: SCN-ONBOARDING-028
+  requirement_ids: [REQ-ONBOARDING-015]
+  category: Security
+  title: A second account on the same phone never inherits or overwrites the first account's profile
+  objective: "Verify sign-out clears the onboarding answers and the next account gets its own state."
+  systems: [Backend, Mobile]
+  status: Ready
+  notes: "Regression guard for DEF-ONBOARDING-001."

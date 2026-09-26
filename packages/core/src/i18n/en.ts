@@ -43,6 +43,7 @@ export const en = {
     unattempted: "Unattempted",
     accuracy: "Accuracy",
     questions: "Questions",
+    difficulty: "Difficulty",
     appName: "SarkariTaiyaari",
   },
 
@@ -187,6 +188,48 @@ export const en = {
     feedbackLabel: "AI Feedback",
     feedbackSubtitle: "Your practice session summary",
     feedbackHeadline: "You scored {percent}% in this practice session.",
+    nextLevel: "Next Level",
+    nextTopic: "Next Topic",
+    tabQuestionWise: "Question Wise",
+    tabAnalytics: "Analytics",
+    tabAiFeedback: "AI Feedback",
+  },
+
+  analyticsTab: {
+    overallTitle: "Overall Performance",
+    correctOfAttempted: "Correct",
+    totalTime: "Total Time",
+    avgPerQuestion: "Avg/Question",
+    highTimeTitle: "High Time Questions",
+    fastAccurateTitle: "Fast & Accurate",
+    subtopicTitle: "Sub-topic Breakdown",
+    weakAreasTitle: "Weak Areas",
+    strongAreasTitle: "Strong Areas",
+    subtopicAccuracy: "{percent}% accuracy",
+    subtopicAverage: "{time} average",
+    questionShort: "Q{number}",
+    label: {
+      STRONG: "Strong",
+      NEEDS_PRACTICE: "Needs Practice",
+      WEAK: "Weak",
+      INSUFFICIENT_DATA: "Not enough data",
+    },
+  },
+
+  aiFeedbackTab: {
+    title: "AI Feedback",
+    loadingTitle: "Analyzing your performance...",
+    loadingAccuracy: "• Accuracy",
+    loadingTime: "• Time patterns",
+    loadingStrengths: "• Strong areas",
+    loadingWeak: "• Weak areas",
+    disabledBody: "AI-powered feedback is currently unavailable. Your Question Wise and Analytics tabs are still fully available.",
+    errorBody: "Unable to generate AI feedback right now. Your practice analytics are still available.",
+    overallInsight: "Overall Insight",
+    strengths: "What You're Doing Well",
+    weakAreas: "What Needs Attention",
+    timeInsight: "Time Insight",
+    recommendedNextStep: "Recommended Next Step",
   },
 
   history: {
@@ -247,6 +290,107 @@ export const en = {
     submitMessage:
       "{unanswered} unanswered{marked}. You can't change answers after submitting.",
     submitMessageMarked: ", {count} marked for review",
+    hub: {
+      title: "Mock Test",
+      builderTitle: "Build your mock",
+      eyebrow: "Mock Tests",
+      heroTitle: "Build your own mock, any way you want",
+      heroSubtitle:
+        "Nine formats, one question bank — from a single topic to a full timed paper, always scored like the real exam.",
+      chips: {
+        all: "All",
+        topic: "Topic",
+        subject: "Subject",
+        speed: "Speed",
+        pyq: "PYQ",
+        full: "Full Mock",
+        personalized: "Personalized",
+      },
+      allFormats: "All Mock Tests",
+      formatCountOne: "{count} format",
+      formatCountOther: "{count} formats",
+      sectionBody: "Pick a format — each one draws from the same question bank in a different way.",
+      personalized: "Personalized",
+      weakAreaEmpty: "We don't have enough evidence of a weak topic yet — practice a few topics first.",
+      revisionEmpty: "No wrong answers to revise yet for this exam.",
+      markingNote: "Marking scheme shown above is the exam's official scheme, or a standard +1/−0.25 when none is set.",
+      priorityHigh: "High Priority",
+      priorityMedium: "Medium Priority",
+      priorityLow: "Low Priority",
+      priorityNormal: "Normal Priority",
+      attemptsLabel: "Attempts",
+      avgScoreLabel: "Avg. Score",
+      chooseSubject: "Choose a subject",
+      chooseTopic: "Choose a topic",
+      chooseSubjects: "Choose subjects",
+      chooseDifficulty: "Choose a difficulty",
+      loadingBuilder: "Setting things up...",
+      resolvingCount: "Checking how many questions are available...",
+      pickToContinue: "Pick an option above to continue.",
+      questionsReady: "{count} questions ready",
+      estimatedMinutes: "About {minutes} minutes",
+      builderIntro: {
+        topic: "Pick a subject, then a topic — this mock is scored and timed like the real exam, on that topic alone.",
+        subject: "Pick one subject — every question in this mock comes from it.",
+        multiSubject: "Pick any combination of subjects for one combined paper.",
+        speed: "Every subject is included by default — narrow it down if you'd like. The clock is tighter than a normal mock.",
+        difficulty: "Pick one difficulty — every question in this mock is at that level.",
+        pyq: "This mock draws only from questions tagged as appearing in a real past exam paper.",
+        // Full Length/Weak Area/Revision never open this screen — kept only so `format`'s
+        // type (every MockFormat) has somewhere to resolve for every value, not just the 6
+        // this screen actually shows.
+        fullLength: "",
+        weakArea: "",
+        revision: "",
+      },
+      cards: {
+        topic: {
+          title: "Topic Wise Mock",
+          desc: "Timed, scored practice on one topic at a time.",
+          stat: "Pick any topic",
+        },
+        subject: {
+          title: "Subject Wise Mock",
+          desc: "Cover one whole subject in a single sitting.",
+          stat: "Pick one subject",
+        },
+        multiSubject: {
+          title: "Multi-Subject Mock",
+          desc: "Pick any combination of subjects for one paper.",
+          stat: "Your choice",
+        },
+        speed: {
+          title: "Speed Mock",
+          desc: "A shorter clock on the same questions — build your pace.",
+          stat: "Tighter clock",
+        },
+        difficulty: {
+          title: "Difficulty Mock",
+          desc: "Practice only Easy, Medium or Hard questions.",
+          stat: "Pick a level",
+        },
+        pyq: {
+          title: "Previous Year Mock",
+          desc: "Real questions from past exam papers.",
+          stat: "Tagged PYQs",
+        },
+        fullLength: {
+          title: "Full Length Mock",
+          desc: "The official exam pattern, sections and timing.",
+          stat: "Real pattern",
+        },
+        weakArea: {
+          title: "Weak Area Mock",
+          desc: "Auto-built from the topics you're weakest in.",
+          stat: "Auto-selected",
+        },
+        revision: {
+          title: "Revision Mock",
+          desc: "Retest questions you've gotten wrong in practice before.",
+          stat: "From your history",
+        },
+      },
+    },
   },
 
   progress: {
@@ -363,6 +507,7 @@ export const en = {
     subheading: "This may take a moment depending on your network — please stay with us.",
     settingUpExams: "Setting up exam data",
     downloadingQuestions: "Downloading practice questions",
+    restoringAccount: "Restoring your account…",
     // NOTE: app/_layout.tsx's "Setting up local database..." and "Database migration
     // failed" screens are deliberately NOT here. They render before any provider mounts,
     // because the preference that selects the language lives in the very database whose

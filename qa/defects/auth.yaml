@@ -39,3 +39,21 @@
     do with whether the transaction commits. Fixed with
     @Transactional(noRollbackFor = UnauthorizedException.class) before the feature was ever
     committed or deployed. Removing that annotation silently disables the cap again.
+
+- id: DEF-AUTH-002
+  title: "Code input showed a grey strip and a speck of hidden text behind the six boxes"
+  severity: Low
+  status: Fixed
+  found_in_execution: EXEC-AUTH-0008
+  test_case_id: TC-AUTH-035
+  requirement_ids: [REQ-AUTH-017]
+  description: >
+    After a wrong code was auto-submitted, a grey band appeared behind all six boxes and a tiny
+    speck of the hidden field's text showed in the first box.
+  external_ref: null
+  remarks: >
+    Found on the emulator the same day the input was written. Two causes: the tappable wrapper took
+    keyboard focus and Android painted its default focus highlight (fixed with focusable={false}),
+    and the hidden text field was fully opaque (now opacity 0.011, which still receives taps and
+    long-press paste). Re-verified by screenshot and by a focus dump showing only the text field
+    focused.

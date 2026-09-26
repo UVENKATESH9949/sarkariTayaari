@@ -214,6 +214,37 @@ export async function resolveAndStampOnboardingStatus(): Promise<OnboardingStatu
   return status;
 }
 
+/**
+ * Forgets the signed-out person's onboarding answers on this phone (2026-09-25).
+ *
+ * The profile used to be device-wide and survive sign-out, on the reasoning that it describes the
+ * device. Found on the emulator that it describes a PERSON: after C signed out and A signed in on
+ * the same phone, the app greeted A as C, skipped A's onboarding on C's answers, and then UPLOADED
+ * C's answers over A's real server profile (C's edit was newer, so it won last-write-wins).
+ *
+ * Called only AFTER sign-out has pushed the profile to the account, so nothing is lost: the next
+ * person to sign in pulls their own. `onboardingStartedAt` is stamped, not cleared, so the launch
+ * resolver answers "required" rather than adopting this used install as already onboarded.
+ * Device preferences (theme, zoom, interface and content languages, active exam) are untouched.
+ */
+export async function resetProfileForSignOut(): Promise<void> {
+  const cleared = {
+    displayName: null,
+    primaryExamCode: null,
+    examStageId: null,
+    targetYear: null,
+    preparationLevel: null,
+    dailyStudyTime: null,
+    onboardingCompletedAt: null,
+    onboardingStartedAt: new Date().toISOString(),
+    profileUpdatedAt: null,
+  };
+  await db
+    .insert(appPreferences)
+    .values({ key: CURRENT_KEY, ...cleared })
+    .onConflictDoUpdate({ target: appPreferences.key, set: cleared });
+}
+
 /** Stamps completion. The one write that ends onboarding. */
 export async function markOnboardingCompleted(): Promise<string> {
   const now = new Date().toISOString();

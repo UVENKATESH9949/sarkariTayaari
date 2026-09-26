@@ -130,18 +130,33 @@ public class QuestionController {
         return questionService.getByIds(ids);
     }
 
-    /** Mock Test's per-section availability, live — how many non-deleted questions exist across this set of subjects for this exam. */
+    /**
+     * Mock Test's per-section availability, live — how many non-deleted questions exist across
+     * this set of subjects for this exam. {@code topicIds}/{@code difficultyCode}/{@code pyqOnly}
+     * are optional, additive narrowings for the Mock Test Hub's ad-hoc formats (Topic/Difficulty/
+     * PYQ/Weak Area Mock etc.) — omitted, this behaves exactly as it always has.
+     */
     @GetMapping("/mock-count")
-    public Map<String, Long> mockCount(@RequestParam String examCode, @RequestParam List<UUID> subjectIds) {
-        return Map.of("count", questionService.countForMock(examCode, subjectIds));
+    public Map<String, Long> mockCount(@RequestParam String examCode,
+                                        @RequestParam List<UUID> subjectIds,
+                                        @RequestParam(required = false) List<UUID> topicIds,
+                                        @RequestParam(required = false) String difficultyCode,
+                                        @RequestParam(required = false, defaultValue = "false") boolean pyqOnly) {
+        return Map.of("count", questionService.countForMock(examCode, subjectIds, topicIds, difficultyCode, pyqOnly));
     }
 
-    /** Mock Test's attempt assembly, live — a genuinely random sample across this set of subjects for this exam. */
+    /**
+     * Mock Test's attempt assembly, live — a genuinely random sample across this set of subjects
+     * for this exam, narrowable the same optional way {@link #mockCount} is.
+     */
     @GetMapping("/mock-sample")
     public List<QuestionResponse> mockSample(@RequestParam String examCode,
                                               @RequestParam List<UUID> subjectIds,
+                                              @RequestParam(required = false) List<UUID> topicIds,
+                                              @RequestParam(required = false) String difficultyCode,
+                                              @RequestParam(required = false, defaultValue = "false") boolean pyqOnly,
                                               @RequestParam(defaultValue = "50") int limit) {
-        return questionService.sampleForMock(examCode, subjectIds, limit);
+        return questionService.sampleForMock(examCode, subjectIds, topicIds, difficultyCode, pyqOnly, limit);
     }
 
     @PutMapping("/{id}")

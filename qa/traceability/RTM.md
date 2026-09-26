@@ -49,7 +49,7 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 
 ## AUTH
 
-15 requirements, 26 scenarios, 29 test cases.
+18 requirements, 30 scenarios, 40 test cases.
 
 | Requirement | Priority | Status | Scenario(s) | Test Case(s) | Execution | Defect |
 |---|---|---|---|---|---|---|
@@ -67,7 +67,10 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 | REQ-AUTH-012: Uniform AUTH error contract | High | Active | SCN-AUTH-021 | TC-AUTH-024 (Not Executed) |  |  |
 | REQ-AUTH-013: Login/register timing must not leak account existence | Medium | Active | SCN-AUTH-022 | TC-AUTH-025 (Not Executed) |  |  |
 | REQ-AUTH-014: Accounts are optional — full app usability while signed out | High | Active | SCN-AUTH-023 | TC-AUTH-026 (Not Executed) |  |  |
-| REQ-AUTH-015: Sign in or sign up with a one-time code emailed to a Gmail address | High | Active | SCN-AUTH-024<br>SCN-AUTH-025<br>SCN-AUTH-026 | TC-AUTH-027 (Pass)<br>TC-AUTH-028 (Pass)<br>TC-AUTH-029 (Pass) | EXEC-AUTH-0003<br>EXEC-AUTH-0001<br>EXEC-AUTH-0002 | DEF-AUTH-001 |
+| REQ-AUTH-015: Sign in or sign up with a one-time code emailed to a Gmail address | High | Active | SCN-AUTH-024<br>SCN-AUTH-025<br>SCN-AUTH-026 | TC-AUTH-027 (Pass)<br>TC-AUTH-028 (Pass)<br>TC-AUTH-029 (Pass)<br>TC-AUTH-032 (Pass) | EXEC-AUTH-0003<br>EXEC-AUTH-0001<br>EXEC-AUTH-0002<br>EXEC-AUTH-0006 | DEF-AUTH-001 |
+| REQ-AUTH-016: A professional, safe sign-in email | High | Active | SCN-AUTH-027 | TC-AUTH-030 (Pass)<br>TC-AUTH-031 (Pass)<br>TC-AUTH-033 (Not Executed) | EXEC-AUTH-0004<br>EXEC-AUTH-0005 |  |
+| REQ-AUTH-017: Redesigned sign-in and code screens | High | Active | SCN-AUTH-028 | TC-AUTH-034 (Blocked)<br>TC-AUTH-035 (Pass)<br>TC-AUTH-036 (Blocked) | EXEC-AUTH-0007<br>EXEC-AUTH-0008<br>EXEC-AUTH-0009<br>EXEC-AUTH-0010 | DEF-AUTH-002 |
+| REQ-AUTH-018: Continue with Google | High | Active | SCN-AUTH-029<br>SCN-AUTH-030 | TC-AUTH-037 (Not Executed)<br>TC-AUTH-038 (Not Executed)<br>TC-AUTH-039 (Blocked)<br>TC-AUTH-040 (Not Executed) | EXEC-AUTH-0011 |  |
 
 ## CATALOG
 
@@ -136,9 +139,21 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 | REQ-LEARNINGSTATE-004: Practice and mock evidence stay separately readable | High | Active | SCN-LEARNINGSTATE-007 | TC-LEARNINGSTATE-007 (Pass) | EXEC-LEARNINGSTATE-0007 |  |
 | REQ-LEARNINGSTATE-005: A subject rolls up as a distribution and coverage, never a single score | High | Active | SCN-LEARNINGSTATE-008 | TC-LEARNINGSTATE-008 (Pass) | EXEC-LEARNINGSTATE-0008 |  |
 
+## MOCK
+
+5 requirements, 8 scenarios, 10 test cases.
+
+| Requirement | Priority | Status | Scenario(s) | Test Case(s) | Execution | Defect |
+|---|---|---|---|---|---|---|
+| REQ-MOCK-001: Mock Test Hub — pick a format after choosing an exam | High | Active | SCN-MOCK-001 | TC-MOCK-001 (Not Executed) |  |  |
+| REQ-MOCK-002: Ad-hoc mock formats narrow the same question pool the Full Length Mock samples from | High | Active | SCN-MOCK-002<br>SCN-MOCK-003 | TC-MOCK-002 (Not Executed)<br>TC-MOCK-003 (Pass)<br>TC-MOCK-004 (Pass)<br>TC-MOCK-005 (Pass) | EXEC-MOCK-0001<br>EXEC-MOCK-0002<br>EXEC-MOCK-0003 |  |
+| REQ-MOCK-003: Weak Area Mock auto-selects the student's current concern-state topics | Medium | Active | SCN-MOCK-004<br>SCN-MOCK-005 | TC-MOCK-006 (Not Executed)<br>TC-MOCK-007 (Not Executed) |  |  |
+| REQ-MOCK-004: Revision Mock auto-selects recent wrong practice answers for this exam | Medium | Active | SCN-MOCK-006<br>SCN-MOCK-007 | TC-MOCK-008 (Not Executed)<br>TC-MOCK-009 (Not Executed) |  |  |
+| REQ-MOCK-005: Full Length Mock is unaffected by the Hub's introduction | Critical | Active | SCN-MOCK-008 | TC-MOCK-010 (Not Executed) |  |  |
+
 ## ONBOARDING
 
-13 requirements, 25 scenarios, 25 test cases.
+15 requirements, 28 scenarios, 31 test cases.
 
 | Requirement | Priority | Status | Scenario(s) | Test Case(s) | Execution | Defect |
 |---|---|---|---|---|---|---|
@@ -155,6 +170,8 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 | REQ-ONBOARDING-011: One source of truth for the active exam, reflected on Home with no reload | Critical | Active | SCN-ONBOARDING-018 | TC-ONBOARDING-009 (Not Executed)<br>TC-ONBOARDING-018 (Not Executed) |  |  |
 | REQ-ONBOARDING-012: The preparation profile is device-local, and a reinstall re-onboards | Medium | Active | SCN-ONBOARDING-019 | TC-ONBOARDING-019 (Not Executed) |  |  |
 | REQ-ONBOARDING-013: CONTENT languages -- one or two, chosen independently of the app language | Critical | Active | SCN-ONBOARDING-021<br>SCN-ONBOARDING-022<br>SCN-ONBOARDING-023<br>SCN-ONBOARDING-024<br>SCN-ONBOARDING-025 | TC-ONBOARDING-021 (Not Executed)<br>TC-ONBOARDING-022 (Not Executed)<br>TC-ONBOARDING-023 (Not Executed)<br>TC-ONBOARDING-024 (Not Executed)<br>TC-ONBOARDING-025 (Not Executed) |  |  |
+| REQ-ONBOARDING-014: Finishing onboarding always reaches Home, with no restart | Critical | Active | SCN-ONBOARDING-026 | TC-ONBOARDING-026 (Pass)<br>TC-ONBOARDING-027 (Blocked) | EXEC-ONBOARDING-0005<br>EXEC-ONBOARDING-0006<br>EXEC-ONBOARDING-0007 | DEF-ONBOARDING-002 |
+| REQ-ONBOARDING-015: Onboarding is remembered by the account (reinstall and new phone skip it) | Critical | Active | SCN-ONBOARDING-027<br>SCN-ONBOARDING-028 | TC-ONBOARDING-028 (Pass)<br>TC-ONBOARDING-029 (Pass)<br>TC-ONBOARDING-030 (Pass)<br>TC-ONBOARDING-031 (Pass) | EXEC-ONBOARDING-0008<br>EXEC-ONBOARDING-0009<br>EXEC-ONBOARDING-0004<br>EXEC-ONBOARDING-0010<br>EXEC-ONBOARDING-0011 | DEF-ONBOARDING-001 |
 
 ## PRACTICE
 
@@ -269,9 +286,9 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 
 | Metric | Value |
 |---|---|
-| Total requirements | 170 |
-| Total scenarios | 323 |
-| Total test cases | 346 |
+| Total requirements | 180 |
+| Total scenarios | 338 |
+| Total test cases | 373 |
 | Requirements with zero scenarios | 0  |
-| Real executions recorded | 103 |
-| Real defects logged | 5 |
+| Real executions recorded | 122 |
+| Real defects logged | 8 |

@@ -22,6 +22,8 @@ import {
 import { savePreferences } from "../db/preferences";
 import { useI18n } from "../i18n/I18nContext";
 import { useAuth } from "../practice/authContext";
+import { useActiveExam } from "../examsModule/activeExamContext";
+import { startupLog } from "../telemetry/startupLog";
 import { captureError, trackEvent } from "../telemetry/analytics";
 
 /**
@@ -86,6 +88,11 @@ export type OnboardingContextValue = {
   }) => Promise<DraftValidationResult>;
   /** Called by the preparation screen once its real work is done. */
   finish: () => void;
+  /**
+   * True while an account profile has arrived but has not yet been checked for completion. The
+   * start gate keeps "Restoring your account" up for this window instead of flashing step 1.
+   */
+  checkingAccount: boolean;
 };
 
 const EMPTY_DRAFT: ProfileDraft = {
@@ -106,6 +113,7 @@ const OnboardingContext = createContext<OnboardingContextValue>({
   updateDraft: () => {},
   submit: async () => ({ ok: false, errors: {} }),
   finish: () => {},
+  checkingAccount: false,
 });
 
 export function useOnboarding() {
@@ -116,9 +124,14 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   const [phase, setPhase] = useState<OnboardingPhase>("resolving");
   const [draft, setDraft] = useState<ProfileDraft>(EMPTY_DRAFT);
   const [savedName, setSavedName] = useState<string | null>(null);
+  // Which profileVersion the re-check below has finished reading. Until it catches up, the gate
+  // waits — found on the emulator: without this, the ~0.5 s between the account restore finishing
+  // and this read resolving was enough to render onboarding step 1 to a returning student.
+  const [checkedProfileVersion, setCheckedProfileVersion] = useState(0);
 
   const { language, setLanguage } = useI18n();
-  const { user } = useAuth();
+  const { user, profileVersion, pushProgress, signOutCount } = useAuth();
+  const { addExam } = useActiveExam();
 
   // Resolution runs exactly once per app launch. Not keyed on anything, and deliberately not
   // re-run: the signals it reads (has this device synced? does it follow an exam?) all turn
@@ -152,6 +165,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
             dailyStudyTime: stored.dailyStudyTime,
           });
           trackEvent("onboarding_started", { resumed: stored.displayName ? "true" : "false" });
+          startupLog("ONBOARDING_REQUIRED");
           setPhase("collecting");
           return;
         }
@@ -171,6 +185,76 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       }
     })();
   }, []);
+
+  /*
+   * THE ACCOUNT CAN END ONBOARDING, NOT ONLY THIS DEVICE (V53, 2026-09-24).
+   *
+   * The launch-time resolution above reads only this phone's own storage, and on a reinstalled app
+   * or a second phone that storage is empty — so it answers "required" even for a student who
+   * onboarded months ago. The account knows better: signing in pulls the server's profile, and
+   * `preparationProfileSync` writes its completion stamp locally. This re-reads that stamp whenever
+   * a sync lands a profile, and whenever the phase becomes "collecting" (a pull can finish before
+   * the resolution above has even set the phase).
+   *
+   * Only ever moves "collecting" -> "ready". A student already past onboarding is untouched, and
+   * the warm-up screen is deliberately skipped: this student has an exam and a dashboard already,
+   * and the ordinary first-sync gate still covers an empty local database behind them.
+   */
+  useEffect(() => {
+    if (phase !== "collecting" || profileVersion === 0) return;
+    let cancelled = false;
+    (async () => {
+      const stored = await loadPreparationProfile();
+      if (cancelled) return;
+      setCheckedProfileVersion(profileVersion);
+      if (!stored.onboardingCompletedAt) return;
+      startupLog("ONBOARDING_RESTORED_FROM_ACCOUNT");
+      trackEvent("onboarding_restored_from_account");
+      setSavedName(stored.displayName || null);
+      setPhase("ready");
+      // Best effort: the followed-exam sync normally brings the exam back too, but an account whose
+      // follows predate that sync would otherwise land on Home with nothing active.
+      if (stored.primaryExamCode) {
+        addExam(stored.primaryExamCode).catch((err) =>
+          console.warn("Failed to re-follow the restored exam", err),
+        );
+      }
+    })().catch((err) => {
+      console.warn("Failed to re-check onboarding after sync", err);
+      captureError(err, { context: "OnboardingProvider.recheck" });
+      // Never leave the gate waiting on a check that failed: fall through to onboarding instead.
+      if (!cancelled) setCheckedProfileVersion(profileVersion);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [phase, profileVersion, addExam]);
+
+  /*
+   * Sign-out starts the next person's onboarding state (2026-09-25). authContext has already
+   * cleared the stored answers (resetProfileForSignOut); this re-reads them so the in-memory draft,
+   * greeting and phase match. The next sign-in then either restores that account's finished
+   * profile (the re-check above) or shows onboarding to a genuinely new account. Without this the
+   * phase stayed "ready" and a brand-new account signing in on this phone skipped onboarding.
+   */
+  useEffect(() => {
+    if (signOutCount === 0) return;
+    let cancelled = false;
+    (async () => {
+      const stored = await loadPreparationProfile();
+      if (cancelled) return;
+      setSavedName(null);
+      setDraft({ ...EMPTY_DRAFT, preferredLanguage: stored.preferredLanguage, contentLanguages: stored.contentLanguages });
+      setCheckedProfileVersion(profileVersion);
+      setPhase("collecting");
+      startupLog("ONBOARDING_REQUIRED", { reason: "signed_out" });
+    })().catch((err) => captureError(err, { context: "OnboardingProvider.signOutReset" }));
+    return () => {
+      cancelled = true;
+    };
+    // profileVersion is read, not reacted to: this runs once per sign-out.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signOutCount]);
 
   const updateDraft = useCallback(
     (patch: Partial<ProfileDraft>) => {
@@ -223,6 +307,11 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
         // One column for the app's language, written where Settings already writes it.
         await savePreferences({ uiLanguage: profile.preferredLanguage });
         await markOnboardingCompleted();
+        startupLog("ONBOARDING_COMPLETED");
+        // Straight to the account, not at the next background: the server's completion stamp is
+        // what lets a reinstall skip onboarding, and it should not depend on the app being
+        // backgrounded first. Not awaited — the warm-up must not wait on the network.
+        pushProgress().catch((err) => console.warn("Failed to push the finished profile", err));
         setSavedName(profile.displayName);
         trackEvent("onboarding_completed", {
           exam: profile.primaryExamCode ?? "none",
@@ -243,16 +332,18 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       setPhase("preparing");
       return result;
     },
-    [draft],
+    [draft, pushProgress],
   );
 
   const finish = useCallback(() => setPhase("ready"), []);
 
   const displayName = savedName ?? (user?.displayName?.trim() || null);
 
+  const checkingAccount = phase === "collecting" && profileVersion !== checkedProfileVersion;
+
   const value = useMemo<OnboardingContextValue>(
-    () => ({ phase, displayName, draft, updateDraft, submit, finish }),
-    [phase, displayName, draft, updateDraft, submit, finish],
+    () => ({ phase, displayName, draft, updateDraft, submit, finish, checkingAccount }),
+    [phase, displayName, draft, updateDraft, submit, finish, checkingAccount],
   );
 
   return <OnboardingContext.Provider value={value}>{children}</OnboardingContext.Provider>;

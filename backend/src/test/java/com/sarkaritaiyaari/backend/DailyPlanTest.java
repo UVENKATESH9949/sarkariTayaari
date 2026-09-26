@@ -546,7 +546,7 @@ class DailyPlanTest extends AbstractIntegrationTest {
     }
 
     private static PreparationProfile profile(String band, String level, OffsetDateTime updatedAt) {
-        return new PreparationProfile("Test Student", null, null, 2027, level, band, updatedAt);
+        return new PreparationProfile("Test Student", null, null, 2027, level, band, updatedAt, null);
     }
 
     private SyncResponse putProfile(String token, PreparationProfile profile) {

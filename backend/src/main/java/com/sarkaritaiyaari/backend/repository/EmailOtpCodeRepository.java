@@ -26,6 +26,13 @@ public interface EmailOtpCodeRepository extends JpaRepository<EmailOtpCode, UUID
     @Query("SELECT c FROM EmailOtpCode c WHERE c.email = :email ORDER BY c.createdAt DESC LIMIT 1")
     Optional<EmailOtpCode> findNewestForEmail(@Param("email") String email);
 
+    /**
+     * How many codes this address was sent since {@code since} — the hourly send cap. Counts rows
+     * whatever their state, so a code that was used or retired still counts as an email sent.
+     */
+    @Query("SELECT COUNT(c) FROM EmailOtpCode c WHERE c.email = :email AND c.createdAt > :since")
+    long countIssuedSince(@Param("email") String email, @Param("since") OffsetDateTime since);
+
     /** Everything still live for this address — used to retire earlier codes when a new one is sent. */
     @Query("SELECT c FROM EmailOtpCode c WHERE c.email = :email AND c.consumedAt IS NULL AND c.expiresAt > :now")
     List<EmailOtpCode> findLiveForEmail(@Param("email") String email, @Param("now") OffsetDateTime now);

@@ -685,6 +685,13 @@ export const practiceSessions = sqliteTable(
     // opened Summary while online) and that's a normal, silent state, not an error.
     feedbackNarrative: text("feedback_narrative"),
     feedbackGeneratedAt: integer("feedback_generated_at", { mode: "timestamp_ms" }),
+    // The Practice Result "AI Feedback" tab's structured response (JSON — see
+    // `PracticeResultInsight` in packages/core), cached on-device only after the student
+    // explicitly opens the tab. No server-side cache (see `PersonalNarrativeService
+    // .practiceResultInsight`'s doc comment for why) — this is the only copy. Both nullable:
+    // most sessions never get one, which is a normal, silent state, not an error.
+    insightJson: text("insight_json"),
+    insightGeneratedAt: integer("insight_generated_at", { mode: "timestamp_ms" }),
   },
   (table) => [
     index("idx_practice_sessions_completed_at").on(table.completedAt),

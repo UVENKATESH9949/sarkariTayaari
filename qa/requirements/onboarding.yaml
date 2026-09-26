@@ -660,3 +660,94 @@
     including that a code with content but no interface catalogue is valid here and invalid for
     the interface) and the "toggling a content language at the limit" block (7 cases, including
     that a refused third tap changes nothing and that the input array is never mutated).
+
+- id: REQ-ONBOARDING-014
+  feature: Finishing onboarding always reaches Home, with no restart
+  module: ONBOARDING
+  system: [Mobile]
+  source_doc: mobile/src/onboarding/PreparingProfile.tsx
+  source_section: "The sequence runs exactly once"
+  description: >
+    After the last onboarding answer, the personalised preparation screen runs its steps (languages,
+    follow and activate the exam, wait for reference data, warm the dashboard), shows the welcome,
+    and opens Home by itself. Onboarding is not a route, so Back can never return to it.
+  business_rule: >
+    Fixed 2026-09-24. The sequence's effect listed addExam/setActiveExam/mode as dependencies; step 2
+    itself changed them, React ran the cleanup (cancelled = true), the re-run returned on the
+    `started` guard, and finish() was never called, so the screen stayed forever and only a relaunch
+    (which skips it) got past. Now the effect has no dependencies, reads collaborators through a
+    ref, and each best-effort step has an 8 s ceiling because the API client has no request timeout.
+  actor: Student
+  preconditions:
+    - "A fresh install, signed in, onboarding in progress"
+  inputs:
+    - "The last onboarding answer"
+  expected_outputs:
+    - "Welcome message, then Home, within seconds"
+  validations:
+    - "The chosen exam is followed and active on Home"
+  permissions:
+    - "Signed in"
+  dependencies: [REQ-ONBOARDING-013]
+  error_conditions:
+    - "A step that fails or hangs is skipped after its ceiling; Home still opens"
+  edge_conditions:
+    - "Backgrounding the app during preparation, then returning"
+    - "Killing the app during preparation: onboarding is already stamped complete, so the next launch goes to Home"
+  offline_behavior: "Steps that need the network time out; Home opens and shows its own offline states."
+  acceptance_criteria:
+    - "No state leaves the student on 'Preparing' permanently"
+  priority: Critical
+  status: Active
+  ambiguity: ""
+  automation_reference: ""
+  automation_status: ManualOnly
+  automation_hint: "Mobile has no automated runner."
+
+- id: REQ-ONBOARDING-015
+  feature: Onboarding is remembered by the account (reinstall and new phone skip it)
+  module: ONBOARDING
+  system: [Backend, Mobile]
+  source_doc: api/PREPARATION-PROFILE.md
+  source_section: "onboardingCompletedAt is monotonic"
+  description: >
+    user_preparation_profiles.onboarding_completed_at (V53) records that the student finished
+    onboarding. After sign-in the app waits (up to 10 s, "Restoring your account...") for the
+    account's profile; if the account says onboarding was finished, onboarding is skipped and the
+    app goes through the normal data preparation to Home. The server keeps the flag monotonically.
+  business_rule: >
+    An install that has not finished onboarding never uploads its profile; it only downloads a
+    FINISHED one. Before 2026-09-24 a reinstalled app uploaded its empty profile with a newer
+    timestamp and overwrote the student's real exam, study time and name with nulls.
+  actor: Student
+  preconditions:
+    - "An account that finished onboarding on some device"
+  inputs:
+    - "Signing in on a fresh install or another phone"
+  expected_outputs:
+    - "No onboarding questions; profile, exam and name restored; Home"
+  validations:
+    - "A genuinely new account still gets onboarding"
+  permissions:
+    - "Signed in"
+  dependencies: [REQ-ONBOARDING-014]
+  error_conditions:
+    - "Account restore slower than 10 s: onboarding shows, and closes automatically the moment the finished profile arrives"
+  edge_conditions:
+    - "Account started onboarding but never finished: onboarding is shown again (partial answers are not stored on the server)"
+    - "Server that predates V53: a stored profile with a display name counts as finished"
+    - "Content languages are device-only and are not restored on reinstall"
+    - >
+      Sign-out forgets the signed-out person's onboarding answers on the phone (after pushing them
+      to their account), so a different account signing in next gets its OWN profile, or onboarding
+      if it is new - never the previous person's name, exam or study time (DEF-ONBOARDING-001)
+  offline_behavior: "A restore that cannot reach the server falls back to onboarding after 10 s."
+  acceptance_criteria:
+    - "Uninstall + reinstall + sign in never shows onboarding to someone who finished it"
+    - "The server profile is never emptied by a reinstall"
+  priority: Critical
+  status: Active
+  ambiguity: ""
+  automation_reference: "backend/src/test/java/com/sarkaritaiyaari/backend/PreparationProfileCompletionTest.java"
+  automation_status: PartiallyAutomated
+  automation_hint: "The server rule is automated (5 tests); the mobile reinstall flow is manual."

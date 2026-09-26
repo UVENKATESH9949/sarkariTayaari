@@ -22,6 +22,14 @@ export type PreparationProfilePayload = {
    * carry its own moment, or it would win simply by arriving last.
    */
   updatedAt: string;
+  /**
+   * When this student first finished onboarding on any device (V53), or null when not known.
+   * The server never clears it once set, so a reinstalled app can trust it to skip onboarding.
+   *
+   * Optional because a server that predates V53 does not return it at all — `undefined` means
+   * "this server cannot say", which is different from `null` ("the server says: not finished").
+   */
+  onboardingCompletedAt?: string | null;
 };
 
 export type PreparationProfileResponse = {

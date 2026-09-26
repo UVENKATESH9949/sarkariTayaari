@@ -11,7 +11,10 @@ import {
   type MockTestQuestion,
   type SyncedPaper,
 } from "../../../data/mockTestAccess";
+import { buildAdHocMockQuestions } from "../../../data/adHocMockData";
 import { useHybridMode } from "../../../data/hybridSource";
+import { decodeAdHocSpec } from "../../../mockHub/adHocSpecParams";
+import { estimateAdHocMinutes } from "../../../mockHub/estimate";
 import { LANGUAGES, useAppLanguage } from "../../../practice/appLanguage";
 import { LanguagePickerModal } from "../../../practice/LanguagePickerModal";
 import { useActiveSession } from "../../../practice/activeSessionContext";
@@ -77,14 +80,26 @@ export default function MockTestTaking() {
   const optionListStyles = useThemedStyles(blindLetterComfortableStyles);
   const t = useT();
   const router = useRouter();
-  const { paperId, examLabel, paperName } = useLocalSearchParams<{
-    paperId: string;
-    examLabel: string;
-    paperName: string;
-  }>();
+  const { paperId, examLabel, paperName, adhoc, marksCorrect: marksCorrectParam, marksWrong: marksWrongParam } =
+    useLocalSearchParams<{
+      paperId?: string;
+      examLabel: string;
+      paperName?: string;
+      adhoc?: string;
+      marksCorrect?: string;
+      marksWrong?: string;
+    }>();
   const { defaultLanguageCode } = useAppLanguage();
   const { beginSession, endSession, abandonSession, resetSignal, pendingDestinationRef } = useActiveSession();
-  const [paper, setPaper] = useState<SyncedPaper | null>(null);
+  // A run's identity + marking scheme — the one thing both a real `SyncedPaper` and an
+  // ad-hoc spec need to hand `submitTest` below, without that callback (or the "still
+  // loading vs. genuinely not found" check further down) caring which one produced it.
+  const [runContext, setRunContext] = useState<{
+    examCode: string;
+    marksCorrect: number | null;
+    marksWrong: number | null;
+  } | null>(null);
+  const durationMinutesRef = useRef(0);
 
   const [questions, setQuestions] = useState<MockTestQuestion[] | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -154,15 +169,31 @@ export default function MockTestTaking() {
   }, [resetSignal.mock, router, pendingDestinationRef]);
 
   useEffect(() => {
-    if (!paperId) return;
     const startMode = modeAtStartRef.current;
+    const adHocSpec = decodeAdHocSpec(adhoc);
+    if (!paperId && !adHocSpec) return;
     (async () => {
       try {
-        const loaded = await getPaperById(paperId, startMode);
-        if (!loaded) return;
-        setPaper(loaded);
-        const qs = await buildMockTestQuestions(loaded, startMode);
-        const minutes = totalDurationMinutes(loaded);
+        let qs: MockTestQuestion[];
+        let minutes: number;
+
+        if (adHocSpec) {
+          qs = await buildAdHocMockQuestions(adHocSpec, startMode);
+          minutes = estimateAdHocMinutes(adHocSpec.format, qs.length || adHocSpec.questionCount);
+          setRunContext({
+            examCode: adHocSpec.examCode,
+            marksCorrect: parseNumericInput(marksCorrectParam),
+            marksWrong: parseNumericInput(marksWrongParam),
+          });
+        } else {
+          const loaded = await getPaperById(paperId!, startMode);
+          if (!loaded) return;
+          setRunContext({ examCode: loaded.examCode, marksCorrect: loaded.marksCorrect, marksWrong: loaded.marksWrong });
+          qs = await buildMockTestQuestions(loaded, startMode);
+          minutes = totalDurationMinutes(loaded);
+        }
+
+        durationMinutesRef.current = minutes;
         setQuestions(qs);
         if (qs.length > 0) beginSession("mock");
         startedAtRef.current = Date.now();
@@ -172,7 +203,11 @@ export default function MockTestTaking() {
         console.warn("Failed to load mock test questions", err);
       }
     })();
-  }, [paperId, beginSession]);
+    // adhoc/marksCorrectParam/marksWrongParam are stable for the lifetime of this screen
+    // (set once by navigation) — re-decoding them isn't a dependency-array concern the way
+    // a changing prop would be.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paperId, adhoc, beginSession]);
 
   /**
    * Ends the session however this screen goes away — the same fix as quiz.tsx, and for the
@@ -202,7 +237,7 @@ export default function MockTestTaking() {
 
   const submitTest = useMemo(
     () => async (auto: boolean) => {
-      if (submittedRef.current || !questions || !paper) return;
+      if (submittedRef.current || !questions || !runContext) return;
       submittedRef.current = true;
       setSubmitting(true);
       // Banks the question still on screen -- including on an auto-submit when the clock runs
@@ -365,18 +400,20 @@ export default function MockTestTaking() {
       const wrongCount = results.filter((r) => r.outcome === "INCORRECT").length;
       const unattemptedCount = results.length - correctCount - wrongCount;
       // Papers may legitimately have no marking set; fall back to a plain +1/0 count
-      // rather than scoring everything as zero.
-      const marksCorrect = paper.marksCorrect ?? 1;
-      const marksWrong = paper.marksWrong ?? 0;
+      // rather than scoring everything as zero. (An ad-hoc spec's runContext is never
+      // null here — start.tsx always resolves a real marking scheme before this screen
+      // is reached — but the same fallback is kept rather than assumed.)
+      const marksCorrect = runContext.marksCorrect ?? 1;
+      const marksWrong = runContext.marksWrong ?? 0;
       const totalMarksScored = correctCount * marksCorrect - wrongCount * marksWrong;
-      const durationSeconds = totalDurationMinutes(paper) * 60;
+      const durationSeconds = durationMinutesRef.current * 60;
       const timeTakenSeconds = auto ? durationSeconds : durationSeconds - remainingSeconds;
       const attemptId = newMockAttemptId();
 
       try {
         await insertMockTestAttempt({
           id: attemptId,
-          examCode: paper.examCode,
+          examCode: runContext.examCode,
           examLabel: paperName ? `${examLabel ?? ""} — ${paperName}` : examLabel ?? "",
           startedAt: startedAtRef.current,
           completedAt: Date.now(),
@@ -418,7 +455,7 @@ export default function MockTestTaking() {
     },
     [
       questions,
-      paper,
+      runContext,
       answers,
       multiAnswers,
       boolAnswers,
@@ -646,7 +683,7 @@ export default function MockTestTaking() {
     onConfirmLeave: exitWithoutSubmitting,
   });
 
-  if (questions && !paper) {
+  if (questions && !runContext) {
     return (
       <View style={styles.centered}>
         <EmptyState

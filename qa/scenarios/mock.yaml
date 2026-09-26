@@ -1,0 +1,87 @@
+# MOCK module — test scenarios
+
+- id: SCN-MOCK-001
+  requirement_ids: [REQ-MOCK-001]
+  category: Positive
+  title: All 9 format cards are reachable from the Hub, chip filter narrows correctly
+  objective: >
+    Verify the Hub renders all 9 cards under "All", each chip narrows to the right subset,
+    and each card routes to the correct next screen (papers.tsx for Full Length, the builder
+    for the 6 configurable formats, straight to Start for Weak Area/Revision).
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-MOCK-002
+  requirement_ids: [REQ-MOCK-002]
+  category: Boundary
+  title: mock-count/mock-sample narrow by topic, difficulty and PYQ independently
+  objective: >
+    Verify each of the three new optional params excludes non-matching questions while
+    leaving the original subject-only behavior unchanged when none are supplied.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-MOCK-003
+  requirement_ids: [REQ-MOCK-002]
+  category: Boundary
+  title: A narrowing combination with zero matching questions disables Start rather than erroring
+  objective: >
+    Verify the builder screen shows 0 questions ready and a disabled Start button for a
+    narrowing combination the exam's question bank cannot satisfy.
+  systems: [Mobile, Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-MOCK-004
+  requirement_ids: [REQ-MOCK-003]
+  category: Integration
+  title: Weak Area Mock matches the Weakness Radar's own concern-state topic list
+  objective: >
+    Verify the topics selected for a Weak Area Mock are exactly the NEEDS_ATTENTION/
+    NEEDS_REVISION topics the Preparation Radar screen shows for the same account and exam,
+    in the radar's own order, capped at 5.
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-MOCK-005
+  requirement_ids: [REQ-MOCK-003]
+  category: Negative
+  title: Weak Area Mock with no concern-state topics shows a message, not a broken test
+  objective: Verify a student with no weak topics sees an explanatory notice and no navigation.
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-MOCK-006
+  requirement_ids: [REQ-MOCK-004]
+  category: DataIntegrity
+  title: Revision Mock is scoped to this exam and deduped by question
+  objective: >
+    Verify Revision Mock only includes wrong answers from sessions recording this exam's
+    code, with no question repeated even if it was answered wrongly more than once.
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-MOCK-007
+  requirement_ids: [REQ-MOCK-004]
+  category: Negative
+  title: Revision Mock with no wrong answers shows a message, not a broken test
+  objective: Verify a student with no wrong practice answers for this exam sees an explanatory notice and no navigation.
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-MOCK-008
+  requirement_ids: [REQ-MOCK-005]
+  category: Regression
+  title: Full Length Mock behaves identically after the Hub's introduction
+  objective: >
+    Verify an official-paper attempt (sections, marking scheme, timer, result) is unchanged
+    from its pre-Hub behavior.
+  systems: [Mobile]
+  status: Ready
+  notes: null

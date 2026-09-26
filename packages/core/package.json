@@ -9,6 +9,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./ai": "./src/ai/index.ts",
+    "./analytics": "./src/analytics/index.ts",
     "./evaluation": "./src/evaluation/index.ts",
     "./intelligence": "./src/intelligence/index.ts",
     "./i18n": "./src/i18n/index.ts",

@@ -1,5 +1,323 @@
 # Project Status — Resume Point
 
+## Session of 2026-09-24 (3) — stuck "Preparing" fixed, onboarding remembered by the account, new sign-in screens and email
+
+**UPDATE 2026-09-25 (later) — "CONTINUE WITH GOOGLE" IS BUILT.** The owner created the Google Cloud
+OAuth clients: a **Web** client `815653276881-bgt8v5luik1jfee7c941510i1d20sb9u.apps.googleusercontent.com`
+(not secret — in `application.yml` as the default for `app.auth.google.web-client-id` /
+`GOOGLE_WEB_CLIENT_ID`, and in `mobile/src/auth/googleSignIn.ts`, overridable with
+`EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`), plus two **Android** clients for `com.sarkaritaiyaari.app` with the
+release SHA-1 `AB:71:5E:E3:80:4C:1C:E1:3D:3D:5C:E3:02:1C:3B:A4:E6:1E:38:E7` (read off a CI-built APK with
+`apksigner`; its SHA-256 matches the recorded upload key) and the debug SHA-1
+`5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25`. **The upload keystore is NOT on this
+laptop** (`C:\dev\keystores\` does not exist here) — back it up wherever it lives.
+
+- **Backend:** `POST /api/auth/google` -> `GoogleSignInService` -> `GoogleIdTokenVerifier`, which verifies
+  the Google ID token **with the JDK only** (no Google library, per ADR-003): RS256 signature against
+  Google's JWKS (`HttpGoogleSigningKeys`, cached per max-age, unknown-kid refresh at most once a
+  minute, fails closed), `iss`, `aud` = the web client id, `exp`, `email_verified`. Gmail only.
+  **Account linking by verified email:** account creation moved out of `EmailOtpService` into a new
+  shared `PasswordlessAccountService`, so a code sign-up and a later Google sign-in (or the reverse)
+  are the SAME user. Tests: `GoogleIdTokenVerifierTest` 11/11 (plain JUnit, `FixtureGoogleSigningKeys`
+  plays Google with its own RSA key), `GoogleSignInTest` 5/5 incl. the linking case, plus
+  `EmailOtpTest` 10/10 re-run after the refactor — **31/31 with OtpMailSenderTest**. A live call with a
+  fake token made the server fetch Google's real keys and refuse it correctly.
+- **One real bug caught by those tests:** two constructors on the verifier meant Spring could not
+  choose, so the whole application failed to start (every DB test died in ~1 ms — the known tell).
+  Fixed with `@Autowired` on the production constructor.
+- **Mobile:** `@react-native-google-signin/google-signin` 16.1.5 (native; config plugin in `app.json`),
+  loaded lazily so an older build hides the button instead of crashing; `auth/googleSignIn.ts`,
+  `authContext.signInWithGoogle` (same `adopt`), Google sign-out on app sign-out, and an "or" divider +
+  "Continue with Google" button on `EmailStep`. `expo prebuild` kept the debug keystore (SHA-1
+  re-checked). `api/AUTH.md` documents the endpoint.
+- **QA:** `REQ-AUTH-018`, `SCN-AUTH-029/030`, `TC-AUTH-037/038` (Automated), `TC-AUTH-039/040` (manual).
+- **Device status:** the rebuilt dev client shows the button; tapping it opens Google's own sign-in
+  activity, and backing out returns cleanly with no error (TC-AUTH-039 Blocked). **A real Google
+  sign-in has NOT been seen end to end** — the emulator has no Google account and adding one needs the
+  owner's credentials. Next: owner adds a Google account on the emulator (Settings > Passwords &
+  accounts), then run TC-AUTH-039 steps 3-4 and TC-AUTH-040. The rebuild took 20.5 min; Metro crashed
+  once during it (a file-watcher crash when prebuild rewrote android/) and needed `--clear`.
+- **Watch for:** Play Store distribution re-signs the app; its Play app-signing SHA-1 must then be added
+  as a THIRD Android OAuth client or Google sign-in fails for Play installs only.
+
+**UPDATE 2026-09-25 — THE EMULATOR PASS RAN, and it found three more real defects, all fixed and
+re-verified.** `emulator-5554`, a real uninstall/reinstall of the dev-client APK (pulled off the
+device first), local backend on :8080 with the new code, codes read from the backend log (mail off
+locally — **still no real email sent**). Records: `qa/execution/2026-09-25-auth-onboarding-device.yaml`.
+
+- **Stuck "Preparing" — FIXED ON A DEVICE.** Fresh install -> sign-in -> 7 steps -> Home by itself
+  in ~2 s; with airplane mode on, ~3 s; force-closing mid-preparation then reopening -> 5 s gate ->
+  Home. Back on Home leaves the app. (TC-ONBOARDING-026 Pass, -027 Blocked: backgrounding
+  mid-preparation not run.)
+- **Reinstall skips onboarding — VERIFIED (the mandatory test), twice.** The server profile was
+  byte-identical before and after, so the data-loss bug is also confirmed fixed. A ~0.5 s window in
+  which step 1 could flash was found and closed (`checkingAccount` in OnboardingContext); the new
+  `ONBOARDING_SHOWN` log line proves it no longer appears. (TC-ONBOARDING-028 Pass, -029 Pass.)
+- **DEF-ONBOARDING-001 (Critical, fixed): a second account on the same phone inherited — and
+  UPLOADED over its own server profile — the first account's answers.** The profile was device-wide
+  and never cleared on sign-out. Sign-out now pushes then clears it (`resetProfileForSignOut`), and
+  OnboardingProvider resets on `signOutCount`. Re-verified A -> C -> new D. The test account A's
+  server profile was restored by hand. `system-design/02-database.md` corrected (it said the profile
+  is never cleared on sign-out).
+- **DEF-ONBOARDING-002 (High, fixed): finishing onboarding offline looped on the exam step** — the
+  live exam list reloaded empty when the network dropped. OnboardingFlow now keeps a list it has
+  already shown.
+- **DEF-AUTH-002 (Low, fixed): a grey strip behind the code boxes** — Android's focus highlight on
+  the wrapper (`focusable={false}`) plus the hidden field's opacity.
+- **Sign-in screens seen and working in light and dark**: inline validation, number pad, typing,
+  backspace, paste (cut/paste within the field — not from an email, no space), auto-submit, wrong
+  code shown once and not retried, resend countdown and resend.
+- **Worth knowing:** once, the server verified a code and created the account but the phone reported
+  "Could not reach the server" (the emulator's network changed at that instant); the code was spent,
+  and Resend was the way forward. The dev-only warning toast covers bottom buttons and eats taps.
+
+**STILL NOT DONE after the pass:** Google login (waiting on the owner's Web client ID + two Android
+client IDs); no real email sent with the new template (TC-AUTH-033); TC-AUTH-034 step 5 (double
+tap), TC-AUTH-036's change-email/offline/expiry steps, TC-ONBOARDING-027 step 2; backend not
+deployed (V53 is applied to the shared DB, the code is not live); **nothing committed.** Test
+accounts `sarkaritaiyaari.devtest.{r0924,b0925,c0925,d0925}@gmail.com` now exist in the shared DB.
+RTM **179/336/369**.
+
+**From a 12-part owner brief (auth / onboarding / OTP / Google login).** Phase 1 (investigation) was
+reported first and the owner answered four plain-language questions: save "onboarding finished" on
+the server (yes), use the emulator only after their other task frees it, **Google login now — they are
+doing the Google Cloud setup** (steps given in chat), and build the email without a logo or links.
+**Nothing is committed. No emulator pass has happened yet** — the emulator was busy with another task.
+**Another session was working in this repo at the same time** (Mock Test hub/builder); none of its
+files were touched.
+
+**THREE ROOT CAUSES, all found by reading and none reproduced on a device yet:**
+
+1. **"Preparing your data" never finished after onboarding.** `PreparingProfile`'s effect listed
+   `addExam`/`setActiveExam`/`mode` as dependencies and guarded re-entry with a `started` ref. Step 2
+   itself changes those (following the exam rebuilds `setActiveExam`; the sync finishing flips
+   `mode`), so React ran the cleanup (`cancelled = true`), the re-run returned on the guard, and the
+   in-flight sequence stopped at `if (cancelled) return` — `finish()` never ran. The 12 s ceiling lived
+   inside the loop that had already exited. Relaunching "worked" only because `submit()` had already
+   stamped completion, so the screen was skipped and the ordinary 5 s gate showed instead. **Fixed:**
+   no dependencies, collaborators read through a ref, `cancelled` means unmount only, and an 8 s
+   ceiling per best-effort step (`withCeiling`) because the shared API client has NO request timeout.
+2. **Reinstall showed onboarding again.** Completion lived only in device-local `app_preferences`,
+   decided once at launch BEFORE sign-in, and the server had no completion field at all.
+3. **A reinstall could EMPTY the student's server profile — data loss.** `savePreparationProfile`
+   stamps `profileUpdatedAt` on every write, including the "onboarding started" stamp at launch, so an
+   empty reinstalled profile carried a newer timestamp than the server's and won last-write-wins. Same
+   for half-finished profiles uploaded on backgrounding mid-flow.
+
+**Shipped:** migration **V53** (`user_preparation_profiles.onboarding_completed_at`, backfilled from
+`updated_at` where a display name exists; **applied to the shared Neon database**, v52 -> v53) — kept
+**monotonically** by `PreparationProfileService` (set, earliest wins, never cleared, recorded even on a
+losing upload, optional so old APKs are unaffected). Mobile: an unfinished install **never uploads**
+and only pulls a FINISHED profile; `applyRemote` stamps local completion; `authContext` gained
+`restoringAccount` (bounded to 10 s) and `profileVersion`; `OnboardingProvider` moves
+`collecting -> ready` when the account says onboarding was done; `AppStartGate` shows "Restoring your
+account..." meanwhile; onboarding pushes the profile immediately on completion. New
+`telemetry/startupLog.ts` (named milestones, no secrets). New sign-in UI: `AuthLayout`, `EmailStep`
+(inline validation), `CodeStep` (auto-submit on 6th digit, resend countdown, expiry/offline states),
+`OtpCodeInput` (six boxes over ONE text field, so paste/autofill/backspace are native). Backend OTP:
+branded HTML + plain-text email (`resources/mail/otp-code.*`), **5 codes per address per hour**,
+**a failed send is now a 503** (was swallowed — the app said "sent" when nothing was), a mail-on-but-
+misconfigured deployment no longer logs the code, and addresses are masked in logs.
+
+**Verified:** backend **20/20** — `PreparationProfileCompletionTest` 5, `EmailOtpTest` 10 (the first
+automated tests the code sign-in ever had), `OtpMailSenderTest` 5; `mvn compile` clean. Mobile `tsc`
+clean; `eslint` on every touched file shows only the pre-existing `authContext` set-state-in-effect
+error (confirmed present in HEAD). The email was rendered in Chromium at 390/800 px and checked by eye.
+
+**⚠️ NOT VERIFIED:** no emulator run of anything above — the stuck-screen fix, the reinstall skip and
+both new screens are unseen (TC-ONBOARDING-026..029, TC-AUTH-034..036 all Not Executed). No real
+email has been sent with the new template (TC-AUTH-033). **Google login is NOT built** — waiting on
+the owner's Web client ID and two Android client IDs (release SHA-1 + debug SHA-1
+`5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25`). Content languages are still
+device-only and reset on reinstall. **`qa/test-cases/catalog.yaml` has TWO `TC-CATALOG-050` entries
+(already in commit ec51285)**, which makes `generate-suites.js` fail on regression-full; not fixed here.
+**`mobile/assets/images/icon.png` is still Expo's default icon**, not a SarkariTaiyaari logo.
+
+**QA:** `REQ-AUTH-016/017`, `REQ-ONBOARDING-014/015`, `SCN-AUTH-027/028`, `SCN-ONBOARDING-026/027`,
+`TC-AUTH-030..036`, `TC-ONBOARDING-026..030`, `EXEC-AUTH-0004..0006`, `EXEC-ONBOARDING-0004`;
+REQ-AUTH-015 and TC-AUTH-029 corrected in place. RTM -> **179/335/368**.
+
+**NEXT:** (1) emulator pass once free: fresh install -> onboarding -> Home with no restart; then
+uninstall/reinstall/sign in (mandatory); (2) Google login once the client IDs arrive; (3) deploy the
+backend so V53 behaviour and the new email reach production; (4) commit.
+
+## Session of 2026-09-24 (2) — the Practice Result redesign, device-verified: all three tabs confirmed on a real emulator with real Groq calls
+
+**Continuation of the same-day session below.** The user asked to "check in emulator" once
+available again. Launched `emulator-5554` (AVD `Pixel_7`, `-memory 3072`), a real backend
+(`mvn spring-boot:run`, port 8080, `adb reverse`), and Metro (`--dev-client`) — all three left
+running at the end of this session in case more checking is wanted.
+
+**Question Wise and Analytics: fully confirmed on-device, on real synced data.** Ran a real
+5-question Practice session (SSC CGL → Quantitative Aptitude → Pipes & Cisterns → Medium) through
+the actual app: the header now shows Retry/Next Level/Next Topic and the
+`Question Wise | Analytics | AI Feedback` tab bar exactly as designed; each Question Wise card
+shows its real sub-topic/difficulty/time (e.g. "Pipes & Cisterns · Difficulty: medium · 2m 26s");
+Analytics rendered instantly with no network call — 40% accuracy, 4m 32s total, 54s/question, a
+correctly-flagged **High Time Questions** card (Q1, 2m26s, the one question deliberately answered
+slowly), a correctly-empty Fast & Accurate section (nothing cleared the relative threshold once
+the slow answer pulled the median up — the intended behaviour, not a bug), and a **Sub-topic
+Breakdown**/**Weak Areas** card correctly labelling "Pipes & Cisterns" WEAK at 40%. "Finished
+early · 5 of 20 answered, 15 left" rendered correctly too. Retry/Next Level absent (correctly)
+when the same session was later reopened from History — only Next Topic shows there, confirmed
+by design per §NOT VERIFIED item 6 below, now resolved.
+
+**AI Feedback: confirmed with THREE real Groq calls, both via direct API and on-device.** Minted a
+short-lived admin token (`AdminTokenMintRunner`, the project's existing harmless mechanism) and
+enabled `PRACTICE_RESULT_INSIGHT` through the real admin endpoint. Two direct `curl` calls against
+the live endpoint both returned well-formed, grounded, validated JSON — correctly citing the
+flagged 146s question in `timeInsight`, correctly leaving `strengths: []` when nothing was strong,
+and correctly using an invented practice count ("10-15 questions") in `recommendation` without
+being rejected by the relaxed topic-name-only grounding check (confirming that design decision
+was right). **The "mojibake" in the raw response (`â€‘`, `â€™`) was checked and confirmed to be
+pure terminal/codepage display noise, not a real bug** — explicitly decoding the raw response
+bytes as UTF-8 showed the actual characters are legitimate typographic punctuation (`‑`
+non-breaking hyphen, curly apostrophes) that Python's `cp1252` console can't render, the exact
+same false alarm this project's own history already records once for a sibling AI feature.
+
+**Then confirmed on-device, twice, on two different already-completed sessions reopened from
+History** (their local `client_config_ai_tasks` had already picked up the flag via a "Sync Now"
+triggered earlier in the session): tapping AI Feedback showed the exact designed loading state —
+"🧠 Analyzing your performance..." with the Accuracy/Time patterns/Strong areas/Weak areas bullet
+list — then, a few seconds later, real generated content rendered in the structured card layout
+(Overall Insight / What Needs Attention / Time Insight / Recommended Next Step) exactly as spec'd.
+**Both real on-device generations correctly cited the cross-session trend** — one said "showing a
+clear struggle with this topic compared to your previous 40% score", the other correctly detected
+a **decline** ("performance in Pipes & Cisterns declined from 40% to 20%") — proving the on-device
+`previousPerformance` computation (most recent other local session sharing the same topic name)
+correctly reached the prompt and was accurately reasoned about by the model, not just plumbed
+through structurally. Recommended actions and section presence/absence (no Time Insight card when
+the model had nothing meaningful to say about time) both behaved correctly across all three real
+generations. The flag was turned back **off** afterward, restoring the project's default "off
+unless explicitly turned on" posture — this is a real, tested feature now, not shipped live yet by
+choice, pending the user's own decision on when to turn it on for real users.
+
+**One real, pre-existing bug found along the way, not caused by this change and not fixed (out of
+scope):** `quiz.tsx:955` throws a "two children with the same key" React warning from
+`AiExplanationCard`'s `key={question.id}` — reproducible on multiple unrelated topics/sessions,
+untouched by this session's diff. Flagged here for whoever next touches that file. A separate,
+lower-confidence observation: the in-app "Finish"/"Finish now" quiz-completion controls were
+intermittently unresponsive to scripted taps during this session's automation (worked reliably on
+the very first attempt, then required several retries and a full app restart on subsequent
+attempts) — never conclusively diagnosed as a real app bug vs. an artifact of rapid scripted taps
+colliding with the screen's own re-renders (the duplicate-key warning above is one plausible
+contributor). Not reproduced by a human tapping, so recorded as a loose thread rather than a
+confirmed defect.
+
+**Original same-day build entry follows, largely superseded by the device pass above — kept for
+the implementation detail, not for its "NOT VERIFIED" list, which is corrected below.**
+
+**The existing question-wise result was reused, not rebuilt**, per the spec's own explicit
+instruction — `ResultCard` in `summary.tsx` is the same component, only extended to show each
+question's sub-topic/difficulty/time alongside the existing answer/explanation content.
+
+**Shipped, spanning `packages/core`, the backend and mobile:**
+
+1. **A new deterministic Analytics engine, in `packages/core/src/analytics/practiceResultAnalytics.ts`
+   — not in `mobile/`, specifically so it is unit-testable** (mobile has no automated test
+   runner). **12 new vitest tests, all passing**, covering exactly what §18 of the spec asks for:
+   overall accuracy/time, high-time detection, fast-and-accurate detection (and that fast-but-
+   wrong is never counted as strong), sub-topic grouping, weak/strong labelling, and the
+   insufficient-data floor (a sub-topic needs ≥3 attempted questions before it gets a confident
+   label — matches the spec's own "one question is not a long-term weakness" example).
+   **The high-time/fast-time threshold is relative to the session's own median time-per-question**
+   (1.6x / 0.6x, with a 15s floor so a fast session doesn't flag a 9s question as slow) —
+   documented in the module's own doc comment, since no expected-time-per-question benchmark
+   exists anywhere in this app yet (`useQuestionTimer`'s own comment already said so). The
+   "sub-topic" grouping key is each question's own `topicId`/`topicName` from the local
+   `questions` table (new `db/questionMeta.ts`, a batch lookup by question id) — **not** a new
+   column — reusing the exact same per-question topic join `quiz.tsx`'s own mastery-recording
+   loop already does, since a Practice session can legitimately span several child topics under
+   one selected parent (Epic L's `topics.parent_id`).
+2. **A new AI task, `PRACTICE_RESULT_INSIGHT`**, added to the existing registry
+   (`packages/core/src/ai/tasks.ts`, the Java `AiTaskId` enum, `AiTaskFlagService`'s
+   `AiTaskId.values()` loop) — reuses the **existing** `AIService`/`AIProviderRegistry`/admin
+   enable-disable mechanism exactly, no new AI architecture. `GENERATED`-tier only, deliberately
+   no deterministic fallback (unlike `SESSION_FEEDBACK`): this task is only ever invoked from an
+   explicit tab tap, so an unreachable fallback tier would sit untested. Structured JSON output
+   (`summary`/`strengths[]`/`weakAreas[]`/`timeInsight`/`recommendation`/`recommendedAction`),
+   validated on both sides (`packages/core/src/ai/schema/validate.ts` +
+   `ai/feedback/PracticeResultInsightValidation.java`) with a **topic-name-only grounding
+   check, deliberately NOT the strict numeric grounding `SESSION_FEEDBACK`/`PROFILE_SUMMARY`
+   use** — this task's `recommendation` field legitimately invents a practice count ("10-15
+   questions"), which is an action item, not a claimed statistic, and the stricter check would
+   have rejected exactly the wording the spec's own example asks for. Documented in both files.
+3. **Backend: `PracticeResultInsightDtos`/`PracticeResultInsightValidation`/a new prompt in
+   `PersonalNarrativePrompts`/`PersonalNarrativeService.practiceResultInsight`/
+   `PracticeResultInsightController`** — `POST /api/practice-sessions/{sessionId}/
+   analysis-feedback`, mirroring `MistakeAnalysisController`'s exact shape.
+   **Deliberately no server-side cache** (same reasoning `MISTAKE_ANALYSIS` already documents
+   for itself: this is generated only on an explicit tap, not automatically, so the cost
+   pressure that justified `PROFILE_SUMMARY`'s cache doesn't apply). `mvn compile` clean.
+4. **Mobile:** local migration **0032** (`practice_sessions.insight_json`/`insight_generated_at`
+   — hand-written, mirroring `0024`/`0025`'s exact pattern, additive/nullable/no backfill), new
+   `ai/practiceResultInsight.ts` (on-demand only — called from exactly one place, the new AI
+   Feedback tab's own mount effect, never from page load), `practice/AnalyticsTab.tsx`,
+   `practice/AiFeedbackTab.tsx` (loading/disabled/error/ready states, retry without a duplicate
+   call, cached result reused on reopen per §10), and `summary.tsx` rewritten around a tab bar
+   (`Question Wise | Analytics | AI Feedback`, Question Wise selected by default) plus
+   Retry/Next Level/Next Topic actions. Retry/Next Level replay the exact route params the quiz
+   screen already carried (now threaded through to Summary, the same "ride along on the route,
+   never persisted" pattern already used for `topicId`/`examCode`); Next Level is computed from
+   the real synced difficulty-level list (never a hardcoded Easy/Medium/Hard), hidden entirely
+   when there isn't a next one; Next Topic reopens `/practice/browse` for the same exam. **The
+   old inline "AI Feedback" narrative card in the header (`SessionFeedbackNarrative`,
+   `SESSION_FEEDBACK` task) was removed from this screen** — superseded by the new AI Feedback
+   tab, per the spec's own §14 ("don't duplicate the same content across tabs"). Mock Test's
+   Result screen is untouched and still uses `SESSION_FEEDBACK` via `getOrBuildMockFeedback`, so
+   nothing there regressed — but `ai/sessionFeedback.ts`'s practice-specific
+   `getOrBuildSessionFeedback` wrapper now has zero callers, left in place rather than deleted
+   given the time box (flagged here rather than silently left for someone to trip over).
+
+**Verified:** `packages/core` `tsc --noEmit` clean, **299/299 vitest tests pass** (12 new); backend
+`mvn compile` clean (offline); mobile `tsc --noEmit` clean; `npx expo lint` **back to the exact
+pre-existing baseline (7 problems, 6 errors + 1 warning) — zero new problems in any file this
+session touched** (two real violations were introduced and fixed along the way: an unused import/
+variable, and a genuine `react-hooks/set-state-in-effect` violation in `AiFeedbackTab.tsx`, fixed
+with the same keyed-loaded-state pattern `PreparationPlanCard`/`SessionFeedbackNarrative` already
+use elsewhere in this codebase — including keying on a `sessionId:retryToken` composite so a
+Retry tap falls back to the loading render immediately rather than showing the stale error).
+
+**⚠️ STILL NOT VERIFIED after the device pass above (items 1, 2 and 6 from the original list are
+now resolved — see the entry above this one):**
+
+1. **No backend JUnit test class exists for `PracticeResultInsightValidation`/the new
+   controller/service method** — every other Phase-7-shaped task in this backend has one
+   (`PersonalNarrativeGroundingTest`, `AiConfigurationTest`-style controller tests, etc.); this
+   one does not, purely for time. The TypeScript-side validator IS exercised by the existing
+   `ai/schema/validate.test.ts` suite only insofar as the whole file's 39 tests still pass — no
+   test case was added there specifically for the new `PRACTICE_RESULT_INSIGHT` branch either.
+   (The real Groq calls made during the device pass are strong evidence the prompt/validation
+   pipeline works, but that's manual verification, not a repeatable automated test.)
+2. **No `qa/` coverage was added** — a real, acknowledged gap against this project's own §3.21
+   standing rule (every change gets a manual test case in the same change). Not done, not faked.
+3. **No `api/*.md` contract doc was written** for the new endpoint — same reasoning as above.
+4. **The "previous performance" trend is a real but narrow signal**: the most recent *other*
+   session in this device's own local history sharing the exact same `topicName` string. It is
+   not persisted, not synced, and says nothing across devices — an honest v1, not the full
+   picture `previousPerformance` in the spec's data model implies. (Confirmed working correctly
+   as designed on real data during the device pass — both IMPROVING and DECLINING cases were
+   observed and correctly reasoned about by the model — this is a scope note, not a defect.)
+5. **Migration 0032 was never applied to a large, populated pre-existing database** — this
+   session's emulator database was already on migration 0031 with real history, and 0032 applied
+   cleanly as part of the normal app boot (confirmed: the app started, synced, and the new
+   columns work), but that's a modest, not a stress, test of the migration.
+6. **The in-app quiz "Finish" control's intermittent unresponsiveness to scripted taps** (see the
+   device-pass entry above) was never conclusively resolved — worth a human tapping through a
+   session to confirm it's purely an automation artifact, not a real intermittent bug.
+7. **The pre-existing `AiExplanationCard` duplicate-key warning** (`quiz.tsx:955`, confirmed not
+   caused by this session) is unfixed — flagged for whoever next touches that file.
+
+**NEXT, in order:** (1) write the backend JUnit test class for `PracticeResultInsightValidation`/
+`PracticeResultInsightController`, now that real Groq responses are in hand to shape realistic
+fixtures from; (2) add `qa/requirements|scenarios|test-cases` coverage (a new module, or extend
+`questions.yaml`) and `api/PRACTICE-RESULT-INSIGHT.md`; (3) decide whether to delete
+`getOrBuildSessionFeedback`/its now-unused presentation helpers or leave them for a future
+narrative surface; (4) decide when to turn `PRACTICE_RESULT_INSIGHT` on for real users (currently
+off, deliberately, after verification); (5) have a human confirm the Finish-button flakiness is
+purely a scripted-tap artifact; (6) fix the pre-existing `AiExplanationCard` duplicate-key warning
+if it's ever touched for another reason.
+
 ## Session of 2026-09-22 (3) — the daily plan becomes a device snapshot, and an audit saved half the work
 
 **Mobile only. ZERO backend changes — the server already did the part that mattered.** Full account:

@@ -1,0 +1,302 @@
+# MOCK module — manual test cases
+#
+# Every case below is UNEXECUTED: actual_result empty, status Not Executed, defect_id empty
+# — except automation_reference on the three backend-automated cases, which cites real,
+# already-passing test methods (10/10 in LiveQuestionsTest, 2026-09-24, real Neon dev DB).
+
+- id: TC-MOCK-001
+  requirement_ids: [REQ-MOCK-001]
+  scenario_id: SCN-MOCK-001
+  system: Mobile
+  module: MOCK
+  feature: Mock Test Hub — pick a format after choosing an exam
+  title: All 9 cards render and route correctly; each chip narrows the visible set
+  objective: Confirm the Hub screen's navigation contract holds for every format and every chip.
+  preconditions:
+    - "An exam with at least one official mockable paper and a real syllabus is chosen"
+  test_data: "Any real, active exam with a synced syllabus"
+  test_environment: "Android emulator, dev build, signed in or out"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "From Exam Selection, tap an exam"
+      expected: "The Hub screen opens, showing the exam's name and 9 cards under 'All Mock Tests'"
+    - step: 2
+      action: "Tap each chip (Topic, Subject, Speed, PYQ, Full Mock, Personalized) in turn"
+      expected: "Only cards whose category matches the chip remain visible; the count next to the section label updates to match"
+    - step: 3
+      action: "Tap Full Length Mock"
+      expected: "The existing papers.tsx screen opens, listing official papers exactly as before this change"
+    - step: 4
+      action: "Go back, tap Topic Wise Mock"
+      expected: "The builder screen opens, starting with a subject picker"
+  expected_result: "Every card is reachable and every chip filters correctly (REQ-MOCK-001 acceptance_criteria)."
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-MOCK-002
+  requirement_ids: [REQ-MOCK-002]
+  scenario_id: SCN-MOCK-003
+  system: Mobile
+  module: MOCK
+  feature: Ad-hoc mock formats narrow the same question pool the Full Length Mock samples from
+  title: A narrowing combination with zero matching questions disables Start
+  objective: Confirm the builder screen degrades gracefully rather than erroring when nothing matches.
+  preconditions:
+    - "A subject/difficulty combination known to have zero questions (or a PYQ-tagged combination that doesn't exist for this exam)"
+  test_data: "A subject with no questions at a specific difficulty level"
+  test_environment: "Android emulator, dev build"
+  priority: Medium
+  severity: Minor
+  test_type: Boundary
+  steps:
+    - step: 1
+      action: "Open Difficulty Mock's builder, pick a subject/difficulty combination with no questions"
+      expected: "The summary shows '0 questions ready' rather than an error"
+    - step: 2
+      action: "Observe the Start button"
+      expected: "Start is disabled, matching the existing Full Length Mock's own disabled-Start behavior for an under-supplied paper"
+  expected_result: "No crash, no misleading count, Start correctly disabled."
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-MOCK-003
+  requirement_ids: [REQ-MOCK-002]
+  scenario_id: SCN-MOCK-002
+  system: Backend
+  module: MOCK
+  feature: Ad-hoc mock formats narrow the same question pool the Full Length Mock samples from
+  title: mock-count/mock-sample narrow correctly by topicIds
+  objective: Confirm a topicIds param excludes questions from a sibling topic in the same subject.
+  preconditions: []
+  test_data: "Two questions in the same subject, different topics, created by the test itself"
+  test_environment: "Backend integration test, real Neon dev database"
+  priority: High
+  severity: Major
+  test_type: Integration
+  steps:
+    - step: 1
+      action: "Create one question in the fixture topic and one in a second topic of the same subject"
+      expected: "Both exist and are published"
+    - step: 2
+      action: "GET /api/questions/mock-count and /mock-sample with subjectIds set to the shared subject and topicIds set to only the fixture topic"
+      expected: "count is 1; the sample contains only the fixture-topic question, never the second topic's"
+  expected_result: "topicIds narrows correctly without affecting the un-narrowed call shape."
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "See EXEC-MOCK-0001 for the real, already-passing execution of this case."
+  automation_status: Automated
+  automation_reference: "backend/src/test/java/com/sarkaritaiyaari/backend/LiveQuestionsTest.java#mockCountAndMockSample_narrowByTopicId"
+
+- id: TC-MOCK-004
+  requirement_ids: [REQ-MOCK-002]
+  scenario_id: SCN-MOCK-002
+  system: Backend
+  module: MOCK
+  feature: Ad-hoc mock formats narrow the same question pool the Full Length Mock samples from
+  title: mock-sample narrows correctly by difficultyCode
+  objective: Confirm a difficultyCode param excludes a question at a different difficulty level.
+  preconditions: []
+  test_data: "One 'hard' and one 'easy' question in the same subject, created by the test itself"
+  test_environment: "Backend integration test, real Neon dev database"
+  priority: High
+  severity: Major
+  test_type: Integration
+  steps:
+    - step: 1
+      action: "Create a hard question and an easy question in the same subject"
+      expected: "Both exist and are published"
+    - step: 2
+      action: "GET /api/questions/mock-sample with difficultyCode=hard"
+      expected: "The sample contains the hard question, never the easy one"
+  expected_result: "difficultyCode narrows correctly."
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "See EXEC-MOCK-0002 for the real, already-passing execution of this case."
+  automation_status: Automated
+  automation_reference: "backend/src/test/java/com/sarkaritaiyaari/backend/LiveQuestionsTest.java#mockSample_narrowByDifficultyCode"
+
+- id: TC-MOCK-005
+  requirement_ids: [REQ-MOCK-002]
+  scenario_id: SCN-MOCK-002
+  system: Backend
+  module: MOCK
+  feature: Ad-hoc mock formats narrow the same question pool the Full Length Mock samples from
+  title: mock-count/mock-sample narrow correctly by pyqOnly
+  objective: Confirm pyqOnly=true excludes a non-PYQ question from the same subject.
+  preconditions: []
+  test_data: "One PYQ-tagged and one ordinary question in the same subject, created by the test itself"
+  test_environment: "Backend integration test, real Neon dev database"
+  priority: High
+  severity: Major
+  test_type: Integration
+  steps:
+    - step: 1
+      action: "Create a PYQ-tagged question and an ordinary question in the same subject"
+      expected: "Both exist and are published"
+    - step: 2
+      action: "GET /api/questions/mock-count and /mock-sample with pyqOnly=true"
+      expected: "count is 1; the sample contains only the PYQ-tagged question"
+  expected_result: "pyqOnly narrows correctly."
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "See EXEC-MOCK-0003 for the real, already-passing execution of this case."
+  automation_status: Automated
+  automation_reference: "backend/src/test/java/com/sarkaritaiyaari/backend/LiveQuestionsTest.java#mockCountAndMockSample_narrowByPyqOnly"
+
+- id: TC-MOCK-006
+  requirement_ids: [REQ-MOCK-003]
+  scenario_id: SCN-MOCK-004
+  system: Mobile
+  module: MOCK
+  feature: Weak Area Mock auto-selects the student's current concern-state topics
+  title: Weak Area Mock's topic set matches the Radar screen's own concern-state list
+  objective: Confirm no second, diverging weak-topic computation exists.
+  preconditions:
+    - "An account with real practice history producing at least one NEEDS_ATTENTION/NEEDS_REVISION topic"
+  test_data: "A real or disposable account with practice history on this exam"
+  test_environment: "Android emulator, dev build, signed in"
+  priority: Medium
+  severity: Major
+  test_type: Integration
+  steps:
+    - step: 1
+      action: "Open the Preparation Radar screen for this exam and note the NEEDS_ATTENTION/NEEDS_REVISION topics, in order"
+      expected: "A list of concern-state topics is visible"
+    - step: 2
+      action: "Open the Mock Test Hub for the same exam, tap Weak Area Mock"
+      expected: "The built mock's topics are exactly the radar's own list, capped at 5, in the same order"
+  expected_result: "The two screens agree exactly."
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-MOCK-007
+  requirement_ids: [REQ-MOCK-003]
+  scenario_id: SCN-MOCK-005
+  system: Mobile
+  module: MOCK
+  feature: Weak Area Mock auto-selects the student's current concern-state topics
+  title: Weak Area Mock with no concern-state topics shows a message, not a broken test
+  objective: Confirm the empty case degrades gracefully.
+  preconditions:
+    - "An account with no practice history, or a history with no concern-state topics for this exam"
+  test_data: "A fresh or disposable account"
+  test_environment: "Android emulator, dev build"
+  priority: Low
+  severity: Minor
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "Tap Weak Area Mock on an account with no weak topics"
+      expected: "An explanatory notice appears on the Hub screen and no navigation occurs"
+  expected_result: "No crash, no empty test, a clear message instead."
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-MOCK-008
+  requirement_ids: [REQ-MOCK-004]
+  scenario_id: SCN-MOCK-006
+  system: Mobile
+  module: MOCK
+  feature: Revision Mock auto-selects recent wrong practice answers for this exam
+  title: Revision Mock is scoped to this exam and deduped by question
+  objective: Confirm exam scoping and dedup both hold on real device history.
+  preconditions:
+    - "Local practice history exists with wrong answers across at least two exams, and one question answered wrongly twice on the target exam"
+  test_data: "A device with mixed-exam practice history"
+  test_environment: "Android emulator, dev build"
+  priority: Medium
+  severity: Major
+  test_type: DataIntegrity
+  steps:
+    - step: 1
+      action: "Open Revise > Wrong Answers and note which entries belong to the target exam"
+      expected: "A known set of exam-scoped wrong answers is visible, each question appearing once"
+    - step: 2
+      action: "Open the Mock Test Hub for the target exam, tap Revision Mock"
+      expected: "The built mock's questions are exactly that exam-scoped, deduped set (capped at 20), with none from the other exam"
+  expected_result: "Scoping and dedup both hold."
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-MOCK-009
+  requirement_ids: [REQ-MOCK-004]
+  scenario_id: SCN-MOCK-007
+  system: Mobile
+  module: MOCK
+  feature: Revision Mock auto-selects recent wrong practice answers for this exam
+  title: Revision Mock with no wrong answers shows a message, not a broken test
+  objective: Confirm the empty case degrades gracefully.
+  preconditions:
+    - "An account with no wrong practice answers for this exam"
+  test_data: "A fresh or disposable account"
+  test_environment: "Android emulator, dev build"
+  priority: Low
+  severity: Minor
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "Tap Revision Mock on an account with no wrong answers for this exam"
+      expected: "An explanatory notice appears on the Hub screen and no navigation occurs"
+  expected_result: "No crash, no empty test, a clear message instead."
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-MOCK-010
+  requirement_ids: [REQ-MOCK-005]
+  scenario_id: SCN-MOCK-008
+  system: Mobile
+  module: MOCK
+  feature: Full Length Mock is unaffected by the Hub's introduction
+  title: A full official-paper attempt behaves identically after the Hub's introduction
+  objective: Regression guard for start.tsx/test.tsx's generalization to also accept an ad-hoc spec.
+  preconditions:
+    - "An exam with at least one official mockable paper"
+  test_data: "Any real exam with an official mock paper"
+  test_environment: "Android emulator, dev build"
+  priority: Critical
+  severity: Critical
+  test_type: Regression
+  steps:
+    - step: 1
+      action: "Open the Hub, tap Full Length Mock, pick a paper, view its Start screen"
+      expected: "Real sections, real duration, real marking scheme all show exactly as before this change"
+    - step: 2
+      action: "Start the test, answer a few questions across different sections, submit"
+      expected: "The test runs, times, and scores exactly as before; the Result screen shows the correct section-wise breakdown"
+  expected_result: "No behavioral change to the official-paper path."
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""

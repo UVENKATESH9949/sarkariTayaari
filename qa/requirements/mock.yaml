@@ -1,0 +1,214 @@
+# MOCK module — requirement repository
+#
+# Scope: the Mock Test Hub (2026-09-24) — a format-picker screen inserted between Exam
+# Selection and the pre-existing official-pattern flow, plus the 8 ad-hoc formats it builds
+# on demand from the same question bank the Full Length Mock already samples from. New
+# module: no prior qa/ coverage existed for Mock Test at all (the feature predates this
+# session's own qa/ register), so this file covers the Hub's own new surface only — the
+# underlying timed-test-taking mechanics (test.tsx's navigator, marking, submit flow) stay
+# uncovered until something changes them specifically, per AI_RULES.md §3.21's "scoped to
+# what actually changed" rule.
+#
+# automation_status is evidence-based, per qa/README.md's standing rule.
+
+- id: REQ-MOCK-001
+  feature: Mock Test Hub — pick a format after choosing an exam
+  module: MOCK
+  system: [Mobile]
+  source_doc: memory/STATUS.md
+  source_section: "Session of 2026-09-24 — Mock Test Hub"
+  description: >
+    After picking an exam, the student sees a Mock Test Hub screen listing 9 mock formats
+    (Topic/Subject/Multi-Subject/Speed/Difficulty/PYQ/Full Length/Weak Area/Revision) as
+    filterable cards, before reaching any specific test — mirroring the 2026-09-22 Practice
+    redesign's "exam first, then one browsing screen" shape.
+  business_rule: >
+    Full Length Mock routes to the existing, unchanged papers.tsx flow. Weak Area and
+    Revision resolve their content automatically (no picker) and route straight to the
+    Start screen. The other 6 formats open a shared builder screen.
+  actor: Signed-in or signed-out student who has already chosen an exam
+  preconditions:
+    - "The student has picked an exam on the existing Exam Selection screen"
+  inputs:
+    - "A chip filter (All/Topic/Subject/Speed/PYQ/Full Mock/Personalized) narrowing the visible cards"
+    - "A tap on one of the 9 format cards"
+  expected_outputs:
+    - "The chip filter shows only cards whose category matches; 'All' shows all 9"
+    - "Tapping Full Length opens papers.tsx; the other 8 formats route as described in business_rule"
+  validations:
+    - "The card count shown next to 'All Mock Tests' matches the number of cards actually rendered"
+  permissions:
+    - "None — the Hub itself needs no sign-in; Weak Area/Revision degrade to an empty-state message rather than an error when there is nothing to build from"
+  dependencies: []
+  error_conditions: []
+  edge_conditions:
+    - "A chip filter selection is retained visually (active state) until another chip is tapped"
+  offline_behavior: "The Hub screen itself renders with no network; ad-hoc sampling behind each card follows the app's existing hybrid local/live rules (see REQ-MOCK-002)"
+  acceptance_criteria:
+    - "Every one of the 9 cards is reachable and routes to the correct next screen"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "No automated test runner exists for mobile in this project — UI navigation is verified manually."
+
+- id: REQ-MOCK-002
+  feature: Ad-hoc mock formats narrow the same question pool the Full Length Mock samples from
+  module: MOCK
+  system: [Backend, Mobile]
+  source_doc: api/QUESTIONS.md
+  source_section: "GET /api/questions/mock-count, GET /api/questions/mock-sample"
+  description: >
+    Topic/Subject/Multi-Subject/Speed/Difficulty/PYQ Mock all reuse the existing
+    subject-scoped mock-count/mock-sample mechanism, extended with optional topicIds/
+    difficultyCode/pyqOnly narrowing — never a second sampling mechanism. Local (SQLite)
+    mode mirrors the same narrowing against the on-device question bank.
+  business_rule: >
+    All three narrowing params are optional and additive; a caller passing none of them
+    (the original Full-Length-mock-live-path callers) gets exactly the pre-existing,
+    unnarrowed behavior — proven by the pre-existing mockCount_and_mockSample_
+    spanMultipleSubjects and mockSample_excludesDeletedQuestions tests continuing to pass
+    unchanged alongside the three new narrowing tests.
+  actor: Signed-in or signed-out student building an ad-hoc mock
+  preconditions:
+    - "An exam is chosen, and (for Topic/Difficulty) a subject and/or difficulty level has been picked in the builder screen"
+  inputs:
+    - "examCode, one or more subjectIds, and optionally topicIds / difficultyCode / pyqOnly"
+  expected_outputs:
+    - "mock-count returns the count of non-deleted, published questions matching every supplied filter"
+    - "mock-sample returns a genuinely random sample matching the same filters, group-atomic (a passage/DI set never splits)"
+  validations:
+    - "A question outside the requested topic/difficulty/PYQ narrowing never appears in the sample"
+  permissions:
+    - "None — both endpoints are public, matching their existing pre-Hub behavior"
+  dependencies: []
+  error_conditions: []
+  edge_conditions:
+    - "A narrowing combination with zero matching questions returns count 0 and an empty sample, not an error — the builder screen's Start button stays disabled exactly as the existing Full Length Mock's Start screen already does for a similarly under-supplied paper"
+  offline_behavior: >
+    Local (SQLite) mode applies the identical narrowing against the device's own synced
+    question bank; "unavailable" mode (never synced, offline) returns 0/empty rather than
+    throwing, matching every other hybrid data function in this app.
+  acceptance_criteria:
+    - "TC-MOCK-003 (topic narrowing), TC-MOCK-004 (difficulty narrowing) and TC-MOCK-005 (PYQ narrowing) all pass against the real backend"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    backend/src/test/java/com/sarkaritaiyaari/backend/LiveQuestionsTest.java —
+    mockCountAndMockSample_narrowByTopicId, mockSample_narrowByDifficultyCode,
+    mockCountAndMockSample_narrowByPyqOnly. All three run and pass against the real Neon
+    dev database (10/10 in the class, 2026-09-24). The local-SQLite mirror
+    (buildAdHocMockQuestionsLocal/countAdHocAvailable in mobile/src/db/mockTest.ts) has no
+    automated coverage — mobile has no test runner in this project.
+
+- id: REQ-MOCK-003
+  feature: Weak Area Mock auto-selects the student's current concern-state topics
+  module: MOCK
+  system: [Mobile]
+  source_doc: memory/STATUS.md
+  source_section: "Session of 2026-09-24 — Mock Test Hub"
+  description: >
+    Tapping Weak Area Mock reads the same Weakness Radar (server when signed in, local
+    computation when signed out/offline) every other radar screen already uses, takes the
+    topics currently in a concern state (NEEDS_ATTENTION/NEEDS_REVISION), and builds an
+    ad-hoc mock from up to 5 of them in the radar's own existing order — never a second,
+    parallel weak-topic computation.
+  business_rule: >
+    Capped at 5 topics, 4 questions per topic. A student with zero concern-state topics
+    sees an explanatory message and no navigation, rather than an empty or broken test.
+  actor: Signed-in or signed-out student with some practice history
+  preconditions:
+    - "The Weakness Radar has been computed at least once for this exam (server or local)"
+  inputs:
+    - "A tap on the Weak Area Mock card"
+  expected_outputs:
+    - "A mock built from the current top concern-state topics (capped at 5), or an empty-state message when there are none"
+  validations:
+    - "The topics selected are exactly those the Radar screen itself would show as NEEDS_ATTENTION/NEEDS_REVISION for the same exam at the same time"
+  permissions: []
+  dependencies: []
+  error_conditions: []
+  edge_conditions:
+    - "Fewer than 5 concern-state topics: the mock uses exactly however many exist, never padded with unrelated topics"
+  offline_behavior: "Signed-out: uses the on-device Weakness Radar computation, same as the Preparation Radar screen"
+  acceptance_criteria:
+    - "The Weak Area Mock's topic set matches the Radar screen's own concern-state list for the same account/exam"
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "No automated test runner exists for mobile in this project; the underlying Weakness Radar ordering/state logic already has its own backend/packages-core coverage, cited in that feature's own qa/ entries, not duplicated here."
+
+- id: REQ-MOCK-004
+  feature: Revision Mock auto-selects recent wrong practice answers for this exam
+  module: MOCK
+  system: [Mobile]
+  source_doc: memory/STATUS.md
+  source_section: "Session of 2026-09-24 — Mock Test Hub"
+  description: >
+    Tapping Revision Mock reads this device's own practice session history, keeps only
+    sessions recording this exam's code, dedupes wrong answers by question (most recent
+    first, same rule Revise's Wrong Answers tab already uses), and builds an exact-list
+    ad-hoc mock (never a random sample) from up to 20 of them.
+  business_rule: >
+    Only PRACTICE wrong answers are available anywhere in this app today — mock-attempt
+    wrong answers are not exposed this way. A session recorded before its exam code was
+    tracked (or the cross-exam "All Government Exams" shortcut) is excluded from this
+    exam's Revision Mock rather than guessed into it.
+  actor: Signed-in or signed-out student with at least one wrong practice answer on this exam
+  preconditions:
+    - "At least one practice session exists locally for this exam with a wrong answer"
+  inputs:
+    - "A tap on the Revision Mock card"
+  expected_outputs:
+    - "A mock built from up to 20 of this exam's most recent distinct wrong practice questions, or an empty-state message when there are none"
+  validations:
+    - "No question appears twice even if it was answered wrongly in more than one session"
+  permissions: []
+  dependencies: []
+  error_conditions: []
+  edge_conditions:
+    - "A wrong answer from a session with no recorded exam code is never attributed to any exam's Revision Mock"
+  offline_behavior: "Fully local — reads this device's own session history regardless of sign-in state"
+  acceptance_criteria:
+    - "The Revision Mock's question set matches exactly the exam-scoped subset of what Revise's Wrong Answers tab shows"
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "No automated test runner exists for mobile in this project."
+
+- id: REQ-MOCK-005
+  feature: Full Length Mock is unaffected by the Hub's introduction
+  module: MOCK
+  system: [Mobile]
+  source_doc: memory/STATUS.md
+  source_section: "Session of 2026-09-24 — Mock Test Hub"
+  description: >
+    The pre-existing official Stage/Paper/Section mock flow (papers.tsx -> start.tsx ->
+    test.tsx -> result.tsx) is reachable from the Hub's Full Length Mock card and behaves
+    exactly as before — a regression guard for start.tsx/test.tsx's generalization to also
+    accept an ad-hoc spec.
+  business_rule: "An official paper's own marksCorrect/marksWrong and real section list are used unchanged; nothing about its behavior is gated on the new adhoc param being absent."
+  actor: Any student
+  preconditions:
+    - "The exam has at least one mockable official paper"
+  inputs:
+    - "A tap on Full Length Mock, then an existing paper"
+  expected_outputs:
+    - "Identical Start/Test/Result behavior to before this change: real sections, real marking scheme, real timer"
+  validations: []
+  permissions: []
+  dependencies: []
+  error_conditions: []
+  edge_conditions: []
+  offline_behavior: "Unchanged — same hybrid local/live behavior as before this change"
+  acceptance_criteria:
+    - "A full official-paper attempt completes and scores identically to before the Hub existed"
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "No automated test runner exists for mobile in this project; this is a device regression check."

@@ -76,8 +76,8 @@ export default function MockTestExamSelection() {
 
   const badgeByCode = useMemo(() => new Map(badges.map((b) => [b.code, b])), [badges]);
 
-  const openPapers = (examCode: string, examLabel: string) => {
-    router.push({ pathname: "/mock-test/papers", params: { examCode, examLabel } });
+  const openHub = (examCode: string, examLabel: string) => {
+    router.push({ pathname: "/mock-test/hub", params: { examCode, examLabel } });
   };
 
   const query = search.trim().toLowerCase();
@@ -126,7 +126,7 @@ export default function MockTestExamSelection() {
             const badge = exam.badge ? badgeByCode.get(exam.badge) : undefined;
             return (
               <FadeInItem key={exam.code} index={index}>
-                <Card onPress={() => openPapers(exam.code, exam.name)} style={styles.examCard}>
+                <Card onPress={() => openHub(exam.code, exam.name)} style={styles.examCard}>
                   <View style={styles.examTopRow}>
                     <IconBox
                       icon={gradient.icon}

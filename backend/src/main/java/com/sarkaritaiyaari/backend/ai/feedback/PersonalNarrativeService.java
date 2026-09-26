@@ -9,6 +9,8 @@ import com.sarkaritaiyaari.backend.ai.AIService;
 import com.sarkaritaiyaari.backend.ai.ResponseFormat;
 import com.sarkaritaiyaari.backend.ai.exception.AIException;
 import com.sarkaritaiyaari.backend.dto.MistakeAnalysisDtos.MistakeAnalysisRequest;
+import com.sarkaritaiyaari.backend.dto.PracticeResultInsightDtos.PracticeResultInsightRequest;
+import com.sarkaritaiyaari.backend.dto.PracticeResultInsightDtos.SubtopicSnapshotDto;
 import com.sarkaritaiyaari.backend.dto.ProfileSummaryDtos.ProfileSummaryRequest;
 import com.sarkaritaiyaari.backend.dto.SessionFeedbackDtos.SessionFeedbackRequest;
 import com.sarkaritaiyaari.backend.dto.SessionFeedbackDtos.TopicSnapshotDto;
@@ -180,6 +182,59 @@ public class PersonalNarrativeService {
             };
         } catch (AIException e) {
             log.warn("MISTAKE_ANALYSIS generation failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * The Practice Result screen's on-demand, structured "AI Feedback" tab. Same
+     * flag-gate/generate/validate/never-throw shape as {@link #mistakeAnalysis} — no server-side
+     * cache, for the identical reason: this is generated only when a student explicitly opens the
+     * tab, never automatically, so the cost pressure that justified {@code PROFILE_SUMMARY}'s
+     * cache does not exist here. The caller (mobile) caches the result on-device against the
+     * session id, per the product spec's own cost-control rules.
+     *
+     * @return {@code null} on disabled/failed-validation/provider error -- never throws for those.
+     */
+    public PracticeResultInsightValidation.Ok practiceResultInsight(PracticeResultInsightRequest request) {
+        if (!flagService.isEnabled(AiTaskId.PRACTICE_RESULT_INSIGHT)) {
+            return null;
+        }
+
+        AIMessage userMessage = PersonalNarrativePrompts.practiceResultInsightUserMessage(
+                request, languageName(request.preferredLanguage()));
+
+        AIRequest aiRequest = AIRequest.builder()
+                .systemPrompt(PersonalNarrativePrompts.practiceResultInsightSystemPrompt())
+                .messages(List.of(userMessage))
+                .temperature(0.4)
+                .maxTokens(MAX_OUTPUT_TOKENS)
+                .responseFormat(ResponseFormat.JSON)
+                .metadata(Map.of("feature", "practice-result-insight"))
+                .build();
+
+        try {
+            AIResponse response = aiService.generate(aiRequest);
+            JsonNode raw = parseJson(response.content());
+            List<String> allowedSubtopicNames = request.subtopics() == null
+                    ? List.of()
+                    : request.subtopics().stream().map(SubtopicSnapshotDto::name).toList();
+            PracticeResultInsightValidation.Result result = raw == null
+                    ? new PracticeResultInsightValidation.Failed("NOT_JSON", "response was not valid JSON")
+                    : PracticeResultInsightValidation.validate(raw, allowedSubtopicNames);
+
+            return switch (result) {
+                case PracticeResultInsightValidation.Ok ok -> ok;
+                case PracticeResultInsightValidation.Failed failed -> {
+                    log.warn("{} rejected a generated insight: {} ({}) [finishReason={}, outputTokens={}]",
+                            AiTaskId.PRACTICE_RESULT_INSIGHT, failed.code(), failed.detail(),
+                            response.finishReason(),
+                            response.usage() != null ? response.usage().outputTokens() : null);
+                    yield null;
+                }
+            };
+        } catch (AIException e) {
+            log.warn("PRACTICE_RESULT_INSIGHT generation failed: {}", e.getMessage());
             return null;
         }
     }

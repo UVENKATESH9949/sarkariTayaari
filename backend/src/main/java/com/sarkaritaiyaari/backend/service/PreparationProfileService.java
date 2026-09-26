@@ -65,7 +65,11 @@ public class PreparationProfileService {
         if (existing != null && existing.getUpdatedAt() != null
                 && existing.getUpdatedAt().isAfter(incoming.updatedAt())) {
             // The server holds a newer edit. Not an error — hand back the winner so the device that
-            // just lost can correct itself immediately.
+            // just lost can correct itself immediately. Completion is still recorded: it is a fact
+            // about the student, not an edit to a field, and losing a conflict must not lose it.
+            if (recordCompletion(existing, incoming.onboardingCompletedAt())) {
+                existing = profiles.save(existing);
+            }
             return new SyncResponse(false, toDto(existing));
         }
 
@@ -88,8 +92,32 @@ public class PreparationProfileService {
         row.setPreparationLevel(incoming.preparationLevel());
         row.setDailyStudyTime(incoming.dailyStudyTime());
         row.setUpdatedAt(incoming.updatedAt());
+        recordCompletion(row, incoming.onboardingCompletedAt());
 
         return new SyncResponse(true, toDto(profiles.save(row)));
+    }
+
+    /**
+     * Onboarding completion is monotonic, deliberately outside last-write-wins (V53).
+     *
+     * <p>Set when the row has none; when both exist the EARLIER moment is kept (it is "first
+     * finished", so a second device finishing later does not move it); never cleared — a null
+     * incoming value means "this device does not know", and an older app never sends the field at
+     * all. Clearing it would put a student who already onboarded back through the questions, which
+     * reads as the app having lost their data.
+     *
+     * @return true when the row changed
+     */
+    private static boolean recordCompletion(UserPreparationProfile row, OffsetDateTime incoming) {
+        if (incoming == null) {
+            return false;
+        }
+        OffsetDateTime current = row.getOnboardingCompletedAt();
+        if (current == null || incoming.isBefore(current)) {
+            row.setOnboardingCompletedAt(incoming);
+            return true;
+        }
+        return false;
     }
 
     private static void validate(PreparationProfile incoming) {
@@ -125,6 +153,7 @@ public class PreparationProfileService {
                 row.getTargetYear(),
                 row.getPreparationLevel(),
                 row.getDailyStudyTime(),
-                row.getUpdatedAt());
+                row.getUpdatedAt(),
+                row.getOnboardingCompletedAt());
     }
 }

@@ -2,6 +2,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "./client";
 import { mockTestAttemptResults, mockTestAttempts, questionExams, questions, questionTranslations } from "./schema";
 import type { SyncedPaper } from "./examStructure";
+import type { AdHocMockSpec } from "../mockHub/types";
 import { trackEvent } from "../telemetry/analytics";
 import { isIndexBasedType, resolveCorrectIndex } from "@sarkaritaiyaari/core/evaluation";
 import { packRandomSample } from "./questionGroupAssembly";
@@ -190,6 +191,137 @@ export async function buildMockTestQuestions(paper: SyncedPaper): Promise<MockTe
   }
 
   return all;
+}
+
+/**
+ * The Mock Test Hub's ad-hoc formats (Topic/Subject/Multi-Subject/Speed/Difficulty/PYQ/Weak
+ * Area Mock) — a single flat pool with no real Stage/Paper/Section behind it, so this shares
+ * `buildMockTestQuestions`'s query shape and pooling constants but samples once rather than
+ * once per section. Revision Mock skips sampling entirely — see `spec.questionIds`.
+ */
+export async function countAdHocAvailable(spec: AdHocMockSpec): Promise<number> {
+  if (spec.questionIds && spec.questionIds.length > 0) {
+    const rows = await db
+      .select({ id: questions.id })
+      .from(questions)
+      .where(and(inArray(questions.id, spec.questionIds), eq(questions.isDeleted, false)))
+      .all();
+    return Math.min(rows.length, spec.questionCount);
+  }
+  if (spec.subjectIds.length === 0) return 0;
+
+  const conditions = [inArray(questions.subjectId, spec.subjectIds), eq(questions.isDeleted, false)];
+  if (spec.topicIds && spec.topicIds.length > 0) conditions.push(inArray(questions.topicId, spec.topicIds));
+  if (spec.difficultyCode) conditions.push(eq(questions.difficulty, spec.difficultyCode));
+  if (spec.pyqOnly) conditions.push(eq(questions.isPyq, true));
+
+  const row = await db
+    .select({ cnt: sql<number>`count(*)` })
+    .from(questions)
+    .innerJoin(questionExams, eq(questionExams.questionId, questions.id))
+    .where(and(...conditions, eq(questionExams.examCode, spec.examCode)))
+    .get();
+  return Math.min(row?.cnt ?? 0, spec.questionCount);
+}
+
+/** Assembles the real, shuffled question set for an ad-hoc mock attempt — see `countAdHocAvailable`. */
+export async function buildAdHocMockQuestionsLocal(spec: AdHocMockSpec): Promise<MockTestQuestion[]> {
+  let matched: MockCandidateRow[];
+
+  if (spec.questionIds && spec.questionIds.length > 0) {
+    matched = await db
+      .select({
+        id: questions.id,
+        correctAnswer: questions.correctAnswer,
+        subjectName: questions.subjectName,
+        questionType: questions.questionType,
+        answerKey: questions.answerKey,
+        contentStructure: questions.contentStructure,
+        questionGroupId: questions.questionGroupId,
+      })
+      .from(questions)
+      .where(and(inArray(questions.id, spec.questionIds), eq(questions.isDeleted, false)))
+      .orderBy(sql`RANDOM()`)
+      .all();
+  } else {
+    if (spec.subjectIds.length === 0) return [];
+
+    const sampleSize = Math.min(
+      Math.max(spec.questionCount * CANDIDATE_POOL_MULTIPLIER, CANDIDATE_POOL_MIN),
+      CANDIDATE_POOL_MAX,
+    );
+
+    const conditions = [inArray(questions.subjectId, spec.subjectIds), eq(questions.isDeleted, false)];
+    if (spec.topicIds && spec.topicIds.length > 0) conditions.push(inArray(questions.topicId, spec.topicIds));
+    if (spec.difficultyCode) conditions.push(eq(questions.difficulty, spec.difficultyCode));
+    if (spec.pyqOnly) conditions.push(eq(questions.isPyq, true));
+
+    const candidates = await db
+      .select({
+        id: questions.id,
+        correctAnswer: questions.correctAnswer,
+        subjectName: questions.subjectName,
+        questionType: questions.questionType,
+        answerKey: questions.answerKey,
+        contentStructure: questions.contentStructure,
+        questionGroupId: questions.questionGroupId,
+      })
+      .from(questions)
+      .innerJoin(questionExams, eq(questionExams.questionId, questions.id))
+      .where(and(...conditions, eq(questionExams.examCode, spec.examCode)))
+      .orderBy(sql`RANDOM()`)
+      .limit(sampleSize)
+      .all();
+
+    if (candidates.length === 0) return [];
+
+    matched = await packRandomSample(candidates, spec.questionCount, fullGroupChildren);
+  }
+
+  if (matched.length === 0) return [];
+
+  const questionIds = matched.map((q) => q.id);
+  const translationRows = await db
+    .select()
+    .from(questionTranslations)
+    .where(inArray(questionTranslations.questionId, questionIds))
+    .all();
+
+  const translationsByQuestion = new Map<
+    string,
+    Record<string, { questionText: string; options: string[]; explanation: string; content?: Record<string, unknown> | null }>
+  >();
+  for (const row of translationRows) {
+    const forQuestion = translationsByQuestion.get(row.questionId) ?? {};
+    forQuestion[row.languageCode] = {
+      questionText: row.questionText,
+      options: row.options,
+      explanation: row.explanation ?? "",
+      content: row.content,
+    };
+    translationsByQuestion.set(row.questionId, forQuestion);
+  }
+
+  return matched.map((q) => {
+    const translations = translationsByQuestion.get(q.id) ?? {};
+    const englishOptions = translations.en?.options ?? Object.values(translations)[0]?.options ?? [];
+    const questionType = q.questionType ?? "SINGLE_CHOICE";
+    const correctIndex = isIndexBasedType(questionType)
+      ? resolveCorrectIndex(q.correctAnswer, englishOptions)
+      : null;
+
+    return {
+      id: q.id,
+      sectionName: spec.title,
+      subjectName: q.subjectName,
+      correctIndex,
+      questionType,
+      answerKey: q.answerKey,
+      contentStructure: q.contentStructure,
+      questionGroupId: q.questionGroupId,
+      translations,
+    };
+  });
 }
 
 export type MockTestResultItem = {

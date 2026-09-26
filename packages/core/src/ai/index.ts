@@ -44,7 +44,7 @@ export type {
   TopicSnapshot,
 } from "./context/types";
 
-export { MISTAKE_TYPES, isGenerativeTaskId } from "./schema/types";
+export { MISTAKE_TYPES, RECOMMENDED_RESULT_ACTIONS, isGenerativeTaskId, isRecommendedResultAction } from "./schema/types";
 export type {
   AiTaskResponse,
   ConceptExplanation,
@@ -52,10 +52,12 @@ export type {
   MistakeAnalysis,
   MistakeType,
   PersonalizedExplanation,
+  PracticeResultInsight,
   ProfileSummary,
   QuestionClassification,
   QuestionExplanation,
   QuestionHint,
+  RecommendedResultAction,
   ResponseForTask,
   SessionFeedback,
   WrongOptionNote,

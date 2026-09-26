@@ -1054,3 +1054,230 @@
     of scope per the brief's section 14 and are not asserted anywhere in this module.
   automation_status: ManualOnly
   automation_reference: ""
+
+- id: TC-ONBOARDING-026
+  requirement_ids: [REQ-ONBOARDING-014]
+  scenario_id: SCN-ONBOARDING-026
+  system: Mobile
+  module: ONBOARDING
+  feature: Finishing onboarding always reaches Home, with no restart
+  title: A fresh install finishes onboarding and opens Home by itself
+  objective: "Regression guard for the stuck 'Preparing' screen."
+  preconditions:
+    - "The app uninstalled first (or app data cleared)"
+    - "A Gmail account that has never onboarded"
+  test_data: "A brand-new test Gmail address"
+  test_environment: "Android emulator emulator-5554 (AVD Pixel_7), dev build, real dev backend"
+  priority: Critical
+  severity: Critical
+  test_type: Regression
+  steps:
+    - step: 1
+      action: "Install, sign in with a code, answer every onboarding question and choose an exam"
+      expected: "The preparation screen appears with its checklist"
+    - step: 2
+      action: "Wait without touching anything"
+      expected: "Every row ticks, the welcome message shows, then Home opens - within about 15 seconds, with no restart"
+    - step: 3
+      action: "Look at Home"
+      expected: "The chosen exam is the active exam"
+    - step: 4
+      action: "Press Android Back on Home"
+      expected: "The app goes to the background; onboarding never comes back"
+  expected_result: "Home opens automatically."
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Before the 2026-09-24 fix this sat on 'Preparing' indefinitely."
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-ONBOARDING-027
+  requirement_ids: [REQ-ONBOARDING-014]
+  scenario_id: SCN-ONBOARDING-026
+  system: Mobile
+  module: ONBOARDING
+  feature: Finishing onboarding always reaches Home, with no restart
+  title: Preparation on a slow or failing network, backgrounded, or killed
+  objective: "Confirm no failure mode strands the student on 'Preparing'."
+  preconditions:
+    - "As TC-ONBOARDING-026, repeated per step"
+  test_data: "A new test Gmail address per run"
+  test_environment: "Android emulator emulator-5554 (AVD Pixel_7), dev build, real dev backend"
+  priority: Critical
+  severity: Critical
+  test_type: Recovery
+  steps:
+    - step: 1
+      action: "On the last onboarding answer, turn on airplane mode, then finish"
+      expected: "Home still opens (steps time out after about 8 s each)"
+    - step: 2
+      action: "Repeat with a normal network, but press Home during preparation and return after 10 s"
+      expected: "Preparation continues or has finished; Home opens"
+    - step: 3
+      action: "Repeat, and swipe the app away during preparation, then reopen it"
+      expected: "No onboarding questions; a short 'Preparing' (under 5 s) then Home"
+    - step: 4
+      action: "Throughout, check the Metro log"
+      expected: "[startup] PREPARATION_READY then NAVIGATING_HOME appear once each; no OTP, token or email in any log line"
+  expected_result: "Every path ends on Home."
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: ""
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-ONBOARDING-028
+  requirement_ids: [REQ-ONBOARDING-015]
+  scenario_id: SCN-ONBOARDING-027
+  system: Mobile
+  module: ONBOARDING
+  feature: Onboarding is remembered by the account (reinstall and new phone skip it)
+  title: "Uninstall, reinstall, sign in: onboarding is skipped (MANDATORY)"
+  objective: "The owner's mandatory reinstall test."
+  preconditions:
+    - "An account that finished onboarding (TC-ONBOARDING-026)"
+    - "A backend that includes V53"
+  test_data: "The same Gmail address as the first install"
+  test_environment: "Android emulator emulator-5554 (AVD Pixel_7), dev build, real dev backend"
+  priority: Critical
+  severity: Critical
+  test_type: DataIntegrity
+  steps:
+    - step: 1
+      action: "Note the name, exam and daily study time chosen during onboarding"
+      expected: "-"
+    - step: 2
+      action: "Uninstall the app completely, then install it again"
+      expected: "The sign-in screen appears"
+    - step: 3
+      action: "Sign in with the same address"
+      expected: "'Restoring your account...' briefly, then (if the question bank is still downloading) 'Preparing' for at most 5 s, then Home"
+    - step: 4
+      action: "Check Home and More > Study preferences"
+      expected: "No onboarding questions were asked; the greeting uses the same name; the same exam is active; the study time is the same"
+    - step: 5
+      action: "Check the server copy (GET /api/me/preparation-profile)"
+      expected: "The same name, exam and study time as before, and onboardingCompletedAt set - nothing overwritten with nulls"
+  expected_result: "A returning student is never onboarded twice and loses nothing."
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Content languages are device-only and come back as the default after a reinstall; that is a known limitation."
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-ONBOARDING-029
+  requirement_ids: [REQ-ONBOARDING-015]
+  scenario_id: SCN-ONBOARDING-027
+  system: Mobile
+  module: ONBOARDING
+  feature: Onboarding is remembered by the account (reinstall and new phone skip it)
+  title: A second phone, a brand-new account, and an unfinished onboarding
+  objective: "Confirm the other edge cases of account-driven onboarding."
+  preconditions:
+    - "Two test accounts: A finished onboarding, B brand new"
+  test_data: "Accounts A and B"
+  test_environment: "Android emulator emulator-5554 (AVD Pixel_7), dev build, real dev backend"
+  priority: High
+  severity: Major
+  test_type: Edge
+  steps:
+    - step: 1
+      action: "On a second device (or after clearing app data) sign in as A"
+      expected: "Onboarding is skipped, as in TC-ONBOARDING-028"
+    - step: 2
+      action: "Sign out, clear app data, sign in as B"
+      expected: "Onboarding is shown from step 1"
+    - step: 3
+      action: "As B, answer two steps, press Home for 10 s, then kill the app"
+      expected: "-"
+    - step: 4
+      action: "Clear app data and sign in as B again"
+      expected: "Onboarding is shown again - an unfinished onboarding is not treated as finished"
+    - step: 5
+      action: "Check B's server profile"
+      expected: "No profile, or one without onboardingCompletedAt - the half-finished answers were never uploaded"
+  expected_result: "Only a finished onboarding is ever skipped."
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: ""
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-ONBOARDING-030
+  requirement_ids: [REQ-ONBOARDING-015]
+  scenario_id: SCN-ONBOARDING-027
+  system: Backend
+  module: ONBOARDING
+  feature: Onboarding is remembered by the account (reinstall and new phone skip it)
+  title: The server keeps onboarding completion monotonically
+  objective: "Confirm onboardingCompletedAt can be set, is never cleared, keeps the earliest moment, and survives a losing upload."
+  preconditions:
+    - "A reachable backend with V53"
+  test_data: "Fresh test accounts"
+  test_environment: "Backend test suite against the real Neon dev database"
+  priority: Critical
+  severity: Critical
+  test_type: DataIntegrity
+  steps:
+    - step: 1
+      action: "Upload a profile with onboardingCompletedAt"
+      expected: "Returned on read"
+    - step: 2
+      action: "Upload a newer profile with onboardingCompletedAt null"
+      expected: "Fields replaced; completion unchanged"
+    - step: 3
+      action: "Upload with the field missing entirely (an old app)"
+      expected: "200; completion unchanged"
+    - step: 4
+      action: "Upload an OLDER profile carrying completion to a server with none"
+      expected: "stored:false, yet completion is recorded"
+    - step: 5
+      action: "Upload a later completion after an earlier one"
+      expected: "The earliest is kept"
+  expected_result: "Completion is set once and never lost."
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: ""
+  automation_status: Automated
+  automation_reference: "backend/src/test/java/com/sarkaritaiyaari/backend/PreparationProfileCompletionTest.java"
+
+- id: TC-ONBOARDING-031
+  requirement_ids: [REQ-ONBOARDING-015]
+  scenario_id: SCN-ONBOARDING-028
+  system: Mobile
+  module: ONBOARDING
+  feature: Onboarding is remembered by the account (reinstall and new phone skip it)
+  title: Signing out and in as a different account on the same phone
+  objective: "Regression guard for DEF-ONBOARDING-001: no profile crosses between accounts."
+  preconditions:
+    - "Accounts A and C have each finished onboarding with different answers; D is brand new"
+  test_data: "Three test Gmail addresses"
+  test_environment: "Android emulator emulator-5554 (AVD Pixel_7), dev build, real dev backend"
+  priority: Critical
+  severity: Critical
+  test_type: Security
+  steps:
+    - step: 1
+      action: "Signed in as A, sign out (More > Your account > Sign out)"
+      expected: "The sign-in screen appears; the phone's stored onboarding answers are empty"
+    - step: 2
+      action: "Sign in as C"
+      expected: "No onboarding; Home greets C by C's name with C's exam"
+    - step: 3
+      action: "Read A's profile from the server"
+      expected: "Unchanged - still A's name, exam and study time"
+    - step: 4
+      action: "Sign out, then sign in as brand-new account D"
+      expected: "Onboarding step 1, with an empty name field (nothing of C's pre-filled)"
+  expected_result: "Each account sees only its own profile, and no account's server profile is overwritten."
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: "Before the fix, step 2 greeted C as A and uploaded A's answers over C's server profile."
+  automation_status: ManualOnly
+  automation_reference: ""

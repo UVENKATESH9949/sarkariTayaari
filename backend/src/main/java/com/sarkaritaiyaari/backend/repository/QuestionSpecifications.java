@@ -79,16 +79,37 @@ public final class QuestionSpecifications {
      * db/mockTest.ts, which does the equivalent local query with an IN clause).
      */
     public static Specification<Question> examAndSubjectsIn(String examCode, List<UUID> subjectIds) {
+        return examAndSubjectsIn(examCode, subjectIds, null, null, false);
+    }
+
+    /**
+     * The Mock Test Hub's ad-hoc formats (Topic/Difficulty/PYQ Mock etc.) narrow the same
+     * subject-scoped pool this already samples from — {@code topicIds}/{@code difficultyCode}/
+     * {@code pyqOnly} are all optional and additive, so a caller passing none of them (every
+     * existing Full-Length-mock-live-path call) gets exactly the original behavior.
+     */
+    public static Specification<Question> examAndSubjectsIn(String examCode, List<UUID> subjectIds,
+                                                              List<UUID> topicIds, String difficultyCode,
+                                                              boolean pyqOnly) {
         return (root, query, cb) -> {
-            var examJoin = root.join("exams");
-            return cb.and(
-                    cb.equal(examJoin.get("code"), examCode),
+            var predicate = cb.and(
+                    cb.equal(root.join("exams").get("code"), examCode),
                     root.get("topic").get("subject").get("id").in(subjectIds),
                     cb.isFalse(root.get("deleted")),
                     // TASK-2501 Phase 2 — a fresh, unreviewed ingestion candidate must never
                     // land in a live-sampled Mock Test attempt.
                     cb.equal(root.get("contentStatus"), ContentStatus.PUBLISHED)
             );
+            if (topicIds != null && !topicIds.isEmpty()) {
+                predicate = cb.and(predicate, root.get("topic").get("id").in(topicIds));
+            }
+            if (difficultyCode != null && !difficultyCode.isBlank()) {
+                predicate = cb.and(predicate, cb.equal(root.get("difficulty"), difficultyCode));
+            }
+            if (pyqOnly) {
+                predicate = cb.and(predicate, cb.isTrue(root.get("pyq")));
+            }
+            return predicate;
         };
     }
 }

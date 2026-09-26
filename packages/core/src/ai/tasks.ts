@@ -52,7 +52,8 @@ export type AiTaskId =
   | "PERSONALIZED_EXPLANATION"
   | "QUESTION_CLASSIFICATION"
   | "SESSION_FEEDBACK"
-  | "PROFILE_SUMMARY";
+  | "PROFILE_SUMMARY"
+  | "PRACTICE_RESULT_INSIGHT";
 
 /**
  * The languages AI may answer in — **not** the languages the app's UI supports.
@@ -300,6 +301,28 @@ export const AI_TASKS: Readonly<Record<AiTaskId, AiTaskDefinition>> = {
     maxOutputTokens: 300,
     minDeviceTier: "MID",
     groundTruthFallback: "DETERMINISTIC_RADAR",
+  },
+
+  /**
+   * The Practice Result screen's "AI Feedback" tab — an on-demand, structured interpretation
+   * of the already-computed deterministic Analytics tab (`analytics/practiceResultAnalytics.ts`).
+   * `GENERATED` only, deliberately: unlike `SESSION_FEEDBACK` there is no canned-template tier,
+   * because this task is explicitly opt-in (a tab the student has to tap open) rather than
+   * something shown unconditionally — an unreachable tier would never be exercised and the
+   * registry guard would have nothing to check it against, so it is left out rather than faked.
+   * `groundTruthFallback: null` because the Analytics tab beside it is already a complete,
+   * correct screen without a narrative — an AI outage here is never an error state.
+   */
+  PRACTICE_RESULT_INSIGHT: {
+    id: "PRACTICE_RESULT_INSIGHT",
+    tiers: ["GENERATED"],
+    personalized: true,
+    cacheable: false,
+    languages: AI_LANGUAGES,
+    requiredContext: ["session"],
+    maxOutputTokens: 700,
+    minDeviceTier: "MID",
+    groundTruthFallback: null,
   },
 };
 

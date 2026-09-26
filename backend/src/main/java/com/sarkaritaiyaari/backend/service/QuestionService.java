@@ -695,22 +695,31 @@ public class QuestionService {
         return questionRepository.countGroupedBy(groupBy, examCode, subjectId, topicId, difficulty, temporaryPoolEnabled);
     }
 
-    /** Live equivalent of mobile/src/db/mockTest.ts's countAvailable() — per-section question availability before local sync completes. */
+    /**
+     * Live equivalent of mobile/src/db/mockTest.ts's countAvailable() — per-section question
+     * availability before local sync completes, and (Mock Test Hub) an ad-hoc format's
+     * available-question count once narrowed by {@code topicIds}/{@code difficultyCode}/
+     * {@code pyqOnly}. Any of the three may be null/empty/false.
+     */
     @Transactional(readOnly = true)
-    public long countForMock(String examCode, List<UUID> subjectIds) {
-        return questionRepository.countForMock(examCode, subjectIds, temporaryPoolEnabled);
+    public long countForMock(String examCode, List<UUID> subjectIds, List<UUID> topicIds, String difficultyCode,
+                              boolean pyqOnly) {
+        return questionRepository.countForMock(examCode, subjectIds, topicIds, difficultyCode, pyqOnly, temporaryPoolEnabled);
     }
 
     /**
      * Live equivalent of mobile/src/db/mockTest.ts's buildMockTestQuestions() per-section
      * query — a genuinely random sample, not just the first N matches, and (TASK-2301 Phase
      * P3) group-aware: a question sharing a {@code question_group_id} with another sampled row
-     * pulls in every sibling as one atomic unit — see {@code QuestionGroupAssembly}.
+     * pulls in every sibling as one atomic unit — see {@code QuestionGroupAssembly}. Also backs
+     * the Mock Test Hub's ad-hoc formats once narrowed the same way {@link #countForMock} is.
      */
     @Transactional(readOnly = true)
-    public List<QuestionResponse> sampleForMock(String examCode, List<UUID> subjectIds, int limit) {
+    public List<QuestionResponse> sampleForMock(String examCode, List<UUID> subjectIds, List<UUID> topicIds,
+                                                 String difficultyCode, boolean pyqOnly, int limit) {
         int clampedLimit = Math.min(Math.max(limit, 1), MAX_MOCK_SAMPLE_SIZE);
-        List<Question> sampled = questionRepository.sampleForMock(examCode, subjectIds, clampedLimit, temporaryPoolEnabled);
+        List<Question> sampled = questionRepository.sampleForMock(
+                examCode, subjectIds, topicIds, difficultyCode, pyqOnly, clampedLimit, temporaryPoolEnabled);
         Map<UUID, List<QuestionMedia>> media = mediaByQuestionId(sampled.stream().map(Question::getId).toList());
         return sampled.stream()
                 .map(q -> QuestionMapper.toResponse(q, media.getOrDefault(q.getId(), List.of())))

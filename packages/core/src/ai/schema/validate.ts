@@ -21,7 +21,7 @@ import type {
   ResponseForTask,
   WrongOptionNote,
 } from "./types";
-import { MISTAKE_TYPES } from "./types";
+import { MISTAKE_TYPES, isRecommendedResultAction } from "./types";
 
 export type ValidationFailureCode =
   | "NOT_JSON"
@@ -239,6 +239,21 @@ function optionalStr(source: Record<string, unknown>, field: string): string | n
   return trimmed.length === 0 ? null : trimmed;
 }
 
+/** Array of non-empty strings — the `strengths`/`weakAreas` bullet lists. Absent/null means "none". */
+function strArray(source: Record<string, unknown>, field: string): ValidationResult<string[]> {
+  const value = source[field];
+  if (value === undefined || value === null) return { ok: true, value: [] };
+  if (!Array.isArray(value)) return fail("WRONG_TYPE", `${field} must be an array`);
+
+  const items: string[] = [];
+  for (const [index, entry] of value.entries()) {
+    if (typeof entry !== "string") return fail("WRONG_TYPE", `${field}[${index}] must be a string`);
+    const trimmed = entry.trim();
+    if (trimmed.length > 0) items.push(trimmed);
+  }
+  return { ok: true, value: items };
+}
+
 function wrongOptionNotes(value: unknown): ValidationResult<WrongOptionNote[]> {
   // Absent is tolerated — a True/False question has little to say here, and an empty list is a
   // weaker answer rather than an invalid one.
@@ -430,6 +445,45 @@ function buildResponse(
 
       return { ok: true, value: { taskId: "PROFILE_SUMMARY", narrative: narrative.value } };
     }
+
+    case "PRACTICE_RESULT_INSIGHT": {
+      const summary = str(raw, "summary");
+      if (!summary.ok) return summary;
+      const strengths = strArray(raw, "strengths");
+      if (!strengths.ok) return strengths;
+      const weakAreas = strArray(raw, "weakAreas");
+      if (!weakAreas.ok) return weakAreas;
+      const timeInsight = optionalStr(raw, "timeInsight");
+      const recommendation = str(raw, "recommendation");
+      if (!recommendation.ok) return recommendation;
+      const recommendedAction = str(raw, "recommendedAction");
+      if (!recommendedAction.ok) return recommendedAction;
+      if (!isRecommendedResultAction(recommendedAction.value)) {
+        return fail("UNKNOWN_ENUM", `recommendedAction "${recommendedAction.value}" is not one of the allowed actions`);
+      }
+
+      // Topic-name grounding only — deliberately NOT the strict numeric check `groundedNarrative`
+      // applies to SESSION_FEEDBACK/PROFILE_SUMMARY. This task's `recommendation` legitimately
+      // invents a practice-count ("10-15 questions") that is an action item, not a claimed
+      // statistic about the student, so a numeric check here would reject the exact wording the
+      // product spec asks for.
+      const combinedText = [summary.value, ...strengths.value, ...weakAreas.value, timeInsight ?? "", recommendation.value].join(" ");
+      const grounded = checkTopicNameGrounding(combinedText, grounding);
+      if (!grounded.ok) return grounded;
+
+      return {
+        ok: true,
+        value: {
+          taskId: "PRACTICE_RESULT_INSIGHT",
+          summary: summary.value,
+          strengths: strengths.value.slice(0, 3),
+          weakAreas: weakAreas.value.slice(0, 3),
+          timeInsight,
+          recommendation: recommendation.value,
+          recommendedAction: recommendedAction.value,
+        },
+      };
+    }
   }
 }
 
@@ -466,4 +520,20 @@ function checkAnswerGrounding(
 function checkNarrativeGrounding(narrative: string, grounding: Grounding): ValidationResult<true> {
   if (!grounding.narrative) return { ok: true, value: true };
   return groundedNarrative(narrative, grounding.narrative);
+}
+
+/**
+ * `PRACTICE_RESULT_INSIGHT`'s own, lighter grounding check — topic names only, never numbers.
+ * See the case block's own comment for why a numeric check does not fit this task's shape.
+ */
+function checkTopicNameGrounding(combinedText: string, grounding: Grounding): ValidationResult<true> {
+  const allowedTopicNames = grounding.narrative?.allowedTopicNames ?? [];
+  if (allowedTopicNames.length === 0) return { ok: true, value: true };
+
+  const normalised = normalise(combinedText);
+  const mentionsAKnownTopic = allowedTopicNames.some((name) => normalised.includes(normalise(name)));
+  if (!mentionsAKnownTopic) {
+    return fail("UNGROUNDED_NARRATIVE", "response names none of the sub-topics it was given");
+  }
+  return { ok: true, value: true };
 }

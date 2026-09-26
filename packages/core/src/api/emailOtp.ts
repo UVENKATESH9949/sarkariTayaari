@@ -50,3 +50,19 @@ export function verifyEmailOtp(email: string, code: string, deviceLabel?: string
     body: { email, code, deviceLabel },
   });
 }
+
+/**
+ * "Continue with Google" (2026-09-25). Sends the ID token the Google Sign-In SDK returned; the
+ * server verifies it itself and returns the same session shape as a code sign-in.
+ *
+ * Lives beside the email-code calls because it is the same account model: the server finds or
+ * creates the account by verified Gmail address, so a student who signed up with a code and later
+ * uses Google lands in the SAME account. 401 = the token failed verification; 400 = not a Gmail
+ * account, or Google sign-in is not set up on that server.
+ */
+export function signInWithGoogleIdToken(idToken: string, deviceLabel?: string) {
+  return apiFetch<AuthResult>("/auth/google", {
+    method: "POST",
+    body: { idToken, deviceLabel },
+  });
+}
