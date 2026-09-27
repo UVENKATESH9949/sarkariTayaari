@@ -5,7 +5,7 @@ import { recordTopicPractice } from "../../../db/topicProgressStore";
 import { newPracticeSessionId } from "../../../db/ids";
 import { useQuestionTimer } from "../../../practice/useQuestionTimer";
 import { PyqBadge } from "../../../ui/PyqBadge";
-import { Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
+import { BackHandler, Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
 import { useSessionHistory } from "../../../practice/sessionHistory";
 import { useBookmarks } from "../../../practice/bookmarks";
 import { useActiveSession } from "../../../practice/activeSessionContext";
@@ -58,7 +58,7 @@ export default function Quiz() {
   const optionListStyles = useThemedStyles(revealLetterComfortableStyles);
   const t = useT();
   const router = useRouter();
-  const { examCode, examLabel, subjectName, topicId, topicName, levelKey, levelLabel, topicIds, topicNames } =
+  const { examCode, examLabel, subjectName, topicId, topicName, levelKey, levelLabel, topicIds, topicNames, returnTo } =
     useLocalSearchParams<{
       examCode: string;
       examLabel: string;
@@ -75,6 +75,17 @@ export default function Quiz() {
        */
       topicIds?: string;
       topicNames?: string;
+      /**
+       * Set only by Today's Plan (`daily-plan.tsx`). Exists because a plain `router.back()`
+       * does not reliably return there: this screen lives inside the `(tabs)` group's own
+       * nested navigator, while Today's Plan is a root-level `Stack.Screen` sibling of
+       * `(tabs)` — pushing into a tabs-nested route from a root screen does not stack this
+       * screen on top of it the way two root screens would, so popping back off did not
+       * consistently return to the screen that pushed us (confirmed on-device: it can land
+       * on the Home tab instead). `returnTo` sidesteps the ambiguity entirely by naming the
+       * exact destination rather than trusting the stack to remember it.
+       */
+      returnTo?: string;
     }>();
   const { addSession } = useSessionHistory();
   const { isBookmarked, toggleBookmark } = useBookmarks();
@@ -262,8 +273,12 @@ export default function Quiz() {
    */
   const confirmLeave = useCallback(() => {
     endSession();
+    if (returnTo === "daily-plan") {
+      router.replace({ pathname: "/daily-plan", params: { examCode: examCode ?? "", examName: examLabel ?? "" } });
+      return;
+    }
     router.back();
-  }, [endSession, router]);
+  }, [endSession, router, returnTo, examCode, examLabel]);
 
   useActiveTestBackGuard({
     // `finishing` rather than `finishedRef.current`: the two are set together in
@@ -274,6 +289,23 @@ export default function Quiz() {
     message: t("quiz.leaveMessage"),
     onConfirmLeave: confirmLeave,
   });
+
+  /*
+   * The guard above registers no listener at all while nothing is answered yet — by design,
+   * there is nothing to warn about. But this screen still needs to know WHERE plain Back
+   * should go in that window, and a plain stack pop does not reliably answer that (see the
+   * long note on the `returnTo` param above). So while the guard is inactive and this screen
+   * was opened from Today's Plan, Back is intercepted quietly here too — no dialog, just the
+   * same explicit destination `confirmLeave` already uses once something IS answered.
+   */
+  useEffect(() => {
+    if (!(returnTo === "daily-plan") || (answeredCount > 0 && !finishing)) return;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      confirmLeave();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [returnTo, answeredCount, finishing, confirmLeave]);
 
   const translation = question ? question.translations[languageCode] ?? question.translations.en : undefined;
   const hasRealTranslation = question ? Boolean(question.translations[languageCode]) : false;

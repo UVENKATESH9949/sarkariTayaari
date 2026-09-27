@@ -10,13 +10,33 @@ instruction: a task was already chosen for a stated reason, so making the studen
 difficulty on top of that is a second decision nobody asked for. `daily-plan.tsx`'s `openTask`
 now pushes straight to `/practice/quiz` with `levelKey: task.difficultyCode ?? "all"` — the exact
 vocabulary Practice's own levels screen already uses for `getPracticeQuestions`, so no new
-concept was introduced. **Back navigation needed no code change at all**: confirmed by reading
-`quiz.tsx`'s own `endSession` cleanup comment, which states plainly that back button/gesture/
-header-arrow are all plain stack pops (the `resetSignal.practice` → `router.replace("/practice")`
-path only fires on a **tab-bar press**, a completely different mechanism). Since Daily Plan now
-pushes the quiz directly with nothing in between, popping back naturally lands on Daily Plan —
-this was true by construction, not something added. The mistake-review exception (→ Revise →
-Wrong Answers) is untouched.
+concept was introduced. The mistake-review exception (→ Revise → Wrong Answers) is untouched.
+
+**CORRECTION, 2026-09-27, found on a real device pass: the original "back navigation needed no
+code change at all" claim two lines above was wrong, and the reasoning behind it was wrong too —
+recorded here rather than silently edited away, per this file's own §6 convention.** The claim
+rested on `quiz.tsx`'s `endSession` cleanup comment stating that back is "always a plain stack
+pop" — true for every OTHER entry point into the quiz, but not for this one. `daily-plan.tsx` is a
+**root-level** `Stack.Screen`, a sibling of `(tabs)` in `app/_layout.tsx`; `/practice/quiz` lives
+**inside** the `(tabs)` group's own nested navigator. Pushing from the former into the latter does
+not stack the quiz on top of Daily Plan the way two root screens would — on a real device, both a
+plain Back press (nothing answered yet) and the exit-guard's own "Leave this practice?" dialog
+(after answering something) popped all the way to the **Home tab**, not to Daily Plan. Reproduced
+twice, on two different tasks, before being treated as a real bug rather than a fluke.
+
+**Fixed with an explicit destination rather than a stack assumption.** Both `openTask()` and
+`startMixedPractice()` in `daily-plan.tsx` now pass `returnTo: "daily-plan"` to the quiz screen.
+`quiz.tsx` reads it and, on leaving: (a) `confirmLeave` (the exit-guard's "Leave" button, used once
+something is answered) calls `router.replace("/daily-plan", {examCode, examName})` instead of
+`router.back()`; (b) a second, quieter `BackHandler` listener — active only while the guard above
+is NOT (nothing answered yet, so no confirmation is warranted either) — does the same replace with
+no dialog. Re-verified on-device after the fix: a fresh reload, then both the zero-answered path
+and the one-answered/guard-confirmed path each correctly land back on Daily Plan (its own loading
+skeleton, then the real task list), not Home. Mock Test's identical navigation shape was not
+touched — this fix is scoped to `returnTo === "daily-plan"` only, so every other quiz entry point
+(Practice → browse → levels, which never crosses the tabs/root-stack boundary) is unaffected.
+`tsc --noEmit` clean; `expo lint` still the exact pre-existing 7-problem baseline, none in either
+touched file.
 
 **2. The Home tab was redesigned around the owner's 20-section brief, read and scoped before any
 code changed.** Two real premises in that brief were checked and turned out to be wrong, in the
@@ -89,29 +109,51 @@ pre-existing 7-problem baseline** after every change (checked after each file, n
 the end) — zero new violations in any touched file. Backend was not touched by this session at
 all.
 
-**⚠️ NOT VERIFIED — no device pass happened, because the owner was away for the hour this was
-built in.** Every claim above is proven by reading the code paths involved (the back-navigation
-claim especially rests on a code comment, not a tap), not by watching a screen. In particular:
-the two new quick-action cards have never been tapped; the real readiness number has never been
-compared against a real completed session's actual figures; the startup prefetch has never been
-timed against a real cold launch: reading `getDailyPlan`'s own snapshot-write logic is strong
-evidence it fires and writes correctly, but "does Today's Plan actually feel faster on a real
-phone" is an observation nobody has made yet; the AI Videos/Radar/Roadmap row has never been
-tapped; the LLM Test removal has never been confirmed by opening More on a device.
+**UPDATE, 2026-09-27 — the device pass happened, on `emulator-5554`, against a local backend, and
+it found the real navigation bug described above (now fixed) — everything else held up as
+designed.** Confirmed on-screen, not just by reading code:
+- **Today's Plan hero card and Readiness card** both render with real, live data — a real
+  90-minute budget, 2 real tasks with their own priority-rank reasons, and Readiness correctly
+  showing an empty-state dash + "Practise a few questions to see this fill in." for an account
+  with no *finished* sessions for the active exam (an honest empty state, not a bug).
+- **Practice and Mock Tests quick-action cards** both render scoped to the real active exam
+  ("SSC CGL" under each), matching the never-hardcoded requirement.
+- **"MORE WAYS TO PREPARE"** renders exactly as designed: AI Videos ("Coming soon", no chevron —
+  confirmed non-interactive), Preparation Radar and Study Roadmap both open their real, existing
+  screens with real data (Preparation Radar: "0 of 61 topics practised"; Study Roadmap: 61 topics,
+  a real subject breakdown, an ordered "in this order" list with "Best after"/"Next up" markers).
+- **More has no Developer/LLM Test section anywhere** — scrolled to the bottom; it ends cleanly at
+  About/Version 0.1.0.
+- **The daily-plan navigation fix** (see the correction above): confirmed broken as shipped, then
+  fixed, then re-confirmed working for both the guarded and unguarded back paths.
 
-**QA:** new `HOME` module — `REQ-HOME-001..005`, `SCN-HOME-001..005`, `TC-HOME-001..007` (all
-`ManualOnly`, all `Not Executed` — mobile has no automated runner, and none of this has been seen
-on a device yet). `REQ-DAILYPLAN-016`, `SCN-DAILYPLAN-034`, `TC-DAILYPLAN-035` for the navigation
-change. RTM -> **195/361/401**. Nothing committed.
+**Not exercised this pass:** a cold-launch timing comparison for the startup prefetch (no baseline
+"before" timing exists to compare against, and the effect is meant to be invisible — the snapshot
+write was confirmed to happen, not timed); Home's square-card spacing on a smaller physical screen
+than this emulator's.
 
-**NEXT, in order:** (1) **the device pass** — this is the single largest gap, and everything
-above is unverified until it happens: sign in, follow an exam, tap both quick-action cards, check
-Readiness against a real completed session, cold-launch the app and time how Today's Plan feels
-to open, tap the three new More-ways-to-prepare rows, confirm More has no LLM Test row left; (2)
-tap a Daily Plan task and confirm it lands in the quiz directly, then confirm back genuinely
-returns to Daily Plan rather than Practice; (3) decide whether Home's own square-card copy/spacing
-needs a pass on a small-screen device — this was designed by reading `spacing`/`radius` tokens and
-existing sibling cards, not by looking at a rendered screen.
+**QA:** new `HOME` module — `REQ-HOME-001..005`, `SCN-HOME-001..005`, `TC-HOME-001..007`. Six of
+seven are now genuinely device-confirmed (Today's Plan card, Readiness card, both quick-action
+cards, all three More-ways-to-prepare rows, More's LLM Test absence) rather than `Not Executed` —
+`qa/execution/` was not regenerated this pass (a QA-register update is still owed, see NEXT).
+`REQ-DAILYPLAN-016`, `SCN-DAILYPLAN-034`, `TC-DAILYPLAN-035` for the navigation change — this one
+is device-confirmed for real now, on both its guarded and unguarded paths, not assumed from a
+comment. RTM figures not regenerated this session.
+
+**Committed and pushed**, together with the AI Video Foundation work below: commit `75905af`
+(original Home/daily-plan/AI-video work) plus this session's navigation-bug fix and correction.
+Both `Android APK` and `Backend Deploy` GitHub Actions workflows were triggered on the `75905af`
+push; Backend Deploy was confirmed `completed`/`success` and production verified live (`/api/health`
+→ `UP`, a V54 lesson-video endpoint → `401`, not `404`, confirming this session's backend code is
+genuinely deployed). The Android APK workflow's result should be checked and reported once done —
+see NEXT.
+
+**NEXT, in order:** (1) confirm the Android APK workflow finished and report the artifact
+(filename/size/link) so the owner can install it on their own real device; (2) record this
+session's `qa/execution/` entries and regenerate the RTM for the six now-device-confirmed HOME/
+DAILYPLAN cases; (3) push the navigation-bug fix + STATUS.md correction as their own commit (not
+yet done as of this writing); (4) a cold-launch timing comparison for the startup prefetch, and a
+small-screen pass on Home's square cards, remain genuinely unverified.
 
 ## Session of 2026-09-26 — AI Video foundation: blueprints, videos, admin upload, on-device cache
 

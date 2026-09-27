@@ -174,10 +174,12 @@ export default function DailyPlanScreen() {
      * screen uses for `levelKey` — falling back to "all" for a task with no stated difficulty
      * (a real, valid case: not every purpose names one) mirrors Practice's own "All Levels".
      *
-     * Back navigation needs no special handling: this screen PUSHES the quiz screen, and the
-     * quiz's back button/gesture/header-arrow are all plain stack pops (see its own `endSession`
-     * cleanup comment) — so back from here always returns to this Daily Plan screen, never to
-     * Practice's browse/levels screens, because those were never pushed in between.
+     * Back navigation: `returnTo: "daily-plan"` below is what actually makes back land here,
+     * not a plain stack pop. Verified on-device that a plain pop does NOT work for this case —
+     * this screen is a root-level `Stack.Screen` sibling of `(tabs)`, while the quiz screen
+     * lives inside the `(tabs)` group's own nested navigator, so `router.back()` from the quiz
+     * resolved to whichever tab last had focus (Home), not back to this screen. quiz.tsx reads
+     * `returnTo` and explicitly replaces to `/daily-plan` instead of trusting the stack.
      *
      * A mistake-review task is the one exception: the questions it means are the ones the student
      * already answered wrongly, and Revise's Wrong Answers tab already shows each with the answer
@@ -199,6 +201,7 @@ export default function DailyPlanScreen() {
         topicName: task.topicName,
         levelKey: task.difficultyCode ?? "all",
         levelLabel: difficultyLabel(task.difficultyCode),
+        returnTo: "daily-plan",
       },
     });
   }
@@ -266,6 +269,7 @@ export default function DailyPlanScreen() {
         topicNames: JSON.stringify(mixedTopics.map((t) => t.topicName)),
         levelKey: "mixed",
         levelLabel: "Mixed",
+        returnTo: "daily-plan",
       },
     });
   }
