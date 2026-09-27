@@ -2,7 +2,7 @@
 #
 # Critical + High priority test cases, excluding Ambiguous cases (no determinate pass/fail to gate on) and a short, explicitly-listed set of cases that need a special/controlled environment to reproduce reliably on demand (see HARD_TO_REPRODUCE in the generator script) — a release gate must be reliably executable every time, not aspirational.
 #
-# 217 test case(s). Membership rule: priority in [Critical, High] AND test_type != Ambiguous AND id not in HARD_TO_REPRODUCE.
+# 269 test case(s). Membership rule: priority in [Critical, High] AND test_type != Ambiguous AND id not in HARD_TO_REPRODUCE.
 
 suite: Release Gate
 test_case_ids:
@@ -70,6 +70,17 @@ test_case_ids:
   - TC-AUTH-027
   - TC-AUTH-028
   - TC-AUTH-029
+  - TC-AUTH-030
+  - TC-AUTH-031
+  - TC-AUTH-032
+  - TC-AUTH-033
+  - TC-AUTH-034
+  - TC-AUTH-035
+  - TC-AUTH-036
+  - TC-AUTH-037
+  - TC-AUTH-038
+  - TC-AUTH-039
+  - TC-AUTH-040
   - TC-CATALOG-001
   - TC-CATALOG-002
   - TC-CATALOG-003
@@ -125,12 +136,45 @@ test_case_ids:
   - TC-DAILYPLAN-028
   - TC-DAILYPLAN-029
   - TC-DAILYPLAN-031
+  - TC-DAILYPLAN-032
+  - TC-DAILYPLAN-033
+  - TC-DAILYPLAN-035
+  - TC-HOME-001
+  - TC-HOME-002
+  - TC-HOME-003
+  - TC-HOME-004
+  - TC-HOME-005
   - TC-LEARNINGSTATE-001
   - TC-LEARNINGSTATE-003
   - TC-LEARNINGSTATE-004
   - TC-LEARNINGSTATE-005
   - TC-LEARNINGSTATE-007
   - TC-LEARNINGSTATE-008
+  - TC-LESSONVIDEO-001
+  - TC-LESSONVIDEO-002
+  - TC-LESSONVIDEO-003
+  - TC-LESSONVIDEO-004
+  - TC-LESSONVIDEO-005
+  - TC-LESSONVIDEO-006
+  - TC-LESSONVIDEO-007
+  - TC-LESSONVIDEO-008
+  - TC-LESSONVIDEO-009
+  - TC-LESSONVIDEO-010
+  - TC-LESSONVIDEO-011
+  - TC-LESSONVIDEO-012
+  - TC-LESSONVIDEO-013
+  - TC-LESSONVIDEO-014
+  - TC-LESSONVIDEO-015
+  - TC-LESSONVIDEO-016
+  - TC-LESSONVIDEO-017
+  - TC-LESSONVIDEO-018
+  - TC-LESSONVIDEO-019
+  - TC-LESSONVIDEO-020
+  - TC-MOCK-001
+  - TC-MOCK-003
+  - TC-MOCK-004
+  - TC-MOCK-005
+  - TC-MOCK-010
   - TC-ONBOARDING-001
   - TC-ONBOARDING-002
   - TC-ONBOARDING-003
@@ -152,6 +196,12 @@ test_case_ids:
   - TC-ONBOARDING-023
   - TC-ONBOARDING-024
   - TC-ONBOARDING-025
+  - TC-ONBOARDING-026
+  - TC-ONBOARDING-027
+  - TC-ONBOARDING-028
+  - TC-ONBOARDING-029
+  - TC-ONBOARDING-030
+  - TC-ONBOARDING-031
   - TC-PRACTICE-001
   - TC-PRACTICE-002
   - TC-PRACTICE-004
@@ -159,6 +209,8 @@ test_case_ids:
   - TC-PRACTICE-006
   - TC-PRACTICE-007
   - TC-PRACTICE-008
+  - TC-PRACTICE-011
+  - TC-PRACTICE-012
   - TC-QUESTIONS-001
   - TC-QUESTIONS-002
   - TC-QUESTIONS-003

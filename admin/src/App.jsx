@@ -21,6 +21,7 @@ import PaperTypes from "./pages/PaperTypes.jsx";
 import AiControlCenter from "./pages/AiControlCenter.jsx";
 import AiContentReview from "./pages/AiContentReview.jsx";
 import AiUsage from "./pages/AiUsage.jsx";
+import AiVideos from "./pages/AiVideos.jsx";
 import Login from "./pages/Login.jsx";
 import { useAuth } from "./auth/AuthContext.jsx";
 import {
@@ -117,6 +118,7 @@ export default function App() {
           <NavLink to="/ai-content-review"><AiIcon /> AI Content Review</NavLink>
           {/* TASK-2701 Phase 7 -- read-only token/failure aggregates per feature and model */}
           <NavLink to="/ai-usage"><AiIcon /> AI Usage</NavLink>
+          <NavLink to="/ai-videos"><AiIcon /> AI Videos</NavLink>
         </nav>
 
         <div className="sidebar-account">
@@ -150,6 +152,7 @@ export default function App() {
           <Route path="/ai-control-center" element={<AiControlCenter />} />
           <Route path="/ai-content-review" element={<AiContentReview />} />
           <Route path="/ai-usage" element={<AiUsage />} />
+          <Route path="/ai-videos" element={<AiVideos />} />
         </Routes>
       </div>
     </div>

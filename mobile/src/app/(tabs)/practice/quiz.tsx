@@ -27,6 +27,7 @@ import { MultiSelectOptionList } from "../../../questionRenderer/MultiSelectOpti
 import { ContentPreamble } from "../../../questionRenderer/ContentPreamble";
 import { GroupContent } from "../../../questionRenderer/GroupContent";
 import { AiExplanationCard } from "../../../questionRenderer/AiExplanationCard";
+import { LessonVideoCard } from "../../../video/LessonVideoCard";
 import { FreeTextAnswerInput } from "../../../questionRenderer/FreeTextAnswerInput";
 import { MatchPairing, type MatchItem } from "../../../questionRenderer/MatchPairing";
 import { OrderingBuilder, type OrderingItem } from "../../../questionRenderer/OrderingBuilder";
@@ -953,6 +954,15 @@ export default function Quiz() {
           )}
           {isCurrentAnswered && (
             <AiExplanationCard key={question.id} questionId={question.id} languageCode={languageCode} />
+          )}
+          {isCurrentAnswered && (
+            <LessonVideoCard
+              key={`video-${question.id}`}
+              ownerKind="QUESTION"
+              ownerId={question.id}
+              languageCode={languageCode}
+              title={topicName ?? undefined}
+            />
           )}
         </ScrollView>
 

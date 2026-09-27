@@ -91,6 +91,26 @@ server:
   port: ${PORT:8080}
 
 app:
+  video-storage:
+    # local | cloudinary. Local writes under `local-path` and is the default because it needs no
+    # credentials, so a fresh checkout works. It is WRONG on Cloud Run, whose filesystem is
+    # ephemeral and whose instances scale to zero - a video written on one request can be gone by
+    # the next. Any real deployment sets this to `cloudinary`, which needs no new credentials:
+    # it reuses the same account images and ingested PDFs already use.
+    provider: ${VIDEO_STORAGE_PROVIDER:local}
+    local-path: ${VIDEO_STORAGE_LOCAL_PATH:./var}
+    # How long a Cloudinary delivery link stays valid. Only meaningful for the cloudinary
+    # provider, and only when the account supports time-limited delivery - see
+    # CloudinaryVideoStorage for what happens when it does not.
+    url-ttl-seconds: ${VIDEO_STORAGE_URL_TTL_SECONDS:3600}
+
+  entitlements:
+    # Whether every signed-in student may watch AI video lessons. True while the feature is being
+    # built, so nothing is locked. There is no subscription system in this project yet, so this
+    # flag IS the entitlement - see EntitlementService, which is the one place to change when a
+    # real one exists. Admins and reviewers always pass, so an unpublished video can be reviewed.
+    ai-video-open-to-all: ${AI_VIDEO_OPEN_TO_ALL:true}
+
   cors:
     # Comma-separated. Dev default only — production sets APP_CORS_ALLOWED_ORIGINS to
     # the deployed sites' origins. See CorsConfig for why this is configuration.

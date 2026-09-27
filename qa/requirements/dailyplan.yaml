@@ -763,3 +763,43 @@
   automation_status: ManualOnly
   automation_hint: "getTopicActivityForDay is a pure query, testable against a seeded local database."
 
+
+- id: REQ-DAILYPLAN-016
+  feature: A task opens the quiz directly, and back returns to the Daily Plan
+  module: DAILYPLAN
+  system: [Mobile]
+  source_doc: memory/STATUS.md
+  source_section: "Session of 2026-09-28"
+  description: >
+    Tapping a non-mistake-review task pushes straight to the quiz screen (task.difficultyCode,
+    falling back to "all") rather than through Practice's own levels screen first. Back button,
+    back gesture, and the header's back arrow all return to Daily Plan, since that is the screen
+    that actually pushed the quiz - no intermediate levels/browse screen was ever pushed to pop
+    back through.
+  business_rule: >
+    A task was already chosen for a stated reason; asking the student to re-pick a difficulty on
+    top of that is a second decision nobody asked for. The mistake-review exception is unchanged:
+    those questions route to Revise's Wrong Answers tab, never to fresh practice.
+  actor: Signed-in student
+  preconditions:
+    - "A daily plan with at least one non-mistake-review task"
+  inputs:
+    - "Tapping a task card on the Daily Plan screen"
+  expected_outputs:
+    - "The quiz opens directly, scoped to the task's topic and difficulty"
+  validations:
+    - "A mistake-review task still opens Revise -> Wrong Answers, unchanged"
+  permissions:
+    - "None beyond being signed in"
+  dependencies: []
+  error_conditions: []
+  edge_conditions:
+    - "A task with no stated difficulty (difficultyCode null) opens All Levels, matching Practice's own fallback"
+  offline_behavior: "Unchanged - governed by the same offline rules the quiz screen already has"
+  acceptance_criteria:
+    - "Tapping a task opens the quiz with no intermediate levels screen, and back returns to Daily Plan"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "Mobile has no automated test runner in this project."

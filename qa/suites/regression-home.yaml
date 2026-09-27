@@ -1,0 +1,15 @@
+# Regression — HOME
+#
+# Every test case belonging to the HOME module. Run after any change confined to that module.
+#
+# 7 test case(s). Membership rule: module == HOME (mechanical filter).
+
+suite: Regression — HOME
+test_case_ids:
+  - TC-HOME-001
+  - TC-HOME-002
+  - TC-HOME-003
+  - TC-HOME-004
+  - TC-HOME-005
+  - TC-HOME-006
+  - TC-HOME-007

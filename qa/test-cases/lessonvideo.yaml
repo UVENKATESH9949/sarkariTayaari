@@ -1,0 +1,728 @@
+# LESSONVIDEO module — manual test cases
+#
+# Backend cases are Automated with a real, verified test method behind each one (LessonVideoTest
+# 14/14 and LessonVideoRulesTest 9/9, both run green). They are recorded here as UNEXECUTED
+# manual cases in the register's own convention.
+#
+# Mobile and Admin cases are ManualOnly: neither system has an automated test runner in this
+# project. They are Not Executed - no device or browser pass has happened for this work.
+
+- id: TC-LESSONVIDEO-001
+  requirement_ids: [REQ-LESSONVIDEO-001]
+  scenario_id: SCN-LESSONVIDEO-001
+  system: Backend
+  module: LESSONVIDEO
+  feature: A video reaches students only after a human approves it
+  title: An uploaded video is READY but invisible to students
+  objective: "Confirm an upload cannot reach a learner before anyone has reviewed it."
+  preconditions:
+    - "A running backend and a topic to attach the video to"
+  test_data: "A synthetic MP4 header (ftyp at offset 4)"
+  test_environment: "Backend against the real dev database"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST an MP4 to /api/admin/lesson-videos with a topicId, as an admin"
+      expected: "200 with status READY, contentStatus DRAFT, contentVersion 1 and a checksum"
+    - step: 2
+      action: "GET /api/topics/{topicId}/lesson-video as a signed-in student"
+      expected: "200 with available:false"
+  expected_result: "An unpublished upload is invisible to students. (REQ-LESSONVIDEO-001)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "LessonVideoTest.uploadIsReadyButUnpublished"
+
+- id: TC-LESSONVIDEO-002
+  requirement_ids: [REQ-LESSONVIDEO-001]
+  scenario_id: SCN-LESSONVIDEO-002
+  system: Backend
+  module: LESSONVIDEO
+  feature: A video reaches students only after a human approves it
+  title: Publishing exposes a video and unpublishing withdraws it
+  objective: "Confirm the publish/unpublish round trip, and that playbackPath is a backend path."
+  preconditions:
+    - "An uploaded DRAFT video"
+  test_data: "A synthetic MP4 header"
+  test_environment: "Backend against the real dev database"
+  priority: Critical
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "PUT /api/admin/lesson-videos/{id}/publish"
+      expected: "200"
+    - step: 2
+      action: "GET the topic availability as a student"
+      expected: "available:true, resolvedVia TOPIC, durationSeconds as uploaded"
+    - step: 3
+      action: "Inspect playbackPath"
+      expected: "/api/lesson-videos/{id}/stream - a backend path, never a storage URL"
+    - step: 4
+      action: "PUT /unpublish, then re-read availability"
+      expected: "available:false"
+  expected_result: "Publication state controls student visibility. (REQ-LESSONVIDEO-001)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "LessonVideoTest.publishThenUnpublish"
+
+- id: TC-LESSONVIDEO-003
+  requirement_ids: [REQ-LESSONVIDEO-002]
+  scenario_id: SCN-LESSONVIDEO-003
+  system: Backend
+  module: LESSONVIDEO
+  feature: A question with no video of its own falls back to its topic lesson
+  title: A question resolves to its topic lesson and reports resolvedVia TOPIC
+  objective: >
+    Confirm the fallback that makes this feature usable with topic-scoped studio content, and
+    that the response is honest about what was matched.
+  preconditions:
+    - "A published video on a topic, and a question on that topic"
+  test_data: "A synthetic MP4 header; a question created on the test topic"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "GET /api/questions/{questionId}/lesson-video as a student"
+      expected: "available:true and the topic video's id"
+    - step: 2
+      action: "Inspect resolvedVia"
+      expected: "TOPIC - so a client cannot claim the lesson was made for this question"
+  expected_result: "The fallback works and is labelled. (REQ-LESSONVIDEO-002)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "LessonVideoTest.questionFallsBackToTopicLesson"
+
+- id: TC-LESSONVIDEO-004
+  requirement_ids: [REQ-LESSONVIDEO-003]
+  scenario_id: SCN-LESSONVIDEO-004
+  system: Backend
+  module: LESSONVIDEO
+  feature: Access to the bytes is enforced by the backend
+  title: An unpublished video is 404 to a student and openable by staff
+  objective: >
+    Confirm ids cannot be probed (404 rather than 403) while a reviewer can still watch a
+    video before it goes live.
+  preconditions:
+    - "An uploaded, unpublished video"
+  test_data: "A synthetic MP4 header"
+  test_environment: "Backend against the real dev database"
+  priority: Critical
+  severity: Critical
+  test_type: Security
+  steps:
+    - step: 1
+      action: "GET /api/lesson-videos/{id}/stream with a STUDENT token"
+      expected: "404 - not 403, so the id reveals nothing"
+    - step: 2
+      action: "GET the same URL with a REVIEWER token"
+      expected: "200 with the bytes"
+  expected_result: "Unpublished video is undiscoverable to students, reviewable by staff. (REQ-LESSONVIDEO-003)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: >
+    LessonVideoTest.unpublishedVideoIsNotFoundForStudents and .staffCanPreviewUnpublished
+
+- id: TC-LESSONVIDEO-005
+  requirement_ids: [REQ-LESSONVIDEO-003]
+  scenario_id: SCN-LESSONVIDEO-002
+  system: Backend
+  module: LESSONVIDEO
+  feature: Access to the bytes is enforced by the backend
+  title: A published video streams to a signed-in student with range support
+  objective: "Confirm the bytes are served and that seeking/resumption is possible."
+  preconditions:
+    - "A published video"
+  test_data: "A synthetic MP4 header"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "GET /api/lesson-videos/{id}/stream with a STUDENT token"
+      expected: "200 and the exact bytes that were uploaded"
+    - step: 2
+      action: "Inspect the response headers"
+      expected: "Accept-Ranges: bytes"
+  expected_result: "The stream endpoint serves the file with range support. (REQ-LESSONVIDEO-003)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "LessonVideoTest.publishedVideoStreams"
+
+- id: TC-LESSONVIDEO-006
+  requirement_ids: [REQ-LESSONVIDEO-003]
+  scenario_id: SCN-LESSONVIDEO-005
+  system: Backend
+  module: LESSONVIDEO
+  feature: Access to the bytes is enforced by the backend
+  title: A student cannot upload and an anonymous caller cannot read
+  objective: "Confirm the authorisation split matches the documented contract."
+  preconditions:
+    - "A running backend"
+  test_data: "A synthetic MP4 header"
+  test_environment: "Backend against the real dev database"
+  priority: Critical
+  severity: Critical
+  test_type: Security
+  steps:
+    - step: 1
+      action: "POST an upload with a STUDENT token"
+      expected: "403"
+    - step: 2
+      action: "GET /api/topics/{id}/lesson-video with no Authorization header"
+      expected: "401"
+  expected_result: "Upload is admin-only; reads require signing in. (REQ-LESSONVIDEO-003)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "LessonVideoTest.authorisationIsEnforced"
+
+- id: TC-LESSONVIDEO-007
+  requirement_ids: [REQ-LESSONVIDEO-004]
+  scenario_id: SCN-LESSONVIDEO-006
+  system: Backend
+  module: LESSONVIDEO
+  feature: A replacement video is a new version
+  title: A second upload for the same owner becomes version 2
+  objective: >
+    Confirm a corrected lesson is a new version, which is what lets a device holding the old
+    file notice it is stale.
+  preconditions:
+    - "A video already uploaded for the topic"
+  test_data: "A synthetic MP4 header, uploaded twice"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST a second upload for the same topic, language and level"
+      expected: "contentVersion 2"
+  expected_result: "Replacement is versioned, not overwritten. (REQ-LESSONVIDEO-004)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "LessonVideoTest.reuploadBumpsContentVersion"
+
+- id: TC-LESSONVIDEO-008
+  requirement_ids: [REQ-LESSONVIDEO-001]
+  scenario_id: SCN-LESSONVIDEO-007
+  system: Backend
+  module: LESSONVIDEO
+  feature: A video reaches students only after a human approves it
+  title: Uploads are validated on their bytes and their owner
+  objective: >
+    Confirm a file is judged by what it is, not what it claims to be, and that an ambiguous
+    owner is refused.
+  preconditions:
+    - "A running backend"
+  test_data: "A plain-text file; an upload with both owners; an upload with neither"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Major
+  test_type: Validation
+  steps:
+    - step: 1
+      action: "POST a non-MP4 file with a video content type"
+      expected: "400 - rejected on the magic bytes, not the declared type"
+    - step: 2
+      action: "POST with both topicId and questionId"
+      expected: "400"
+    - step: 3
+      action: "POST with neither"
+      expected: "400"
+  expected_result: "Invalid uploads are refused at the boundary. (REQ-LESSONVIDEO-001)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "LessonVideoTest.rejectsNonMp4 and .rejectsBothOwners"
+
+- id: TC-LESSONVIDEO-009
+  requirement_ids: [REQ-LESSONVIDEO-006]
+  scenario_id: SCN-LESSONVIDEO-008
+  system: Backend
+  module: LESSONVIDEO
+  feature: A blueprint is stored as the studio's own Lesson JSON
+  title: A studio lesson round-trips and a malformed payload is refused
+  objective: >
+    Confirm the blueprint boundary accepts a real studio lesson and refuses something that is
+    not a lesson, listing every problem rather than only the first.
+  preconditions:
+    - "A topic to attach the blueprint to"
+  test_data: "A real-shaped Lesson JSON; a payload containing only an id"
+  test_environment: "Backend against the real dev database"
+  priority: High
+  severity: Major
+  test_type: Validation
+  steps:
+    - step: 1
+      action: "POST a valid Lesson JSON to /api/admin/lesson-blueprints"
+      expected: "200 with studioLessonId and schemaVersion STUDIO_LESSON_V1, contentStatus DRAFT"
+    - step: 2
+      action: "POST a payload with no title, exam, subject, topic or scenes"
+      expected: "400"
+    - step: 3
+      action: "Post a lesson containing an unknown scene type"
+      expected: "400 naming the unknown type and the expected vocabulary"
+  expected_result: "Only real lessons are stored. (REQ-LESSONVIDEO-006)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Step 3 is covered by LessonVideoRulesTest.rejectsUnknownSceneType at the validation layer
+    rather than over HTTP.
+  automation_status: Automated
+  automation_reference: "LessonVideoTest.blueprintRoundTrip; LessonVideoRulesTest.rejectsUnknownSceneType"
+
+- id: TC-LESSONVIDEO-010
+  requirement_ids: [REQ-LESSONVIDEO-007]
+  scenario_id: SCN-LESSONVIDEO-009
+  system: Backend
+  module: LESSONVIDEO
+  feature: Premium gating has one name and one check point
+  title: A gated deployment refuses a student and still allows staff
+  objective: >
+    Confirm the entitlement seam behaves correctly in both configurations, and that staff can
+    always review.
+  preconditions:
+    - "None - this is a pure unit-level rule"
+  test_data: "EntitlementService constructed with the flag true and false"
+  test_environment: "Plain JUnit, no Spring context, no database"
+  priority: High
+  severity: Major
+  test_type: Security
+  steps:
+    - step: 1
+      action: "Ask an ungated service whether a STUDENT holds AI_VIDEO"
+      expected: "true"
+    - step: 2
+      action: "Ask a gated service the same"
+      expected: "false"
+    - step: 3
+      action: "Ask a gated service about an ADMIN and a REVIEWER"
+      expected: "true for both"
+    - step: 4
+      action: "Ask about a null user"
+      expected: "false"
+  expected_result: "Entitlement is decided in one place and never locks staff out. (REQ-LESSONVIDEO-007)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: >
+    LessonVideoRulesTest.ungatedDeploymentGrantsEveryone, .gatedDeploymentStillAllowsStaff,
+    .nullUserHoldsNothing
+
+- id: TC-LESSONVIDEO-011
+  requirement_ids: [REQ-LESSONVIDEO-005]
+  scenario_id: SCN-LESSONVIDEO-010
+  system: Mobile
+  module: LESSONVIDEO
+  feature: A downloaded lesson plays offline
+  title: A lesson downloads once and then plays with no network
+  objective: >
+    The central claim of the feature: internet is needed to obtain a lesson, not to study it.
+  preconditions:
+    - "A published topic lesson; a signed-in account; a question on that topic"
+  test_data: "A real rendered studio lesson (Profit and Loss, ~8MB)"
+  test_environment: "Android emulator emulator-5554 against a real backend"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Answer a question on a topic that has a lesson"
+      expected: "A Video lesson card appears below the written explanation, offering a download with its size and duration"
+    - step: 2
+      action: "Tap Download"
+      expected: "Progress is shown, then the card becomes Watch the lesson, saved on your device"
+    - step: 3
+      action: "Tap Watch and let it play"
+      expected: "The lesson plays with native controls"
+    - step: 4
+      action: "Turn on airplane mode, reopen the same question, tap Watch"
+      expected: "It plays immediately with no network and no re-download"
+    - step: 5
+      action: "Reopen the question while online"
+      expected: "The card still says saved on your device; nothing is downloaded again"
+  expected_result: "One download, then offline playback forever. (REQ-LESSONVIDEO-005)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Requires a dev-client rebuild, since expo-video is a new native dependency not present in
+    any existing build.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-LESSONVIDEO-012
+  requirement_ids: [REQ-LESSONVIDEO-005]
+  scenario_id: SCN-LESSONVIDEO-011
+  system: Mobile
+  module: LESSONVIDEO
+  feature: A downloaded lesson plays offline
+  title: Offline with nothing cached is explained, and the explanation still works
+  objective: >
+    Confirm AI video is an enhancement, not a dependency - the written explanation must be
+    unaffected in every failure mode.
+  preconditions:
+    - "Airplane mode; a question whose lesson has never been downloaded"
+  test_data: "None"
+  test_environment: "Android emulator emulator-5554"
+  priority: Critical
+  severity: Major
+  test_type: EdgeCase
+  steps:
+    - step: 1
+      action: "Answer the question with no network"
+      expected: "The authored explanation renders in full, exactly as it does today"
+    - step: 2
+      action: "Look at the Video lesson card"
+      expected: "It says the lesson is not downloaded and that connecting once will fetch it - no spinner that never resolves"
+    - step: 3
+      action: "Confirm nothing else on the screen is degraded"
+      expected: "Navigation, next question and finishing the session all work normally"
+  expected_result: "Video absence never breaks the core learning experience. (REQ-LESSONVIDEO-005)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-LESSONVIDEO-013
+  requirement_ids: [REQ-LESSONVIDEO-004, REQ-LESSONVIDEO-005]
+  scenario_id: SCN-LESSONVIDEO-012
+  system: Mobile
+  module: LESSONVIDEO
+  feature: A replacement video is a new version
+  title: A new version invalidates the cached copy on the device
+  objective: >
+    Confirm a corrected lesson actually reaches a device that already had the old one - the
+    failure this versioning exists to prevent.
+  preconditions:
+    - "A device holding a downloaded v1 of a topic lesson"
+  test_data: "A second upload of a visibly different lesson for the same topic"
+  test_environment: "Android emulator emulator-5554 against a real backend"
+  priority: High
+  severity: Major
+  test_type: EdgeCase
+  steps:
+    - step: 1
+      action: "Publish v2 for the same topic, then reopen the question online"
+      expected: "The card offers a download again rather than playing the stale copy"
+    - step: 2
+      action: "Download and play"
+      expected: "The new lesson plays"
+    - step: 3
+      action: "Inspect Paths.document/lesson-videos on the device"
+      expected: "The v1 file is gone; only the v2 file remains"
+  expected_result: "A corrected lesson reaches devices that held the old one. (REQ-LESSONVIDEO-004)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-LESSONVIDEO-014
+  requirement_ids: [REQ-LESSONVIDEO-005, REQ-LESSONVIDEO-007]
+  scenario_id: SCN-LESSONVIDEO-013
+  system: Mobile
+  module: LESSONVIDEO
+  feature: Premium gating has one name and one check point
+  title: Sign-out clears downloaded lessons
+  objective: >
+    Confirm one account's downloads do not stay playable for the next person on a shared
+    phone, which is the norm this product is built for.
+  preconditions:
+    - "A signed-in account with at least one downloaded lesson"
+  test_data: "None"
+  test_environment: "Android emulator emulator-5554"
+  priority: High
+  severity: Major
+  test_type: Security
+  steps:
+    - step: 1
+      action: "Sign out"
+      expected: "No error; sign-out completes normally"
+    - step: 2
+      action: "Inspect Paths.document/lesson-videos and the local lesson_videos table"
+      expected: "Both are empty"
+    - step: 3
+      action: "Sign in as a different account and open the same question"
+      expected: "The lesson must be downloaded again for this account"
+  expected_result: "Downloads do not outlive the account that fetched them. (REQ-LESSONVIDEO-007)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-LESSONVIDEO-015
+  requirement_ids: [REQ-LESSONVIDEO-005]
+  scenario_id: SCN-LESSONVIDEO-010
+  system: Mobile
+  module: LESSONVIDEO
+  feature: A downloaded lesson plays offline
+  title: Local migration 0033 applies to a populated device database without data loss
+  objective: >
+    The riskiest single statement in the mobile half - a failed local migration is a hard gate
+    that stops the app starting.
+  preconditions:
+    - "A device already on migration 0032 with real synced content and practice history"
+  test_data: "The existing emulator database (tens of thousands of questions)"
+  test_environment: "Android emulator emulator-5554"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Install the rebuilt dev client over the existing install and launch it"
+      expected: "No migration failure screen; the app reaches Home"
+    - step: 2
+      action: "Query the local database for the migration count and the questions count"
+      expected: "33 migrations applied; the question count is unchanged"
+    - step: 3
+      action: "Confirm the lesson_videos table exists and is empty"
+      expected: "Table present, zero rows - it is a cache, never populated by reference sync"
+  expected_result: "0033 applies cleanly to real data. (REQ-LESSONVIDEO-005)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-LESSONVIDEO-016
+  requirement_ids: [REQ-LESSONVIDEO-001, REQ-LESSONVIDEO-006]
+  scenario_id: SCN-LESSONVIDEO-014
+  system: Admin
+  module: LESSONVIDEO
+  feature: A video reaches students only after a human approves it
+  title: An admin can upload, link, publish and unpublish from the console
+  objective: "Confirm the whole lifecycle is reachable through the UI, not only through the API."
+  preconditions:
+    - "A running backend and admin console; an admin account"
+  test_data: "A real rendered studio lesson plus its lessons/<id>.json"
+  test_environment: "Admin console at localhost:5173 against a real backend"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Open AI Videos from the Settings group in the sidebar"
+      expected: "The page renders with an upload form and an empty list"
+    - step: 2
+      action: "Choose a topic, attach the MP4, paste the lesson JSON, and upload"
+      expected: "A card appears showing READY and DRAFT, with the blueprint's studio lesson id"
+    - step: 3
+      action: "Click Publish"
+      expected: "The badge becomes PUBLISHED after the list reloads"
+    - step: 4
+      action: "Click Unpublish, then reload the page"
+      expected: "The badge is DRAFT again - confirmed on a fresh load, not just in-page state"
+    - step: 5
+      action: "Watch the browser console throughout"
+      expected: "No errors"
+  expected_result: "The admin lifecycle works in a real browser. (REQ-LESSONVIDEO-001)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Step 4 deliberately requires a fresh page load - this project has previously mistaken a
+    stale in-page re-render for a broken save.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-LESSONVIDEO-017
+  requirement_ids: [REQ-LESSONVIDEO-008]
+  scenario_id: SCN-LESSONVIDEO-015
+  system: Backend
+  module: LESSONVIDEO
+  feature: Where video files live is a configuration choice
+  title: Setting the provider to cloudinary swaps the storage implementation
+  objective: >
+    Confirm the config switch genuinely wires, before anyone flips it in production and discovers
+    the application will not start.
+  preconditions:
+    - "A Spring context startable with app.video-storage.provider overridden"
+  test_data: "Property override only; no Cloudinary credentials needed"
+  test_environment: "Backend against the real dev database"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Start the context with app.video-storage.provider=cloudinary and inject VideoStorage"
+      expected: "Exactly one bean, and it is CloudinaryVideoStorage - not zero (context fails) and not two (ambiguous)"
+    - step: 2
+      action: "Call open() on it for any key"
+      expected: "Empty - the object store serves its own bytes, so the backend must not proxy them"
+  expected_result: "The provider switch is real. (REQ-LESSONVIDEO-008)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    The local default needs no case of its own - every other backend case in this module runs
+    against it.
+  automation_status: Automated
+  automation_reference: >
+    VideoStorageSelectionTest.cloudinaryProviderIsSelected and .cloudinaryServesNoBytesDirectly
+
+- id: TC-LESSONVIDEO-018
+  requirement_ids: [REQ-LESSONVIDEO-008]
+  scenario_id: SCN-LESSONVIDEO-015
+  system: Backend
+  module: LESSONVIDEO
+  feature: Where video files live is a configuration choice
+  title: A storage key maps to a Cloudinary public id without drifting
+  objective: >
+    Confirm the asset name is derived from the key rather than stored separately, so a row and
+    its file cannot disagree about where the video lives.
+  preconditions:
+    - "None - a pure function"
+  test_data: "lesson-videos/<id>/v1.mp4, the same key the service generates"
+  test_environment: "Plain JUnit, no Spring context, no database"
+  priority: High
+  severity: Major
+  test_type: Validation
+  steps:
+    - step: 1
+      action: "Derive the public id for a key ending in .mp4"
+      expected: "The extension is dropped - Cloudinary carries format separately, so keeping it would name the asset ...mp4.mp4"
+    - step: 2
+      action: "Derive it for a key with no extension"
+      expected: "Unchanged"
+    - step: 3
+      action: "Derive it for v1 and v2 of the same video"
+      expected: "Different ids, so a re-upload is a separate asset rather than an overwrite"
+    - step: 4
+      action: "Derive it for a blank and a null key"
+      expected: "IllegalArgumentException in both cases"
+  expected_result: "Key-to-asset mapping is total and collision-free. (REQ-LESSONVIDEO-008)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: >
+    LessonVideoRulesTest.publicIdDropsTheExtension, .publicIdLeavesAnExtensionlessKeyAlone,
+    .publicIdIsDerivedNotStored, .publicIdRefusesBlank
+
+- id: TC-LESSONVIDEO-019
+  requirement_ids: [REQ-LESSONVIDEO-008, REQ-LESSONVIDEO-003]
+  scenario_id: SCN-LESSONVIDEO-016
+  system: Backend
+  module: LESSONVIDEO
+  feature: Where video files live is a configuration choice
+  title: A real Cloudinary upload and signed delivery round-trips
+  objective: >
+    The one thing no test on the development machine can answer - whether a real MP4 actually
+    reaches Cloudinary as an authenticated asset, and whether time-limited delivery works on this
+    account's plan.
+  preconditions:
+    - "Real Cloudinary credentials (the same account images already use)"
+    - "app.video-storage.provider=cloudinary"
+  test_data: "output/profit-and-loss.mp4 from the AI Video Studio (8,696,996 bytes)"
+  test_environment: "An environment with the real Cloudinary account - not this laptop"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Upload the real MP4 through POST /api/admin/lesson-videos and publish it"
+      expected: "200, and the asset appears in Cloudinary as resource_type video, type authenticated"
+    - step: 2
+      action: "GET the stream endpoint as a signed-in student"
+      expected: "302 with Cache-Control no-store and a Location on the Cloudinary domain"
+    - step: 3
+      action: "Follow the Location and download"
+      expected: "The bytes are served and the SHA-256 matches the source file"
+    - step: 4
+      action: "Check the backend log for the expiring-URL fallback warning"
+      expected: "No warning - the account supports time-limited delivery. If the warning IS present, links do not expire and premium gating is weaker than documented"
+    - step: 5
+      action: "Request the Cloudinary URL directly WITHOUT its signature"
+      expected: "Refused - an authenticated asset is not publicly fetchable"
+  expected_result: "Real object-storage delivery works end to end. (REQ-LESSONVIDEO-008)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Cannot be run on the development machine - no Cloudinary credentials exist there, which is
+    the same disclosed gap the document-ingestion pipeline has carried since TASK-2401. Step 4 is
+    the one that decides whether the expiry claim in api/LESSON-VIDEOS.md is true for this
+    account.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-LESSONVIDEO-020
+  requirement_ids: [REQ-LESSONVIDEO-009]
+  scenario_id: SCN-LESSONVIDEO-017
+  system: Mobile
+  module: LESSONVIDEO
+  feature: A lesson can be watched immediately, without downloading first
+  title: Play now streams a never-downloaded lesson with no local file created
+  objective: "Confirm streaming genuinely bypasses the download step rather than downloading silently first."
+  preconditions:
+    - "A published video for the topic; the device has never downloaded it"
+  test_data: "A real rendered studio lesson (Profit and Loss, ~8.3MB)"
+  test_environment: "Android emulator emulator-5554 against a real backend"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Confirm the device's lesson-videos directory has no file for this video before the test"
+      expected: "No matching file present"
+    - step: 2
+      action: "Answer a question whose topic has a published, never-downloaded lesson"
+      expected: "The Video lesson card shows both Play now (streams over your connection) and Download for offline"
+    - step: 3
+      action: "Tap Play now"
+      expected: "The player opens and plays the real studio content directly, with no Downloading state shown first"
+    - step: 4
+      action: "Re-check the device's lesson-videos directory"
+      expected: "Still no file for this video - streaming created nothing on disk"
+  expected_result: "A lesson can be watched without waiting for a download. (REQ-LESSONVIDEO-009)"
+  actual_result: >
+    Confirmed on-device: before the test, `find .../files/lesson-videos -type f` returned nothing
+    for this video. The card showed "Play now / 2:06 - streams over your connection" and
+    "Download for offline / 8.3 MB - watch without a connection later". Tapping Play now opened
+    the player directly - no download progress step - and it played the real "What are Profit and
+    Loss?" concept scene, further along in its own animation than an earlier unrelated playback,
+    confirming genuine real-time streaming rather than a cached replay. A repeat directory check
+    afterward still showed no file - streaming created nothing on disk.
+  status: Pass
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""

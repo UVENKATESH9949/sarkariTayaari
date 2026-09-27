@@ -100,14 +100,14 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 | REQ-CATALOG-020: Exam Badges: read-only vocabulary, active/all split, no CRUD | Low | Active | SCN-CATALOG-037<br>SCN-CATALOG-043 | TC-CATALOG-046 (Not Executed)<br>TC-CATALOG-047 (Not Executed) |  |  |
 | REQ-CATALOG-021: Cross-cutting: public-vs-admin auth split across the whole catalog | Critical | Active | SCN-CATALOG-003<br>SCN-CATALOG-038 | TC-CATALOG-048 (Not Executed) |  |  |
 | REQ-CATALOG-022: Mobile — entire catalog syncs for full offline browsing and mock-test generation | Critical | Active | SCN-CATALOG-039 | TC-CATALOG-049 (Not Executed) |  |  |
-| REQ-CATALOG-023: Known limitation: per-section timers not enforced during a live mock test | Medium | Active | SCN-CATALOG-040 | TC-CATALOG-050 (Blocked) | EXEC-CATALOG-0050 |  |
+| REQ-CATALOG-023: Known limitation: per-section timers not enforced during a live mock test | Medium | Active | SCN-CATALOG-040 | TC-CATALOG-050 (Blocked) |  |  |
 | REQ-CATALOG-024: Admin nested structure editor — inherited-value display and cascade-delete confirmation | Medium | Active | SCN-CATALOG-041<br>SCN-CATALOG-042 | TC-CATALOG-051 (Not Executed)<br>TC-CATALOG-052 (Not Executed) |  |  |
 | REQ-CATALOG-025: One active exam out of several followed, with every screen agreeing on which | High | Active | SCN-CATALOG-044<br>SCN-CATALOG-045 | TC-CATALOG-053 (Pass)<br>TC-CATALOG-054 (Pass)<br>TC-CATALOG-055 (Pass) | EXEC-CATALOG-0001<br>EXEC-CATALOG-0002<br>EXEC-CATALOG-0003<br>EXEC-CATALOG-0004 | DEF-CATALOG-001 |
-| REQ-CATALOG-048: The Exams tab keeps a snapshot of the catalogue the server returned | Medium | Active | SCN-CATALOG-049 | TC-CATALOG-050 (Blocked) | EXEC-CATALOG-0050 |  |
+| REQ-CATALOG-048: The Exams tab keeps a snapshot of the catalogue the server returned | Medium | Active | SCN-CATALOG-049 | TC-CATALOG-056 (Blocked) | EXEC-CATALOG-0050 |  |
 
 ## DAILYPLAN
 
-15 requirements, 33 scenarios, 34 test cases.
+16 requirements, 34 scenarios, 35 test cases.
 
 | Requirement | Priority | Status | Scenario(s) | Test Case(s) | Execution | Defect |
 |---|---|---|---|---|---|---|
@@ -126,6 +126,19 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 | REQ-DAILYPLAN-013: Mistake review is built from the student's real wrong answers | Medium | Active | SCN-DAILYPLAN-030 | TC-DAILYPLAN-030 (Pass) | EXEC-DAILYPLAN-0031 |  |
 | REQ-DAILYPLAN-014: The device keeps a snapshot of the plan the server decided | High | Active | SCN-DAILYPLAN-031<br>SCN-DAILYPLAN-032 | TC-DAILYPLAN-032 (Blocked)<br>TC-DAILYPLAN-033 (Blocked) | EXEC-DAILYPLAN-0032<br>EXEC-DAILYPLAN-0033 |  |
 | REQ-DAILYPLAN-015: A stored plan shows progress counted on the device, not frozen figures | Medium | Active | SCN-DAILYPLAN-033 | TC-DAILYPLAN-034 (Not Executed) | EXEC-DAILYPLAN-0034 |  |
+| REQ-DAILYPLAN-016: A task opens the quiz directly, and back returns to the Daily Plan | High | Active | SCN-DAILYPLAN-034 | TC-DAILYPLAN-035 (Not Executed) |  |  |
+
+## HOME
+
+5 requirements, 5 scenarios, 7 test cases.
+
+| Requirement | Priority | Status | Scenario(s) | Test Case(s) | Execution | Defect |
+|---|---|---|---|---|---|---|
+| REQ-HOME-001: Practice and Mock Tests are one tap away, for the currently selected exam | Critical | Active | SCN-HOME-001 | TC-HOME-001 (Not Executed)<br>TC-HOME-002 (Not Executed) |  |  |
+| REQ-HOME-002: Readiness Score is real, not a fixed 62% | Critical | Active | SCN-HOME-002 | TC-HOME-003 (Not Executed)<br>TC-HOME-004 (Not Executed) |  |  |
+| REQ-HOME-003: Today's Plan starts preparing before the student asks for it | High | Active | SCN-HOME-003 | TC-HOME-005 (Not Executed) |  |  |
+| REQ-HOME-004: AI Videos, Preparation Radar and Study Roadmap are reachable from Home | Medium | Active | SCN-HOME-004 | TC-HOME-006 (Not Executed) |  |  |
+| REQ-HOME-005: The on-device LLM benchmark spike is removed from the product | Low | Active | SCN-HOME-005 | TC-HOME-007 (Not Executed) |  |  |
 
 ## LEARNING-STATE
 
@@ -138,6 +151,22 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 | REQ-LEARNINGSTATE-003: Per-topic direction has exactly one producer | Medium | Active | SCN-LEARNINGSTATE-006 | TC-LEARNINGSTATE-006 (Pass) | EXEC-LEARNINGSTATE-0006 |  |
 | REQ-LEARNINGSTATE-004: Practice and mock evidence stay separately readable | High | Active | SCN-LEARNINGSTATE-007 | TC-LEARNINGSTATE-007 (Pass) | EXEC-LEARNINGSTATE-0007 |  |
 | REQ-LEARNINGSTATE-005: A subject rolls up as a distribution and coverage, never a single score | High | Active | SCN-LEARNINGSTATE-008 | TC-LEARNINGSTATE-008 (Pass) | EXEC-LEARNINGSTATE-0008 |  |
+
+## LESSONVIDEO
+
+9 requirements, 17 scenarios, 20 test cases.
+
+| Requirement | Priority | Status | Scenario(s) | Test Case(s) | Execution | Defect |
+|---|---|---|---|---|---|---|
+| REQ-LESSONVIDEO-001: A video reaches students only after a human approves it | Critical | Active | SCN-LESSONVIDEO-001<br>SCN-LESSONVIDEO-002<br>SCN-LESSONVIDEO-007<br>SCN-LESSONVIDEO-014 | TC-LESSONVIDEO-001 (Not Executed)<br>TC-LESSONVIDEO-002 (Pass)<br>TC-LESSONVIDEO-008 (Not Executed)<br>TC-LESSONVIDEO-016 (Pass) | EXEC-LESSONVIDEO-0002<br>EXEC-LESSONVIDEO-0001 |  |
+| REQ-LESSONVIDEO-002: A question with no video of its own falls back to its topic lesson | High | Active | SCN-LESSONVIDEO-003 | TC-LESSONVIDEO-003 (Pass) | EXEC-LESSONVIDEO-0003 |  |
+| REQ-LESSONVIDEO-003: Access to the bytes is enforced by the backend, not by hiding a button | Critical | Active | SCN-LESSONVIDEO-004<br>SCN-LESSONVIDEO-005<br>SCN-LESSONVIDEO-007 | TC-LESSONVIDEO-004 (Not Executed)<br>TC-LESSONVIDEO-005 (Not Executed)<br>TC-LESSONVIDEO-006 (Not Executed)<br>TC-LESSONVIDEO-019 (Not Executed) |  |  |
+| REQ-LESSONVIDEO-004: A replacement video is a new version, never a silent overwrite | High | Active | SCN-LESSONVIDEO-006<br>SCN-LESSONVIDEO-012 | TC-LESSONVIDEO-007 (Not Executed)<br>TC-LESSONVIDEO-013 (Not Executed) |  |  |
+| REQ-LESSONVIDEO-005: A downloaded lesson plays offline, and the written explanation never depends on video | Critical | Active | SCN-LESSONVIDEO-010<br>SCN-LESSONVIDEO-011<br>SCN-LESSONVIDEO-012<br>SCN-LESSONVIDEO-013 | TC-LESSONVIDEO-011 (Pass)<br>TC-LESSONVIDEO-012 (Not Executed)<br>TC-LESSONVIDEO-013 (Not Executed)<br>TC-LESSONVIDEO-014 (Pass)<br>TC-LESSONVIDEO-015 (Pass) | EXEC-LESSONVIDEO-0006<br>EXEC-LESSONVIDEO-0007<br>EXEC-LESSONVIDEO-0008<br>EXEC-LESSONVIDEO-0005 |  |
+| REQ-LESSONVIDEO-006: A blueprint is stored as the studio's own Lesson JSON, validated at the boundary | High | Active | SCN-LESSONVIDEO-008<br>SCN-LESSONVIDEO-014 | TC-LESSONVIDEO-009 (Blocked)<br>TC-LESSONVIDEO-016 (Pass) | EXEC-LESSONVIDEO-0004<br>EXEC-LESSONVIDEO-0001 |  |
+| REQ-LESSONVIDEO-007: Premium gating has one name and one check point | High | Active | SCN-LESSONVIDEO-009<br>SCN-LESSONVIDEO-013 | TC-LESSONVIDEO-010 (Not Executed)<br>TC-LESSONVIDEO-014 (Pass) | EXEC-LESSONVIDEO-0008 |  |
+| REQ-LESSONVIDEO-008: Where video files live is a configuration choice, not a code change | Critical | Active | SCN-LESSONVIDEO-015<br>SCN-LESSONVIDEO-016 | TC-LESSONVIDEO-017 (Not Executed)<br>TC-LESSONVIDEO-018 (Not Executed)<br>TC-LESSONVIDEO-019 (Not Executed) |  |  |
+| REQ-LESSONVIDEO-009: A lesson can be watched immediately, without downloading first | High | Active | SCN-LESSONVIDEO-017 | TC-LESSONVIDEO-020 (Pass) |  |  |
 
 ## MOCK
 
@@ -286,9 +315,9 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 
 | Metric | Value |
 |---|---|
-| Total requirements | 180 |
-| Total scenarios | 338 |
-| Total test cases | 373 |
+| Total requirements | 195 |
+| Total scenarios | 361 |
+| Total test cases | 401 |
 | Requirements with zero scenarios | 0  |
-| Real executions recorded | 122 |
+| Real executions recorded | 130 |
 | Real defects logged | 8 |

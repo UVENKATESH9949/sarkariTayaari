@@ -2,7 +2,7 @@
 #
 # Every test case belonging to the PRACTICE module. Run after any change confined to that module.
 #
-# 10 test case(s). Membership rule: module == PRACTICE (mechanical filter).
+# 13 test case(s). Membership rule: module == PRACTICE (mechanical filter).
 
 suite: Regression — PRACTICE
 test_case_ids:
@@ -16,3 +16,6 @@ test_case_ids:
   - TC-PRACTICE-008
   - TC-PRACTICE-009
   - TC-PRACTICE-010
+  - TC-PRACTICE-011
+  - TC-PRACTICE-012
+  - TC-PRACTICE-013

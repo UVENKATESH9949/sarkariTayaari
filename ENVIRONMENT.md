@@ -110,7 +110,18 @@ app.ai.provider                  # GROQ on this machine
 app.ai.api-key                   # Groq key
 app.ai.model                     # openai/gpt-oss-120b
 app.document-storage.fake        # true locally, since there are no real Cloudinary creds here
+app.video-storage.provider       # local (default) | cloudinary — see below
 ```
+
+**Video storage (`VIDEO_STORAGE_PROVIDER`).** Defaults to `local`, which writes under
+`app.video-storage.local-path` (`./var`) and needs no credentials, so a fresh checkout works. It
+is **wrong on Cloud Run** — ephemeral filesystem, scales to zero — so **a deployment sets
+`VIDEO_STORAGE_PROVIDER=cloudinary`**. That needs no new credentials: it reuses the same
+Cloudinary account images and ingested PDFs already use, which Cloud Run already has. The only
+optional extra is `VIDEO_STORAGE_URL_TTL_SECONDS` (default 3600), how long a signed delivery link
+lasts — and note that time-limited delivery is not available on every Cloudinary plan; if the
+account refuses it, the backend falls back to a signed link that does **not** expire and logs a
+WARN saying so.
 
 **Where the values come from:** the Neon console (database), the Cloudinary dashboard, and the
 Groq console. The AI key can alternatively be saved through the admin console, which stores it

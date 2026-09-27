@@ -3,6 +3,7 @@ import { AppState } from "react-native";
 import { clearSession, loadSession, saveSession } from "../db/authSession";
 import { resetProfileForSignOut } from "../db/onboarding";
 import { clearSnapshots } from "../data/snapshotStore";
+import { clearLessonVideoCache } from "../video/lessonVideoCache";
 import {
   login as apiLogin,
   logout as apiLogout,
@@ -378,6 +379,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
      * containing nothing about anybody, so wiping it would only make the next sign-in slower.
      */
     await clearSnapshots("daily-plan");
+    /*
+     * Downloaded video lessons are per-account: entitlement is decided server-side per user,
+     * so a premium lesson downloaded by one account must not stay playable for whoever signs
+     * in next on the same phone. Clearing the files is also what stops a shared device
+     * accumulating gigabytes of one former user's lessons.
+     */
+    await clearLessonVideoCache().catch((err) =>
+      captureError(err, { context: "authContext.clearLessonVideoCache", full: false }),
+    );
     /*
      * The cached Weakness Radar is this student's own diagnosis, not device state -- leaving
      * it behind would show the next person to pick up the phone someone else's weaknesses.

@@ -23,7 +23,7 @@ worth knowing there are two different shapes of that, not one:
 
 ---
 
-## The server tables, in four groups
+## The server tables, in six groups
 
 ### Group 1: the questions themselves
 
@@ -199,6 +199,40 @@ table at all.
 
 ---
 
+### Group 6: teaching lessons and the videos that deliver them
+
+Added by V54, for the AI video feature. Two tables, and the split between them is the point.
+
+| Table | Holds |
+|---|---|
+| `lesson_blueprints` | **What** should be taught, independent of how it is delivered. `payload` is the AI Video Studio's own Lesson JSON stored verbatim (`{id, title, exam, subject, topic, language, scenes[]}`, scenes being `title/concept/example/formula/summary`). That schema is defined by a zod contract in **a separate repository** (`C:\AIVideos`) and read by both its renderer and its narration synthesis, so it is already the real contract — defining a prettier one here would guarantee the two drift, and the studio's is the one that can be rendered |
+| `lesson_videos` | **One rendered delivery** of a blueprint: version, duration, size, checksum, storage reference, review state |
+
+Keeping them apart is what lets the same teaching content later become a text lesson, an
+interactive lesson, or a device-rendered lesson without re-deciding what to teach.
+
+**Owner is a topic OR a question, never both** — two nullable FKs plus a CHECK, following
+`question_media` (V29) and `ai_content` (V41). Topic is the one carrying real content: the studio
+produces topic lessons and has no concept of a question, so a question read falls back to its
+topic's lesson and reports which it matched.
+
+**Two status columns, deliberately separate.** `status` answers "does a playable file exist yet"
+(QUEUED/GENERATING/PROCESSING/READY/FAILED/ARCHIVED); `content_status` answers "has a human
+approved it" (DRAFT/REVIEW/PUBLISHED, the same workflow `ai_content` and `recruitment_cycles`
+use). A video can be READY and still DRAFT, which is exactly what an admin needs in order to
+watch it before students can. **`NOT_AVAILABLE` is deliberately not a stored status** — the
+absence of a row is what it means, and storing it would need a row for every question that has no
+video, which is nearly all of them.
+
+**`storage_key` is a key, not a URL**, unlike every other asset in this schema. A premium video
+behind a public, guessable Cloudinary link is not gated at all; a key is resolved to bytes by
+`VideoStorage` at serve time, so the backend stays the thing that decides who may watch.
+`teaching_level` is part of the uniqueness key because `ai_content`'s (task, subject, language)
+key cannot express "English beginner" and "English advanced" as two live rows.
+
+There is **no job table** — "is generation already running" is answerable from
+`status IN (QUEUED, GENERATING, PROCESSING)` on the row itself.
+
 ## The two subject links — the confusing bit
 
 There are **two** places that connect subjects to exams. They look similar. They are
@@ -251,6 +285,7 @@ phone and are never uploaded:
 | `practice_sessions` + `practice_session_results` | past practice sessions, question by question |
 | `mock_test_attempts` + `mock_test_attempt_results` | past mock tests, with scores |
 | `bookmarks` | questions the student saved |
+| `lesson_videos` | the on-device video cache. **Not synced reference content** — a row appears only when a student actually asks about a lesson, because shipping metadata for every video to every device would make people who never watch one pay for them. Keyed on (`id`, `content_version`) so a corrected lesson is detectable rather than played forever; `local_uri`/`downloaded_at` are local-only and are never overwritten by a metadata refresh, the same rule `question_media` follows (migration 0033) |
 | `app_preferences` | one row, keyed `"current"`, holding everything that describes this *device* rather than the account: theme/zoom/UI language, which of the followed exams is the **active** one (migration 0026), and the **first-time onboarding profile** — display name, chosen exam, exam stage, target year, preparation level, daily study time, and the two onboarding timestamps (migration 0027). Theme/zoom/language/active exam are device settings and are never cleared on sign-out (see `05-why-its-built-this-way.md`). **The onboarding profile is different since 2026-09-25**: it belongs to the person, is synced to `user_preparation_profiles` (including onboarding completion, V53), and is cleared on sign-out after being pushed, so a second account on the same phone never inherits it (DEF-ONBOARDING-001). Being a single row is what makes "exactly one active exam" and "one profile per device" true by construction rather than by a constraint |
 | `radar_cache` | the last Weakness Radar the server sent, one JSON payload per exam, so the radar screens still work offline. Account data, not a device setting — it's cleared on sign-out, unlike `app_preferences` above |
 
@@ -338,6 +373,7 @@ V50__study_task_reason.sql                    study_tasks.reason — why a task 
 V51__email_otp.sql                            email_otp_codes — one-time sign-in codes, no FK to users by design
 V52__study_task_sources.sql                   study_tasks.source relabel PRACTICE -> NEW_TOPIC (five learning purposes, TASK-3501)
 V53__onboarding_completed_at.sql              user_preparation_profiles.onboarding_completed_at — onboarding completion as an account fact, monotonic
+V54__lesson_videos.sql                        lesson_blueprints + lesson_videos — the AI video foundation (teaching blueprint, rendered delivery, review state)
 ```
 
 V8–V24 add whole feature areas ("Epic L" topic intelligence, "Exam Guide", the Exams

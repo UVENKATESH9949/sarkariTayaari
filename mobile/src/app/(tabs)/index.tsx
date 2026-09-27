@@ -11,13 +11,14 @@ import { getExamGuideHybrid } from "../../data/examGuideData";
 import { useHybridMode } from "../../data/hybridSource";
 import { daysUntil, priorityTier } from "../../examGuide/dates";
 import { useBookmarks } from "../../practice/bookmarks";
+import { computeReadiness } from "../../practice/readiness";
 import { useSessionHistory } from "../../practice/sessionHistory";
 import { getWrongAnswers } from "../../practice/wrongAnswers";
 import { useSyncStatus } from "../../sync/SyncContext";
 import { PressableScale } from "../../ui/PressableScale";
 import { FadeInItem } from "../../ui/FadeInList";
-import { Button } from "../../ui/Button";
-import { Card } from "../../ui/Card";
+import { Card, CardRow } from "../../ui/Card";
+import { IconBox } from "../../ui/IconBox";
 import { PreparationPlanCard } from "../../ui/PreparationPlanCard";
 import { SectionLabel } from "../../ui/SectionLabel";
 import { CardSkeleton } from "../../ui/Skeleton";
@@ -25,13 +26,13 @@ import { radius, spacing } from "../../ui/theme";
 import { useTheme, useThemedStyles, type Theme } from "../../ui/ThemeContext";
 import { ThemeToggleButton } from "../../ui/ThemeToggleButton";
 import { useT } from "../../i18n/I18nContext";
+import { trackEvent } from "../../telemetry/analytics";
 
-// Streak/readiness are still mock — real streak computation and the final
-// readiness formula haven't been decided yet (see Progress for the real,
-// computed readiness score). The followed exam name and Revise counts below are real.
+// Streak is still mock — real streak computation hasn't been decided yet. Readiness is now
+// real (see computeReadiness, shared with Progress). The followed exam name and Revise counts
+// below are real.
 const MOCK = {
   streakDays: 3,
-  readinessPercent: 62,
 };
 
 /**
@@ -109,6 +110,13 @@ export default function Home() {
 
   const wrongAnswerCount = useMemo(() => getWrongAnswers(sessions).length, [sessions]);
 
+  // Real readiness, scoped to the exam the student is currently preparing for — the same
+  // formula Progress shows, never a second one (see practice/readiness.ts).
+  const { readinessPercent, hasActivity: hasReadinessActivity } = useMemo(
+    () => computeReadiness(sessions, followedExamCode),
+    [sessions, followedExamCode],
+  );
+
   // Pull to refresh forces a check, bypassing the staleness window — this is the
   // user explicitly asking, so "synced recently" isn't a reason to do nothing.
   const onRefresh = async () => {
@@ -117,6 +125,38 @@ export default function Home() {
     // fresh install — so the provider is asked to re-resolve rather than assumed current.
     await refreshActiveExam();
   };
+
+  /*
+   * Practice and Mock Test both jump straight into the student's currently selected exam,
+   * skipping the exam-picker screen those tabs otherwise open with — that picker is still there
+   * for someone switching exams, it is just no longer the first thing tapped from Home. With no
+   * exam followed yet, falling back to each tab's own root is the graceful case: both already
+   * handle "no exam chosen" by showing their own exam list, so nothing here needs to invent a
+   * second version of that state.
+   */
+  function openPractice() {
+    trackEvent("home_quick_action_opened", { action: "practice", examCode: followedExamCode });
+    if (followedExamCode) {
+      router.push({
+        pathname: "/practice/browse",
+        params: { examCode: followedExamCode, examLabel: followedExamName ?? "" },
+      });
+    } else {
+      router.push("/practice");
+    }
+  }
+
+  function openMockTest() {
+    trackEvent("home_quick_action_opened", { action: "mock_test", examCode: followedExamCode });
+    if (followedExamCode) {
+      router.push({
+        pathname: "/mock-test/papers",
+        params: { examCode: followedExamCode, examLabel: followedExamName ?? "" },
+      });
+    } else {
+      router.push("/mock-test");
+    }
+  }
 
   return (
     <ScrollView
@@ -168,8 +208,8 @@ export default function Home() {
           </Pressable>
 
           {/* Only with something to switch to. With one followed exam this control would open
-              a picker containing the exam already shown; "Explore Exams" right below is the
-              route to getting a second one. */}
+              a picker containing the exam already shown; My Exams (reachable from More) is the
+              route to getting a second one now that Explore Exams is no longer on Home. */}
           {myExams.length > 1 && (
             <Pressable
               style={styles.changeExamRow}
@@ -199,45 +239,58 @@ export default function Home() {
         </Pressable>
       )}
 
-      <Pressable
-        style={styles.exploreExamsRow}
-        onPress={() => router.push("/exams")}
-        accessibilityRole="button"
-        accessibilityLabel="Explore other exams"
-      >
-        <Ionicons name="compass-outline" size={16} color={colors.brand.light} />
-        <Text style={styles.exploreExamsText}>Explore Exams</Text>
-        <Ionicons name="chevron-forward" size={14} color={colors.text.muted} />
-      </Pressable>
-
-      <Button size="lg" onPress={() => router.push("/practice")}>
-        {t("home.continuePractice")}
-      </Button>
-
-      {/* Today's Plan (TASK-3301/3401) — the personalization program's first student-facing
-          surface, and its other entry point is More. Placed right under Continue Practice
-          because that is the "what should I actually do now" moment. Deliberately a plain
-          container card rather than the gradient the readiness card uses: two gradient cards
-          stacked would read as two competing primary actions. */}
-      <Card variant="container" onPress={() => router.push("/daily-plan")} style={styles.dailyPlanCard}>
-        <Ionicons name="today-outline" size={20} color={colors.brand.light} />
-        <View style={styles.dailyPlanText}>
-          <Text style={styles.dailyPlanTitle}>Today&apos;s Plan</Text>
-          <Text style={styles.dailyPlanSubtitle}>What to study today, in the time you have</Text>
+      {/* Today's Plan — the personalization program's flagship student-facing surface, and
+          deliberately the most visually prominent card on this screen alongside Readiness.
+          Gradient (not "container"), matching the readiness card's weight, because this is
+          meant to read as a core dashboard feature rather than one more list row. */}
+      <Card variant="gradient" onPress={() => router.push("/daily-plan")} style={styles.dailyPlanCard}>
+        <View style={styles.dailyPlanIconRow}>
+          <IconBox icon="today-outline" size={44} iconSize={22} backgroundColor="rgba(255,255,255,0.14)" />
+          <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.7)" />
         </View>
-        <Ionicons name="chevron-forward" size={16} color={colors.text.muted} />
+        <Text style={styles.dailyPlanTitle}>Today&apos;s Plan</Text>
+        <Text style={styles.dailyPlanSubtitle}>Your daily study tasks, personalised for your preparation.</Text>
       </Card>
 
+      {/* Readiness — real data now (practice/readiness.ts), not a fixed 62%. Same gradient
+          weight as Today's Plan, so the two read as one pair of core dashboard numbers. */}
       <Card variant="gradient" onPress={() => router.push("/progress")} style={styles.readinessCard}>
-        <View>
+        <View style={styles.readinessTop}>
           <Text style={styles.readinessLabel}>{t("home.readiness")}</Text>
-          <Text style={styles.readinessPercent}>{MOCK.readinessPercent}%</Text>
+          <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.7)" />
         </View>
-        <View style={styles.readinessCta}>
-          <Text style={styles.readinessCtaText}>{t("home.viewProgress")}</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.text.onAccent} />
-        </View>
+        <Text style={styles.readinessHint}>See how prepared you are for your selected exam.</Text>
+        <Text style={styles.readinessPercent}>
+          {hasReadinessActivity ? `${readinessPercent}%` : "—"}
+        </Text>
+        {!hasReadinessActivity && (
+          <Text style={styles.readinessEmptyHint}>Practise a few questions to see this fill in.</Text>
+        )}
       </Card>
+
+      {/* Practice / Mock Tests — the two quick actions Continue Practice used to be alone.
+          Equal-width square cards, side by side; each jumps straight to the currently selected
+          exam (see openPractice/openMockTest), never a hardcoded one. */}
+      <View style={styles.quickActionsRow}>
+        <FadeInItem index={0} style={styles.quickActionItem}>
+          <PressableScale style={styles.quickActionCard} onPress={openPractice}>
+            <IconBox icon="book-outline" size={48} iconSize={24} backgroundColor={colors.brand.glowSoft} iconColor={colors.brand.light} />
+            <Text style={styles.quickActionTitle}>Practice</Text>
+            <Text style={styles.quickActionSubtitle} numberOfLines={1}>
+              {followedExamName ?? "Choose an exam"}
+            </Text>
+          </PressableScale>
+        </FadeInItem>
+        <FadeInItem index={1} style={styles.quickActionItem}>
+          <PressableScale style={styles.quickActionCard} onPress={openMockTest}>
+            <IconBox icon="timer-outline" size={48} iconSize={24} backgroundColor={colors.brand.glowSoft} iconColor={colors.brand.light} />
+            <Text style={styles.quickActionTitle}>Mock Tests</Text>
+            <Text style={styles.quickActionSubtitle} numberOfLines={1}>
+              {followedExamName ?? "Choose an exam"}
+            </Text>
+          </PressableScale>
+        </FadeInItem>
+      </View>
 
       {/* Epic L's first user-facing slice. Renders nothing when no exam is followed or nothing
           has been computed yet, so Home is unchanged until there is a real plan to show. */}
@@ -246,6 +299,29 @@ export default function Home() {
         examName={followedExamName}
         refreshKey={syncVersion}
       />
+
+      <SectionLabel label="More ways to prepare" />
+      <Card variant="container" style={styles.moreCard}>
+        {/* AI Videos — replaces the old Explore Exams entry point on Home (My Exams, reachable
+            from More, is still the way to browse and follow other exams). Placeholder only:
+            no video functionality exists yet, and this is deliberately styled to look like a
+            real, upcoming feature rather than a broken link. */}
+        <CardRow icon="videocam-outline" label="AI Videos" value="Coming soon" />
+        <View style={styles.cardRowDivider} />
+        <CardRow
+          icon="radio-outline"
+          label="Preparation Radar"
+          value="What to work on next, and why"
+          onPress={() => router.push("/preparation-radar")}
+        />
+        <View style={styles.cardRowDivider} />
+        <CardRow
+          icon="map-outline"
+          label="Study Roadmap"
+          value="The whole path, in order, and how long it takes"
+          onPress={() => router.push("/study-roadmap")}
+        />
+      </Card>
 
       <SectionLabel label={t("nav.revise")} />
       <View style={styles.reviseRow}>
@@ -360,60 +436,92 @@ const buildStyles = ({ colors, typography }: Theme) =>
       fontWeight: "600",
       flex: 1,
     },
-    exploreExamsRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.xs + 2,
-      alignSelf: "flex-start",
-    },
-    exploreExamsText: {
-      fontSize: 13,
-      fontWeight: "600",
-      color: colors.brand.light,
-      flex: 1,
-    },
     dailyPlanCard: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.sm,
+      padding: spacing.lg,
     },
-    dailyPlanText: {
-      flex: 1,
+    dailyPlanIconRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
     },
     dailyPlanTitle: {
-      fontSize: 14.5,
+      fontSize: 19,
       fontWeight: "700",
-      color: colors.text.primary,
+      color: colors.text.onAccent,
+      marginTop: spacing.md,
     },
     dailyPlanSubtitle: {
-      fontSize: 11.5,
-      color: colors.text.muted,
-      marginTop: 1,
+      fontSize: 13,
+      color: "rgba(255,255,255,0.75)",
+      marginTop: spacing.xs,
+      lineHeight: 18,
     },
     readinessCard: {
+      padding: spacing.lg,
+    },
+    readinessTop: {
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
     },
     readinessLabel: {
-      fontSize: 13,
-      color: "rgba(255,255,255,0.75)",
-    },
-    readinessPercent: {
-      fontSize: 24,
+      fontSize: 15,
       fontWeight: "700",
       color: colors.text.onAccent,
-      marginTop: 2,
     },
-    readinessCta: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.xs,
+    readinessHint: {
+      fontSize: 12.5,
+      color: "rgba(255,255,255,0.75)",
+      marginTop: spacing.xs,
+      lineHeight: 17,
     },
-    readinessCtaText: {
-      fontSize: 13,
-      fontWeight: "600",
+    readinessPercent: {
+      fontSize: 34,
+      fontWeight: "700",
       color: colors.text.onAccent,
+      marginTop: spacing.md,
+    },
+    readinessEmptyHint: {
+      fontSize: 12,
+      color: "rgba(255,255,255,0.6)",
+      marginTop: spacing.xs,
+    },
+    quickActionsRow: {
+      flexDirection: "row",
+      gap: spacing.md,
+    },
+    // Carries the flex share; quickActionCard fills whatever width that gives it — the same
+    // wrapper-vs-child sizing split reviseItem/reviseCard already use below.
+    quickActionItem: {
+      flex: 1,
+    },
+    quickActionCard: {
+      backgroundColor: colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.lg,
+      padding: spacing.base,
+      // Square-ish, not exactly square: aspectRatio 1 would clip the two-line subtitle on a
+      // narrow phone, so height is left to content while width is forced equal by flex:1 above.
+      alignItems: "flex-start",
+      gap: spacing.sm,
+    },
+    quickActionTitle: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.text.primary,
+    },
+    quickActionSubtitle: {
+      fontSize: 12,
+      color: colors.text.muted,
+    },
+    moreCard: {
+      padding: 0,
+    },
+    cardRowDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.border,
+      marginLeft: spacing.lg + 40 + spacing.md,
     },
     reviseRow: {
       flexDirection: "row",

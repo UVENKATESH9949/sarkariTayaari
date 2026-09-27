@@ -1,0 +1,229 @@
+# HOME module — manual test cases
+#
+# Every case here is ManualOnly and Not Executed — mobile has no automated runner, and this is
+# newly built, unseen-on-a-device work. Writing the case is the deliverable; running it is next.
+
+- id: TC-HOME-001
+  requirement_ids: [REQ-HOME-001]
+  scenario_id: SCN-HOME-001
+  system: Mobile
+  module: HOME
+  feature: Practice and Mock Tests are one tap away, for the currently selected exam
+  title: The two quick-action cards open the active exam's Practice/Mock Test screens
+  objective: "Confirm both cards route correctly and show the real active exam name, never a hardcoded one."
+  preconditions:
+    - "Signed in, with an exam followed and active"
+  test_data: "Any followed exam"
+  test_environment: "Android emulator against a real backend"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Note the active exam shown in the Preparing For card"
+      expected: "Recorded for comparison"
+    - step: 2
+      action: "Tap the Practice card"
+      expected: "Opens the subject/topic browse screen for that same exam, with no exam-list step"
+    - step: 3
+      action: "Go back, then tap the Mock Tests card"
+      expected: "Opens the mock paper list for that same exam, with no exam-list step"
+    - step: 4
+      action: "Switch the active exam (via Change Exam), return Home, repeat steps 2-3"
+      expected: "Both cards now open the newly active exam instead"
+  expected_result: "Both cards are always scoped to whichever exam is currently active. (REQ-HOME-001)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-HOME-002
+  requirement_ids: [REQ-HOME-001]
+  scenario_id: SCN-HOME-001
+  system: Mobile
+  module: HOME
+  feature: Practice and Mock Tests are one tap away, for the currently selected exam
+  title: With no exam followed, both cards fall back gracefully
+  objective: "Confirm neither card crashes or shows a blank scoped screen when there is nothing to scope to."
+  preconditions:
+    - "A signed-in account following no exam"
+  test_data: "None"
+  test_environment: "Android emulator"
+  priority: High
+  severity: Major
+  test_type: EdgeCase
+  steps:
+    - step: 1
+      action: "Tap the Practice card"
+      expected: "Opens Practice's own exam-selection root, same as tapping the Practice tab directly"
+    - step: 2
+      action: "Tap the Mock Tests card"
+      expected: "Opens Mock Test's own exam-selection root, same as tapping the Mock Test tab directly"
+  expected_result: "Both cards degrade to the existing exam-selection screens rather than breaking. (REQ-HOME-001)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-HOME-003
+  requirement_ids: [REQ-HOME-002]
+  scenario_id: SCN-HOME-002
+  system: Mobile
+  module: HOME
+  feature: Readiness Score is real, not a fixed 62%
+  title: Readiness matches a manual calculation from real session history
+  objective: "Confirm the shown percentage is genuinely computed, not the old fixed 62%."
+  preconditions:
+    - "An account with at least one completed practice session for the active exam"
+  test_data: "A completed session with a known correct/total split"
+  test_environment: "Android emulator"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Note the correct/total counts from a just-completed session's summary"
+      expected: "Recorded for comparison"
+    - step: 2
+      action: "Open Home and read the Readiness card's percentage"
+      expected: "Matches round(totalCorrect/totalQuestions*100) across all of this exam's sessions - never a fixed 62%"
+    - step: 3
+      action: "Open Progress and compare its own readiness figure"
+      expected: "Progress's app-wide figure and Home's exam-scoped figure both come from the same formula and agree when only one exam has history"
+  expected_result: "Readiness is real and consistent with Progress. (REQ-HOME-002)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-HOME-004
+  requirement_ids: [REQ-HOME-002]
+  scenario_id: SCN-HOME-002
+  system: Mobile
+  module: HOME
+  feature: Readiness Score is real, not a fixed 62%
+  title: A brand-new account shows a dash, not a fabricated percentage
+  objective: "Confirm the empty state is honest rather than showing 0% or the old 62%."
+  preconditions:
+    - "A freshly onboarded account with zero practice sessions"
+  test_data: "None"
+  test_environment: "Android emulator"
+  priority: High
+  severity: Major
+  test_type: EdgeCase
+  steps:
+    - step: 1
+      action: "Open Home immediately after onboarding, before answering any question"
+      expected: "The Readiness card shows a dash and a short prompt to practise, not a percentage"
+  expected_result: "No activity is represented honestly, never as a fake score. (REQ-HOME-002)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-HOME-005
+  requirement_ids: [REQ-HOME-003]
+  scenario_id: SCN-HOME-003
+  system: Mobile
+  module: HOME
+  feature: Today's Plan starts preparing before the student asks for it
+  title: Today's Plan opens instantly on a normal, warm app session
+  objective: "Confirm the background prefetch results in a fast-feeling open, not a visible generation wait."
+  preconditions:
+    - "Signed in, with an active exam, app freshly launched"
+  test_data: "None"
+  test_environment: "Android emulator against a real backend"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Launch the app fresh and wait a few seconds on Home before tapping anything"
+      expected: "No visible loading indicator for the plan yet - this is background work"
+    - step: 2
+      action: "Tap Today's Plan"
+      expected: "The plan renders with no multi-second generation wait, in the common case where a snapshot already existed or the background prefetch had time to complete"
+  expected_result: "Opening Today's Plan feels instant on a normal session. (REQ-HOME-003)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    Genuinely first-ever open for a brand-new account/exam pair (no snapshot exists anywhere
+    yet) is excluded - that case still waits on real server generation, as documented, and is
+    not what this case is testing.
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-HOME-006
+  requirement_ids: [REQ-HOME-004]
+  scenario_id: SCN-HOME-004
+  system: Mobile
+  module: HOME
+  feature: AI Videos, Preparation Radar and Study Roadmap are reachable from Home
+  title: The new shortcuts row renders and routes correctly
+  objective: "Confirm AI Videos is informational-only and Radar/Roadmap open the correct screens."
+  preconditions:
+    - "Signed in, on Home"
+  test_data: "None"
+  test_environment: "Android emulator"
+  priority: Medium
+  severity: Minor
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Scroll to the More ways to prepare section and tap AI Videos"
+      expected: "Nothing happens - no chevron shown, reads as Coming soon"
+    - step: 2
+      action: "Tap Preparation Radar"
+      expected: "Opens the same Preparation Radar screen More's own row opens"
+    - step: 3
+      action: "Tap Study Roadmap"
+      expected: "Opens the same Study Roadmap screen More's own row opens"
+    - step: 4
+      action: "Open More and confirm its own Preparation Radar/Study Roadmap rows still work"
+      expected: "Unchanged - both still function exactly as before"
+  expected_result: "All three new entries behave as designed and nothing under More broke. (REQ-HOME-004)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""
+
+- id: TC-HOME-007
+  requirement_ids: [REQ-HOME-005]
+  scenario_id: SCN-HOME-005
+  system: Mobile
+  module: HOME
+  feature: The on-device LLM benchmark spike is removed from the product
+  title: LLM Test no longer appears anywhere in the app
+  objective: "Confirm the More row and its screen are both gone, with no dangling entry point."
+  preconditions:
+    - "Signed in"
+  test_data: "None"
+  test_environment: "Android emulator"
+  priority: Low
+  severity: Minor
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Open More and scroll through it fully"
+      expected: "No Developer section and no LLM Test row appear anywhere"
+    - step: 2
+      action: "Confirm the rest of More (Preparation Radar, Today's Plan, Study Roadmap, Preferences, About) is otherwise unchanged"
+      expected: "All still present and working"
+  expected_result: "LLM Test is fully gone with no other regression in More. (REQ-HOME-005)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""

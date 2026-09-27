@@ -1267,3 +1267,39 @@
   automation_status: ManualOnly
   automation_reference: ""
 
+
+- id: TC-DAILYPLAN-035
+  requirement_ids: [REQ-DAILYPLAN-016]
+  scenario_id: SCN-DAILYPLAN-034
+  system: Mobile
+  module: DAILYPLAN
+  feature: A task opens the quiz directly, and back returns to the Daily Plan
+  title: Tapping a task skips the levels screen; back returns to Daily Plan
+  objective: "Confirm the shortened navigation path and correct back-stack behaviour."
+  preconditions:
+    - "A signed-in account with a generated daily plan"
+  test_data: "Any task not sourced from MISTAKE_REVIEW"
+  test_environment: "Android emulator against a real backend"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Tap a task card on the Daily Plan screen"
+      expected: "The quiz opens directly for that task's topic/difficulty - no levels screen shown"
+    - step: 2
+      action: "Answer a question, then press the hardware back button"
+      expected: "Returns to the Daily Plan screen, not Practice's browse or levels screen"
+    - step: 3
+      action: "Repeat step 1, then use the header's back arrow instead"
+      expected: "Same result - Daily Plan, not Practice"
+    - step: 4
+      action: "Tap a MISTAKE_REVIEW task, if the plan has one"
+      expected: "Opens Revise -> Wrong Answers, unchanged from before"
+  expected_result: "The shortened path works and back-navigation is correct. (REQ-DAILYPLAN-016)"
+  actual_result: ""
+  status: Not Executed
+  defect_id: ""
+  remarks: null
+  automation_status: ManualOnly
+  automation_reference: ""

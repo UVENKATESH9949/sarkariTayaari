@@ -385,3 +385,12 @@
   status: Ready
   notes: "Guards against the obvious simplification of caching the response wholesale."
 
+
+- id: SCN-DAILYPLAN-034
+  requirement_ids: [REQ-DAILYPLAN-016]
+  category: Functional
+  title: A daily plan task opens the quiz directly and back returns here
+  objective: "Verify no intermediate levels screen appears, and back/gesture/header-arrow all return to Daily Plan."
+  systems: [Mobile]
+  status: Ready
+  notes: null

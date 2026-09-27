@@ -11,6 +11,7 @@ import { OnboardingFlow } from "./OnboardingFlow";
 import { PreparingProfile } from "./PreparingProfile";
 import { useOnboarding } from "./OnboardingContext";
 import { startupLog } from "../telemetry/startupLog";
+import { StartupPrefetch } from "../data/startupPrefetch";
 
 /**
  * The flow, plus one log line when it actually reaches the screen. "Onboarding was decided" and
@@ -97,5 +98,16 @@ export function AppStartGate({ children }: { children: ReactNode }) {
   if (firstLaunchSyncActive) {
     return <PreparingApp />;
   }
-  return <>{children}</>;
+  /*
+   * StartupPrefetch renders null and only ever fires a background write — it cannot delay or
+   * change anything below it. Mounted here, rather than inside Home itself, so it starts the
+   * moment the app is usable at all (this is the last gate before the tab navigator), not only
+   * once a student happens to land on the Home tab specifically.
+   */
+  return (
+    <>
+      <StartupPrefetch />
+      {children}
+    </>
+  );
 }

@@ -1,0 +1,6 @@
+# HOME module — defects
+#
+# A defect record is created ONLY when a real test execution fails and someone determines it
+# represents a genuine product defect. Empty: no device pass has happened yet for this work.
+
+[]

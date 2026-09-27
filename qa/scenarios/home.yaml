@@ -1,0 +1,46 @@
+# HOME module — test scenarios
+
+- id: SCN-HOME-001
+  requirement_ids: [REQ-HOME-001]
+  category: Functional
+  title: Practice and Mock Tests cards open the active exam directly
+  objective: "Verify both cards skip the exam-picker step and use the active exam, never a hardcoded one."
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-HOME-002
+  requirement_ids: [REQ-HOME-002]
+  category: Functional
+  title: Readiness reflects real, exam-scoped session history
+  objective: "Verify the percentage matches a manual calculation and changes with the active exam."
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-HOME-003
+  requirement_ids: [REQ-HOME-003]
+  category: Functional
+  title: Today's Plan opens fast on a normal app session
+  objective: "Verify the background prefetch results in an instant-feeling open in the common case."
+  systems: [Mobile]
+  status: Ready
+  notes: "Perceived-latency only — no automated timing exists for this."
+
+- id: SCN-HOME-004
+  requirement_ids: [REQ-HOME-004]
+  category: Functional
+  title: The new Home shortcuts and placeholder render and route correctly
+  objective: "Verify AI Videos is informational only, and Radar/Roadmap open the same screens More does."
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-HOME-005
+  requirement_ids: [REQ-HOME-005]
+  category: Functional
+  title: LLM Test is fully removed with nothing left referencing it
+  objective: "Verify the More row and its screen are both gone, and no other entry point remains."
+  systems: [Mobile]
+  status: Ready
+  notes: null

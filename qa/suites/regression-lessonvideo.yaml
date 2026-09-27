@@ -1,0 +1,28 @@
+# Regression — LESSONVIDEO
+#
+# Every test case belonging to the LESSONVIDEO module. Run after any change confined to that module.
+#
+# 20 test case(s). Membership rule: module == LESSONVIDEO (mechanical filter).
+
+suite: Regression — LESSONVIDEO
+test_case_ids:
+  - TC-LESSONVIDEO-001
+  - TC-LESSONVIDEO-002
+  - TC-LESSONVIDEO-003
+  - TC-LESSONVIDEO-004
+  - TC-LESSONVIDEO-005
+  - TC-LESSONVIDEO-006
+  - TC-LESSONVIDEO-007
+  - TC-LESSONVIDEO-008
+  - TC-LESSONVIDEO-009
+  - TC-LESSONVIDEO-010
+  - TC-LESSONVIDEO-011
+  - TC-LESSONVIDEO-012
+  - TC-LESSONVIDEO-013
+  - TC-LESSONVIDEO-014
+  - TC-LESSONVIDEO-015
+  - TC-LESSONVIDEO-016
+  - TC-LESSONVIDEO-017
+  - TC-LESSONVIDEO-018
+  - TC-LESSONVIDEO-019
+  - TC-LESSONVIDEO-020

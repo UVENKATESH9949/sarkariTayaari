@@ -1,0 +1,107 @@
+# LESSONVIDEO — device execution records, 2026-09-27 (emulator pass)
+#
+# Real dev-client rebuild (npx expo run:android) to compile in expo-video (a new native
+# dependency; no prior build had it). Metro pointed temporarily at an isolated backend on :8090
+# (mobile/.env.local backed up and restored afterward) so the real V54 endpoints were reachable -
+# the backend already on :8080 was found stale (missing V54 endpoints) and left untouched, likely
+# belonging to a concurrent session.
+#
+# Content was REAL, not a fixture: output/profit-and-loss.mp4 (8,696,996 bytes) and
+# lessons/profit-and-loss.json from the AI Video Studio at C:\AIVideos, uploaded and published to
+# the real "Profit & Loss" topic (378 real questions) via the same isolated backend.
+#
+# A disposable account (sarkaritaiyaari.devtest.lessonvideo@gmail.com) was created via the app's
+# own OTP flow and onboarded through SSC CGL, matching real product usage rather than a seeded
+# fixture. Everything server-side created for this pass (the video, the blueprint) was deleted
+# afterward, and the admin token revoked - the same discipline this project already applies,
+# since prod and dev share one Neon database.
+
+- execution_id: EXEC-LESSONVIDEO-0005
+  test_case_id: TC-LESSONVIDEO-015
+  test_case_version: 1
+  environment: "Android emulator emulator-5554 (AVD Pixel_7 clone), real dev-client rebuild, real populated local database"
+  build_version: "main @ a70152b + uncommitted 2026-09-27 AI video work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-27T12:32:00+05:30"
+  actual_result: >
+    Snapshotted the device's real local database before the rebuild: 33 migrations, 37,921 real
+    questions, no lesson_videos table (confirmed pre-0033). After the native rebuild reinstalled
+    the app (a normal incremental reinstall, not a wipe) and it relaunched: 34 migrations, 37,921
+    questions (unchanged), lesson_videos table present with the exact 17-column schema designed,
+    0 rows. No migration-failure screen at any point.
+  status: Pass
+  defect_id: ""
+  evidence: "device_pre.db / device_post_rebuild.db snapshots (scratch, not committed), sqlite3 query output"
+  remarks: >
+    The riskiest single item in the mobile half of this work - a failed local migration is a hard
+    gate that stops the app starting - and it applied cleanly to real, populated data.
+
+- execution_id: EXEC-LESSONVIDEO-0006
+  test_case_id: TC-LESSONVIDEO-011
+  test_case_version: 1
+  environment: "Android emulator emulator-5554, real dev-client rebuild, real backend on an isolated port, real Neon dev database"
+  build_version: "main @ a70152b + uncommitted 2026-09-27 AI video work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-27T14:56:00+05:30"
+  actual_result: >
+    Signed in via a real OTP (email created and verified through the app's own flow, code read
+    from the backend log since mail is off in dev), onboarded through SSC CGL, opened a real
+    Profit & Loss question (one of 378 real questions on that topic) and answered it. The Video
+    lesson card appeared below the written explanation reading "Covers this topic" /
+    "Download the lesson · 2:06 · 8.3 MB · watch offline after" - the first real render of this
+    component on a device. Tapped Download: progress showed, then "Watch the lesson · saved on
+    your device". Pulled the on-device file directly and its SHA-256
+    (31b80ac4e74fb311bd9148d36ba69a4ff0f2b4984817a71cf6ff2a08aaf28e6a) matched the source studio
+    file exactly. The local lesson_videos row was correct in every field: owner_kind QUESTION,
+    the real question's own id, resolved_via TOPIC, status READY, local_uri and downloaded_at
+    both set, checksum matching. Tapped Watch: the player opened and played the ACTUAL rendered
+    studio content (the "What are Profit and Loss?" concept scene, with its real cost-price/
+    selling-price grid animation and narration caption), not a placeholder.
+  status: Pass
+  defect_id: ""
+  evidence: "screenshots (scratch, not committed); on-device file pulled and hashed; local DB row inspected directly"
+  remarks: >
+    Required rebuilding the dev client, since expo-video is a new native dependency no prior
+    build had. A cosmetic-only gap noticed along the way: the player screen's native header
+    shows the raw route name "lesson-video" rather than a friendly title - not fixed this pass,
+    flagged for later.
+
+- execution_id: EXEC-LESSONVIDEO-0007
+  test_case_id: TC-LESSONVIDEO-011
+  test_case_version: 1
+  environment: "Android emulator emulator-5554, wifi and mobile data both disabled (svc wifi disable / svc data disable), confirmed unreachable by a failed ping to 8.8.8.8"
+  build_version: "main @ a70152b + uncommitted 2026-09-27 AI video work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-27T14:58:00+05:30"
+  actual_result: >
+    With the device genuinely offline, reopened the same question. The Video lesson card still
+    read "Watch the lesson · saved on your device" with no network call needed to reach that
+    state. Tapped Watch: the player opened and played the real video from the local file,
+    starting from its title scene ("Welcome back to SarkariTaayari"), with zero network
+    reachable. Confirms the central product claim: internet is needed to obtain a lesson, not to
+    study it.
+  status: Pass
+  defect_id: ""
+  evidence: "screenshot showing real video playback with wifi/data confirmed disabled"
+  remarks: >
+    Network was restored immediately after this check (svc wifi enable / svc data enable),
+    confirmed by a successful ping before continuing.
+
+- execution_id: EXEC-LESSONVIDEO-0008
+  test_case_id: TC-LESSONVIDEO-014
+  test_case_version: 1
+  environment: "Android emulator emulator-5554, same session as the above"
+  build_version: "main @ a70152b + uncommitted 2026-09-27 AI video work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-27T15:03:00+05:30"
+  actual_result: >
+    Confirmed the downloaded file and its local_videos row both present before sign-out (1 file,
+    1 row). Signed out through the app's own Account screen and its confirmation dialog. After
+    sign-out: the lesson-videos directory no longer exists on the device at all, and the
+    lesson_videos table has 0 rows. The app correctly returned to the sign-in screen.
+  status: Pass
+  defect_id: ""
+  evidence: "sqlite3 row count and `ls` output before/after, both captured directly"
+  remarks: >
+    Confirms entitlement cannot be outlived: a downloaded lesson does not remain playable for
+    whoever signs in next on the same phone.

@@ -1,0 +1,192 @@
+# LESSONVIDEO module — test scenarios
+#
+# Scoped to the AI Video foundation (V54 / mobile 0033). Nothing here covers on-demand
+# generation: the AI Video Studio has no API and nothing in this product can trigger a render.
+
+- id: SCN-LESSONVIDEO-001
+  requirement_ids: [REQ-LESSONVIDEO-001]
+  category: Functional
+  title: An uploaded video is not visible to students until it is published
+  objective: >
+    Verify an upload lands READY/DRAFT and that the student-facing read reports
+    available:false until a human publishes it.
+  systems: [Backend]
+  status: Ready
+  notes: "The check that stops a video reaching learners before anyone has watched it."
+
+- id: SCN-LESSONVIDEO-002
+  requirement_ids: [REQ-LESSONVIDEO-001]
+  category: Functional
+  title: Publishing makes a video available and unpublishing withdraws it
+  objective: >
+    Verify the full round trip, including that the returned playbackPath points at this
+    backend rather than at storage.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-LESSONVIDEO-003
+  requirement_ids: [REQ-LESSONVIDEO-002]
+  category: Functional
+  title: A question resolves to its topic lesson and says so
+  objective: >
+    Verify a question with no video of its own returns the topic lesson with
+    resolvedVia TOPIC, so the app cannot claim a tailored explanation it does not have.
+  systems: [Backend]
+  status: Ready
+  notes: "This is what makes the feature usable with the content that exists today."
+
+- id: SCN-LESSONVIDEO-004
+  requirement_ids: [REQ-LESSONVIDEO-003]
+  category: Security
+  title: An unpublished video is not reachable or discoverable by a student
+  objective: >
+    Verify the stream endpoint returns 404 rather than 403 for an unpublished video, so
+    video ids cannot be probed, while staff can still open it for review.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-LESSONVIDEO-005
+  requirement_ids: [REQ-LESSONVIDEO-003]
+  category: Security
+  title: Upload is admin-only and reads require signing in
+  objective: >
+    Verify a STUDENT token cannot upload and an anonymous caller cannot read availability.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-LESSONVIDEO-006
+  requirement_ids: [REQ-LESSONVIDEO-004]
+  category: Functional
+  title: Re-uploading produces a new version rather than overwriting
+  objective: "Verify a second upload for the same owner reports contentVersion 2."
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-LESSONVIDEO-007
+  requirement_ids: [REQ-LESSONVIDEO-001, REQ-LESSONVIDEO-003]
+  category: Validation
+  title: Uploads are validated on their bytes and their owner
+  objective: >
+    Verify a non-MP4 is rejected by magic bytes rather than by declared content type, and
+    that a video with both owners or neither is refused.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-LESSONVIDEO-008
+  requirement_ids: [REQ-LESSONVIDEO-006]
+  category: Validation
+  title: A studio lesson is stored as a blueprint and a malformed one is refused
+  objective: >
+    Verify a real Lesson JSON round-trips with its studioLessonId and schema version, and
+    that a payload that is not a lesson is rejected with every problem listed at once.
+  systems: [Backend, Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-LESSONVIDEO-009
+  requirement_ids: [REQ-LESSONVIDEO-007]
+  category: Security
+  title: Entitlement is decided in one place and staff are never locked out
+  objective: >
+    Verify a gated deployment refuses a STUDENT, still allows ADMIN and REVIEWER, and that a
+    null user never holds a capability.
+  systems: [Backend]
+  status: Ready
+  notes: null
+
+- id: SCN-LESSONVIDEO-010
+  requirement_ids: [REQ-LESSONVIDEO-005]
+  category: Functional
+  title: A lesson downloads once and then plays with no network
+  objective: >
+    Verify the download/play cycle on a device, and that reopening the same question does not
+    download again.
+  systems: [Mobile]
+  status: Ready
+  notes: "The central claim of the feature; needs a device."
+
+- id: SCN-LESSONVIDEO-011
+  requirement_ids: [REQ-LESSONVIDEO-005]
+  category: EdgeCase
+  title: Offline with no download is explained plainly, and the explanation still works
+  objective: >
+    Verify that with no network and no cached file the student is told it is not downloaded,
+    and the question's written explanation is unaffected.
+  systems: [Mobile]
+  status: Ready
+  notes: "AI video must be an enhancement, never a dependency of the core experience."
+
+- id: SCN-LESSONVIDEO-012
+  requirement_ids: [REQ-LESSONVIDEO-004, REQ-LESSONVIDEO-005]
+  category: EdgeCase
+  title: A new version invalidates the cached copy on the device
+  objective: >
+    Verify a device holding v1 detects v2, re-downloads, and deletes the superseded file.
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-LESSONVIDEO-013
+  requirement_ids: [REQ-LESSONVIDEO-005, REQ-LESSONVIDEO-007]
+  category: Security
+  title: Sign-out clears downloaded lessons
+  objective: >
+    Verify one account's downloaded lessons do not remain playable for the next person to
+    sign in on the same phone.
+  systems: [Mobile]
+  status: Ready
+  notes: null
+
+- id: SCN-LESSONVIDEO-014
+  requirement_ids: [REQ-LESSONVIDEO-001, REQ-LESSONVIDEO-006]
+  category: Functional
+  title: An admin can upload, link, publish and unpublish from the console
+  objective: >
+    Verify the AI Videos admin page performs the whole lifecycle against a real backend,
+    including attaching a lesson JSON as the blueprint.
+  systems: [Admin]
+  status: Ready
+  notes: null
+
+- id: SCN-LESSONVIDEO-015
+  requirement_ids: [REQ-LESSONVIDEO-008]
+  category: Functional
+  title: The storage provider can be swapped by configuration alone
+  objective: >
+    Verify setting app.video-storage.provider to cloudinary genuinely selects that
+    implementation, and that exactly one is ever active.
+  systems: [Backend]
+  status: Ready
+  notes: >
+    Guards a silent, total failure: two @ConditionalOnProperty beans behind one interface means a
+    typo gives zero beans (the app will not start) or two (ambiguous dependency). Neither shows
+    up in a compile.
+
+- id: SCN-LESSONVIDEO-016
+  requirement_ids: [REQ-LESSONVIDEO-008]
+  category: Functional
+  title: A real Cloudinary upload and signed delivery round-trips
+  objective: >
+    Verify a real MP4 reaches Cloudinary as an authenticated asset and that the issued URL
+    actually serves it - including whether time-limited delivery works on this account's plan.
+  systems: [Backend]
+  status: Blocked
+  notes: >
+    Blocked on credentials: none exist on the development machine (app.document-storage.fake is
+    true there for the same reason). Needs an environment with the real Cloudinary account.
+
+- id: SCN-LESSONVIDEO-017
+  requirement_ids: [REQ-LESSONVIDEO-009]
+  category: Functional
+  title: A never-downloaded lesson plays immediately via streaming
+  objective: >
+    Verify Play now opens the player and plays without a download step, and that no local file
+    is created by streaming.
+  systems: [Mobile]
+  status: Ready
+  notes: "Confirms streaming and the offline download path are additive, not exclusive."

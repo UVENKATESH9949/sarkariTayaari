@@ -797,3 +797,61 @@ export function rejectAiContent(id, reason, expectedVersion) {
 export function unpublishAiContent(id, expectedVersion) {
   return request(`/api/admin/ai-content/${id}/unpublish`, jsonBody("PUT", { expectedVersion }));
 }
+
+/* -------------------------------------------------------------- Lesson videos */
+
+export function getLessonVideos() {
+  return request(`/api/admin/lesson-videos`);
+}
+
+// Multipart, same pattern as uploadImage — field name "file", Content-Type left unset so the
+// browser supplies the multipart boundary itself.
+export async function uploadLessonVideo(file, fields) {
+  const form = new FormData();
+  form.append("file", file);
+  Object.entries(fields).forEach(([key, value]) => {
+    if (value !== null && value !== undefined && value !== "") {
+      form.append(key, String(value));
+    }
+  });
+
+  const headers = authToken ? { Authorization: `Bearer ${authToken}` } : {};
+  const response = await fetch(`${BASE_URL}/api/admin/lesson-videos`, {
+    method: "POST",
+    body: form,
+    headers,
+  });
+  if (response.status === 401) onUnauthorized();
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+  return response.json();
+}
+
+export function publishLessonVideo(id) {
+  return request(`/api/admin/lesson-videos/${id}/publish`, { method: "PUT" });
+}
+
+export function unpublishLessonVideo(id) {
+  return request(`/api/admin/lesson-videos/${id}/unpublish`, { method: "PUT" });
+}
+
+export function deleteLessonVideo(id) {
+  return request(`/api/admin/lesson-videos/${id}`, { method: "DELETE" });
+}
+
+export function getLessonBlueprints() {
+  return request(`/api/admin/lesson-blueprints`);
+}
+
+export function createLessonBlueprint(payload) {
+  return request(`/api/admin/lesson-blueprints`, jsonBody("POST", payload));
+}
+
+export function publishLessonBlueprint(id) {
+  return request(`/api/admin/lesson-blueprints/${id}/publish`, { method: "PUT" });
+}
+
+export function deleteLessonBlueprint(id) {
+  return request(`/api/admin/lesson-blueprints/${id}`, { method: "DELETE" });
+}

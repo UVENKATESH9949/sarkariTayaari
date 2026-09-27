@@ -2,7 +2,7 @@
 
 **GENERATED FILE — do not hand-edit.** Regenerate with `node scripts/qa/generate-reports.js`. Every number below is computed directly from qa/*.yaml at generation time — nothing here is hardcoded or estimated.
 
-_Generated at: 2026-09-25T18:28:17.213Z_
+_Generated at: 2026-09-27T13:16:34.975Z_
 
 ## Coverage
 
@@ -12,8 +12,10 @@ _Generated at: 2026-09-25T18:28:17.213Z_
 | ANALYTICS | 5 | 6 | 6 | 1.2 |
 | AUTH | 18 | 30 | 40 | 2.2 |
 | CATALOG | 26 | 46 | 56 | 2.2 |
-| DAILYPLAN | 15 | 33 | 34 | 2.3 |
+| DAILYPLAN | 16 | 34 | 35 | 2.2 |
+| HOME | 5 | 5 | 7 | 1.4 |
 | LEARNING-STATE | 5 | 8 | 8 | 1.6 |
+| LESSONVIDEO | 9 | 17 | 20 | 2.2 |
 | MOCK | 5 | 8 | 10 | 2.0 |
 | ONBOARDING | 15 | 28 | 31 | 2.1 |
 | PRACTICE | 8 | 13 | 13 | 1.6 |
@@ -22,11 +24,11 @@ _Generated at: 2026-09-25T18:28:17.213Z_
 | ROADMAP | 6 | 14 | 15 | 2.5 |
 | USER-PROGRESS | 6 | 8 | 8 | 1.3 |
 | WEB | 14 | 22 | 23 | 1.6 |
-| **Total** | **180** | **338** | **373** | **2.1** |
+| **Total** | **195** | **361** | **401** | **2.1** |
 
 ## Execution status
 
-122 real execution record(s) across 112 test case(s). A test case with no execution record stays `Not Executed`; where a case has been run more than once, the most recent record wins.
+130 real execution record(s) across 119 test case(s). A test case with no execution record stays `Not Executed`; where a case has been run more than once, the most recent record wins.
 
 | Module | Not Executed | Pass | Fail | Blocked | Skipped |
 |---|---|---|---|---|---|
@@ -34,8 +36,10 @@ _Generated at: 2026-09-25T18:28:17.213Z_
 | ANALYTICS | 1 | 5 | 0 | 0 | 0 |
 | AUTH | 30 | 7 | 0 | 3 | 0 |
 | CATALOG | 51 | 3 | 0 | 2 | 0 |
-| DAILYPLAN | 3 | 28 | 0 | 3 | 0 |
+| DAILYPLAN | 4 | 28 | 0 | 3 | 0 |
+| HOME | 7 | 0 | 0 | 0 | 0 |
 | LEARNING-STATE | 0 | 8 | 0 | 0 | 0 |
+| LESSONVIDEO | 12 | 7 | 0 | 1 | 0 |
 | MOCK | 7 | 3 | 0 | 0 | 0 |
 | ONBOARDING | 22 | 8 | 0 | 1 | 0 |
 | PRACTICE | 2 | 7 | 0 | 3 | 1 |
@@ -55,8 +59,10 @@ Evidence-based per qa/README.md's rule — Automated only where a specific test 
 | ANALYTICS | 5 | 1 | 0 | 0 | 0 |
 | AUTH | 19 | 6 | 3 | 12 | 0 |
 | CATALOG | 20 | 4 | 19 | 13 | 0 |
-| DAILYPLAN | 20 | 0 | 0 | 14 | 0 |
+| DAILYPLAN | 20 | 0 | 0 | 15 | 0 |
+| HOME | 0 | 0 | 0 | 7 | 0 |
 | LEARNING-STATE | 8 | 0 | 0 | 0 | 0 |
+| LESSONVIDEO | 12 | 0 | 0 | 8 | 0 |
 | MOCK | 3 | 0 | 0 | 7 | 0 |
 | ONBOARDING | 4 | 11 | 0 | 16 | 0 |
 | PRACTICE | 0 | 0 | 0 | 13 | 0 |
@@ -65,18 +71,18 @@ Evidence-based per qa/README.md's rule — Automated only where a specific test 
 | ROADMAP | 13 | 0 | 0 | 2 | 0 |
 | USER-PROGRESS | 4 | 0 | 0 | 4 | 0 |
 | WEB | 3 | 0 | 1 | 19 | 0 |
-| **Total** | **181** | **25** | **55** | **111** | **1** |
+| **Total** | **193** | **25** | **55** | **127** | **1** |
 
-Automated: 49% of all test cases.
+Automated: 48% of all test cases.
 
 ## Priority breakdown (all modules)
 
 | Priority | Count |
 |---|---|
-| Critical | 83 |
-| High | 163 |
-| Medium | 109 |
-| Low | 18 |
+| Critical | 94 |
+| High | 178 |
+| Medium | 110 |
+| Low | 19 |
 
 ## Ambiguous / blocked test cases
 
@@ -103,19 +109,22 @@ Test cases with no determinate expected outcome — established behavior, not a 
 | Critical Business Flow | 9 |
 | Regression — AI | 55 |
 | Regression — ANALYTICS | 6 |
-| Regression — AUTH | 29 |
-| Regression — CATALOG | 55 |
-| Regression — DAILYPLAN | 31 |
-| Regression (Full) | 339 |
+| Regression — AUTH | 40 |
+| Regression — CATALOG | 56 |
+| Regression — DAILYPLAN | 35 |
+| Regression (Full) | 401 |
+| Regression — HOME | 7 |
 | Regression — LEARNING-STATE | 8 |
-| Regression — ONBOARDING | 25 |
-| Regression — PRACTICE | 10 |
+| Regression — LESSONVIDEO | 20 |
+| Regression — MOCK | 10 |
+| Regression — ONBOARDING | 31 |
+| Regression — PRACTICE | 13 |
 | Regression — QUESTIONS | 64 |
 | Regression — REVISION | 10 |
 | Regression — ROADMAP | 15 |
 | Regression — USER-PROGRESS | 8 |
 | Regression — WEB | 23 |
-| Release Gate | 217 |
-| Sanity | 80 |
+| Release Gate | 269 |
+| Sanity | 94 |
 | Smoke | 14 |
 

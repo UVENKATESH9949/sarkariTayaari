@@ -1,0 +1,387 @@
+# LESSONVIDEO module — requirement repository
+#
+# Scope: the AI Video foundation (migration V54, mobile 0033) — lesson_blueprints,
+# lesson_videos, the student read/stream endpoints, admin upload and review, and the
+# on-device cache.
+#
+# What this module deliberately does NOT cover: on-demand video generation. The AI Video
+# Studio is a separate repository with no API — it renders through its own CLI — so nothing
+# in this product can trigger a render. The status vocabulary has somewhere for that to land
+# (QUEUED/GENERATING/PROCESSING) and nothing sets those values today.
+#
+# automation_status is evidence-based, per qa/README.md's standing rule. Mobile cases stay
+# ManualOnly because mobile still has no automated test runner.
+
+- id: REQ-LESSONVIDEO-001
+  feature: A video reaches students only after a human approves it
+  module: LESSONVIDEO
+  system: [Backend, Admin]
+  source_doc: api/LESSON-VIDEOS.md
+  source_section: "Two status fields, and they answer different questions"
+  description: >
+    lesson_videos carries two independent states. status answers "does a playable file exist"
+    (QUEUED/GENERATING/PROCESSING/READY/FAILED/ARCHIVED); content_status answers "has a human
+    approved it" (DRAFT/REVIEW/PUBLISHED, the same workflow ai_content and recruitment_cycles
+    already use). An uploaded video is READY and DRAFT, so staff can watch it before any
+    student sees it.
+  business_rule: >
+    A video is never shown because it was uploaded; it is shown because a human published it.
+    NOT_AVAILABLE is deliberately not a stored status - the absence of a row is what it means.
+  actor: Admin, reviewer, signed-in student
+  preconditions:
+    - "A topic or question exists to attach the video to"
+  inputs:
+    - "An MP4 upload plus exactly one of topicId or questionId"
+  expected_outputs:
+    - "Upload returns status READY and contentStatus DRAFT"
+    - "A student read reports available:false until the video is published"
+  validations:
+    - "Publishing a video with no stored file is rejected"
+  permissions:
+    - "Upload and delete are ADMIN; publish/unpublish/reject are REVIEWER (ADMIN is a superset)"
+  dependencies: []
+  error_conditions:
+    - "Publishing a non-READY video returns 400"
+  edge_conditions:
+    - "Unpublishing a live video removes it from student reads immediately"
+  offline_behavior: "Not applicable - this is a server-side state machine"
+  acceptance_criteria:
+    - "An uploaded video is invisible to students until published, and visible immediately after"
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    LessonVideoTest.uploadIsReadyButUnpublished and .publishThenUnpublish.
+
+- id: REQ-LESSONVIDEO-002
+  feature: A question with no video of its own falls back to its topic lesson
+  module: LESSONVIDEO
+  system: [Backend, Mobile]
+  source_doc: api/LESSON-VIDEOS.md
+  source_section: "GET /api/questions/{questionId}/lesson-video"
+  description: >
+    The question endpoint looks for a video made for that exact question first, then for that
+    question's topic. The response carries resolvedVia (QUESTION or TOPIC) so a client can say
+    truthfully what the student is about to watch.
+  business_rule: >
+    The AI Video Studio produces topic lessons and has no concept of a question, so without
+    this fallback the feature would have no content at all. resolvedVia exists so the app never
+    claims a general topic lesson was made for one specific question.
+  actor: Signed-in student
+  preconditions:
+    - "A published video exists for the question's topic"
+  inputs:
+    - "A question id and a language"
+  expected_outputs:
+    - "available:true with resolvedVia TOPIC, carrying the topic video's id"
+  validations:
+    - "A question-scoped video, when one exists, wins over the topic lesson"
+  permissions:
+    - "Signed-in student"
+  dependencies: [REQ-LESSONVIDEO-001]
+  error_conditions:
+    - "A question with no topic and no own video reports available:false"
+  edge_conditions:
+    - "A question whose topic has no video reports available:false rather than erroring"
+  offline_behavior: "Resolution needs a network unless a copy is already cached on the device"
+  acceptance_criteria:
+    - "A question on a topic that has a lesson resolves to it, and says resolvedVia TOPIC"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "LessonVideoTest.questionFallsBackToTopicLesson"
+
+- id: REQ-LESSONVIDEO-003
+  feature: Access to the bytes is enforced by the backend, not by hiding a button
+  module: LESSONVIDEO
+  system: [Backend]
+  source_doc: api/LESSON-VIDEOS.md
+  source_section: "GET /api/lesson-videos/{videoId}/stream"
+  description: >
+    The stream endpoint is the only path to a video file. storage_key is an opaque key rather
+    than a public URL, so bytes are resolved through VideoStorage at serve time. An unpublished
+    video is 404 to a student (not 403, so ids cannot be probed) and openable by staff for
+    review. A premium video without the AI_VIDEO capability is 403.
+  business_rule: >
+    Every other asset in this schema is a public Cloudinary URL. That is wrong for video: a
+    premium video behind a guessable public link is not gated at all.
+  actor: Signed-in student, reviewer
+  preconditions:
+    - "A video row exists"
+  inputs:
+    - "A video id and a bearer token"
+  expected_outputs:
+    - "200 with the bytes and Accept-Ranges: bytes when permitted"
+  validations:
+    - "An unpublished video is 404 for a student and 200 for staff"
+  permissions:
+    - "Signed-in user; entitlement checked via EntitlementService"
+  dependencies: [REQ-LESSONVIDEO-001]
+  error_conditions:
+    - "A missing stored file is 404, not a 500"
+  edge_conditions:
+    - "An anonymous caller is 401 on every endpoint in this family"
+  offline_behavior: "Not applicable - this is the network path"
+  acceptance_criteria:
+    - "An unpublished video cannot be streamed by a student, and can be by a reviewer"
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    LessonVideoTest.publishedVideoStreams, .unpublishedVideoIsNotFoundForStudents,
+    .staffCanPreviewUnpublished, .authorisationIsEnforced.
+
+- id: REQ-LESSONVIDEO-004
+  feature: A replacement video is a new version, never a silent overwrite
+  module: LESSONVIDEO
+  system: [Backend, Mobile]
+  source_doc: api/LESSON-VIDEOS.md
+  source_section: "Admin endpoints"
+  description: >
+    Uploading again for the same owner, language and teaching level creates a row with the next
+    content_version. The device cache is keyed on (videoId, contentVersion), so a device holding
+    v1 can detect v2 and re-download.
+  business_rule: >
+    A device holding an old file has no way to notice a silent swap, so a corrected lesson would
+    never reach anyone who already had the wrong one.
+  actor: Admin
+  preconditions:
+    - "A video already exists for this owner"
+  inputs:
+    - "A second MP4 upload for the same owner"
+  expected_outputs:
+    - "contentVersion 2"
+  validations:
+    - "The first version's row is not modified"
+  permissions:
+    - "ADMIN"
+  dependencies: [REQ-LESSONVIDEO-001]
+  error_conditions: []
+  edge_conditions:
+    - "Superseded local files are deleted from the device when a new version is seen"
+  offline_behavior: "A device offline at the time keeps playing the version it has"
+  acceptance_criteria:
+    - "A second upload for the same owner reports contentVersion 2"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "LessonVideoTest.reuploadBumpsContentVersion"
+
+- id: REQ-LESSONVIDEO-005
+  feature: A downloaded lesson plays offline, and the written explanation never depends on video
+  module: LESSONVIDEO
+  system: [Mobile]
+  source_doc: api/LESSON-VIDEOS.md
+  source_section: "The two things, and why they are separate"
+  description: >
+    The device caches a lesson under Paths.document/lesson-videos and records local_uri. A
+    resolved lesson with a local file short-circuits the network entirely. With no network and
+    no local copy the student is told plainly that it is not downloaded. In every case the
+    question's authored explanation remains fully available.
+  business_rule: >
+    Internet should be needed to obtain a lesson, not to study it. AI video is an enhancement;
+    it must never degrade the core learning experience.
+  actor: Signed-in student
+  preconditions:
+    - "A published lesson exists for the topic"
+  inputs:
+    - "Opening a question whose topic has a lesson"
+  expected_outputs:
+    - "Download once, then play offline"
+  validations:
+    - "A recorded local_uri whose file no longer exists is treated as not downloaded"
+  permissions:
+    - "Signed-in student"
+  dependencies: [REQ-LESSONVIDEO-002]
+  error_conditions:
+    - "A failed download leaves no partial file that could later look complete"
+  edge_conditions:
+    - "Sign-out clears downloaded lessons, since entitlement is per account"
+  offline_behavior: "A cached lesson plays with no network at all"
+  acceptance_criteria:
+    - "A lesson downloaded once plays in airplane mode, and the written explanation works regardless"
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "Mobile has no automated test runner in this project."
+
+- id: REQ-LESSONVIDEO-006
+  feature: A blueprint is stored as the studio's own Lesson JSON, validated at the boundary
+  module: LESSONVIDEO
+  system: [Backend, Admin]
+  source_doc: api/LESSON-VIDEOS.md
+  source_section: "The two things, and why they are separate"
+  description: >
+    lesson_blueprints.payload holds the AI Video Studio's Lesson JSON verbatim
+    (id, title, exam, subject, topic, language, scenes[]). The backend validates the identity
+    fields and the five-value scene vocabulary; it does not re-implement the studio's full zod
+    schema.
+  business_rule: >
+    The studio validates deeply and refuses to render a bad lesson. This validates shallowly and
+    refuses to STORE something that is not a lesson at all. Duplicating the full zod schema in
+    Java would create a second contract that silently disagrees with the first.
+  actor: Admin
+  preconditions:
+    - "A topic or question to attach the blueprint to"
+  inputs:
+    - "The contents of lessons/<id>.json"
+  expected_outputs:
+    - "A DRAFT blueprint carrying studioLessonId and schemaVersion STUDIO_LESSON_V1"
+  validations:
+    - "Every problem is reported at once, not just the first"
+  permissions:
+    - "ADMIN to create; REVIEWER to publish"
+  dependencies: []
+  error_conditions:
+    - "A payload that is not a lesson is rejected with 400"
+  edge_conditions:
+    - "An unknown scene type is rejected rather than stored and failed at render time"
+  offline_behavior: "Not applicable"
+  acceptance_criteria:
+    - "A real studio lesson is accepted; a malformed one is refused with every problem listed"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: >
+    LessonVideoRulesTest (6 validation cases) and LessonVideoTest.blueprintRoundTrip.
+
+- id: REQ-LESSONVIDEO-007
+  feature: Premium gating has one name and one check point
+  module: LESSONVIDEO
+  system: [Backend]
+  source_doc: api/LESSON-VIDEOS.md
+  source_section: "Storage and entitlement"
+  description: >
+    Access goes through EntitlementService.has(user, Capability.AI_VIDEO). There is no
+    subscription system in this project - questions.is_premium has existed since V2 and is read
+    by nothing - so the answer currently comes from app.entitlements.ai-video-open-to-all
+    (default true). Staff always hold every capability so a reviewer can watch an unpublished
+    video.
+  business_rule: >
+    This is the seam, not the mechanism. Building payments to satisfy a video feature would be
+    the wrong order of work; scattering premium checks through UI components would mean the
+    paywall is enforced only on the client, which is not enforcement.
+  actor: Signed-in student, reviewer
+  preconditions:
+    - "A premium video exists"
+  inputs:
+    - "A stream request for a premium video"
+  expected_outputs:
+    - "403 when the capability is absent; 200 when present"
+  validations:
+    - "A gated deployment still allows ADMIN and REVIEWER"
+  permissions:
+    - "Enforced server-side at serve time"
+  dependencies: [REQ-LESSONVIDEO-003]
+  error_conditions:
+    - "A null user never holds a capability"
+  edge_conditions:
+    - "Flipping one config value locks the feature without any code change"
+  offline_behavior: "A downloaded video is cleared on sign-out, so entitlement cannot be outlived"
+  acceptance_criteria:
+    - "A gated deployment refuses a student and still allows staff"
+  priority: High
+  status: Active
+  ambiguity: >
+    Whether a downloaded premium video should stop playing when an entitlement lapses is
+    undecided - today the file is only cleared on sign-out.
+  automation_status: Automated
+  automation_hint: >
+    LessonVideoRulesTest.gatedDeploymentStillAllowsStaff, .ungatedDeploymentGrantsEveryone,
+    .nullUserHoldsNothing.
+
+- id: REQ-LESSONVIDEO-008
+  feature: Where video files live is a configuration choice, not a code change
+  module: LESSONVIDEO
+  system: [Backend]
+  source_doc: api/LESSON-VIDEOS.md
+  source_section: "Storage and entitlement"
+  description: >
+    app.video-storage.provider selects between the local filesystem (default, credential-free, for
+    development) and Cloudinary (the object store this project already uses for images and
+    ingested PDFs). Cloudinary assets are uploaded as type=authenticated, and delivery is a
+    signed, short-lived URL the backend issues only after the caller has passed every check - the
+    stream endpoint answers 302 rather than proxying the bytes.
+  business_rule: >
+    Local disk is wrong on Cloud Run, whose filesystem is ephemeral and whose instances scale to
+    zero. Proxying every 9MB lesson through the backend would double egress and pressure a service
+    sized for JSON. A redirect is not a weaker door: the URL is minted after the entitlement
+    check, is unguessable without the API secret, and is sent with Cache-Control no-store.
+  actor: Operator
+  preconditions:
+    - "Cloudinary credentials configured (the same ones images already use)"
+  inputs:
+    - "app.video-storage.provider set to local or cloudinary"
+  expected_outputs:
+    - "The matching VideoStorage implementation is injected"
+    - "local returns 200 with bytes; cloudinary returns 302 to a signed URL"
+  validations:
+    - "Exactly one implementation is active - never zero and never two"
+  permissions:
+    - "Not user-facing; enforcement is unchanged on both paths"
+  dependencies: [REQ-LESSONVIDEO-003]
+  error_conditions:
+    - "If the account cannot issue time-limited links, it falls back to a signed non-expiring URL and logs a WARN"
+  edge_conditions:
+    - "A Cloudinary public id is derived from the storage key by dropping .mp4, so the row and the asset cannot drift"
+  offline_behavior: "Irrelevant once downloaded - the device plays its local copy"
+  acceptance_criteria:
+    - "Setting the provider to cloudinary swaps the implementation without any code change"
+  priority: Critical
+  status: Active
+  ambiguity: >
+    Whether Cloudinary's time-limited delivery is available on this account's plan is unconfirmed -
+    no Cloudinary credentials exist on the development machine, so the real upload and the real
+    expiry behaviour have never been exercised.
+  automation_status: Automated
+  automation_hint: >
+    VideoStorageSelectionTest (2 cases) and LessonVideoRulesTest's four publicIdFor cases.
+
+- id: REQ-LESSONVIDEO-009
+  feature: A lesson can be watched immediately, without downloading first
+  module: LESSONVIDEO
+  system: [Mobile]
+  source_doc: api/LESSON-VIDEOS.md
+  source_section: "GET /api/lesson-videos/{videoId}/stream"
+  description: >
+    Before a lesson is downloaded, the Video lesson card offers two actions: "Play now" (streams
+    directly from the network via expo-video's own authenticated {uri, headers} source) and
+    "Download for offline" (the existing cache-then-play path). Streaming reuses the exact same
+    /stream endpoint the download path already calls, so publication and entitlement are enforced
+    identically either way, and it creates no local file.
+  business_rule: >
+    Download-then-play is right for a slow or metered connection, but making every student wait
+    for a full download before watching a 2-minute lesson is the wrong default on a good
+    connection. Streaming is additive - it does not replace the offline path, since a student on
+    a slow connection still wants "fetch once, watch forever offline".
+  actor: Signed-in student
+  preconditions:
+    - "A published video exists and is not yet downloaded on this device"
+  inputs:
+    - "Tapping Play now on a downloadable lesson"
+  expected_outputs:
+    - "The player opens and plays without a download step"
+    - "No file is written under the device's lesson-videos directory"
+  validations:
+    - "The bearer token travels with the stream request; it is resolved on the player screen, never carried through route params"
+  permissions:
+    - "Enforced identically to the download path, via the same /stream endpoint"
+  dependencies: [REQ-LESSONVIDEO-003, REQ-LESSONVIDEO-005]
+  error_conditions:
+    - "A stream that fails mid-playback shows a message pointing at downloading for offline instead, rather than a silent stall"
+  edge_conditions:
+    - "Download remains available alongside streaming, for later offline use"
+  offline_behavior: "Streaming requires a network; it is not the offline path - Download for offline is"
+  acceptance_criteria:
+    - "A never-downloaded, published lesson plays via Play now with no local file created"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "Mobile has no automated test runner in this project."

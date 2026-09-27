@@ -1068,3 +1068,45 @@ export const remoteSnapshots = sqliteTable("remote_snapshots", {
   /** Epoch millis. Drives both the "last updated" line and any staleness policy a caller wants. */
   fetchedAt: integer("fetched_at").notNull(),
 });
+
+/**
+ * AI Video foundation — the on-device video cache (migration 0033).
+ *
+ * <p>Unlike every other table above, this is NOT synced reference content. A row appears only
+ * when a student actually asks whether a lesson exists for a topic or question, because shipping
+ * metadata for every video to every device would make people who never watch one pay for them —
+ * the opposite of what this product wants on a slow connection.
+ *
+ * The cache key is (id, contentVersion): a corrected video arrives as a new version, so a device
+ * holding the old file can tell it is stale rather than playing a superseded lesson forever.
+ *
+ * `localUri`/`downloadedAt` are local-only, exactly like `questionMedia`'s — there is no server
+ * equivalent, and any write that refreshes this row must preserve them or it silently throws
+ * away a download the student already paid for in data.
+ */
+export const lessonVideos = sqliteTable(
+  "lesson_videos",
+  {
+    id: text("id").primaryKey(),
+    /** TOPIC or QUESTION — what the student asked about, not necessarily what was found. */
+    ownerKind: text("owner_kind").notNull(),
+    ownerId: text("owner_id").notNull(),
+    /** What the server actually matched: TOPIC or QUESTION. */
+    resolvedVia: text("resolved_via"),
+    languageCode: text("language_code").notNull(),
+    teachingLevel: text("teaching_level").notNull().default("STANDARD"),
+    quality: text("quality").notNull().default("STANDARD"),
+    contentVersion: integer("content_version").notNull().default(1),
+    status: text("status").notNull(),
+    durationSeconds: integer("duration_seconds"),
+    sizeBytes: integer("size_bytes"),
+    checksumSha256: text("checksum_sha256"),
+    requiresPremium: integer("requires_premium", { mode: "boolean" }).notNull().default(false),
+    playbackPath: text("playback_path"),
+    localUri: text("local_uri"),
+    downloadedAt: integer("downloaded_at", { mode: "timestamp_ms" }),
+    /** When the device last asked the server about this owner. */
+    checkedAt: integer("checked_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [index("idx_lesson_videos_owner").on(table.ownerKind, table.ownerId, table.languageCode)],
+);

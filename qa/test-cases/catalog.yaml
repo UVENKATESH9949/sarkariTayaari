@@ -1911,7 +1911,7 @@
   automation_status: ManualOnly
   automation_reference: null
 
-- id: TC-CATALOG-050
+- id: TC-CATALOG-056
   requirement_ids: [REQ-CATALOG-048]
   scenario_id: SCN-CATALOG-049
   system: Mobile

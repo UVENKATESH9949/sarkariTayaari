@@ -34,6 +34,7 @@ import m0029 from './0029_practice_session_started_at.sql';
 import m0030 from './0030_profile_updated_at.sql';
 import m0031 from './0031_remote_snapshots.sql';
 import m0032 from './0032_practice_result_insight.sql';
+import m0033 from './0033_lesson_videos.sql';
 
   export default {
     journal,
@@ -70,6 +71,7 @@ m0028,
 m0029,
 m0030,
 m0031,
-m0032
+m0032,
+m0033
     }
   }

@@ -75,7 +75,7 @@
     "mirrors by reading" is not "agrees when run".
 
 - execution_id: EXEC-CATALOG-0050
-  test_case_id: TC-CATALOG-050
+  test_case_id: TC-CATALOG-056
   test_case_version: 1
   environment: "Android emulator-5554, dev client on Metro, backend on the host via 10.0.2.2"
   build_version: "feature/on-device-llm-spike, uncommitted working tree"

@@ -35,6 +35,7 @@
         }
       ],
       "expo-sqlite",
+      "expo-video",
       "llama.rn",
       [
         "expo-build-properties",

@@ -17,6 +17,7 @@ export * from "./questions";
 export * from "./reference";
 export * from "./reminders";
 export * from "./sessionFeedback";
+export * from "./lessonVideo";
 export * from "./studyRoadmap";
 export * from "./practiceResultInsight";
 export * from "./preparationProfile";

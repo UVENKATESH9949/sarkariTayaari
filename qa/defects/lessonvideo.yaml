@@ -1,0 +1,11 @@
+# LESSONVIDEO module — defects
+#
+# A defect record is created ONLY when a real test execution fails (qa/execution/*.yaml records a
+# failure) and someone determines it represents a genuine product defect, not an environment issue
+# or a known deviation. Never fabricated ahead of a real execution.
+#
+# Empty: the backend suite ran green on its first complete run (LessonVideoTest 14/14,
+# LessonVideoRulesTest 9/9), and no device or browser pass has happened yet — so there is nothing
+# here to record either way.
+
+[]

@@ -29,6 +29,17 @@ import { useTheme, useThemedStyles, type Theme } from "../ui/ThemeContext";
 import { trackEvent } from "../telemetry/analytics";
 
 /**
+ * Display label for the quiz header ("Topic · Level"), matching Practice's own levels screen
+ * exactly for the codes it knows (`getDifficultyLevels` supplies the real admin-set label there,
+ * which a task navigating straight past that screen has no cheap way to look up) — a plain
+ * capitalised fallback for anything else, and "All Levels" for a task with no stated difficulty.
+ */
+function difficultyLabel(code: string | null): string {
+  if (!code) return "All Levels";
+  return code.charAt(0).toUpperCase() + code.slice(1);
+}
+
+/**
  * "Today's Plan" — the student-facing surface of the personalization program.
  *
  * A root-level pushed screen reached from Home and from More — **deliberately not a sixth tab**,
@@ -155,10 +166,18 @@ export default function DailyPlanScreen() {
   function openTask(task: DailyPlanTask) {
     trackEvent("daily_plan_task_opened", { examCode, topicId: task.topicId, source: task.source });
     /*
-     * Into the levels screen rather than straight into a quiz. The task names a difficulty
-     * sometimes and a question count always, but Practice's own flow owns choosing a level and
-     * starting a session — jumping past it would be a second entry path into the quiz to keep
-     * working forever after.
+     * Straight into the quiz, not the levels screen — the owner's own explicit instruction
+     * (2026-09-28): a task was already chosen for a reason (its `source`/`reason` sentence
+     * explains why), so asking the student to re-pick a difficulty on top of that is a second
+     * decision nobody asked for. `task.difficultyCode` already carries the level the task was
+     * planned at ("easy"/"medium"/"hard"), matching the exact vocabulary Practice's own levels
+     * screen uses for `levelKey` — falling back to "all" for a task with no stated difficulty
+     * (a real, valid case: not every purpose names one) mirrors Practice's own "All Levels".
+     *
+     * Back navigation needs no special handling: this screen PUSHES the quiz screen, and the
+     * quiz's back button/gesture/header-arrow are all plain stack pops (see its own `endSession`
+     * cleanup comment) — so back from here always returns to this Daily Plan screen, never to
+     * Practice's browse/levels screens, because those were never pushed in between.
      *
      * A mistake-review task is the one exception: the questions it means are the ones the student
      * already answered wrongly, and Revise's Wrong Answers tab already shows each with the answer
@@ -171,13 +190,15 @@ export default function DailyPlanScreen() {
     }
 
     router.push({
-      pathname: "/practice/levels",
+      pathname: "/practice/quiz",
       params: {
         examCode: examCode ?? "",
         examLabel: examName ?? "",
         subjectName: task.subjectName,
         topicId: task.topicId,
         topicName: task.topicName,
+        levelKey: task.difficultyCode ?? "all",
+        levelLabel: difficultyLabel(task.difficultyCode),
       },
     });
   }

@@ -1,6 +1,515 @@
 # Project Status — Resume Point
 
+## Session of 2026-09-28 — Home redesign, real readiness, a startup prefetch pattern, and a daily-plan navigation fix
+
+**Two changes, requested separately in the same session and both built while the owner was away
+for an hour (no device pass yet — see below).**
+
+**1. Daily Plan tasks now open the quiz directly, skipping the levels screen.** The owner's own
+instruction: a task was already chosen for a stated reason, so making the student re-pick a
+difficulty on top of that is a second decision nobody asked for. `daily-plan.tsx`'s `openTask`
+now pushes straight to `/practice/quiz` with `levelKey: task.difficultyCode ?? "all"` — the exact
+vocabulary Practice's own levels screen already uses for `getPracticeQuestions`, so no new
+concept was introduced. **Back navigation needed no code change at all**: confirmed by reading
+`quiz.tsx`'s own `endSession` cleanup comment, which states plainly that back button/gesture/
+header-arrow are all plain stack pops (the `resetSignal.practice` → `router.replace("/practice")`
+path only fires on a **tab-bar press**, a completely different mechanism). Since Daily Plan now
+pushes the quiz directly with nothing in between, popping back naturally lands on Daily Plan —
+this was true by construction, not something added. The mistake-review exception (→ Revise →
+Wrong Answers) is untouched.
+
+**2. The Home tab was redesigned around the owner's 20-section brief, read and scoped before any
+code changed.** Two real premises in that brief were checked and turned out to be wrong, in the
+project's favour:
+- **"The project may not have a proper icon library."** It does — `@expo/vector-icons`
+  (`Ionicons`) is already used on every screen in this app, including Home itself. No new
+  dependency was added.
+- **"Daily Plan is generated on tap, with no prefetch."** Also false, by this point — a prior
+  session (`ec51285`) had already built a real stale-while-revalidate snapshot cache
+  (`data/dailyPlanData.ts`, `data/snapshotStore.ts`): read cache → return instantly → refresh in
+  background → notify via callback. **The actual gap was narrower than the brief assumed**: that
+  function was only ever *called* when the Daily Plan screen mounted, never earlier. So the real
+  fix is a small addition, not a new cache architecture.
+
+**Shipped on Home:**
+- **Continue Practice removed. Two equal-width square cards (Practice / Mock Tests) replace it**,
+  each jumping straight to `/practice/browse` or `/mock-test/papers` scoped to the currently
+  active exam (never hardcoded — read from the same `useActiveExam()` provider Home already used).
+  With no exam followed, each falls back to that tab's own root, which already handles the
+  no-exam state — no new empty-state code was needed.
+- **Today's Plan is now a full gradient hero card**, the same visual weight as Readiness, with a
+  one-line explanation ("Your daily study tasks, personalised for your preparation.") — up from a
+  plain container row.
+- **Readiness is real, not the hardcoded 62%.** New `practice/readiness.ts` exports
+  `computeReadiness(sessions, examCode?)` — the *exact* formula Progress already used
+  (`totalCorrect/totalQuestions`), extracted so there is one implementation, not two that could
+  quietly disagree. **Progress itself was refactored to call the same function**, closing that
+  risk rather than just asserting it away in a comment. Home's card scopes it to the active exam
+  (a real, additive filter on the same formula); Progress keeps its existing whole-app figure.
+  With no sessions for the active exam, the card shows a dash and a short prompt, never a
+  fabricated number.
+- **"Explore Exams" removed from Home** (My Exams, under More, is untouched and still the way to
+  browse/follow other exams). **A new "More ways to prepare" section replaces that spot**: AI
+  Videos (non-tappable "Coming soon" — no chevron, so it reads as informational rather than
+  broken), Preparation Radar, and Study Roadmap — the latter two are genuine Home shortcuts to the
+  exact screens More already links to (same routes, same icons/copy as More's own rows, so there
+  is no second description of the same feature to drift from the first).
+- **LLM Test removed.** The whole "Developer" section and its row deleted from More;
+  `src/app/llm-spike.tsx` deleted. **Checked first, not assumed**: grepped the entire mobile
+  source tree and confirmed the route and the file were referenced from exactly those two places
+  and nowhere else. The `llama.rn` native config plugin in `app.json` was **deliberately left
+  in place** — removing it needs a native rebuild, which is a different, larger change than a
+  navigation/UI removal, and the brief's own caution not to break "shared LLM infrastructure" was
+  read as covering exactly this: the plugin costs nothing sitting unused, and the row/screen were
+  the only product-visible surface of the spike.
+
+**The startup-prefetch architecture the brief asked to be "reusable, not a one-off for Daily
+Plan" is new (`data/startupPrefetch.tsx`), and it is deliberately narrow, not general.** A single
+`<StartupPrefetch />` component, mounted at the very last app-start gate (`AppStartGate`, right
+before `{children}` renders — chosen because it's the earliest point every provider it needs
+`useAuth()`/`useActiveExam()` is already available, and the latest point that's still "before the
+student can see anything"), calls the *existing* `getDailyPlan(examCode)` once per (account, exam)
+pair, fire-and-forget, the moment both are known. It changes **when** that function is first
+called, not what it does — no second cache, no new API, no blocking of app startup (renders
+`null`, the call is never awaited).
+
+**Two things the brief asked to prefetch were deliberately NOT added, and this is written into
+the component's own doc comment so the scoping decision survives past this session:**
+- **Readiness needs no prefetch** — it's computed entirely from `useSessionHistory()`, already
+  loaded app-wide with no network call in the first place.
+- **The Study Roadmap has NO cache, by an earlier session's own explicit design** (its order
+  moves with every session practised, its minutes move with the cohort — a saved copy would often
+  be silently wrong). Prefetching it would spend a real request on data thrown away the instant
+  it's not the freshest possible answer, for a screen students open rarely. This directly honours
+  the brief's own "acceptable for a small number of core features, not every possible one" rule
+  rather than reading "make this reusable" as "call everything."
+
+**Verified:** mobile `tsc --noEmit` clean throughout every step; `expo lint` at the **exact
+pre-existing 7-problem baseline** after every change (checked after each file, not just once at
+the end) — zero new violations in any touched file. Backend was not touched by this session at
+all.
+
+**⚠️ NOT VERIFIED — no device pass happened, because the owner was away for the hour this was
+built in.** Every claim above is proven by reading the code paths involved (the back-navigation
+claim especially rests on a code comment, not a tap), not by watching a screen. In particular:
+the two new quick-action cards have never been tapped; the real readiness number has never been
+compared against a real completed session's actual figures; the startup prefetch has never been
+timed against a real cold launch: reading `getDailyPlan`'s own snapshot-write logic is strong
+evidence it fires and writes correctly, but "does Today's Plan actually feel faster on a real
+phone" is an observation nobody has made yet; the AI Videos/Radar/Roadmap row has never been
+tapped; the LLM Test removal has never been confirmed by opening More on a device.
+
+**QA:** new `HOME` module — `REQ-HOME-001..005`, `SCN-HOME-001..005`, `TC-HOME-001..007` (all
+`ManualOnly`, all `Not Executed` — mobile has no automated runner, and none of this has been seen
+on a device yet). `REQ-DAILYPLAN-016`, `SCN-DAILYPLAN-034`, `TC-DAILYPLAN-035` for the navigation
+change. RTM -> **195/361/401**. Nothing committed.
+
+**NEXT, in order:** (1) **the device pass** — this is the single largest gap, and everything
+above is unverified until it happens: sign in, follow an exam, tap both quick-action cards, check
+Readiness against a real completed session, cold-launch the app and time how Today's Plan feels
+to open, tap the three new More-ways-to-prepare rows, confirm More has no LLM Test row left; (2)
+tap a Daily Plan task and confirm it lands in the quiz directly, then confirm back genuinely
+returns to Daily Plan rather than Practice; (3) decide whether Home's own square-card copy/spacing
+needs a pass on a small-screen device — this was designed by reading `spacing`/`radius` tokens and
+existing sibling cards, not by looking at a rendered screen.
+
+## Session of 2026-09-26 — AI Video foundation: blueprints, videos, admin upload, on-device cache
+
+**UPDATE — STREAMING ADDED: a lesson can now be watched without downloading first, and it is
+device-verified.** The owner asked directly ("can I play without download") — the answer was no,
+by deliberate design (download-then-play, per the brief's rural-first principle), but this was a
+reasonable gap to close: a student on a decent connection shouldn't have to wait for an 8MB
+download before watching a 2-minute lesson.
+
+**Reused the exact same `/stream` endpoint, no new backend contract.** `expo-video`'s
+`VideoSourceObject` accepts `{ uri, headers }`, so the native player (ExoPlayer/AVFoundation, not
+`expo-file-system`'s downloader) can request the authenticated endpoint directly. Publication and
+entitlement are enforced **exactly once**, identically for streaming and downloading — there was
+no second check to add or get wrong. `VideoStorage` needed no change at all.
+
+**`LessonVideoCard`'s "downloadable" state now offers two actions**, not one: **"Play now"**
+(primary — streams immediately) and **"Download for offline"** (secondary — the existing
+cache-then-play path, kept exactly as it was). Streaming does not replace downloading: a student
+on a slow or metered connection still wants "fetch once, watch forever offline", so both stay
+available side by side.
+
+**The player screen resolves its own bearer token, rather than the card passing it through route
+params** — `loadSession()` is called inside `app/lesson-video.tsx` itself when a `streamPath` is
+given, so a token never sits in navigation state (which can be inspected via the dev menu, or
+persist in memory longer than intended). `useVideoPlayer`'s internal `useReleasingSharedObject`
+re-creates the player whenever its source's `JSON.stringify` changes — confirmed by reading the
+hook's actual source, not assumed — so starting with `source: null` and swapping in the real
+`{uri, headers}` once the token resolves asynchronously works cleanly, with no player left stuck
+on a stale source.
+
+**Verified end to end on the device, not just typechecked** — pure JS/TS change, no native
+dependency added, so no rebuild was needed, only a Metro restart against the existing (already
+`expo-video`-compiled) install. Signed back into the same disposable test account (its onboarding
+and profile had persisted server-side across the earlier sign-out), re-uploaded and published the
+real 8.3MB studio lesson to a fresh isolated backend, and opened a **different** real Profit &
+Loss question — confirming the question pool is genuinely randomized session to session, not a
+fixture. **Confirmed the local `lesson-videos` directory had no file for this video before the
+test.** The card correctly showed both actions with the new copy ("Play now · 2:06 · streams over
+your connection" / "Download for offline · 8.3 MB · watch without a connection later"). Tapping
+Play now opened the player **immediately, with no download step**, and it played the real
+concept-scene content — the grid animation visibly further along than an earlier unrelated
+playback, which is what genuine real-time streaming looks like rather than a cached replay.
+**A repeat directory check afterward confirmed streaming created no local file.**
+
+**Full cleanup performed**: the re-uploaded video and blueprint deleted from the isolated backend
+(0 remaining, 0 stored files), the admin token revoked, `mobile/.env.local` restored to `:8080`,
+Metro and the isolated backend stopped — the backend already on :8080 (another session's,
+confirmed still stale for V54) was never touched.
+
+**QA:** `REQ-LESSONVIDEO-009`, `SCN-LESSONVIDEO-017`, `TC-LESSONVIDEO-020` — genuinely run and
+**Pass**, recorded directly in the test case (mobile has no automated runner, so there is no
+separate execution file entry for it — following this module's existing convention for
+`ManualOnly` cases). RTM -> **189/355/393**.
+
+**Not changed, and worth stating plainly:** the download-then-offline-play path from the earlier
+sessions is completely untouched — `handleDownload`/`handlePlay` and the whole cache module are
+unmodified. Streaming is additive.
+
+**UPDATE — THE DEVICE PASS RAN. Real dev-client rebuild, real 8.3MB studio video, real download,
+real offline playback, real sign-out cleanup — the largest gap this work had is closed.**
+Records: `qa/execution/2026-09-27-lessonvideo-device.yaml` (4/4 Pass).
+
+**Rebuilt the dev client** (`npx expo run:android`, ~4m33s of real Gradle work since most was
+cached) to compile in `expo-video` — no prior build had it. Confirmed the emulator (`emulator-5554`)
+was the only attached device and idle (a day-stale Metro process was found and stopped first to
+free memory, down to 2.8GB free of 16GB before the build). **A real backend was found already
+listening on :8080 and was stale** — the V54 endpoints 404'd — so it was left untouched (likely
+another concurrent session's) and a fresh isolated backend ran on :8090, with `mobile/.env.local`
+temporarily repointed at it and restored to `:8080` afterward. **A real trap hit along the way:
+the dev build's API URL is inlined by Metro at bundle time, not native-compile time** — so
+repointing it needed only a `.env.local` edit + Metro restart, not a second native rebuild.
+
+**Migration 0033 applied cleanly to the real, populated on-device database** — the single riskiest
+statement in the whole mobile change. Snapshotted before (33 migrations, 37,921 real questions, no
+`lesson_videos` table) and after the rebuild reinstalled the app (34 migrations, 37,921 questions
+**unchanged**, `lesson_videos` present with the designed 17-column schema, 0 rows). No migration-
+failure screen at any point.
+
+**Signed in as a genuinely new account** (`sarkaritaiyaari.devtest.lessonvideo@gmail.com`, created
+through the app's own real OTP flow — code read from the isolated backend's log, mail is off in
+dev) and onboarded through all 7 steps to SSC CGL, exactly like a real student would. Uploaded and
+published the **real** `output/profit-and-loss.mp4` (8,696,996 bytes) and its matching
+`lessons/profit-and-loss.json` blueprint from `C:\AIVideos` to the isolated backend.
+
+**Opened a real Profit & Loss question — one of 378 real questions on that topic — and answered
+it. The Video lesson card rendered correctly for the first time ever on a device**: "Video lesson
+/ Covers this topic" (`resolvedVia: TOPIC`, correctly labelled since this is the question-to-topic
+fallback, not a video made for that specific question) and "Download the lesson · 2:06 · 8.3 MB ·
+watch offline after".
+
+**Tapped Download: real progress showed, then "Watch the lesson · saved on your device".**
+Pulled the actual on-device file directly — filename `f7082ab2-...-v1.mp4` (the real video id and
+content version), size exactly 8,696,996 bytes, and **its SHA-256 matched the source studio file
+byte-for-byte**. The local `lesson_videos` row was correct in every field: `owner_kind QUESTION`,
+the real question's own id (not the topic id — confirms the question-scoped lookup genuinely ran),
+`resolved_via TOPIC`, `status READY`, `local_uri`/`downloaded_at` both set, checksum matching.
+
+**Tapped Watch: the player opened and played the ACTUAL rendered studio content** — the "What are
+'Profit' and 'Loss'?" concept scene, with its real cost-price/selling-price grid animation and
+narration caption ("A profit of twenty rupees on every hundred rupees") — not a placeholder, not a
+black screen. `expo-video`'s `VideoView`/`useVideoPlayer` render correctly on this device.
+
+**Then the central product claim was tested directly, not inferred: real offline playback.**
+Disabled wifi and mobile data (`svc wifi disable` / `svc data disable`), confirmed genuinely
+unreachable (a ping to 8.8.8.8 failed). Reopened the same question — the card still read "Watch
+the lesson · saved on your device" with **no network call needed** to reach that state. Tapped
+Watch: **the video played from the local file with zero network reachable**, starting from its
+title scene ("Welcome back to SarkariTaayari"). This is the "internet needed to obtain, not to
+study" principle, proven rather than assumed. Network was restored immediately after
+(`svc wifi enable` / `svc data enable`, confirmed by a successful ping).
+
+**Then sign-out clearing was verified directly, not assumed from the code.** Confirmed 1 file + 1
+DB row present before sign-out. Signed out through the app's own Account screen and its
+confirmation dialog. **After sign-out: the `lesson-videos` directory no longer exists on the
+device at all, and `lesson_videos` has 0 rows.** A downloaded lesson cannot outlive the account
+that fetched it, confirmed rather than inferred.
+
+**A pre-existing, already-documented bug was seen again and correctly not touched**: the
+duplicate-React-key warning (`AiExplanationCard key={question.id}`, already flagged in this file
+under the 2026-09-24 (2) session as a pre-existing defect in `quiz.tsx`) appeared throughout this
+pass. Unrelated to this work, not fixed, matching the existing disclosed-not-hidden precedent.
+Also confirmed working correctly and unaffected by this change: the practice exit-guard dialog
+("Leave this test?"/"Leave this practice?") fired exactly as designed on both a tab switch and a
+hardware back press from the video player screen.
+
+**One small cosmetic gap noticed, not fixed this pass**: the video player screen's native header
+shows the raw route name "lesson-video" instead of a friendly title like "Profit & Loss" or the
+question's topic name. Low priority — flagged for whoever next touches `app/lesson-video.tsx`.
+
+**Full cleanup performed**: the uploaded video and blueprint deleted from the isolated backend
+(confirmed 0 videos remaining, 0 stored files) — the same discipline as the earlier backend-only
+pass, since prod and dev share one Neon database; the admin token revoked; `mobile/.env.local`
+restored to its original `:8080` value; Metro and the isolated backend both stopped (confirmed by
+port check); the backend already on :8080 (another session's, presumed) was never touched or
+restarted. The disposable test account and its uploaded content remain in the real dev database
+as a normal, harmless artifact, matching this project's existing precedent for test accounts.
+
+**QA:** `EXEC-LESSONVIDEO-0005..0008`, all **Pass**, added to
+`qa/execution/2026-09-27-lessonvideo-device.yaml`. `TC-LESSONVIDEO-011`/`014`/`015` move from Not
+Executed to genuinely run and passing; `TC-LESSONVIDEO-012` (offline with nothing cached) and
+`TC-LESSONVIDEO-013` (version invalidation) remain **Not Executed** — both would need a second
+round (a fresh topic with no download attempted while offline, and a real v2 re-upload) and were
+judged lower priority than the two claims above once those were confirmed. `TC-LESSONVIDEO-016`
+(the admin browser click-through) was already Pass from the earlier backend-only session and is
+unchanged. RTM unchanged at **188/354/392** — no new requirements this pass, only real executions
+against ones that already existed.
+
+**UPDATE — STORAGE DECIDED: CLOUDINARY. The swap the interface existed for was made, and it cost
+one class.** The owner chose Cloudinary over local disk, which is the right call: local storage
+cannot survive Cloud Run, and Cloudinary needs **no new vendor and no new credentials** — it is
+the same account images and ingested PDFs already use (`cloudinary-http5 2.3.0` was already a
+dependency).
+
+- **`app.video-storage.provider`** selects `local` (default, credential-free, so a fresh checkout
+  works) or `cloudinary`. Both are `@ConditionalOnProperty` beans behind the one `VideoStorage`
+  interface.
+- **Uploaded as `type: authenticated`, not the default `upload`.** An `upload`-type asset is
+  served from a public URL anyone who has it can pass on, which would make a premium video
+  ungated in practice.
+- **Delivery is a 302 to a signed URL, not a proxy.** `VideoStorage` gained
+  `deliveryUrl(key)` (default empty) and the service now returns a `VideoPlayback` of either
+  `Stream` (local serves the bytes) or `Redirect`. Streaming every 9MB lesson through Cloud Run
+  would double egress and pressure a service sized for JSON — and this file already records
+  suspected Cloud Run memory trouble once. **The redirect is not a weaker door:** the URL is
+  minted only after publication and entitlement pass, and carries `Cache-Control: no-store` so a
+  shared cache cannot hand it to the next person.
+- **The honest limit on expiry, written into the code:** delivery uses `privateDownload` with an
+  `expires_at` (`url-ttl-seconds`, default 1h). Time-limited delivery is not on every Cloudinary
+  plan; if the account refuses it this falls back to a signed `authenticated` URL, which is
+  unguessable but **does not expire once issued** — and that fallback logs a WARN, so a
+  deployment can never silently believe its links expire when they do not.
+- The Cloudinary public id is **derived** from the storage key by dropping `.mp4` (Cloudinary
+  carries format separately), so the row and the asset cannot drift and `v1`/`v2` stay separate
+  assets rather than an overwrite. No schema change.
+
+**Verified: 29 tests green** — `LessonVideoTest` 14/14, `LessonVideoRulesTest` **13/13** (four new
+key-derivation cases), and a new **`VideoStorageSelectionTest` 2/2** that starts a real context
+with `provider=cloudinary` and asserts the right bean is injected. That last one earns its 34
+seconds: two `@ConditionalOnProperty` beans behind one interface means a typo gives **zero** beans
+(the application refuses to start) or **two** (ambiguous dependency), and neither shows up in a
+compile — the first would surface in production as a deploy that never comes up.
+
+**A REAL TRAP HIT ALONG THE WAY, worth remembering: `mvn test-compile` reported CLEAN while the
+test class was actually broken.** All 13 rules tests then errored in ~1ms each with
+"Unresolved compilation problems: publicIdFor is not visible" — an ECJ-compiled stale class sitting
+in `target/`, i.e. the IDE's language server had written it and Maven saw fresh timestamps. This
+file already warns "if a class that obviously exists is not found, suspect `target/` before
+suspecting the code"; the same applies to a *visibility* error surviving a clean-looking build.
+`mvn clean test-compile` fixed it. The underlying mistake was mine — a package-private static
+called from a test in a different package — now `public`.
+
+**⚠️ WHAT CLOUDINARY DELIVERY STILL HAS NOT PROVEN, and it cannot be proven on this laptop:** there
+are **no Cloudinary credentials here** (placeholders only; `app.document-storage.fake=true` for the
+same reason since TASK-2401). So **no real Cloudinary upload has ever happened**, the signed URL
+has never been fetched, and **whether this account's plan supports time-limited delivery is
+unknown** — if it does not, the WARN fires and links do not expire. `TC-LESSONVIDEO-019` exists for
+exactly this, `Not Executed`, and its step 4 is the one that decides whether the expiry claim in
+`api/LESSON-VIDEOS.md` is true for this account.
+
+**A SECOND UNVERIFIED THING THE REDIRECT INTRODUCES:** with the Cloudinary provider the stream
+endpoint answers **302**, and it is unconfirmed whether `expo-file-system`'s downloader follows
+redirects on a real device. Standard HTTP clients do. This is flagged in `lessonVideoCache.ts`
+itself and is **the first thing to check on the device pass**; if it does not follow, the fallback
+is returning the URL in the body instead of a 302 and nothing else changes.
+
+**QA:** `REQ-LESSONVIDEO-008`, `SCN-LESSONVIDEO-015/016`, `TC-LESSONVIDEO-017/018` (Automated) and
+`TC-LESSONVIDEO-019` (ManualOnly, blocked on credentials). RTM -> **188/354/392**.
+
+
+**Migrations V54 (backend) and 0033 (mobile). Nothing committed.** The owner asked for the
+FOUNDATION of an AI video system, supplying a 31-section brief. Per AI_RULES §4, the brief was
+audited against the real codebase first, and **three of its premises were false**:
+
+1. **"We already have an AI Videos section in the admin web — do not replace it."** There was
+   none. `grep -ri video` across `backend/`, `admin/src`, `mobile/src` and `packages/` returned
+   **zero matches**. The video system lives in a **separate repository at `C:\AIVideos`**, which
+   the owner confirmed mid-session. So §13's "extend what exists" did not apply; this is net-new.
+2. **"Use the existing subscription/entitlement architecture."** There is none.
+   `questions.is_premium` has existed since V2, is written by three code paths and **read by
+   zero**; the admin checkbox's own label already says *"reserved — no paywall is enforced yet"*.
+   `User` carries only `role`.
+3. **"Do not store large MP4s."** Measured rather than assumed: the studio's real rendered
+   lessons are **7.1–9.2 MB**, comfortably under the existing 20MB multipart cap, so no storage
+   plumbing change was needed for upload. An earlier claim in this session that the 20MB cap was
+   a blocker was wrong and was corrected.
+
+**READING `C:\AIVideos` CHANGED THE DESIGN, and this is the most important thing to carry
+forward.** It is a Remotion studio with a **zod-validated Lesson JSON schema** already acting as
+a real contract (`packages/lesson-engine/src/schema.ts`):
+`{ id, title, exam, subject, topic, language, scenes[] }`, scenes being a discriminated union of
+`title | concept | example | formula | summary`. **That IS the "explanation blueprint" §3 asks
+for**, so it was ADOPTED verbatim rather than re-invented — a second blueprint format in Java
+would have guaranteed drift, and the studio's is the one that can actually be rendered.
+
+Three further facts from that repo that shaped scope: **it is topic-level, not question-level**
+(zero occurrences of `questionId`; its three lessons are Percentage, Simple Interest and Profit
+and Loss — all real SSC CGL Quant topics); **it has no API** (per-lesson npm scripts,
+`remotion render ProfitAndLoss ../../output/profit-and-loss.mp4`, TTS via local Windows SAPI, and
+the automated LLM pipeline deliberately shelved in `docs/web-studio-plan.SUPERSEDED.md`); and
+**`library/library.json` is already an export manifest** carrying id/title/exam/subject/topic/
+language/sceneCount/durationSeconds/videoUrl/status. Real durations are 1:46, 2:06 and 2:24.
+
+**Owner decisions taken before coding** (asked in plain language): storage = **local**, scope =
+**schema + admin upload + mobile play/cache** (no on-demand generation), blueprint = **its own
+table, fetched on demand**.
+
+**A DISCLOSED RISK THE OWNER SHOULD SETTLE: local storage does not survive Cloud Run**, whose
+filesystem is ephemeral and which scales to zero — `DocumentStorage`'s own javadoc already says
+so. It was implemented behind a `VideoStorage` interface with a `LocalFilesystemVideoStorage`
+implementation, exactly as `DocumentStorage`/`LocalDevFakeDocumentStorage` do, so swapping to
+object storage later is **one class and one config value**, not a redesign.
+
+**Shipped — backend.** V54 adds `lesson_blueprints` (the studio Lesson JSON verbatim; owner =
+topic XOR question via CHECK; `teaching_level` is in the uniqueness key because `ai_content`'s
+(task, subject, language) key **cannot express "English beginner" and "English advanced" as two
+live rows**) and `lesson_videos`. New classes: `VideoStorage`/`LocalFilesystemVideoStorage`/
+`StoredVideo`, `LessonBlueprintValidation`, `EntitlementService` + `Capability.AI_VIDEO`,
+`LessonVideoService`, `LessonBlueprintService`, three controllers. Contract:
+`api/LESSON-VIDEOS.md` plus an index row.
+
+**FOUR DESIGN POINTS WORTH KEEPING:**
+
+1. **Two status columns, deliberately separate.** `status` = "does a playable file exist"
+   (QUEUED/GENERATING/PROCESSING/READY/FAILED/ARCHIVED); `content_status` = "has a human approved
+   it" (DRAFT/REVIEW/PUBLISHED). A video can be READY and DRAFT — exactly what an admin needs in
+   order to watch it before students do. **`NOT_AVAILABLE` is deliberately NOT a stored status**:
+   the absence of a row is what it means, and storing it would mean a row for every question that
+   has no video, which is nearly all of them.
+2. **A question falls back to its topic lesson**, and the response says `resolvedVia`. Without
+   this the feature would have **no content at all**, because the studio only makes topic lessons.
+   With it, the app can never claim a general topic lesson was made for one specific question.
+3. **`storage_key` is a key, not a URL.** Every other asset in this schema is a public Cloudinary
+   `secure_url`; that is wrong for video, because a premium video behind a guessable public link
+   is not gated at all. Bytes are resolved through `VideoStorage` at serve time, so the backend
+   stays the thing that decides who may watch.
+4. **No job table this phase.** "Is generation already running" is answerable from
+   `status IN (QUEUED, GENERATING, PROCESSING)` on the row itself, so a job table would duplicate
+   state that already lives there. A real generation runner can add one for attempt history.
+
+**Shipped — admin.** `admin/src/pages/AiVideos.jsx` under Settings: upload an MP4, pick the topic,
+optionally paste `lessons/<id>.json` as the blueprint, then publish/unpublish/delete. The form is
+shaped deliberately like the studio's own export, because an upload is the integration point —
+there is no API to call. Carries the request-id race guard `AiContentReview.jsx` already needed
+once.
+
+**Shipped — mobile.** Migration **0033** (`lesson_videos`, a CACHE — never written by reference
+sync), `video/lessonVideoCache.ts`, `video/LessonVideoCard.tsx`, `app/lesson-video.tsx`, the card
+wired into `quiz.tsx` below the AI explanation, and sign-out clearing downloads. New dependency
+**`expo-video ~57.0.5`** (registered in `app.json`) — neither `expo-video` nor `expo-av` existed
+before, so **a dev-client rebuild is required; no existing build can play video.**
+
+**THE CACHE RULES THAT MATTER:** the key is **(videoId, contentVersion), never videoId alone** —
+a corrected lesson is a new version, and keying on the id alone is how a student would keep
+watching a superseded lesson forever. A recorded `local_uri` is **verified against the filesystem**
+before being trusted, because a row can outlive its file. Downloads write to a `.part` file and
+rename only on success, so an interrupted download can never later look complete — which matters
+more for video than for images, since a truncated MP4 plays for a few seconds and then fails,
+reading to a student as a broken lesson rather than a failed download. And the
+`onConflictDoUpdate` deliberately **omits `localUri`/`downloadedAt`**, the same rule
+`upsertQuestionsBatch` already follows for `question_media`, so refreshing metadata never throws
+away a download the student already paid for in data.
+
+**Verified.** Backend **`LessonVideoTest` 14/14** and **`LessonVideoRulesTest` 9/9 (0.18s, plain
+JUnit, no Spring — the fast-rules-first pattern this project already learned)**, both green on
+their first complete run; **V54 applied cleanly to the real Neon dev database (v53 -> v54,
+5.066s)**. `mvn compile`/`test-compile` clean. Admin `npm run build` clean and `oxlint` at the
+exact pre-existing baseline (1 warning, untouched file). Mobile and core `tsc` clean; `expo lint`
+back to the **exact 7-problem baseline** after one genuine new warning was introduced and **fixed
+rather than suppressed** — the card now takes `ownerKind`/`ownerId` as primitives instead of an
+object, so the effect's dependency list is honest instead of lying about identity.
+
+What those tests actually prove, beyond compiling: an upload is READY but invisible until
+published; publish/unpublish round-trips; an unpublished video is **404 to a student, not 403**,
+so ids cannot be probed, while staff can still preview it; a question resolves to its topic lesson
+and says `resolvedVia: TOPIC`; a re-upload becomes **v2**; a non-MP4 is rejected **on its magic
+bytes**, not its declared content type; both-owners and neither-owner are 400; a student cannot
+upload and an anonymous caller cannot read; and a topic with no video reports `available:false`
+rather than erroring.
+
+**A SECOND ROUND VERIFIED THE BACKEND AND ADMIN AGAINST REAL CONTENT — the real 8.3MB studio
+lesson, not a fixture.** Run against an **isolated backend on port 8090**, because the backend
+already running on 8080 was found to be **stale (V54 endpoints 404)** — the exact trap this file
+already documents twice. It was left running and untouched, since it is likely another session's.
+
+- The real `lessons/profit-and-loss.json` was accepted verbatim as a blueprint
+  (`studioLessonId: profit-and-loss`, `STUDIO_LESSON_V1`, 5 scenes).
+- **`output/profit-and-loss.mp4` (8,696,996 bytes) uploaded in 2.7s**, and the server-computed
+  SHA-256 **matched the source file exactly**.
+- Publishing flipped the student-facing read from `available:false` to `true`, and **a real
+  question from the live bank** (one of **378** on Profit & Loss) resolved to it with
+  `resolvedVia: TOPIC`. A question on Percentage correctly reported `available:false`.
+- **The downloaded stream was byte-identical to the source** (same SHA-256), with
+  `Accept-Ranges: bytes` and the right content type/length.
+- **Range requests genuinely work**: `bytes=0-11` and `bytes=4000000-4000015` both returned
+  **206** with correct `Content-Range`, and the mid-file bytes matched the source exactly. So
+  seeking and resumable downloads are real, not just advertised.
+- **The admin page was click-tested in a real browser** (Playwright): sidebar link present, topic
+  dropdown populated with **118 real topics**, and PUBLISHED -> Unpublish -> **DRAFT** -> Publish
+  -> **PUBLISHED**, each read **after a fresh page load** — the check this project's history says
+  matters, since a stale in-page re-render was once mistaken for a broken save. **Zero console
+  errors.**
+
+**A NAME MISMATCH WORTH KNOWING: the studio says "Profit and Loss", the app's topic is
+"Profit & Loss".** Percentage and Simple Interest also exist as real topics. This is exactly why
+the admin picks the topic from a dropdown rather than the importer matching on name.
+
+**Everything created for that pass was deleted afterwards** (video, blueprint, stored file; the
+topic reads `available:false` again, 0 videos, 0 files) and the minted token revoked. That
+cleanup was not optional housekeeping: **prod and dev share one Neon database**, so a PUBLISHED
+row whose `storage_key` points at a file on this laptop would, once V54 deploys, make the
+availability endpoint promise a video the server cannot serve.
+
+**Corrected 2026-09-27, per §6: the claim above is now false — see the device-pass update at
+the top of this entry.** Migration 0033 has run on a real populated database; the `expo-video`
+player has rendered real content; offline playback and sign-out clearing have both been observed
+directly on a device. What genuinely remains unverified: `TC-LESSONVIDEO-012` (offline with
+NOTHING cached — the correct-message path) and `TC-LESSONVIDEO-013` (a v2 re-upload invalidating
+a cached v1 on-device).
+
+**A PRE-EXISTING BUG WAS FIXED BECAUSE IT BLOCKED THIS WORK, disclosed rather than buried:**
+`qa/test-cases/catalog.yaml` had **two `TC-CATALOG-050` entries** (already in commit `ec51285`,
+and already flagged in this file). That made `npm run qa:generate` fail outright, so the RTM had
+not regenerated since. The newer of the two — the Exams-snapshot case — was renumbered to
+**`TC-CATALOG-056`**, and `qa/execution/2026-09-22-dailyplan-snapshot-cache.yaml` updated to
+match. This is why the RTM jumped by more than this session's own additions: it was catching up.
+
+**QA:** new `LESSONVIDEO` module — `REQ-LESSONVIDEO-001..007`, `SCN-LESSONVIDEO-001..014`,
+`TC-LESSONVIDEO-001..016` (10 Automated with real, verified test methods; 6 ManualOnly, since
+mobile and admin still have no automated runner), plus `EXEC-LESSONVIDEO-0001..0004` in
+`qa/execution/2026-09-26-lessonvideo-backend-admin.yaml` for the four cases genuinely run against
+the real 8.3MB lesson — **three Pass, one Blocked** (only step 1 of the blueprint case ran; it is
+not marked Pass on the strength of the automated suite covering the rest). RTM -> **187/352/389**.
+
+**NEXT, in order:** (1) run `TC-LESSONVIDEO-012`/`013` on a device (offline with nothing cached,
+and a real v2 re-upload invalidating a cached v1) — lower priority since the two central claims
+(real download+checksum+offline playback, sign-out clearing) are already confirmed on a device;
+(2) **run `TC-LESSONVIDEO-019` somewhere with real Cloudinary credentials** — a real upload,
+signed delivery, and above all whether this account's plan gives genuinely expiring links; its
+step 4 decides whether the expiry claim in `api/LESSON-VIDEOS.md` is true, and it should also
+settle whether `expo-file-system`'s downloader follows the 302 redirect the Cloudinary provider
+returns (flagged as unconfirmed in `lessonVideoCache.ts`). Set `VIDEO_STORAGE_PROVIDER=cloudinary`
+on Cloud Run when deploying; no other config is needed, since the Cloudinary credentials are
+already there; (3) only then consider on-demand generation, which needs the studio to grow an API
+it does not have today. ~~Rebuild the dev client~~, ~~device pass~~, ~~decide production
+storage~~, ~~click through the admin page~~ and ~~prove a real MP4 round-trips~~ are all **done**
+— see the two verification rounds above.
+
+
 ## Session of 2026-09-24 (3) — stuck "Preparing" fixed, onboarding remembered by the account, new sign-in screens and email
+
+**UPDATE 2026-09-26 — COMMITTED, PUSHED TO `main`, DEPLOYED.** Commit `a70152b` carries all of the
+work below plus the Practice Result tabs and the Mock Test hub/builder (the owner chose to push all
+three together). Backend Deploy **success** — `/api/health` UP and `POST /api/auth/google` with a fake
+token returns **401** (live, was 404). Android APK **success** — artifact
+`sarkaritaiyaari-1.0.0-1030-a70152b.apk` (102 MB). Checks before pushing: `mvn test-compile`, mobile
+and core `tsc` clean; the full backend suite was NOT re-run. The owner is testing on their real
+phone next: Google sign-in end to end (never yet seen), a real OTP email, the reinstall skip, and
+the unreviewed Mock Test hub/builder. "Deploy web" failed as it always does (never set up).
 
 **UPDATE 2026-09-25 (later) — "CONTINUE WITH GOOGLE" IS BUILT.** The owner created the Google Cloud
 OAuth clients: a **Web** client `815653276881-bgt8v5luik1jfee7c941510i1d20sb9u.apps.googleusercontent.com`

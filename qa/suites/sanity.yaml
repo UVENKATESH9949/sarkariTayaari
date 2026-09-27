@@ -2,7 +2,7 @@
 #
 # Every Critical-priority test case with a determinate expected outcome. Broader than Smoke, still fast — the standard "did this area still work" check after a focused change.
 #
-# 80 test case(s). Membership rule: priority == Critical AND test_type != Ambiguous (mechanical filter over qa/test-cases/*.yaml).
+# 94 test case(s). Membership rule: priority == Critical AND test_type != Ambiguous (mechanical filter over qa/test-cases/*.yaml).
 
 suite: Sanity
 test_case_ids:
@@ -39,6 +39,8 @@ test_case_ids:
   - TC-AUTH-020
   - TC-AUTH-032
   - TC-AUTH-035
+  - TC-AUTH-037
+  - TC-AUTH-038
   - TC-CATALOG-001
   - TC-CATALOG-003
   - TC-CATALOG-004
@@ -49,6 +51,17 @@ test_case_ids:
   - TC-CATALOG-044
   - TC-CATALOG-048
   - TC-CATALOG-049
+  - TC-HOME-001
+  - TC-HOME-003
+  - TC-LESSONVIDEO-001
+  - TC-LESSONVIDEO-002
+  - TC-LESSONVIDEO-004
+  - TC-LESSONVIDEO-006
+  - TC-LESSONVIDEO-011
+  - TC-LESSONVIDEO-012
+  - TC-LESSONVIDEO-015
+  - TC-LESSONVIDEO-017
+  - TC-LESSONVIDEO-019
   - TC-MOCK-010
   - TC-ONBOARDING-001
   - TC-ONBOARDING-002
@@ -67,6 +80,7 @@ test_case_ids:
   - TC-ONBOARDING-027
   - TC-ONBOARDING-028
   - TC-ONBOARDING-030
+  - TC-ONBOARDING-031
   - TC-PRACTICE-001
   - TC-PRACTICE-004
   - TC-PRACTICE-007

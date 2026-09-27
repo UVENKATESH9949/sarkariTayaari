@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { ScrollView, Text, View, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSessionHistory } from "../../practice/sessionHistory";
+import { computeReadiness } from "../../practice/readiness";
 import { toSubjectMeta } from "../../constants/subjects";
 import { getAllSubjects, type SubjectMetaRow } from "../../db/subjectMeta";
 import { PressableScale } from "../../ui/PressableScale";
@@ -78,7 +79,9 @@ export default function Progress() {
       bySubject[session.subjectName] = bucket;
     }
 
-    const readinessPercent = totalQuestions > 0 ? Math.round((totalCorrect / totalQuestions) * 100) : 0;
+    // The shared formula, not reimplemented — Home's readiness card reads through the exact
+    // same function, so the two can never quietly disagree about what "readiness" means.
+    const { readinessPercent } = computeReadiness(sessions);
 
     const subjectBreakdown = syncedSubjects.map((subject) => {
       const bucket = bySubject[subject.name];

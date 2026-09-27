@@ -1,0 +1,18 @@
+# Regression — MOCK
+#
+# Every test case belonging to the MOCK module. Run after any change confined to that module.
+#
+# 10 test case(s). Membership rule: module == MOCK (mechanical filter).
+
+suite: Regression — MOCK
+test_case_ids:
+  - TC-MOCK-001
+  - TC-MOCK-002
+  - TC-MOCK-003
+  - TC-MOCK-004
+  - TC-MOCK-005
+  - TC-MOCK-006
+  - TC-MOCK-007
+  - TC-MOCK-008
+  - TC-MOCK-009
+  - TC-MOCK-010

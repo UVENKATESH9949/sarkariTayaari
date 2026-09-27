@@ -232,6 +232,13 @@
       "when": 1788604806040,
       "tag": "0032_practice_result_insight",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1788691206040,
+      "tag": "0033_lesson_videos",
+      "breakpoints": true
     }
   ]
 }

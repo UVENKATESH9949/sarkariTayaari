@@ -53,3 +53,8 @@ yarn-error.log*
 # --- Device debugging artefacts --------------------------------------------
 # uiautomator dumps captured while driving the emulator; not project files.
 dump*.xml
+
+# --- Local video storage ---------------------------------------------------
+# LocalFilesystemVideoStorage's default root (app.video-storage.local-path). Dev/test only —
+# Cloud Run's filesystem is ephemeral, so this is never the production store.
+backend/var/

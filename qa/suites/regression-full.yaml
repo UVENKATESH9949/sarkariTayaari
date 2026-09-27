@@ -2,7 +2,7 @@
 #
 # Every test case across all three modules, including Ambiguous/blocked ones (their execution still records real observed behavior, even without a pre-asserted pass/fail). Run before a significant, cross-cutting change.
 #
-# 339 test case(s). Membership rule: All test cases in qa/test-cases/*.yaml.
+# 401 test case(s). Membership rule: All test cases in qa/test-cases/*.yaml.
 
 suite: Regression (Full)
 test_case_ids:
@@ -96,6 +96,17 @@ test_case_ids:
   - TC-AUTH-027
   - TC-AUTH-028
   - TC-AUTH-029
+  - TC-AUTH-030
+  - TC-AUTH-031
+  - TC-AUTH-032
+  - TC-AUTH-033
+  - TC-AUTH-034
+  - TC-AUTH-035
+  - TC-AUTH-036
+  - TC-AUTH-037
+  - TC-AUTH-038
+  - TC-AUTH-039
+  - TC-AUTH-040
   - TC-CATALOG-001
   - TC-CATALOG-002
   - TC-CATALOG-003
@@ -151,6 +162,7 @@ test_case_ids:
   - TC-CATALOG-053
   - TC-CATALOG-054
   - TC-CATALOG-055
+  - TC-CATALOG-056
   - TC-DAILYPLAN-001
   - TC-DAILYPLAN-002
   - TC-DAILYPLAN-003
@@ -182,6 +194,17 @@ test_case_ids:
   - TC-DAILYPLAN-029
   - TC-DAILYPLAN-030
   - TC-DAILYPLAN-031
+  - TC-DAILYPLAN-032
+  - TC-DAILYPLAN-033
+  - TC-DAILYPLAN-034
+  - TC-DAILYPLAN-035
+  - TC-HOME-001
+  - TC-HOME-002
+  - TC-HOME-003
+  - TC-HOME-004
+  - TC-HOME-005
+  - TC-HOME-006
+  - TC-HOME-007
   - TC-LEARNINGSTATE-001
   - TC-LEARNINGSTATE-002
   - TC-LEARNINGSTATE-003
@@ -190,6 +213,36 @@ test_case_ids:
   - TC-LEARNINGSTATE-006
   - TC-LEARNINGSTATE-007
   - TC-LEARNINGSTATE-008
+  - TC-LESSONVIDEO-001
+  - TC-LESSONVIDEO-002
+  - TC-LESSONVIDEO-003
+  - TC-LESSONVIDEO-004
+  - TC-LESSONVIDEO-005
+  - TC-LESSONVIDEO-006
+  - TC-LESSONVIDEO-007
+  - TC-LESSONVIDEO-008
+  - TC-LESSONVIDEO-009
+  - TC-LESSONVIDEO-010
+  - TC-LESSONVIDEO-011
+  - TC-LESSONVIDEO-012
+  - TC-LESSONVIDEO-013
+  - TC-LESSONVIDEO-014
+  - TC-LESSONVIDEO-015
+  - TC-LESSONVIDEO-016
+  - TC-LESSONVIDEO-017
+  - TC-LESSONVIDEO-018
+  - TC-LESSONVIDEO-019
+  - TC-LESSONVIDEO-020
+  - TC-MOCK-001
+  - TC-MOCK-002
+  - TC-MOCK-003
+  - TC-MOCK-004
+  - TC-MOCK-005
+  - TC-MOCK-006
+  - TC-MOCK-007
+  - TC-MOCK-008
+  - TC-MOCK-009
+  - TC-MOCK-010
   - TC-ONBOARDING-001
   - TC-ONBOARDING-002
   - TC-ONBOARDING-003
@@ -215,6 +268,12 @@ test_case_ids:
   - TC-ONBOARDING-023
   - TC-ONBOARDING-024
   - TC-ONBOARDING-025
+  - TC-ONBOARDING-026
+  - TC-ONBOARDING-027
+  - TC-ONBOARDING-028
+  - TC-ONBOARDING-029
+  - TC-ONBOARDING-030
+  - TC-ONBOARDING-031
   - TC-PRACTICE-001
   - TC-PRACTICE-002
   - TC-PRACTICE-003
@@ -225,6 +284,9 @@ test_case_ids:
   - TC-PRACTICE-008
   - TC-PRACTICE-009
   - TC-PRACTICE-010
+  - TC-PRACTICE-011
+  - TC-PRACTICE-012
+  - TC-PRACTICE-013
   - TC-QUESTIONS-001
   - TC-QUESTIONS-002
   - TC-QUESTIONS-003

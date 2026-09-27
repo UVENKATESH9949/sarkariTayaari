@@ -1,0 +1,200 @@
+# HOME module — requirement repository
+#
+# Scope: the Home tab's dashboard cards and their navigation (2026-09-28 redesign). Does not
+# cover the individual destination screens' own behaviour (Daily Plan, Progress, Practice, Mock
+# Test, Preparation Radar, Study Roadmap all have their own modules/coverage already) - only what
+# Home itself shows and where it sends the student.
+#
+# automation_status is evidence-based, per qa/README.md's standing rule. Mobile has no automated
+# runner, so every case here is ManualOnly.
+
+- id: REQ-HOME-001
+  feature: Practice and Mock Tests are one tap away, for the currently selected exam
+  module: HOME
+  system: [Mobile]
+  source_doc: memory/STATUS.md
+  source_section: "Session of 2026-09-28"
+  description: >
+    Two equal-width cards replace the old Continue Practice button. Each jumps straight to the
+    student's currently selected exam's Practice/Mock Test browse screen, skipping the exam-list
+    step those tabs otherwise open with. With no exam followed yet, each falls back to its own
+    tab root, which already handles that state.
+  business_rule: >
+    The exam is never hardcoded - both cards read the same active-exam provider the rest of Home
+    already uses, so switching the followed exam changes what these cards open without any card
+    logic change.
+  actor: Signed-in student
+  preconditions:
+    - "An exam is followed and active"
+  inputs:
+    - "Tapping the Practice or Mock Tests card"
+  expected_outputs:
+    - "Practice opens the subject/topic browse screen scoped to the active exam"
+    - "Mock Tests opens the mock paper list scoped to the active exam"
+  validations:
+    - "Both cards show the active exam's name as their subtitle"
+  permissions: []
+  dependencies: []
+  error_conditions: []
+  edge_conditions:
+    - "No exam followed yet: each card falls back to its tab's own exam-selection root"
+  offline_behavior: "Unchanged - governed by whatever Practice/Mock Test already do offline"
+  acceptance_criteria:
+    - "Tapping either card opens that feature already scoped to the active exam, with no exam-picker step"
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "Mobile has no automated test runner in this project."
+
+- id: REQ-HOME-002
+  feature: Readiness Score is real, not a fixed 62%
+  module: HOME
+  system: [Mobile]
+  source_doc: memory/STATUS.md
+  source_section: "Session of 2026-09-28"
+  description: >
+    Home's readiness card now reads practice/readiness.ts's computeReadiness(sessions,
+    activeExamCode) - the exact formula Progress already uses (correct answers over questions
+    answered), scoped to the student's currently selected exam. Progress itself now calls the
+    same function, so the two figures can never quietly disagree.
+  business_rule: >
+    No second readiness calculation was invented. An account with no practice history for the
+    active exam shows a dash and a short prompt, never a fabricated percentage.
+  actor: Signed-in student
+  preconditions:
+    - "None - the card renders in every state"
+  inputs:
+    - "Real practice session history, if any"
+  expected_outputs:
+    - "A percentage matching totalCorrect/totalQuestions for the active exam's sessions"
+  validations:
+    - "An account with zero sessions for the active exam shows a dash, not 0% or 62%"
+  permissions: []
+  dependencies: []
+  error_conditions: []
+  edge_conditions:
+    - "Switching the active exam changes the shown percentage to that exam's own sessions"
+  offline_behavior: "Fully local - computed from on-device session history, no network needed"
+  acceptance_criteria:
+    - "The percentage shown matches manual calculation from the account's real session history"
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "Mobile has no automated test runner in this project."
+
+- id: REQ-HOME-003
+  feature: Today's Plan starts preparing before the student asks for it
+  module: HOME
+  system: [Mobile]
+  source_doc: memory/STATUS.md
+  source_section: "Session of 2026-09-28"
+  description: >
+    A background prefetch (data/startupPrefetch.tsx), mounted at the last app-start gate, calls
+    the existing getDailyPlan(examCode) once signed in and the active exam is known - the same
+    stale-while-revalidate function the Daily Plan screen already calls, just invoked earlier so
+    its on-device snapshot is usually already written by the time the student opens the card.
+  business_rule: >
+    This does not change what getDailyPlan does or add a second cache - it only changes when the
+    existing function is first called. Nothing here blocks app startup: the call is fired and not
+    awaited, and failure is silent (the Daily Plan screen's own existing error state is what
+    speaks, if it ever does).
+  actor: Signed-in student
+  preconditions:
+    - "Signed in, with an active exam"
+  inputs:
+    - "None - fires automatically once, per (account, exam) pair"
+  expected_outputs:
+    - "Opening Today's Plan after a few seconds of app use shows the plan with no visible wait"
+  validations:
+    - "Does not fire again for the same account/exam pair without a fresh app start"
+  permissions: []
+  dependencies: [REQ-DAILYPLAN-016]
+  error_conditions:
+    - "A failed prefetch is silent; the Daily Plan screen's own existing error/retry state is unaffected"
+  edge_conditions:
+    - "Switching the active exam triggers a fresh prefetch for the newly active exam"
+  offline_behavior: "No prefetch possible offline; the screen's own existing offline/cached behaviour is unchanged"
+  acceptance_criteria:
+    - "Today's Plan opens with a cached plan already available in the common case, rather than always generating on tap"
+  priority: High
+  status: Active
+  ambiguity: >
+    Not yet measured with a stopwatch against a real cold app start on a real device - the
+    mechanism was verified by reading getDailyPlan's own snapshot-write behaviour and confirming
+    this component calls it, not by timing an actual perceived-latency improvement.
+  automation_status: ManualOnly
+  automation_hint: "Mobile has no automated test runner in this project."
+
+- id: REQ-HOME-004
+  feature: AI Videos, Preparation Radar and Study Roadmap are reachable from Home
+  module: HOME
+  system: [Mobile]
+  source_doc: memory/STATUS.md
+  source_section: "Session of 2026-09-28"
+  description: >
+    The old "Explore Exams" row is removed from Home (My Exams, reachable from More, is
+    unaffected and remains the way to browse/follow other exams). In its place, a "More ways to
+    prepare" section lists AI Videos (a non-interactive "Coming soon" placeholder - no video
+    functionality exists yet), Preparation Radar and Study Roadmap - both of which already exist
+    under More and are unchanged there; these are additional Home shortcuts to the same screens.
+  business_rule: >
+    Nothing under More was removed or altered by adding these Home shortcuts - both routes
+    (/preparation-radar, /study-roadmap) are the exact same screens More already links to.
+  actor: Signed-in student
+  preconditions: []
+  inputs:
+    - "Tapping Preparation Radar or Study Roadmap on Home"
+  expected_outputs:
+    - "Opens the same screen More's own row opens"
+  validations:
+    - "AI Videos is not tappable and shows no chevron, reading as informational rather than broken"
+  permissions: []
+  dependencies: []
+  error_conditions: []
+  edge_conditions: []
+  offline_behavior: "Unchanged - governed by whatever each destination screen already does offline"
+  acceptance_criteria:
+    - "Both shortcuts open the correct existing screen; More's own rows still work unchanged"
+  priority: Medium
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "Mobile has no automated test runner in this project."
+
+- id: REQ-HOME-005
+  feature: The on-device LLM benchmark spike is removed from the product
+  module: HOME
+  system: [Mobile]
+  source_doc: memory/STATUS.md
+  source_section: "Session of 2026-09-28"
+  description: >
+    The "Developer" section and its "LLM Test (temporary)" row are removed from More, and
+    src/app/llm-spike.tsx is deleted. The llama.rn native config plugin in app.json is
+    deliberately left in place - removing it would need a native rebuild, which is out of scope
+    for a navigation/UI removal, and it was confirmed to have no other reference anywhere in the
+    app before the row was removed.
+  business_rule: >
+    This was scaffolding for a benchmark question, never a shipped feature - its removal has no
+    effect on any real AI feature (question explanations, session feedback, etc.), which all go
+    through the separate, unrelated cloud AI service layer.
+  actor: N/A - a removal, not a feature
+  preconditions: []
+  inputs: []
+  expected_outputs:
+    - "More no longer shows a Developer section or an LLM Test row"
+  validations:
+    - "No other screen or deep link still points at /llm-spike"
+  permissions: []
+  dependencies: []
+  error_conditions: []
+  edge_conditions: []
+  offline_behavior: "Not applicable"
+  acceptance_criteria:
+    - "The row and its screen are gone; nothing else references them"
+  priority: Low
+  status: Active
+  ambiguity: null
+  automation_status: ManualOnly
+  automation_hint: "Mobile has no automated test runner in this project."

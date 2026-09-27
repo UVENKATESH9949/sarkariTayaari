@@ -1,0 +1,106 @@
+# LESSONVIDEO — backend and admin execution records, 2026-09-26
+#
+# Run against an ISOLATED backend on port 8090. The backend already listening on 8080 was found
+# to be stale (the V54 endpoints returned 404) and was left running and untouched, since it is
+# likely another session's - the same isolated-second-backend approach this project has used
+# before.
+#
+# Content was REAL, not a fixture: output/profit-and-loss.mp4 (8,696,996 bytes) and
+# lessons/profit-and-loss.json from the AI Video Studio at C:\AIVideos, attached to the app's own
+# "Profit & Loss" topic, which carries 378 real questions.
+#
+# Everything created here was deleted afterwards and the minted admin token revoked. That is not
+# just tidiness: prod and dev share one Neon database, so a PUBLISHED row pointing at a file on
+# this laptop would, once V54 deploys, promise a video the server could not serve.
+#
+# No mobile execution is recorded - the device pass has not happened, and expo-video is a new
+# native dependency so no existing build can play video.
+
+- execution_id: EXEC-LESSONVIDEO-0001
+  test_case_id: TC-LESSONVIDEO-016
+  test_case_version: 1
+  environment: "Admin console (Vite dev, localhost:5173) driven with Playwright/Chromium against an isolated backend on :8090, real Neon dev database"
+  build_version: "main @ a70152b + uncommitted 2026-09-26 AI video work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-26T19:35:00+05:30"
+  actual_result: >
+    All five steps passed. The AI Videos entry is present in the sidebar Settings group and the
+    page renders with its upload form; the topic dropdown was populated with 118 real topics. A
+    real 8.3MB studio lesson uploaded through the API appeared as a card reading
+    "Quantitative Aptitude - Profit & Loss" with READY and PUBLISHED badges, v1, "2:06 - 8.3 MB",
+    and its blueprint shown as "profit-and-loss (STUDIO_LESSON_V1)". Clicking Unpublish and then
+    reloading the page showed DRAFT; clicking Publish and reloading showed PUBLISHED again - both
+    read after a FRESH page load, not from in-page state. Zero console errors throughout.
+  status: Pass
+  defect_id: ""
+  evidence: "screenshots aivideos.png, aivideos-card.png (scratch, not committed)"
+  remarks: >
+    Step 2 was performed via the API rather than by choosing a file in the browser file picker -
+    Playwright can set a file input, but the upload itself was exercised directly so the real
+    8.3MB payload and its checksum could be verified byte-for-byte. The page's own rendering of
+    the resulting row, and the publish/unpublish transitions, were genuinely clicked.
+
+- execution_id: EXEC-LESSONVIDEO-0002
+  test_case_id: TC-LESSONVIDEO-002
+  test_case_version: 1
+  environment: "Isolated backend on :8090 against the real Neon dev database; curl"
+  build_version: "main @ a70152b + uncommitted 2026-09-26 AI video work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-26T19:31:00+05:30"
+  actual_result: >
+    Run with the real 8.3MB lesson rather than the synthetic header the automated test uses.
+    Before publishing, the topic read reported available:false. After PUT /publish (200), it
+    reported available:true with resolvedVia TOPIC, durationSeconds 126, sizeBytes 8696996 and
+    playbackPath /api/lesson-videos/{id}/stream - a backend path, not a storage URL. The full
+    stream download returned a file whose SHA-256 matched the source file exactly
+    (31b80ac4...28e6a), with Accept-Ranges: bytes and Content-Length 8696996.
+  status: Pass
+  defect_id: ""
+  evidence: "curl transcripts; sha256 of source and downloaded file identical"
+  remarks: >
+    Also exercised beyond the written steps: Range requests bytes=0-11 and bytes=4000000-4000015
+    both returned 206 with correct Content-Range, and the mid-file bytes matched the source
+    exactly - so seeking and resumable download genuinely work rather than merely being
+    advertised by the header.
+
+- execution_id: EXEC-LESSONVIDEO-0003
+  test_case_id: TC-LESSONVIDEO-003
+  test_case_version: 1
+  environment: "Isolated backend on :8090 against the real Neon dev database; curl"
+  build_version: "main @ a70152b + uncommitted 2026-09-26 AI video work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-26T19:31:30+05:30"
+  actual_result: >
+    Run against REAL questions, not fixtures. A real question from the live bank
+    (71f55a8c-..., one of 378 on "Profit & Loss") returned available:true with the topic lesson's
+    id and resolvedVia TOPIC. A real question on Percentage - a topic with no video uploaded -
+    correctly returned available:false with a null videoId, confirming the fallback resolves by
+    topic rather than matching anything loosely.
+  status: Pass
+  defect_id: ""
+  evidence: "curl transcripts"
+  remarks: >
+    Worth recording: the studio names the lesson "Profit and Loss" while the app's topic is
+    "Profit & Loss". Nothing matched on name - the topic was chosen explicitly - which is the
+    reason the importer does not auto-match by name.
+
+- execution_id: EXEC-LESSONVIDEO-0004
+  test_case_id: TC-LESSONVIDEO-009
+  test_case_version: 1
+  environment: "Isolated backend on :8090 against the real Neon dev database; curl"
+  build_version: "main @ a70152b + uncommitted 2026-09-26 AI video work"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-26T19:30:00+05:30"
+  actual_result: >
+    Step 1 run with the REAL lessons/profit-and-loss.json from the studio (not a hand-written
+    approximation): accepted with studioLessonId "profit-and-loss", schemaVersion
+    STUDIO_LESSON_V1, contentStatus DRAFT, and its five scenes
+    (title/concept/example/formula/summary) intact. Steps 2 and 3 were not re-run here - they are
+    covered by the automated suite.
+  status: Blocked
+  defect_id: ""
+  evidence: "curl transcript"
+  remarks: >
+    Blocked rather than Pass because only step 1 was executed in this pass. Recorded because it
+    is the first time the studio's real Lesson JSON has round-tripped through this backend, which
+    is the claim the blueprint design rests on.
