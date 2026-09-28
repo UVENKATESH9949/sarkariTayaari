@@ -1,0 +1,15 @@
+{
+  "name": "@sarkaritaayari/tts",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@sarkaritaayari/shared": "*",
+    "music-metadata": "11.15.0",
+    "ffmpeg-static": "5.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.9.0"
+  }
+}

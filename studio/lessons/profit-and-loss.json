@@ -1,0 +1,94 @@
+{
+  "id": "profit-and-loss",
+  "title": "Profit and Loss",
+  "exam": "SSC CGL",
+  "subject": "Quantitative Aptitude",
+  "topic": "Profit and Loss",
+  "language": "en",
+  "scenes": [
+    {
+      "type": "title",
+      "id": "title",
+      "narration": "Welcome back to SarkariTaayari. Today we're covering Profit and Loss — one of the most frequently asked topics in SSC CGL and other government exams. By the end of this video, you'll be able to calculate profit, loss, and profit percentage confidently.",
+      "kicker": "SarkariTaayari · Quantitative Aptitude",
+      "title": "Profit and Loss",
+      "subtitle": "SSC CGL  |  Every trader's basic math"
+    },
+    {
+      "type": "concept",
+      "id": "concept",
+      "narration": "Profit and loss compare two prices: the cost price, what you paid to buy something, and the selling price, what you sell it for. If the selling price is higher than the cost price, you make a profit. If it's lower, you make a loss. A profit of twenty rupees on every hundred rupees invested means a twenty percent profit.",
+      "heading": "What are \"Profit\" and \"Loss\"?",
+      "breakdown": [
+        { "text": "Cost Price" },
+        { "text": "vs" },
+        { "text": "Selling Price" },
+        { "text": "=" },
+        { "text": "Profit or Loss", "emphasis": true }
+      ],
+      "grid": {
+        "fillTarget": 20,
+        "start": 0.32,
+        "end": 0.68,
+        "resultPrefix": "20 out of 100 =",
+        "resultValue": "20% profit"
+      }
+    },
+    {
+      "type": "example",
+      "id": "example",
+      "narration": "Suppose a shopkeeper buys a fan for eight hundred rupees and sells it for nine hundred sixty rupees. Let's find the profit percentage. Profit equals selling price minus cost price: nine hundred sixty minus eight hundred equals one hundred sixty rupees. To find the profit percentage, we divide the profit by the cost price and multiply by one hundred. One hundred sixty divided by eight hundred, times one hundred, gives us a profit of twenty percent.",
+      "heading": "Worked Example",
+      "problemText": "A shopkeeper buys a fan for Rs 800 and sells it for Rs 960. Find the profit percentage.",
+      "bars": [
+        { "label": "Cost Price", "value": 800, "max": 960, "color": "muted", "growStart": 0.2, "growEnd": 0.32 },
+        { "label": "Selling Price", "value": 960, "max": 960, "color": "accent", "growStart": 0.32, "growEnd": 0.42 }
+      ],
+      "calcLines": [
+        "Profit = Selling Price − Cost Price",
+        "= 960 − 800 = 160",
+        "Profit % = (Profit / Cost Price) × 100"
+      ],
+      "calcStartFraction": 0.5,
+      "calcStaggerFraction": 0.1,
+      "answer": { "from": 0, "to": 20, "suffix": "%", "atFraction": 0.86, "durationSeconds": 1 }
+    },
+    {
+      "type": "formula",
+      "id": "formula",
+      "narration": "Here's the general formula: Profit percent equals profit divided by cost price, multiplied by one hundred. Plugging in our numbers — one hundred sixty divided by eight hundred, times one hundred — gives us the same answer, twenty percent. Loss percentage works exactly the same way: just divide the loss by the cost price instead.",
+      "heading": "The Formula",
+      "formulaTokens": [
+        { "text": "Profit %", "emphasis": true },
+        { "text": " = " },
+        { "text": "(Profit / Cost Price)" },
+        { "text": " × " },
+        { "text": "100" }
+      ],
+      "forms": [
+        { "value": "Profit %" },
+        { "value": "(160/800)×100", "connectorLabel": "plug in values" },
+        { "value": "20%", "connectorLabel": "compute" }
+      ],
+      "formsLabel": "From formula to answer:",
+      "formsStartFraction": 0.4,
+      "formsStaggerFraction": 0.17,
+      "caption": "The same formula applies for Loss % — just use (Loss / Cost Price) × 100."
+    },
+    {
+      "type": "summary",
+      "id": "summary",
+      "narration": "Let's recap. Profit is selling price minus cost price, and loss is cost price minus selling price. Profit percentage equals profit divided by cost price, times one hundred. Remember: always divide by the cost price, not the selling price — that's the most common mistake students make. That's it for Profit and Loss — see you in the next lesson.",
+      "heading": "Key Takeaways",
+      "points": [
+        "Profit = Selling Price − Cost Price",
+        "Loss = Cost Price − Selling Price",
+        "Profit % = (Profit / Cost Price) × 100",
+        "Always divide by Cost Price, never Selling Price"
+      ],
+      "outroStartFraction": 0.72,
+      "outroTitle": "SarkariTaayari",
+      "outroSubtitle": "More concepts coming next"
+    }
+  ]
+}

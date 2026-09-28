@@ -1,0 +1,8 @@
+node_modules/
+output/
+*.log
+.DS_Store
+.remotion/
+.env
+apps/studio/public/audio/
+library/library.json

@@ -1,0 +1,15 @@
+{
+  "name": "@sarkaritaayari/lesson-engine",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@sarkaritaayari/shared": "*",
+    "@sarkaritaayari/scene-engine": "*",
+    "zod": "4.6.5"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  }
+}

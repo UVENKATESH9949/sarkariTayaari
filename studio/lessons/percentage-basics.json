@@ -1,0 +1,94 @@
+{
+  "id": "percentage-basics",
+  "title": "Percentage Basics",
+  "exam": "SSC CGL",
+  "subject": "Quantitative Aptitude",
+  "topic": "Percentage",
+  "language": "en",
+  "scenes": [
+    {
+      "type": "title",
+      "id": "title",
+      "narration": "Welcome back to SarkariTaayari. In this lesson, we're tackling one of the most important topics in Quantitative Aptitude for the SSC CGL exam: percentages. By the end of this video, you'll be able to convert between percentages, fractions, and decimals without hesitation.",
+      "kicker": "SarkariTaayari · Quantitative Aptitude",
+      "title": "Percentage Basics",
+      "subtitle": "SSC CGL  |  A concept every exam tests"
+    },
+    {
+      "type": "concept",
+      "id": "concept",
+      "narration": "Let's start with the word itself. “Percent” comes from Latin, and it simply means “per hundred.” Imagine any quantity divided into exactly one hundred equal parts. If forty of those hundred parts are marked, that quantity is forty percent of the whole. The percent sign is just shorthand for “divided by one hundred,” so any percentage can always be rewritten as a fraction with one hundred in the denominator.",
+      "heading": "What does \"Percent\" mean?",
+      "breakdown": [
+        { "text": "Per" },
+        { "text": "+" },
+        { "text": "Cent" },
+        { "text": "=" },
+        { "text": "Per Hundred", "emphasis": true }
+      ],
+      "grid": {
+        "fillTarget": 40,
+        "start": 0.32,
+        "end": 0.68,
+        "resultPrefix": "40 out of 100 =",
+        "resultValue": "40%"
+      }
+    },
+    {
+      "type": "example",
+      "id": "example",
+      "narration": "Let's put this into practice with a typical exam question. Suppose forty out of one hundred sixty students passed an exam, and we're asked what percentage passed. We take the part, forty, divide it by the whole, one hundred sixty, then multiply by one hundred to convert that fraction into a percentage. Forty divided by one hundred sixty gives zero point two five, and zero point two five times one hundred is twenty five. So exactly twenty five percent of the students passed.",
+      "heading": "Worked Example",
+      "problemText": "40 out of 160 students passed an exam. What percentage passed?",
+      "bars": [
+        { "label": "Total students", "value": 160, "max": 160, "color": "muted", "growStart": 0.26, "growEnd": 0.38 },
+        { "label": "Passed", "value": 40, "max": 160, "color": "accent", "growStart": 0.38, "growEnd": 0.48 }
+      ],
+      "calcLines": [
+        "Percentage = (Part / Whole) × 100",
+        "= (40 / 160) × 100",
+        "= 0.25 × 100"
+      ],
+      "calcStartFraction": 0.56,
+      "calcStaggerFraction": 0.08,
+      "answer": { "from": 0, "to": 25, "suffix": "%", "atFraction": 0.86, "durationSeconds": 1 }
+    },
+    {
+      "type": "formula",
+      "id": "formula",
+      "narration": "Let's generalize this into a formula you can use for any percentage problem. Percentage equals the part, divided by the whole, multiplied by one hundred. Here's something worth remembering: a percentage isn't a separate kind of number — it's just another way of writing a fraction. Twenty five percent, twenty five over one hundred, and one quarter are three different ways of writing the exact same value.",
+      "heading": "The Formula",
+      "formulaTokens": [
+        { "text": "Percentage", "emphasis": true },
+        { "text": " = " },
+        { "text": "(Part / Whole)" },
+        { "text": " × " },
+        { "text": "100" }
+      ],
+      "forms": [
+        { "value": "25%" },
+        { "value": "25/100", "connectorLabel": "÷100" },
+        { "value": "1/4", "connectorLabel": "÷25" }
+      ],
+      "formsLabel": "Same value, three forms:",
+      "formsStartFraction": 0.42,
+      "formsStaggerFraction": 0.16,
+      "caption": "These all describe the exact same quantity."
+    },
+    {
+      "type": "summary",
+      "id": "summary",
+      "narration": "Let's quickly recap. Percent means per hundred. The formula connecting part, whole, and percentage is: percentage equals part divided by whole, times one hundred. And remember, twenty five percent, twenty five over one hundred, and one quarter are all the same value, just written differently. Practice converting between these forms until it becomes second nature. That's it for percentage basics — see you in the next lesson.",
+      "heading": "Key Takeaways",
+      "points": [
+        "“Percent” means per hundred",
+        "Percentage = (Part / Whole) × 100",
+        "25% = 25/100 = 1/4 — same value, three forms",
+        "Practice converting between forms for speed in the exam"
+      ],
+      "outroStartFraction": 0.72,
+      "outroTitle": "SarkariTaayari",
+      "outroSubtitle": "More concepts coming next"
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "name": "sarkaritaayari-ai-videos",
+  "private": true,
+  "version": "0.1.0",
+  "description": "AI-assisted educational video studio for SarkariTaayari (Phase 1, independent from the main app)",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "studio": "npm run dev --workspace=apps/studio",
+    "render:percentage-basics": "npm run render:percentage-basics --workspace=apps/studio",
+    "render:simple-interest-basics": "npm run render:simple-interest-basics --workspace=apps/studio",
+    "synthesize:percentage-basics": "tsx scripts/synthesize-narration.ts lessons/percentage-basics.json",
+    "synthesize:percentage-basics:local": "tsx scripts/synthesize-narration.ts lessons/percentage-basics.json local",
+    "synthesize:simple-interest-basics": "tsx scripts/synthesize-narration.ts lessons/simple-interest-basics.json",
+    "synthesize:simple-interest-basics:local": "tsx scripts/synthesize-narration.ts lessons/simple-interest-basics.json local",
+    "render:profit-and-loss": "npm run render:profit-and-loss --workspace=apps/studio",
+    "synthesize:profit-and-loss": "tsx scripts/synthesize-narration.ts lessons/profit-and-loss.json",
+    "synthesize:profit-and-loss:local": "tsx scripts/synthesize-narration.ts lessons/profit-and-loss.json local",
+    "library:build": "tsx scripts/build-library.ts",
+    "library:serve": "tsx scripts/serve-library.ts",
+    "library": "npm run library:build && npm run library:serve"
+  },
+  "devDependencies": {
+    "@sarkaritaayari/lesson-engine": "*",
+    "@sarkaritaayari/shared": "*",
+    "@sarkaritaayari/subtitle-engine": "*",
+    "@sarkaritaayari/tts": "*",
+    "dotenv": "17.4.2",
+    "tsx": "4.23.13"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "ffmpeg-static@5.3.0": true
+  }
+}

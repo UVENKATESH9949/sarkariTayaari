@@ -1,0 +1,90 @@
+{
+  "id": "simple-interest-basics",
+  "title": "Simple Interest",
+  "exam": "SSC CGL",
+  "subject": "Quantitative Aptitude",
+  "topic": "Simple Interest",
+  "language": "en",
+  "scenes": [
+    {
+      "type": "title",
+      "id": "title",
+      "narration": "Now let's move to another Quant favorite for SSC CGL: Simple Interest. This one comes up constantly, and once you know the formula, it's one of the fastest topics to solve in the exam.",
+      "kicker": "SarkariTaayari · Quantitative Aptitude",
+      "title": "Simple Interest",
+      "subtitle": "SSC CGL  |  Interest you can calculate in your head"
+    },
+    {
+      "type": "concept",
+      "id": "concept",
+      "narration": "Before the formula, let's understand what “rate” actually means. A rate of eight percent means eight rupees of interest for every hundred rupees you borrow or invest, for each year. So whenever you see a rate of eight percent, picture eight out of every hundred rupees as the yearly interest.",
+      "heading": "What does \"Rate\" mean?",
+      "breakdown": [
+        { "text": "Rate" },
+        { "text": "=" },
+        { "text": "Interest" },
+        { "text": "per Rs 100" },
+        { "text": "per year", "emphasis": true }
+      ],
+      "grid": {
+        "fillTarget": 8,
+        "start": 0.35,
+        "end": 0.68,
+        "resultPrefix": "8 out of 100 =",
+        "resultValue": "8% per year"
+      }
+    },
+    {
+      "type": "example",
+      "id": "example",
+      "narration": "Here's a typical question. Find the simple interest on five thousand rupees, at eight percent per annum, for three years. Simple interest equals principal, times rate, times time, divided by one hundred. Plugging in our numbers: five thousand, times eight, times three, divided by one hundred. That works out to a simple interest of twelve hundred rupees.",
+      "heading": "Worked Example",
+      "problemText": "Find the Simple Interest on Rs 5,000 at 8% per annum for 3 years.",
+      "calcLines": [
+        "Simple Interest = (P × R × T) / 100",
+        "= (5000 × 8 × 3) / 100",
+        "= 120000 / 100"
+      ],
+      "calcStartFraction": 0.32,
+      "calcStaggerFraction": 0.14,
+      "answer": { "prefix": "= Rs", "from": 0, "to": 1200, "atFraction": 0.82, "durationSeconds": 1.33 }
+    },
+    {
+      "type": "formula",
+      "id": "formula",
+      "narration": "Here's the general formula one more time: simple interest equals principal times rate times time, divided by one hundred. Once you plug in the principal, the rate, and the time, you get straight to the answer — in our case, twelve hundred rupees. This exact same formula works no matter what numbers the exam gives you.",
+      "heading": "The Formula",
+      "formulaTokens": [
+        { "text": "Simple Interest", "emphasis": true },
+        { "text": " = " },
+        { "text": "(P × R × T)" },
+        { "text": " / " },
+        { "text": "100" }
+      ],
+      "forms": [
+        { "value": "SI" },
+        { "value": "(5000×8×3)/100", "connectorLabel": "plug in values" },
+        { "value": "Rs 1200", "connectorLabel": "compute" }
+      ],
+      "formsLabel": "From formula to answer:",
+      "formsStartFraction": 0.4,
+      "formsStaggerFraction": 0.17,
+      "caption": "Same formula, works for any Principal, Rate, or Time."
+    },
+    {
+      "type": "summary",
+      "id": "summary",
+      "narration": "Let's recap Simple Interest. Rate means interest per hundred rupees, per year. And the formula ties principal, rate, and time directly to the interest earned. Master this formula, and Simple Interest becomes one of the quickest question types to solve under exam pressure.",
+      "heading": "Key Takeaways",
+      "points": [
+        "Rate means interest per Rs 100 per year",
+        "Simple Interest = (P × R × T) / 100",
+        "On Rs 5000 at 8% for 3 years, SI = Rs 1200",
+        "The same formula works for any Principal, Rate, or Time"
+      ],
+      "outroStartFraction": 0.72,
+      "outroTitle": "SarkariTaayari",
+      "outroSubtitle": "More concepts coming next"
+    }
+  ]
+}

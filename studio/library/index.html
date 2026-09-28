@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AIVideos — Video Library</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="app-header__title">
+        <span class="app-header__brand">SarkariTaayari</span>
+        <span class="app-header__divider">/</span>
+        <span>Video Library</span>
+      </div>
+      <div class="app-header__meta" id="summary">Loading…</div>
+    </header>
+
+    <main class="page">
+      <section class="filters" aria-label="Filters">
+        <div class="filter-field">
+          <label for="filter-subject">Subject</label>
+          <select id="filter-subject">
+            <option value="">All subjects</option>
+          </select>
+        </div>
+        <div class="filter-field">
+          <label for="filter-topic">Topic</label>
+          <select id="filter-topic">
+            <option value="">All topics</option>
+          </select>
+        </div>
+        <div class="filter-field">
+          <label for="filter-language">Language</label>
+          <select id="filter-language">
+            <option value="">All languages</option>
+          </select>
+        </div>
+        <button id="reset-filters" class="filters__reset" type="button">Reset</button>
+      </section>
+
+      <section aria-label="Ready videos">
+        <h2 class="section-heading">Ready to watch</h2>
+        <div id="ready-grid" class="video-grid"></div>
+        <p id="ready-empty" class="empty-state" hidden>No videos match these filters.</p>
+      </section>
+
+      <section aria-label="Not yet rendered lessons">
+        <h2 class="section-heading section-heading--muted">Not yet rendered</h2>
+        <div id="pending-grid" class="video-grid video-grid--pending"></div>
+        <p id="pending-empty" class="empty-state" hidden>Nothing pending — everything is rendered.</p>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
