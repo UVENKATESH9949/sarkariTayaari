@@ -14,7 +14,9 @@
     "typecheck": "npm run typecheck --workspace @sarkaritaiyaari/core && npm run typecheck --workspace @sarkaritaiyaari/web",
     "lint:web": "npm run lint --workspace @sarkaritaiyaari/web",
     "check:parity": "node scripts/check-topic-health-parity.js",
-    "qa:generate": "node scripts/qa/generate-test-data.js && node scripts/qa/generate-suites.js && node scripts/qa/generate-reports.js"
+    "qa:generate": "node scripts/qa/generate-test-data.js && node scripts/qa/generate-suites.js && node scripts/qa/generate-reports.js",
+    "secrets:apply": "node scripts/apply-secrets.js",
+    "secrets:check": "node scripts/apply-secrets.js --check"
   },
   "devDependenciesComment": "js-yaml is required by scripts/qa/*.js. Those scripts predate this file, so until now the dependency was undeclared and they only ran where it happened to be installed globally.",
   "devDependencies": {

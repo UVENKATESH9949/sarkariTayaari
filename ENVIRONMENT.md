@@ -88,9 +88,52 @@ npm --prefix admin run build
 
 ---
 
-## 4. The three local files that are NOT in the repo
+## 4. Secrets: one file, and everything else is generated from it
 
-These are gitignored on purpose and are the single biggest thing a new machine is missing.
+**Since 2026-09-28 there is a single file — `secrets.local.env` at the repository root — holding
+every credential and machine-specific setting for every system.** It is gitignored.
+`secrets.example.env` sits beside it in git with the same keys and blank values, so the inventory
+is visible without any secret being committed.
+
+```bash
+cp secrets.example.env secrets.local.env   # then fill it in
+npm run secrets:apply                      # writes the per-system files
+npm run secrets:check                      # verifies they are up to date, writes nothing
+```
+
+`npm run secrets:apply` generates, from that one file:
+
+| Generated file | Read by |
+|---|---|
+| `backend/application-local.yml` | Spring |
+| `mobile/.env.local` | Expo / Metro |
+| `web/.env.local` | Vite |
+| `admin/.env.local` | Vite (optional — admin defaults to `http://localhost:8080`) |
+| `studio/.env` | the AI Video Studio |
+
+**Do not hand-edit those five.** They carry a generated-file banner and are overwritten on the
+next apply. Four runtimes reading four files in three formats is exactly how a value ends up
+right in one place and stale in another.
+
+A blank value is **left out** of the generated file rather than written as an empty string —
+Spring and Vite both treat "present but empty" differently from "absent", and a blank base URL
+fails in a much harder way to read than a missing one.
+
+### ⚠️ Two traps this replaced
+
+**`backend/application-local.yml` is the file Spring reads — NOT
+`backend/src/main/resources/application-local.yml`.** `application.yml` does
+`spring.config.import: optional:file:./application-local.yml`, and the working directory for both
+`spring-boot:run` and surefire is `backend/`. A copy under `src/main/resources` is only loaded
+when a `local` *profile* is active, which this project never sets — so editing that one changes
+nothing at all, silently. A stray copy exists on this machine and is dead weight; it is gitignored
+by the same pattern, so it is harmless but confusing.
+
+**A placeholder is not a value.** `FILL_ME_IN` and `unused-placeholder` are dropped rather than
+carried forward, so "empty" in `secrets.local.env` always means "not set yet".
+
+### Key names, and where each value comes from
+
 **Key names are listed; values are not, because this repository is public.**
 
 ### `backend/application-local.yml`

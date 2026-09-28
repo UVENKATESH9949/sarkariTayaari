@@ -58,3 +58,10 @@ dump*.xml
 # LocalFilesystemVideoStorage's default root (app.video-storage.local-path). Dev/test only —
 # Cloud Run's filesystem is ephemeral, so this is never the production store.
 backend/var/
+
+# The one file holding every secret for every system (see secrets.example.env, which IS
+# committed and carries the same keys with blank values). Everything under it -
+# backend/application-local.yml, mobile/.env.local, web/.env.local, admin/.env.local,
+# studio/.env - is GENERATED from this by `npm run secrets:apply`, so this is the only
+# place a live credential is written by hand.
+secrets.local.env
