@@ -2,7 +2,7 @@
 #
 # Every test case belonging to the LESSONVIDEO module. Run after any change confined to that module.
 #
-# 20 test case(s). Membership rule: module == LESSONVIDEO (mechanical filter).
+# 26 test case(s). Membership rule: module == LESSONVIDEO (mechanical filter).
 
 suite: Regression — LESSONVIDEO
 test_case_ids:
@@ -26,3 +26,9 @@ test_case_ids:
   - TC-LESSONVIDEO-018
   - TC-LESSONVIDEO-019
   - TC-LESSONVIDEO-020
+  - TC-LESSONVIDEO-021
+  - TC-LESSONVIDEO-022
+  - TC-LESSONVIDEO-023
+  - TC-LESSONVIDEO-024
+  - TC-LESSONVIDEO-025
+  - TC-LESSONVIDEO-026

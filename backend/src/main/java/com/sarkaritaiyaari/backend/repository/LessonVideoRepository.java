@@ -68,6 +68,37 @@ public interface LessonVideoRepository extends JpaRepository<LessonVideo, UUID> 
                                       @Param("languageCode") String languageCode,
                                       @Param("teachingLevel") com.sarkaritaiyaari.backend.entity.TeachingLevel teachingLevel);
 
+    /**
+     * Every published topic video, optionally narrowed to one subject.
+     *
+     * <p>This is what makes an AI Videos browse screen affordable. The alternative - asking
+     * "does this topic have a video" once per topic - is 61 round trips for SSC CGL alone, on a
+     * connection this product assumes is slow. The answer here is sparse: it returns only topics
+     * that actually have a video, so a client that already holds the topic list locally can mark
+     * them up without the response carrying the whole syllabus back.
+     *
+     * <p>{@code subjectId} is optional from day one so that, if the published set ever grows past
+     * what one response should carry, narrowing it is a parameter rather than a contract change.
+     * The null-or-match shape matches {@code findAnyForOwner} above.
+     */
+    @Query("""
+            SELECT v FROM LessonVideo v
+            WHERE v.deleted = false
+              AND v.topicId IS NOT NULL
+              AND v.languageCode = :languageCode
+              AND v.teachingLevel = :teachingLevel
+              AND v.quality = :quality
+              AND v.contentStatus = com.sarkaritaiyaari.backend.entity.ContentStatus.PUBLISHED
+              AND (:subjectId IS NULL OR v.topicId IN (
+                    SELECT t.id FROM Topic t WHERE t.subject.id = :subjectId))
+            ORDER BY v.topicId ASC, v.contentVersion DESC
+            """)
+    List<LessonVideo> findPublishedTopicCatalog(
+            @Param("subjectId") UUID subjectId,
+            @Param("languageCode") String languageCode,
+            @Param("teachingLevel") com.sarkaritaiyaari.backend.entity.TeachingLevel teachingLevel,
+            @Param("quality") com.sarkaritaiyaari.backend.entity.VideoQuality quality);
+
     Optional<LessonVideo> findByIdAndDeletedFalse(UUID id);
 
     List<LessonVideo> findAllByDeletedFalseOrderByCreatedAtDesc();

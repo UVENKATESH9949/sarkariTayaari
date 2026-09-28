@@ -380,6 +380,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
      */
     await clearSnapshots("daily-plan");
     /*
+     * The video catalog carries a per-user `entitled` flag on every entry, so it is personal for
+     * the same reason the daily plan is. Keyed per account as well, so again this is the second
+     * line of defence rather than the only one.
+     */
+    await clearSnapshots("lesson-video-catalog");
+    /*
      * Downloaded video lessons are per-account: entitlement is decided server-side per user,
      * so a premium lesson downloaded by one account must not stay playable for whoever signs
      * in next on the same phone. Clearing the files is also what stops a shared device

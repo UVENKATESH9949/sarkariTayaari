@@ -52,10 +52,13 @@ public class LessonVideoAdminController {
     }
 
     /**
-     * Uploads an already-rendered MP4 and links it to a topic or a question.
+     * Attaches an already-rendered MP4 and links it to a topic or a question.
      *
      * <p>This is how a video produced by the AI Video Studio enters the product. The studio has no
      * API and renders through its own CLI, so an upload is the integration point, not a call.
+     *
+     * <p>The file is staged, not stored. Nothing reaches the object store until the video is
+     * published - see {@link LessonVideoService#publish}.
      */
     @PostMapping
     public AdminVideo upload(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
@@ -86,11 +89,31 @@ public class LessonVideoAdminController {
         return videos.setContentStatus(videoId, ContentStatus.REVIEW, null, admin.getEmail());
     }
 
+    /**
+     * Accepts the video: uploads it to the object store, then marks it published.
+     *
+     * <p>Idempotent. A video whose file is already stored is not re-uploaded, so pressing this
+     * twice cannot produce two copies in Cloudinary.
+     */
     @PutMapping("/{videoId}/publish")
     public AdminVideo publish(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
                               @PathVariable UUID videoId) {
         User reviewer = authService.requireReviewer(authorization);
-        return videos.setContentStatus(videoId, ContentStatus.PUBLISHED, null, reviewer.getEmail());
+        return videos.publish(videoId, reviewer.getEmail());
+    }
+
+    /**
+     * Re-runs an upload that failed, from the file still held in staging.
+     *
+     * <p>Separate from publish because they answer different questions. Retry fixes a transfer;
+     * publish decides that the content is good. An operator clearing a backlog of failed uploads
+     * should not have to re-approve each one to do it.
+     */
+    @PostMapping("/{videoId}/retry-upload")
+    public AdminVideo retryUpload(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
+                                  @PathVariable UUID videoId) {
+        User admin = authService.requireAdmin(authorization);
+        return videos.retryUpload(videoId, admin.getEmail());
     }
 
     @PutMapping("/{videoId}/unpublish")

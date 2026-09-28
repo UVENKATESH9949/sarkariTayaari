@@ -176,6 +176,13 @@ function RootNavigator() {
         <Stack.Screen name="exam-compare" options={{ title: "Compare Exams" }} />
         <Stack.Screen name="diagnostic-test" options={{ title: "Diagnostic Test" }} />
         <Stack.Screen name="diagnostic-result" options={{ title: "Diagnostic Results", headerBackVisible: false }} />
+        {/*
+          Was never registered, so its header showed the raw route name "lesson-video" - a
+          cosmetic gap that mattered little while the only way in was a card inside a quiz, and
+          matters now that AI Videos opens this screen constantly. The screen replaces this title
+          with the topic's own name when it is given one.
+        */}
+        <Stack.Screen name="lesson-video" options={{ title: "Video Lesson" }} />
       </Stack>
       <NetworkStatusToast />
     </>

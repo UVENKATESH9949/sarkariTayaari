@@ -2,7 +2,7 @@
 #
 # Every test case across all three modules, including Ambiguous/blocked ones (their execution still records real observed behavior, even without a pre-asserted pass/fail). Run before a significant, cross-cutting change.
 #
-# 401 test case(s). Membership rule: All test cases in qa/test-cases/*.yaml.
+# 407 test case(s). Membership rule: All test cases in qa/test-cases/*.yaml.
 
 suite: Regression (Full)
 test_case_ids:
@@ -233,6 +233,12 @@ test_case_ids:
   - TC-LESSONVIDEO-018
   - TC-LESSONVIDEO-019
   - TC-LESSONVIDEO-020
+  - TC-LESSONVIDEO-021
+  - TC-LESSONVIDEO-022
+  - TC-LESSONVIDEO-023
+  - TC-LESSONVIDEO-024
+  - TC-LESSONVIDEO-025
+  - TC-LESSONVIDEO-026
   - TC-MOCK-001
   - TC-MOCK-002
   - TC-MOCK-003

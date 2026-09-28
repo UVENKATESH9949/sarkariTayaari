@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useNavigation } from "expo-router";
 import { useEvent } from "expo";
 import { VideoView, useVideoPlayer, type VideoSource } from "expo-video";
 import { StyleSheet, View, Text, ActivityIndicator } from "react-native";
@@ -26,6 +26,13 @@ export default function LessonVideoScreen() {
     title?: string;
   }>();
   const styles = useThemedStyles(buildStyles);
+  const navigation = useNavigation();
+
+  // The caller knows what this lesson is about; the route name does not. AI Videos passes the
+  // topic name, so the header reads "Profit & Loss" rather than "Video Lesson".
+  useEffect(() => {
+    if (title) navigation.setOptions({ title });
+  }, [navigation, title]);
 
   const [streamSource, setStreamSource] = useState<VideoSource | null>(null);
   const [streamError, setStreamError] = useState(false);

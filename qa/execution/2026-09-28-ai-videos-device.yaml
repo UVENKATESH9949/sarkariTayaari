@@ -1,0 +1,127 @@
+# AI VIDEOS — device execution records, 2026-09-28 (emulator pass)
+#
+# emulator-5554 (AVD Pixel_7, -memory 3072), the already-installed dev client (no rebuild needed:
+# the AI Videos screens are pure JS/TS and expo-video was compiled in on 2026-09-27), Metro on
+# :8081, a real backend on :8080 against the real Neon dev database with V55 applied.
+#
+# Content was REAL, not a fixture: output/percentage-basics.mp4 (9,628,656 bytes) from the AI
+# Video Studio, uploaded and published against the real "Percentage" topic under SSC CGL ->
+# Quantitative Aptitude.
+#
+# Two environment traps hit and worth recording, neither an app defect:
+#   1. AIRPLANE MODE was still on from an earlier session's offline test. A dev build cannot
+#      cold-start that way, because airplane mode blocks Metro as well as the backend - this file's
+#      own notes already say so. The screen was black until it was turned off.
+#   2. Repeated launches STACK MainActivity and the new top one renders blank. force-stop plus a
+#      SINGLE launch is the fix. Also: the LogBox warning toast (the pre-existing
+#      dailyPlanVisuals.ts missing-default-export warning) overlaps the bottom tab bar and
+#      silently ate taps on it, so AI Videos was opened from its Home row instead - which
+#      incidentally exercised the new Home entry point.
+#
+# Screenshots were unreliable throughout (torn/partial captures under host memory pressure -
+# ~1.1GB free of 16GB), so every observation below is from `uiautomator dump` text, which was
+# consistent and reproducible. The pass ended when the emulator wedged after the playback tap.
+
+- execution_id: EXEC-LESSONVIDEO-0009
+  test_case_id: TC-LESSONVIDEO-025
+  test_case_version: 1
+  environment: "Android emulator emulator-5554 (AVD Pixel_7), installed dev client, Metro :8081, real backend :8080, real Neon dev database at V55"
+  build_version: "main @ 72694bc + uncommitted 2026-09-28 AI Videos integration"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-28T19:12:00+05:30"
+  actual_result: >
+    Steps 1-4 and 6 PASS; step 5 (playback) not observed - see remarks.
+
+    Step 1: the AI Videos tab is present in the tab bar, which reads
+    "Home / Practice / Mock Test / AI Videos / More" - Exams is no longer listed, exactly as
+    designed. Opening AI Videos showed "Short video lessons for SSC CGL, one topic at a time."
+    scoped to the REAL active exam (never hardcoded), over a SUBJECTS list of the four real
+    syllabus subjects for SSC CGL - Quantitative Aptitude, Reasoning, English, General Awareness -
+    each reading "No videos yet" before any video existed.
+
+    Step 2: opening Quantitative Aptitude showed "No video lessons for this subject yet - all 28
+    topics are listed below." and then all 28 real topics (General, Number System, Simplification
+    & Approximation, LCM & HCF, Percentage, Ratio & Proportion, Average, ...). The header title
+    was the subject's own name, confirming navigation.setOptions works.
+
+    Step 4: every topic without a video read "No explanation video available yet" - the required
+    empty state, with no chevron, so the row reads as information rather than a dead button. No
+    topic was hidden for lack of a video.
+
+    Step 6 (the automatic-availability requirement, and the most important one): the real 9.6MB
+    studio lesson was uploaded and published through the admin API while the app stayed installed
+    and running. Upload returned status PENDING_UPLOAD / contentStatus DRAFT / hasStagedFile true
+    / uploadAttempts 0 with storageKey null - nothing in the object store. Publishing returned
+    status READY / contentStatus PUBLISHED / uploadAttempts 1 / hasStagedFile false. A
+    pull-to-refresh on the already-open topic list then changed the header to "1 of 28 topics have
+    a video lesson." and Percentage to "Watch explanation", while every other topic still read
+    "No explanation video available yet". NO app rebuild and NO code change were involved.
+
+    Step 3: Percentage correctly showed a play affordance and "Watch explanation". The duration
+    was absent, correctly: the local storage provider does not measure the file and no
+    durationSeconds was supplied on upload. With the Cloudinary provider it is measured - proven
+    separately by CloudinaryVideoStorageRealTest.
+  status: Pass
+  defect_id: ""
+  remarks: >
+    Recorded Pass for steps 1-4 and 6, NOT for step 5. Tapping "Watch explanation" was performed
+    and the player screen was not observed: the emulator wedged immediately afterwards (uiautomator
+    and logcat both stopped responding, no focused window) under host memory pressure with a video
+    decode added on top. That is an environment failure, not evidence either way about playback.
+
+    Worth knowing when re-running: the player screen itself (app/lesson-video.tsx) IS already
+    device-verified from 2026-09-27, where a real studio lesson played its actual rendered content
+    and offline playback was confirmed. What remains unverified is specifically NAVIGATING to it
+    from the AI Videos topic list and the stream playing from there - one hop, on a machine with
+    more free memory.
+
+- execution_id: EXEC-LESSONVIDEO-0010
+  test_case_id: TC-LESSONVIDEO-021
+  test_case_version: 1
+  environment: "Real backend :8080 against the real Neon dev database at V55, storage provider=local"
+  build_version: "main @ 72694bc + uncommitted 2026-09-28 AI Videos integration"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-28T19:10:00+05:30"
+  actual_result: >
+    Confirmed against the real database with the real 9.6MB studio lesson, not the synthetic MP4
+    the automated test uses. POST returned status PENDING_UPLOAD, contentStatus DRAFT,
+    hasStagedFile true, uploadAttempts 0, sizeBytes 9628656 and a real sha256 - with storageKey
+    null, so attaching genuinely sent nothing to the store. PUT /publish then returned status
+    READY, contentStatus PUBLISHED, uploadAttempts 1, hasStagedFile false, a real publishedAt and
+    errorMessage null - so publishing performed the upload, dropped the staged copy, and only then
+    marked the video live.
+  status: Pass
+  defect_id: ""
+  remarks: >
+    This is the same behaviour LessonVideoTest asserts, re-confirmed once against real content and
+    a real database rather than only against a 64-byte fixture in an integration test.
+
+- execution_id: EXEC-LESSONVIDEO-0011
+  test_case_id: TC-LESSONVIDEO-019
+  test_case_version: 1
+  environment: "Real Cloudinary account (Free plan), provider overridden to cloudinary for this test class only"
+  build_version: "main @ 72694bc + uncommitted 2026-09-28 AI Videos integration"
+  tester: "venkatesh.undekod@innovapptive.com (via Claude Code session)"
+  executed_at: "2026-09-28T18:30:00+05:30"
+  actual_result: >
+    The blocked case is now genuinely run, against real credentials. A real upload succeeded;
+    Cloudinary reported duration=1s width=128 height=128, which the code now reads instead of
+    trusting a typed-in number; the signed delivery URL served the bytes back byte-identically
+    (HTTP 200); an UNSIGNED request for the same asset was REFUSED with HTTP 400, which is what
+    makes premium gating real rather than cosmetic; and the object was deleted afterwards, leaving
+    nothing in the account.
+
+    Step 4, the question api/LESSON-VIDEOS.md could not answer: this account's plan DOES support
+    time-limited delivery. The URL came back as a privateDownload link carrying an expiry
+    (api.cloudinary.com/v1_1/<cloud>/video/download), so the documented expiry claim is TRUE here
+    and the non-expiring signed-URL fallback stays dormant. It logs a WARN if that ever changes.
+  status: Pass
+  defect_id: ""
+  remarks: >
+    Two findings from getting this to run, both mine rather than the product's. A hand-built MP4
+    (ftyp box plus empty moov) passes the application's own magic-byte check but Cloudinary
+    DECODES uploads and rejected it as "Invalid video file" - so the test now uses a genuinely
+    playable 2.2KB clip committed at backend/src/test/resources/tiny-video.mp4. And the first run
+    used a stale cloud name because secrets.local.env had been edited without re-running
+    `npm run secrets:apply`; `npm run secrets:check` correctly reported the generated file as out
+    of date.

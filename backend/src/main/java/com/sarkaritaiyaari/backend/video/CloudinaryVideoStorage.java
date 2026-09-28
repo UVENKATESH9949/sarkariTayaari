@@ -61,23 +61,44 @@ public class CloudinaryVideoStorage implements VideoStorage {
     }
 
     @Override
-    public String store(String key, byte[] bytes, String mimeType) {
+    public StoredObject store(String key, byte[] bytes, String mimeType) {
         String publicId = publicIdFor(key);
+        Map<?, ?> result;
         try {
-            Map<?, ?> result = cloudinary.uploader().upload(bytes, ObjectUtils.asMap(
+            // overwrite + a public id derived from the storage key is what makes a retry safe.
+            // The same video retried lands on the same asset; a failed attempt that had in fact
+            // reached Cloudinary is replaced rather than duplicated.
+            result = cloudinary.uploader().upload(bytes, ObjectUtils.asMap(
                     "resource_type", RESOURCE_TYPE,
                     "type", DELIVERY_TYPE,
                     "public_id", publicId,
                     "overwrite", true,
                     "invalidate", true));
-            log.info("video.storage cloudinary stored publicId={} bytes={} durationFromCloudinary={}",
-                    publicId, bytes.length, result.get("duration"));
         } catch (IOException e) {
             throw new UncheckedIOException("Could not upload video to Cloudinary: " + publicId, e);
         }
-        // The row keeps the key we were given, not Cloudinary's public id. deliveryUrl derives one
-        // from the other, so the two can never disagree about where a file lives.
-        return key;
+        log.info("video.storage cloudinary stored publicId={} bytes={} duration={}",
+                publicId, bytes.length, result.get("duration"));
+        // Cloudinary probes the container while ingesting it, so these are measured rather than
+        // typed in. The row keeps the key we were given, not Cloudinary's public id: deliveryUrl
+        // derives one from the other, so the two can never disagree about where a file lives.
+        return new StoredObject(key,
+                asRoundedSeconds(result.get("duration")),
+                asInteger(result.get("width")),
+                asInteger(result.get("height")));
+    }
+
+    private static Integer asInteger(Object value) {
+        return value instanceof Number n ? n.intValue() : null;
+    }
+
+    /**
+     * Cloudinary reports duration as fractional seconds. Rounding rather than truncating keeps a
+     * 2:05.9 lesson from being shown as 2:05, which is the kind of small lie a student notices
+     * when the player disagrees with the label.
+     */
+    private static Integer asRoundedSeconds(Object value) {
+        return value instanceof Number n ? (int) Math.round(n.doubleValue()) : null;
     }
 
     /**

@@ -836,8 +836,30 @@ export function unpublishLessonVideo(id) {
   return request(`/api/admin/lesson-videos/${id}/unpublish`, { method: "PUT" });
 }
 
+export function retryLessonVideoUpload(id) {
+  return request(`/api/admin/lesson-videos/${id}/retry-upload`, { method: "POST" });
+}
+
 export function deleteLessonVideo(id) {
   return request(`/api/admin/lesson-videos/${id}`, { method: "DELETE" });
+}
+
+/**
+ * Fetches a lesson video as a blob URL so it can be played in the review card.
+ *
+ * <p>It goes through fetch rather than being handed to a <video src> directly because the stream
+ * endpoint needs the bearer token, and a plain src attribute cannot carry one. The caller must
+ * revoke the returned URL when it is done with it, or the blob stays in memory for the life of
+ * the page.
+ */
+export async function fetchLessonVideoBlobUrl(id) {
+  const headers = authToken ? { Authorization: `Bearer ${authToken}` } : {};
+  const response = await fetch(`${BASE_URL}/api/lesson-videos/${id}/stream`, { headers });
+  if (response.status === 401) onUnauthorized();
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+  return URL.createObjectURL(await response.blob());
 }
 
 export function getLessonBlueprints() {

@@ -190,3 +190,71 @@
   systems: [Mobile]
   status: Ready
   notes: "Confirms streaming and the offline download path are additive, not exclusive."
+
+- id: SCN-LESSONVIDEO-018
+  requirement_ids: [REQ-LESSONVIDEO-010]
+  category: Functional
+  title: An attached video is staged, and publishing is what stores it
+  objective: >
+    Verify that attaching an MP4 leaves the row PENDING_UPLOAD with no storage key, and that
+    publishing uploads the file and then marks it PUBLISHED.
+  systems: [Backend]
+  status: Ready
+  notes: "The order matters: a PUBLISHED row with no file is what a student meets as a dead play button."
+
+- id: SCN-LESSONVIDEO-019
+  requirement_ids: [REQ-LESSONVIDEO-010, REQ-LESSONVIDEO-011]
+  category: Negative
+  title: A storage failure is recorded rather than rolled back, and retry recovers it
+  objective: >
+    Verify that a refused upload leaves UPLOAD_FAILED, an error message, an attempt count and the
+    staged file, keeps the video DRAFT, and that a retry stores the file leaving one object.
+  systems: [Backend]
+  status: Ready
+  notes: >
+    This is the defect the flow was rebuilt around - the upload used to share a transaction with
+    the row write, so a failure destroyed the evidence of itself.
+
+- id: SCN-LESSONVIDEO-020
+  requirement_ids: [REQ-LESSONVIDEO-011]
+  category: Functional
+  title: Publishing or retrying twice does not upload twice
+  objective: "Verify idempotency - an already-stored video is not re-uploaded by publish or retry."
+  systems: [Backend]
+  status: Ready
+  notes: "A retry button is only safe if pressing it cannot leave a duplicate asset behind."
+
+- id: SCN-LESSONVIDEO-021
+  requirement_ids: [REQ-LESSONVIDEO-012]
+  category: Functional
+  title: The catalog lists published topic videos and omits everything else
+  objective: >
+    Verify a topic appears in the catalog only once its video is published, and that the response
+    carries the topic's subject so a browse screen can group without mapping ids itself.
+  systems: [Backend]
+  status: Ready
+  notes: "Absence is the contract - it is what the app renders its empty state from."
+
+- id: SCN-LESSONVIDEO-022
+  requirement_ids: [REQ-LESSONVIDEO-012]
+  category: Functional
+  title: AI Videos shows every topic, with and without a video
+  objective: >
+    Verify the AI Videos tab lists the active exam's real subjects and topics, marks the ones with
+    a published video, and shows a plain empty state on the rest rather than hiding them.
+  systems: [Mobile]
+  status: Ready
+  notes: "Uses the same subject/topic reads as Practice, so the two can never disagree."
+
+- id: SCN-LESSONVIDEO-023
+  requirement_ids: [REQ-LESSONVIDEO-012]
+  category: Regression
+  title: Swapping the Exams tab for AI Videos breaks nothing that used it
+  objective: >
+    Verify Practice, Mock Test, onboarding and active-exam switching still work, and that the exam
+    screens stay reachable from Home now that they no longer hold a tab slot.
+  systems: [Mobile]
+  status: Ready
+  notes: >
+    The exams route is kept with href: null, the same treatment Progress already has - Home, More,
+    the daily plan and the AI Videos empty state all still push to it.

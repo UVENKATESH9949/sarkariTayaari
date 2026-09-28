@@ -7,8 +7,10 @@ import {
   listSubjects,
   listTopics,
   publishLessonVideo,
+  retryLessonVideoUpload,
   unpublishLessonVideo,
   uploadLessonVideo,
+  fetchLessonVideoBlobUrl,
 } from "../api.js";
 
 /**
@@ -25,11 +27,26 @@ import {
  */
 
 const STATUS_BADGE = { DRAFT: "badge-lang", REVIEW: "badge-medium", PUBLISHED: "badge-easy" };
+// A one-line plain-English gloss per upload state. The enum name alone reads as jargon to
+// whoever is reviewing content, and "PENDING_UPLOAD" in particular looks like a failure when it
+// is the normal state of every video that has not been accepted yet.
+const STATUS_HELP = {
+  PENDING_UPLOAD: "Waiting to be accepted. The file is held here and has not been sent to storage yet.",
+  UPLOADING: "Being sent to storage.",
+  UPLOAD_FAILED: "The file could not be sent to storage. It is still here — use Retry upload.",
+  READY: "Stored and playable.",
+  FAILED: "Generation failed.",
+  ARCHIVED: "Withdrawn.",
+};
+
 const READY_BADGE = {
   READY: "badge-easy",
   PROCESSING: "badge-medium",
   GENERATING: "badge-medium",
   QUEUED: "badge-medium",
+  PENDING_UPLOAD: "badge-medium",
+  UPLOADING: "badge-medium",
+  UPLOAD_FAILED: "badge-hard",
   FAILED: "badge-hard",
   ARCHIVED: "badge-lang",
 };
@@ -103,7 +120,7 @@ function UploadForm({ topics, onUploaded }) {
         durationSeconds: durationSeconds || null,
       });
 
-      setNotice("Uploaded. It is a draft until you publish it.");
+      setNotice("Attached. Watch it below, then Accept & publish — that is what uploads it to storage.");
       setFile(null);
       setLessonJson("");
       setDurationSeconds("");
@@ -232,6 +249,32 @@ function UploadForm({ topics, onUploaded }) {
 function VideoCard({ video, topicName, blueprint, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [previewing, setPreviewing] = useState(false);
+
+  const canPublish = video.hasStagedFile || video.status === "READY";
+
+  /*
+   * Revoke the blob when the card goes away or the video changes. Without this every preview
+   * leaks its copy of the file — 8MB a time — for as long as the page stays open.
+   */
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  async function loadPreview() {
+    setError(null);
+    setPreviewing(true);
+    try {
+      setPreviewUrl(await fetchLessonVideoBlobUrl(video.id));
+    } catch (err) {
+      setError(`Could not load the video: ${err.message}`);
+    } finally {
+      setPreviewing(false);
+    }
+  }
 
   async function run(action) {
     setError(null);
@@ -259,6 +302,24 @@ function VideoCard({ video, topicName, blueprint, onChanged }) {
       </div>
 
       {error && <div className="banner banner-error">{error}</div>}
+
+      <p className="field-note">{STATUS_HELP[video.status] ?? ""}</p>
+
+      {/*
+        Watching it is the whole point of reviewing it. Before this, "review" meant reading a row
+        of metadata and pressing Publish on a file nobody had seen.
+      */}
+      {canPublish && (
+        <div className="form-field">
+          {previewUrl ? (
+            <video src={previewUrl} controls style={{ width: "100%", maxWidth: 480, borderRadius: 6 }} />
+          ) : (
+            <button className="btn" type="button" disabled={previewing} onClick={loadPreview}>
+              {previewing ? "Loading…" : "Watch video"}
+            </button>
+          )}
+        </div>
+      )}
 
       <table>
         <tbody>
@@ -308,6 +369,22 @@ function VideoCard({ video, topicName, blueprint, onChanged }) {
               <code>{video.checksumSha256 ? video.checksumSha256.slice(0, 16) + "…" : "—"}</code>
             </td>
           </tr>
+          <tr>
+            <th>Storage</th>
+            <td>
+              {video.status === "READY"
+                ? "Uploaded to storage"
+                : video.hasStagedFile
+                  ? "Held here — uploads when you accept it"
+                  : "No file attached"}
+              {video.uploadAttempts > 0 && (
+                <span className="field-note">
+                  {" "}
+                  — {video.uploadAttempts} upload attempt{video.uploadAttempts === 1 ? "" : "s"}
+                </span>
+              )}
+            </td>
+          </tr>
           {video.errorMessage && (
             <tr>
               <th>Error</th>
@@ -321,10 +398,15 @@ function VideoCard({ video, topicName, blueprint, onChanged }) {
         {video.contentStatus !== "PUBLISHED" ? (
           <button
             className="btn btn-primary"
-            disabled={busy || video.status !== "READY"}
+            /*
+             * Publishable when there is a file to publish — staged OR already stored. Gating this
+             * on status === "READY" would deadlock the whole flow, because accepting the video is
+             * what makes it READY in the first place.
+             */
+            disabled={busy || !canPublish}
             onClick={() => run(() => publishLessonVideo(video.id))}
           >
-            {busy ? "Working…" : "Publish"}
+            {busy ? "Uploading…" : "Accept & publish"}
           </button>
         ) : (
           <button
@@ -333,6 +415,15 @@ function VideoCard({ video, topicName, blueprint, onChanged }) {
             onClick={() => run(() => unpublishLessonVideo(video.id))}
           >
             {busy ? "Working…" : "Unpublish"}
+          </button>
+        )}
+        {video.status === "UPLOAD_FAILED" && (
+          <button
+            className="btn"
+            disabled={busy}
+            onClick={() => run(() => retryLessonVideoUpload(video.id))}
+          >
+            {busy ? "Retrying…" : "Retry upload"}
           </button>
         )}
         <button

@@ -76,21 +76,69 @@ public final class LessonVideoDtos {
             Integer height,
             String checksumSha256,
             String errorMessage,
+            int uploadAttempts,
+            OffsetDateTime lastUploadAttemptAt,
+            boolean hasStagedFile,
             OffsetDateTime createdAt,
             OffsetDateTime updatedAt,
             OffsetDateTime publishedAt,
             String reviewedByEmail,
             long version) {
 
-        public static AdminVideo from(LessonVideo v) {
+        /**
+         * @param hasStagedFile whether the attached file is still held in the staging table -
+         *                      i.e. whether publishing has bytes to promote, or whether a retry
+         *                      has anything left to retry with. The caller supplies it because
+         *                      answering it from the video row alone would be a guess.
+         */
+        public static AdminVideo from(LessonVideo v, boolean hasStagedFile) {
             return new AdminVideo(
                     v.getId(), v.getBlueprintId(), v.getTopicId(), v.getQuestionId(),
                     v.getLanguageCode(), v.getTeachingLevel(), v.getQuality(), v.getContentVersion(),
                     v.getStatus(), v.getSource(), v.getContentStatus(), v.getRejectionReason(),
                     v.isPremium(), v.getMimeType(), v.getSizeBytes(), v.getDurationSeconds(),
                     v.getWidth(), v.getHeight(), v.getChecksumSha256(), v.getErrorMessage(),
+                    v.getUploadAttempts(), v.getLastUploadAttemptAt(), hasStagedFile,
                     v.getCreatedAt(), v.getUpdatedAt(), v.getPublishedAt(), v.getReviewedByEmail(),
                     v.getVersion());
         }
+    }
+
+    /**
+     * One published topic video, as the AI Videos browse screen needs it.
+     *
+     * <p>Only topics that HAVE a video appear. A topic without one is not represented here at all,
+     * and the client shows its empty state from the absence - the same "no row means not
+     * available" rule {@link VideoAvailability#notAvailable()} already follows. Sending a row per
+     * topic-without-a-video would make the response scale with the syllabus instead of with the
+     * content, which is backwards for a product that assumes a slow connection.
+     *
+     * <p>Nothing Cloudinary-shaped is in here: no public id, no storage key, no signed URL.
+     * {@code playbackPath} is a path on this backend, so entitlement stays enforceable and the
+     * object store stays an implementation detail the app never learns.
+     */
+    public record TopicVideoCatalogEntry(
+            UUID topicId,
+            /**
+             * The topic's subject, resolved here rather than on the device. A client browsing by
+             * subject would otherwise have to map every topic id back to a subject itself, and
+             * the server is already holding the topic rows needed to answer it.
+             */
+            UUID subjectId,
+            UUID videoId,
+            int contentVersion,
+            Integer durationSeconds,
+            Long sizeBytes,
+            String languageCode,
+            TeachingLevel teachingLevel,
+            VideoQuality quality,
+            String checksumSha256,
+            boolean requiresPremium,
+            boolean entitled,
+            String playbackPath) {
+    }
+
+    /** The catalog response. A wrapper, so a later cursor or generation stamp is additive. */
+    public record TopicVideoCatalog(java.util.List<TopicVideoCatalogEntry> items) {
     }
 }

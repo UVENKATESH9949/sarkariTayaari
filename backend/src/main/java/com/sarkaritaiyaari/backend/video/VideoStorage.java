@@ -22,14 +22,18 @@ import java.util.Optional;
 public interface VideoStorage {
 
     /**
-     * Stores bytes under a caller-supplied key and returns the key actually used.
+     * Stores bytes under a caller-supplied key.
+     *
+     * <p>Implementations must be safe to call twice with the same key: a retry after a failure
+     * that may in fact have succeeded must replace the object, never create a second one. That is
+     * what makes publishing retryable without an admin risking duplicate uploads.
      *
      * @param key        a stable, caller-chosen identifier, e.g. {@code "lesson-videos/<uuid>/1.mp4"}
      * @param bytes      the file
      * @param mimeType   the content type to serve it back as
-     * @return the storage key to persist on the row
+     * @return the key to persist on the row, plus whatever the store measured about the file
      */
-    String store(String key, byte[] bytes, String mimeType);
+    StoredObject store(String key, byte[] bytes, String mimeType);
 
     /**
      * Resolves a key to bytes this backend can serve itself, or empty when this store does not

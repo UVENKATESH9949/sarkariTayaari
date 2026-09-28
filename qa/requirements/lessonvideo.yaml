@@ -385,3 +385,136 @@
   ambiguity: null
   automation_status: ManualOnly
   automation_hint: "Mobile has no automated test runner in this project."
+
+- id: REQ-LESSONVIDEO-010
+  feature: Accepting a video is what uploads it to the object store
+  module: LESSONVIDEO
+  system: [Backend, Admin]
+  source_doc: api/LESSON-VIDEOS.md
+  source_section: "Attaching a file and publishing it are two steps"
+  description: >
+    Attaching an MP4 stages it in the database and leaves the row PENDING_UPLOAD / DRAFT.
+    Publishing uploads it to the object store and only then marks it PUBLISHED. A reviewer can
+    still watch the staged file before deciding, streamed through the backend.
+  business_rule: >
+    An unreviewed video should not be sitting in the object store, and a row must never claim to
+    be published with no file behind it. Uploading first and publishing second is what guarantees
+    the second half; staging in the database rather than on disk is what makes it work on Cloud
+    Run, whose filesystem is ephemeral and whose instances scale to zero.
+  actor: Admin or reviewer
+  preconditions:
+    - "An MP4 has been attached to a topic or question"
+  inputs:
+    - "PUT /api/admin/lesson-videos/{id}/publish"
+  expected_outputs:
+    - "The file is uploaded to the object store, then status READY and contentStatus PUBLISHED"
+    - "The staged copy is deleted, so a published video is not held twice"
+  validations:
+    - "A video with no file in the store and no staged file cannot be published"
+  permissions:
+    - "Publishing requires REVIEWER (ADMIN is a superset)"
+  dependencies: [REQ-LESSONVIDEO-001, REQ-LESSONVIDEO-008]
+  error_conditions:
+    - "An upload failure answers 400 and leaves the video unpublished"
+  edge_conditions:
+    - "Publishing a video whose file is already stored does not upload it again"
+  offline_behavior: "Not applicable - admin-side."
+  acceptance_criteria:
+    - "An attached video is PENDING_UPLOAD with no storage key until it is published"
+    - "Publishing produces a stored file and a PUBLISHED row, in that order"
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "LessonVideoTest.uploadIsStagedNotStored / publishUploadsToStorage"
+
+- id: REQ-LESSONVIDEO-011
+  feature: A failed upload is recorded and can be retried without duplicating
+  module: LESSONVIDEO
+  system: [Backend, Admin]
+  source_doc: api/LESSON-VIDEOS.md
+  source_section: "Attaching a file and publishing it are two steps"
+  description: >
+    When the object store refuses an upload the row records UPLOAD_FAILED, the operator-facing
+    error, and the attempt count; the staged file is kept and the video stays DRAFT. Retrying
+    re-uploads from the staged file. Publishing or retrying a video whose file is already stored
+    does not upload it a second time.
+  business_rule: >
+    The upload runs outside a transaction on purpose. Inside one, a storage failure would mark the
+    transaction rollback-only and destroy the record of itself, leaving an admin with a row that
+    looked untouched and no way to tell a failure from a publish that never ran.
+  actor: Admin
+  preconditions:
+    - "A video with a staged file whose upload has failed"
+  inputs:
+    - "POST /api/admin/lesson-videos/{id}/retry-upload"
+  expected_outputs:
+    - "A successful retry sets status READY and clears the error"
+    - "The object store holds exactly one object for the video, whatever the attempt count"
+  validations:
+    - "The object key is derived from video id and contentVersion, and the store overwrites"
+  permissions:
+    - "Retry requires ADMIN"
+  dependencies: [REQ-LESSONVIDEO-010]
+  error_conditions:
+    - "A retry that fails again answers 400 and keeps the staged file"
+  edge_conditions:
+    - "Retrying an already-stored video is a no-op and uploads nothing"
+    - "Retry moves the file only; it never publishes the video by itself"
+  offline_behavior: "Not applicable - admin-side."
+  acceptance_criteria:
+    - "A failed upload leaves UPLOAD_FAILED, an error message, an attempt count, and the file intact"
+    - "A retry after a failure stores the file and leaves exactly one object behind"
+  priority: Critical
+  status: Active
+  ambiguity: null
+  automation_status: Automated
+  automation_hint: "LessonVideoUploadFailureTest - failedUploadIsRecordedAndRetryable, retrySucceedsWithoutDuplicating, retryOnAStoredVideoIsANoOp"
+
+- id: REQ-LESSONVIDEO-012
+  feature: AI Videos browses the existing exam syllabus, showing topics with and without videos
+  module: LESSONVIDEO
+  system: [Backend, Mobile]
+  source_doc: api/LESSON-VIDEOS.md
+  source_section: "GET /api/lesson-videos/catalog"
+  description: >
+    The AI Videos tab lists the active exam's real subjects and topics - the same getSubjectStats
+    and getTopicStats Practice reads - and marks which topics have a published video, from a
+    single catalog call. Topics without a video stay visible and say "No explanation video
+    available yet".
+  business_rule: >
+    There is deliberately no second subject/topic list for videos. A separate hierarchy would
+    drift from the one Practice uses and leave a student with two different ideas of their
+    syllabus. Hiding topics that have no video would make an almost-empty library look like a
+    complete syllabus.
+  actor: Signed-in student
+  preconditions:
+    - "An active exam whose syllabus is on the device"
+  inputs:
+    - "Opening the AI Videos tab, then a subject"
+  expected_outputs:
+    - "Every subject of the active exam is listed, with a count of its videos or 'No videos yet'"
+    - "Every topic of the chosen subject is listed, whether or not it has a video"
+    - "A topic with a published video offers a watch action; one without shows the empty state"
+  validations:
+    - "The catalog response is sparse - only topics that have a video appear in it"
+    - "One catalog request serves the whole screen, not one per topic"
+  permissions:
+    - "Requires a signed-in user; premium videos show as locked when the student is not entitled"
+  dependencies: [REQ-LESSONVIDEO-002, REQ-LESSONVIDEO-010]
+  error_conditions:
+    - "A catalog failure still shows the syllabus, with a note, rather than an error page"
+  edge_conditions:
+    - "No active exam shows a prompt to choose one, not an empty screen"
+    - "A newly published video appears after the catalog refreshes, with no app release"
+  offline_behavior: >
+    The catalog is cached per account and exam, read stale-while-revalidate. A failed refresh
+    never replaces a usable saved list with an error. The syllabus itself is local already.
+  acceptance_criteria:
+    - "All topics of a subject render, including those with no video"
+    - "A published video becomes watchable without a new mobile build"
+  priority: High
+  status: Active
+  ambiguity: null
+  automation_status: PartiallyAutomated
+  automation_hint: "Backend catalog covered by LessonVideoTest.catalogListsOnlyPublishedTopics; the mobile screens have no automated runner."

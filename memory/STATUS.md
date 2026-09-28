@@ -1,5 +1,216 @@
 # Project Status — Resume Point
 
+## Session of 2026-09-28 (2) — AI Videos: studio moved in-repo, publish uploads to Cloudinary, and a student-facing module
+
+**A supplied three-operation brief, audited before any code changed — and three of its premises
+were false, two of them in the project's favour.** Full account:
+`reports/43-ai-videos-integration/ai-videos-integration.md`. Migration **V55** (backend only; no
+mobile migration). **Nothing committed.**
+
+**WHAT THE AUDIT FOUND, and it reshaped all three operations:**
+
+1. **"Migrate the AI Videos Admin page."** It already existed — `admin/src/pages/AiVideos.jsx`,
+   446 lines, shipped two days ago in `75905af`. The *source* project has no admin page at all:
+   `C:\AIVideos\library/` is a read-only static HTML browser with no auth and no accept action.
+2. **"Migrate the AI video generation APIs/services."** There are none. The studio has **no API
+   and no server** — generation is `lessons/<id>.json` → PowerShell/SAPI narration → headless-
+   Chromium Remotion render → `output/<id>.mp4`, run from npm scripts. A Chromium+ffmpeg+Windows-
+   TTS toolchain cannot be moved into a Spring backend or a React admin bundle; that is a rewrite,
+   not a migration. The automated LLM pipeline was designed and deliberately shelved
+   (`docs/web-studio-plan.SUPERSEDED.md`).
+3. **"Integrate Cloudinary."** Already integrated — `CloudinaryVideoStorage` does `authenticated`
+   upload, signed expiring delivery, 302 redirect, delete, public-id derivation. **The real gap was
+   never whether it was wired up. It was WHEN it uploaded, and what happened when it failed.**
+
+**THE DEFECT THE AUDIT FOUND, and the whole reason Operation 2 was worth doing:**
+`LessonVideoService.upload` called `storage.store(...)` **inside a `@Transactional` method**. A
+Cloudinary failure rolled the row back with it — leaving **no row, no failure record, and nothing
+to retry**, so an admin could not tell a failed upload from one that never ran. Third time this
+project has hit that shape (`DocumentStoreService`, the ingestion scan).
+
+**Four owner decisions taken before implementing:** Cloudinary uploads **only on Accept** (the
+literal brief); the studio is **copied into the repo**; AI Videos **takes the Exams tab slot** and
+Exams moves to Home; all three operations in one pass.
+
+**DECISION 1 WAS FLAGGED AS BROKEN AND WAS REAFFIRMED, SO IT WAS BUILT — with the hole filled
+rather than the decision weakened.** The problem: if nothing uploads until Accept, the reviewer has
+nowhere to watch from, and Cloud Run has no durable local disk to stage on (ephemeral filesystem,
+scale to zero). Accepting a video nobody could watch is not a review. **Solved with a database
+staging table** — V55's `lesson_video_uploads`. Bounded: 20MB cap, and a row lives only until the
+video is published or deleted.
+
+**The flow now:**
+```
+attach   -> staged in lesson_video_uploads; row PENDING_UPLOAD / DRAFT; Cloudinary untouched
+review   -> streamed from staging (staff only)
+accept   -> uploaded to Cloudinary, THEN READY / PUBLISHED; staging row dropped
+fail     -> UPLOAD_FAILED + errorMessage + attempt count, still DRAFT, file kept
+retry    -> re-uploads from staging; exactly one object, never a duplicate
+```
+
+**`LessonVideoPublisher` is new and drives transactions BY HAND, deliberately.** The usual fix for
+"don't call storage inside a transaction" is separate beans, because `@Transactional` on a method
+called from inside its own bean does nothing. `TransactionTemplate` is used instead so the
+boundaries are **visible in the code** rather than depending on which object a call travels
+through — a property this codebase has lost time to twice. Claim the attempt and commit, upload
+outside any transaction, commit the outcome; each step durable before the next begins.
+
+**Idempotency is structural, not a flag.** The object key is derived from video id + content
+version and the store overwrites, so a retry after an upload that secretly succeeded lands on the
+same object. An already-stored video is reported as such **without the store being touched**, so a
+double-click cannot make two assets. And **a video is never published with no file behind it** —
+upload runs first; PUBLISHED comes only after the bytes are stored.
+
+**Three new `status` values** — `PENDING_UPLOAD`/`UPLOADING`/`UPLOAD_FAILED` — kept distinct from
+`FAILED` on purpose: a render that produced nothing and a finished file that could not be uploaded
+need different fixes (regenerate vs retry). The column is a bare `VARCHAR` with no CHECK, so
+adding values cost nothing — the same property V52 used for `study_tasks.source`.
+
+**`VideoStorage.store` now returns `StoredObject` rather than the key.** Cloudinary measures the
+video while ingesting it and that was being **logged and discarded**, so duration was whatever an
+admin typed. A store that reports nothing leaves the supplied value alone, so a blank never
+overwrites a real one.
+
+**NEW READ: `GET /api/lesson-videos/catalog`** — every published topic video in one call, optional
+`subjectId`. The per-topic endpoint is right for the quiz card and wrong for a browse screen (SSC
+CGL alone has 61 topics). **The response is sparse: a topic with no video is simply absent, and
+that absence is what the app renders its empty state from.** Carries no topic/subject *names* (the
+app already holds the syllabus; a second copy drifts) and nothing Cloudinary-shaped — no public id,
+no storage key, no signed URL.
+
+**Admin.** A **real preview player** (before this, "review" meant reading a metadata table and
+publishing a file nobody had seen); the blob URL is revoked on unmount or every preview leaks 8MB
+for the life of the page. Publish became **"Accept & publish"**, and **its gate was a real bug** —
+`disabled={status !== "READY"}` would have **deadlocked the whole feature**, since accepting is
+what makes a video READY. Plus a **Retry upload** button on `UPLOAD_FAILED`, a storage/attempt row,
+and a plain-English gloss per status (`PENDING_UPLOAD` reads like a failure when it is the normal
+state of every unaccepted video).
+
+**Mobile.** New **AI Videos tab** in the slot Exams held: `ai-videos/index.tsx` (the active exam's
+real subjects) → `ai-videos/subject.tsx` (that subject's topics) → the existing player.
+**Exams is KEPT as a route with `href: null`**, the same treatment Progress already has — Home,
+More, the daily plan and the AI Videos empty state all still push to it, so discovery, calendar,
+comparison and eligibility are untouched. Deleting the route would have broken all of them. Home
+gains an **Exams** row, and its "AI Videos — Coming soon" placeholder became a real link.
+
+**NO SECOND SUBJECT/TOPIC HIERARCHY WAS CREATED** — the screens call `getSubjectStats` and
+`getTopicStats`, the same reads Practice uses, so the two cannot disagree about an exam's contents.
+**Every topic is listed whether or not it has a video**; one without reads "No explanation video
+available yet" with no chevron, so the row is information rather than a dead button.
+
+`data/lessonVideoCatalog.ts` caches per account and exam, stale-while-revalidate, and **a failed
+refresh never replaces a usable saved list with an error**. Cleared on sign-out, because every
+entry carries a per-user `entitled` flag. Also **registered `lesson-video` in the root Stack** — it
+never was, so its header showed the raw route name (a gap this file already flagged); it now takes
+the topic's own name.
+
+**Studio.** Copied to **`studio/`** (64 files, 437KB) excluding `node_modules`, `output/`,
+generated narration WAVs and `.env` — all already in its own `.gitignore`. **Not** added to the
+root npm workspaces: it is a workspace root of its own (`apps/*`, `packages/*`), and nesting one
+inside another makes npm resolve the two sets against each other. It stays an independent npm
+project like `mobile/` and `admin/`.
+
+**Verified:** backend compile/test-compile clean; **35/35 tests green, BUILD SUCCESS** against the
+real Neon dev database (`LessonVideoTest` 17, `LessonVideoRulesTest` 13,
+`LessonVideoUploadFailureTest` 3, `VideoStorageSelectionTest` 2). `packages/core` `tsc` clean;
+mobile `tsc` clean and `expo lint` at the **exact pre-existing 7-problem baseline** (two real new
+violations were introduced and **fixed, not suppressed**); admin `npm run build` clean and
+`oxlint` at its exact baseline. **Secrets audit clean**: no Cloudinary/API secret anywhere in
+`admin/src`, `mobile/src`, `web/src`, `packages/core/src` or the studio copy;
+`application-local.yml` confirmed gitignored; no `.mp4`/`.wav`/`node_modules` would be committed
+from `studio/`.
+
+**`LessonVideoUploadFailureTest` is the test that earns its keep** — it overrides `VideoStorage`
+with an in-memory store that can be told to fail, the only way to provoke what the rebuild exists
+for (the local filesystem does not fail on demand, and breaking real Cloudinary credentials is not
+a test). It proves a refused upload leaves `UPLOAD_FAILED` + error + attempt count with the staged
+file intact and the video still DRAFT; that a retry then stores it; and that the store ends up
+holding **exactly one object despite two upload calls**.
+
+**Three real bugs found by building, none by reading:** a record-accessor collision
+(`Attempt.alreadyStored()` static factory vs the generated accessor — the same trap
+`AICredentialStatus.valid()` hit); the admin Publish deadlock above; and two
+`set-state-in-effect` violations of my own, fixed with the keyed-loaded-state pattern plus an
+inline async IIFE — the linter flags a memoized callback invoked with a chained `.catch()` even
+when the callee touches no state before its first `await`, a shape this file already records.
+
+**UPDATE, later the same day — THE DEVICE PASS RAN, CLOUDINARY IS REAL, AND V55 IS APPLIED.**
+Records: `qa/execution/2026-09-28-ai-videos-device.yaml` (3 executions).
+
+**Cloudinary credentials are live and the whole object-store path is proven** against the real
+account (Free plan, 129 existing assets). `CloudinaryVideoStorageRealTest` — new, env-gated behind
+`CLOUDINARY_REAL_TESTS=true` so it never runs in an ordinary build — did a real round trip:
+upload succeeded; **Cloudinary reported `duration=1s width=128 height=128`, which the code now
+reads instead of trusting a typed-in number** (the `StoredObject` change earning its keep); the
+signed URL served the bytes back byte-identically; **an UNSIGNED request was refused with HTTP
+400**, which is what makes premium gating real rather than cosmetic; and the object was deleted
+afterwards. **The open question in `api/LESSON-VIDEOS.md` is answered: this account's plan DOES
+support expiring links**, so the documented expiry claim is true here and the non-expiring
+fallback stays dormant. `TC-LESSONVIDEO-019` moves from Not Executed to **Pass**.
+
+**V55 is applied to the real Neon dev database** — Flyway reports "Successfully validated 55
+migrations", schema at v55.
+
+**On `emulator-5554`:** the tab bar reads **Home / Practice / Mock Test / AI Videos / More** with
+Exams no longer listed; AI Videos shows the **real active exam** (SSC CGL) over its **four real
+syllabus subjects**, each "No videos yet"; Quantitative Aptitude shows **"all 28 topics are listed
+below"** with every videoless topic reading **"No explanation video available yet"** — none
+hidden. Then the decisive one: **a real 9.6MB studio lesson was uploaded and published through the
+admin API while the app stayed installed**, and a pull-to-refresh changed the header to **"1 of 28
+topics have a video lesson."** with Percentage reading **"Watch explanation"** — **no rebuild, no
+code change.** That is success criterion 7 proven rather than argued. The upload/publish pair also
+behaved exactly as designed on real content: `PENDING_UPLOAD`/`DRAFT`/`hasStagedFile true` with a
+null storage key, then `READY`/`PUBLISHED`/`uploadAttempts 1`/`hasStagedFile false`.
+
+**Full cleanup:** the published video deleted (the topic reads `available:false` again, catalog
+empty — this matters because prod and dev share one Neon database and a PUBLISHED row pointing at
+a file on this laptop would promise production a video it cannot serve), the admin token revoked,
+backend/Metro/emulator all stopped.
+
+**⚠️ STILL NOT VERIFIED:**
+1. **Playback from the AI Videos list was not observed.** "Watch explanation" was tapped and the
+   emulator wedged immediately — host memory was ~1.1GB free of 16GB with a video decode added on
+   top. `TC-LESSONVIDEO-025` is recorded **Blocked**, not Pass: five of six steps ran and the sixth
+   was stopped by the environment, not the app. Worth knowing: the player screen itself is already
+   device-verified from 2026-09-27; what is unproven is the single hop into it from this list.
+2. **The admin preview player has not been opened in a browser.**
+3. **The studio has not been run from `studio/`** — files copied unchanged, but no `npm install`
+   and no render from the new location.
+4. **`VIDEO_STORAGE_PROVIDER` is deliberately still `local`.** Flipping it globally would make
+   every `mvn test` push MP4s into the live Cloudinary account; the verification test overrides it
+   for itself only. A real deployment sets it to `cloudinary`.
+
+**THREE ENVIRONMENT TRAPS COST REAL TIME, all already in this file and all hit again:**
+airplane mode was still on from an earlier offline test (**a dev build cannot cold-start that way
+— airplane mode blocks Metro too**, and the screen is simply black); repeated launches **stack
+MainActivity** and the new top one renders blank (force-stop plus ONE launch); and the **LogBox
+warning toast overlaps the bottom tab bar and silently eats taps on it**, so AI Videos had to be
+opened from its Home row. A fourth, new: **Git Bash mangles `/sdcard/...` paths** — `adb` needs
+`MSYS_NO_PATHCONV=1` — and **Windows `curl` cannot read a `/c/...` path**, so a 9.6MB upload
+failed with HTTP 000 until it was given `C:/...`.
+
+**A SECRETS CONSOLIDATION SHIPPED THE SAME SESSION.** Every credential for every system now lives
+in ONE gitignored file, `secrets.local.env`, with `secrets.example.env` committed beside it
+carrying the same keys blank. `npm run secrets:apply` GENERATES
+`backend/application-local.yml`, `mobile/.env.local`, `web/.env.local`, `admin/.env.local` and
+`studio/.env` from it; `npm run secrets:check` verifies they are current. **Two traps it
+removed:** `backend/application-local.yml` is the file Spring reads (via
+`spring.config.import: optional:file:./application-local.yml`, working dir `backend/`) — **NOT**
+`backend/src/main/resources/application-local.yml`, which is only loaded under a `local` profile
+this project never sets, so editing it changes nothing silently; and a placeholder is not a value,
+so `FILL_ME_IN`/`unused-placeholder` are dropped rather than carried forward. A stray dead copy
+still exists at `src/main/resources/` and is gitignored but confusing — **offered for deletion,
+not deleted.**
+
+**QA:** `REQ-LESSONVIDEO-010/011/012`, `SCN-LESSONVIDEO-018..023`, `TC-LESSONVIDEO-021..026` — four
+**Automated** against real, passing test methods; two **ManualOnly** and `Not Executed`, with no
+invented results. RTM → **198/367/407**.
+
+**NEXT, in order:** (1) emulator pass on the AI Videos screens and the Exams-tab regression
+(`TC-LESSONVIDEO-025`/`026`); (2) apply V55 to the dev database and run one real publish through
+the admin console; (3) a real Cloudinary run wherever credentials exist, which also settles
+`TC-LESSONVIDEO-019`; (4) commit; (5) then the items below.
+
 ## Session of 2026-09-28 — Home redesign, real readiness, a startup prefetch pattern, and a daily-plan navigation fix
 
 **Two changes, requested separately in the same session and both built while the owner was away

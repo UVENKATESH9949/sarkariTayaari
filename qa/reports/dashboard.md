@@ -2,7 +2,7 @@
 
 **GENERATED FILE — do not hand-edit.** Regenerate with `node scripts/qa/generate-reports.js`. Every number below is computed directly from qa/*.yaml at generation time — nothing here is hardcoded or estimated.
 
-_Generated at: 2026-09-27T13:16:34.975Z_
+_Generated at: 2026-09-28T13:57:13.503Z_
 
 ## Coverage
 
@@ -15,7 +15,7 @@ _Generated at: 2026-09-27T13:16:34.975Z_
 | DAILYPLAN | 16 | 34 | 35 | 2.2 |
 | HOME | 5 | 5 | 7 | 1.4 |
 | LEARNING-STATE | 5 | 8 | 8 | 1.6 |
-| LESSONVIDEO | 9 | 17 | 20 | 2.2 |
+| LESSONVIDEO | 12 | 23 | 26 | 2.2 |
 | MOCK | 5 | 8 | 10 | 2.0 |
 | ONBOARDING | 15 | 28 | 31 | 2.1 |
 | PRACTICE | 8 | 13 | 13 | 1.6 |
@@ -24,11 +24,11 @@ _Generated at: 2026-09-27T13:16:34.975Z_
 | ROADMAP | 6 | 14 | 15 | 2.5 |
 | USER-PROGRESS | 6 | 8 | 8 | 1.3 |
 | WEB | 14 | 22 | 23 | 1.6 |
-| **Total** | **195** | **361** | **401** | **2.1** |
+| **Total** | **198** | **367** | **407** | **2.1** |
 
 ## Execution status
 
-130 real execution record(s) across 119 test case(s). A test case with no execution record stays `Not Executed`; where a case has been run more than once, the most recent record wins.
+133 real execution record(s) across 122 test case(s). A test case with no execution record stays `Not Executed`; where a case has been run more than once, the most recent record wins.
 
 | Module | Not Executed | Pass | Fail | Blocked | Skipped |
 |---|---|---|---|---|---|
@@ -39,7 +39,7 @@ _Generated at: 2026-09-27T13:16:34.975Z_
 | DAILYPLAN | 4 | 28 | 0 | 3 | 0 |
 | HOME | 7 | 0 | 0 | 0 | 0 |
 | LEARNING-STATE | 0 | 8 | 0 | 0 | 0 |
-| LESSONVIDEO | 12 | 7 | 0 | 1 | 0 |
+| LESSONVIDEO | 12 | 13 | 0 | 1 | 0 |
 | MOCK | 7 | 3 | 0 | 0 | 0 |
 | ONBOARDING | 22 | 8 | 0 | 1 | 0 |
 | PRACTICE | 2 | 7 | 0 | 3 | 1 |
@@ -62,7 +62,7 @@ Evidence-based per qa/README.md's rule — Automated only where a specific test 
 | DAILYPLAN | 20 | 0 | 0 | 15 | 0 |
 | HOME | 0 | 0 | 0 | 7 | 0 |
 | LEARNING-STATE | 8 | 0 | 0 | 0 | 0 |
-| LESSONVIDEO | 12 | 0 | 0 | 8 | 0 |
+| LESSONVIDEO | 16 | 0 | 0 | 10 | 0 |
 | MOCK | 3 | 0 | 0 | 7 | 0 |
 | ONBOARDING | 4 | 11 | 0 | 16 | 0 |
 | PRACTICE | 0 | 0 | 0 | 13 | 0 |
@@ -71,7 +71,7 @@ Evidence-based per qa/README.md's rule — Automated only where a specific test 
 | ROADMAP | 13 | 0 | 0 | 2 | 0 |
 | USER-PROGRESS | 4 | 0 | 0 | 4 | 0 |
 | WEB | 3 | 0 | 1 | 19 | 0 |
-| **Total** | **193** | **25** | **55** | **127** | **1** |
+| **Total** | **197** | **25** | **55** | **129** | **1** |
 
 Automated: 48% of all test cases.
 
@@ -79,8 +79,8 @@ Automated: 48% of all test cases.
 
 | Priority | Count |
 |---|---|
-| Critical | 94 |
-| High | 178 |
+| Critical | 97 |
+| High | 181 |
 | Medium | 110 |
 | Low | 19 |
 
@@ -112,10 +112,10 @@ Test cases with no determinate expected outcome — established behavior, not a 
 | Regression — AUTH | 40 |
 | Regression — CATALOG | 56 |
 | Regression — DAILYPLAN | 35 |
-| Regression (Full) | 401 |
+| Regression (Full) | 407 |
 | Regression — HOME | 7 |
 | Regression — LEARNING-STATE | 8 |
-| Regression — LESSONVIDEO | 20 |
+| Regression — LESSONVIDEO | 26 |
 | Regression — MOCK | 10 |
 | Regression — ONBOARDING | 31 |
 | Regression — PRACTICE | 13 |
@@ -124,7 +124,7 @@ Test cases with no determinate expected outcome — established behavior, not a 
 | Regression — ROADMAP | 15 |
 | Regression — USER-PROGRESS | 8 |
 | Regression — WEB | 23 |
-| Release Gate | 269 |
-| Sanity | 94 |
+| Release Gate | 275 |
+| Sanity | 97 |
 | Smoke | 14 |
 

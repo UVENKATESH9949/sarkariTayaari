@@ -105,6 +105,17 @@ public class LessonVideo {
     @Column(name = "error_message")
     private String errorMessage;
 
+    /**
+     * How many times promotion to the object store has been attempted, and when the last one ran.
+     * Operator-facing: without them a stuck video cannot be told apart from one whose first
+     * attempt has simply not happened yet, and "let the admin retry" becomes retrying blind.
+     */
+    @Column(name = "upload_attempts", nullable = false)
+    private int uploadAttempts;
+
+    @Column(name = "last_upload_attempt_at")
+    private OffsetDateTime lastUploadAttemptAt;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt = OffsetDateTime.now();
 
@@ -298,6 +309,22 @@ public class LessonVideo {
 
     public void setErrorMessage(String errorMessage) {
         this.errorMessage = errorMessage;
+    }
+
+    public int getUploadAttempts() {
+        return uploadAttempts;
+    }
+
+    public void setUploadAttempts(int uploadAttempts) {
+        this.uploadAttempts = uploadAttempts;
+    }
+
+    public OffsetDateTime getLastUploadAttemptAt() {
+        return lastUploadAttemptAt;
+    }
+
+    public void setLastUploadAttemptAt(OffsetDateTime lastUploadAttemptAt) {
+        this.lastUploadAttemptAt = lastUploadAttemptAt;
     }
 
     public OffsetDateTime getCreatedAt() {

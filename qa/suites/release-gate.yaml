@@ -2,7 +2,7 @@
 #
 # Critical + High priority test cases, excluding Ambiguous cases (no determinate pass/fail to gate on) and a short, explicitly-listed set of cases that need a special/controlled environment to reproduce reliably on demand (see HARD_TO_REPRODUCE in the generator script) — a release gate must be reliably executable every time, not aspirational.
 #
-# 269 test case(s). Membership rule: priority in [Critical, High] AND test_type != Ambiguous AND id not in HARD_TO_REPRODUCE.
+# 275 test case(s). Membership rule: priority in [Critical, High] AND test_type != Ambiguous AND id not in HARD_TO_REPRODUCE.
 
 suite: Release Gate
 test_case_ids:
@@ -170,6 +170,12 @@ test_case_ids:
   - TC-LESSONVIDEO-018
   - TC-LESSONVIDEO-019
   - TC-LESSONVIDEO-020
+  - TC-LESSONVIDEO-021
+  - TC-LESSONVIDEO-022
+  - TC-LESSONVIDEO-023
+  - TC-LESSONVIDEO-024
+  - TC-LESSONVIDEO-025
+  - TC-LESSONVIDEO-026
   - TC-MOCK-001
   - TC-MOCK-003
   - TC-MOCK-004

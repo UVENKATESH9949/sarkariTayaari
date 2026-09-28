@@ -23,13 +23,48 @@ interactive lesson, or a device-rendered lesson without re-deciding what to teac
 
 | Field | Question | Values |
 |---|---|---|
-| `status` | Does a playable file exist yet? | `QUEUED`, `GENERATING`, `PROCESSING`, `READY`, `FAILED`, `ARCHIVED` |
+| `status` | Does a playable file exist yet? | `QUEUED`, `PENDING_UPLOAD`, `UPLOADING`, `UPLOAD_FAILED`, `GENERATING`, `PROCESSING`, `READY`, `FAILED`, `ARCHIVED` |
 | `contentStatus` | Has a human approved it? | `DRAFT`, `REVIEW`, `PUBLISHED` |
+
+`PENDING_UPLOAD` / `UPLOADING` / `UPLOAD_FAILED` are the object-store leg, and they are separate
+from `FAILED` on purpose: a render that never produced a file and a finished file that could not be
+uploaded need different fixes — regenerate versus retry — and one value for both would make an
+operator guess which they were looking at.
 
 A video can be `READY` and still `DRAFT` — which is exactly what an admin needs in order to watch
 it before students can. **`NOT_AVAILABLE` is deliberately not a status value**: the absence of a
 row is what not-available means, and storing it would mean a row for every question that has no
 video, which is nearly all of them. The read endpoints synthesise `available: false` instead.
+
+## Attaching a file and publishing it are two steps
+
+**Publishing is what uploads the video to the object store.** Attaching a file does not.
+
+```
+Admin attaches the MP4    ->  bytes staged in `lesson_video_uploads`, row is PENDING_UPLOAD / DRAFT
+Admin watches it          ->  streamed from staging (staff only, see /stream below)
+Admin accepts & publishes ->  bytes uploaded to Cloudinary, then READY / PUBLISHED, staging row dropped
+Upload fails              ->  UPLOAD_FAILED + `errorMessage`, still DRAFT, file kept, retryable
+```
+
+Why staged in the database rather than on disk: Cloud Run's filesystem is ephemeral and its
+instances scale to zero, so a file attached on one request can be gone before the request that
+reviews it. It is bounded — a video is capped at 20MB and a staged row lives only until the video
+is published or deleted.
+
+**The upload runs outside a transaction** (see `LessonVideoPublisher`). If it shared one with the
+row updates around it, a storage failure would mark that transaction rollback-only and take the
+failure record down with it — leaving an admin looking at a row with no error, no attempt count,
+and no way to tell a failure from a publish that never ran.
+
+**Publishing is idempotent.** A video whose file is already stored is not re-uploaded, so pressing
+Accept twice cannot produce two Cloudinary assets. The object key is derived from the video id and
+`contentVersion` and the store overwrites rather than appends, so even a retry after an upload that
+had secretly succeeded lands on the same object.
+
+**A video is never published without a file behind it.** The upload runs first and the row only
+becomes `PUBLISHED` once the bytes are genuinely stored — the reverse order is the failure a
+student would meet as a play button that does nothing.
 
 ## Student endpoints
 
@@ -42,6 +77,43 @@ Video metadata is fetched **on demand per question or topic and is deliberately 
 reference sync**. Putting it in the sync feed would make every device download metadata for every
 video whether or not it ever watches one, which is the opposite of what this product wants on a
 rural connection.
+
+### `GET /api/lesson-videos/catalog`
+
+Query: `subjectId` (optional), `language` (default `en`), `level`, `quality`.
+
+Every **published** topic video, in one call. This is what the mobile AI Videos browse screen
+reads, and it exists because the per-topic endpoint below is the wrong shape for a browse screen:
+SSC CGL alone has 61 topics, and asking about each separately is 61 round trips on a connection
+this product assumes is slow.
+
+```json
+{ "items": [
+  { "topicId": "…", "subjectId": "…", "videoId": "…", "contentVersion": 1,
+    "durationSeconds": 126, "sizeBytes": 8696996, "languageCode": "en",
+    "teachingLevel": "STANDARD", "quality": "STANDARD", "checksumSha256": "…",
+    "requiresPremium": false, "entitled": true,
+    "playbackPath": "/api/lesson-videos/…/stream" }
+] }
+```
+
+**The response is sparse — a topic with no video is simply absent.** That absence is what the app
+renders its "no explanation video available yet" state from, so no topic is ever hidden for lack of
+a video. Sending a row per topic-without-a-video would make the response scale with the syllabus
+instead of with the content.
+
+**No topic or subject names.** The app already holds the whole exam/subject/topic tree from
+reference sync; a name here would be a second copy that can go stale, and the two disagreeing is
+how a video ends up labelled with a topic's old name.
+
+**Nothing Cloudinary-shaped is returned** — no public id, no storage key, no signed URL.
+`playbackPath` is a path on this backend, so entitlement stays enforceable and the object store
+stays an implementation detail the app never learns.
+
+`subjectId` is optional from day one so that, if the published set ever outgrows one response,
+narrowing it is a parameter rather than a contract change.
+
+**Consumers:** Mobile (AI Videos).
 
 ### `GET /api/topics/{topicId}/lesson-video`
 ### `GET /api/questions/{questionId}/lesson-video`
@@ -119,7 +191,20 @@ as for `expo-file-system`.
 `/api/admin/lesson-videos` — `GET` list (reviewer), `POST` upload (admin, multipart),
 `PUT /{id}/submit-for-review` (admin), `PUT /{id}/publish` (reviewer),
 `PUT /{id}/unpublish` (reviewer), `PUT /{id}/reject` (reviewer, body `{reason}`),
-`DELETE /{id}` (admin).
+`POST /{id}/retry-upload` (admin), `DELETE /{id}` (admin).
+
+`PUT /{id}/publish` **uploads the file to the object store and then publishes**, in that order.
+It answers **400** (not 500) when the upload fails: nothing is broken, the file is still attached,
+and the next move is Retry upload.
+
+`POST /{id}/retry-upload` re-runs a failed upload from the staged file. It is separate from publish
+because they answer different questions — retry fixes a transfer, publish decides the content is
+good — so clearing a backlog of failed uploads does not mean re-approving each one. It leaves
+`contentStatus` alone.
+
+The admin list and every admin response also carry `uploadAttempts`, `lastUploadAttemptAt` and
+`hasStagedFile`, so an operator can tell a first attempt that has not run from a fifth that keeps
+failing.
 
 `POST` takes `file` plus `topicId` **or** `questionId` (exactly one), and optional `blueprintId`,
 `language`, `level`, `quality`, `premium`, `durationSeconds`. Upload is how a video rendered by
@@ -130,6 +215,10 @@ Validation on upload: 20MB ceiling (real studio lessons are 7–9MB), and an **M
 on the actual bytes** rather than the declared content type. Re-uploading for the same owner
 creates a **new `contentVersion`, never an overwrite** — a device holding the old file has no way
 to notice a silent swap.
+
+`durationSeconds` on upload is a hint, not the final word: when the object store measures the file
+itself (Cloudinary does, while ingesting it) the measured value replaces it. A store that reports
+nothing leaves whatever was supplied, so a blank never overwrites a real value.
 
 `/api/admin/lesson-blueprints` — `GET` list/`GET /{id}` (reviewer), `POST` create (admin),
 `PUT /{id}/publish` and `/unpublish` (reviewer), `DELETE /{id}` (admin). `POST` body carries the

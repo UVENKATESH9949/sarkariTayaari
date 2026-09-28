@@ -154,19 +154,22 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 
 ## LESSONVIDEO
 
-9 requirements, 17 scenarios, 20 test cases.
+12 requirements, 23 scenarios, 26 test cases.
 
 | Requirement | Priority | Status | Scenario(s) | Test Case(s) | Execution | Defect |
 |---|---|---|---|---|---|---|
 | REQ-LESSONVIDEO-001: A video reaches students only after a human approves it | Critical | Active | SCN-LESSONVIDEO-001<br>SCN-LESSONVIDEO-002<br>SCN-LESSONVIDEO-007<br>SCN-LESSONVIDEO-014 | TC-LESSONVIDEO-001 (Not Executed)<br>TC-LESSONVIDEO-002 (Pass)<br>TC-LESSONVIDEO-008 (Not Executed)<br>TC-LESSONVIDEO-016 (Pass) | EXEC-LESSONVIDEO-0002<br>EXEC-LESSONVIDEO-0001 |  |
 | REQ-LESSONVIDEO-002: A question with no video of its own falls back to its topic lesson | High | Active | SCN-LESSONVIDEO-003 | TC-LESSONVIDEO-003 (Pass) | EXEC-LESSONVIDEO-0003 |  |
-| REQ-LESSONVIDEO-003: Access to the bytes is enforced by the backend, not by hiding a button | Critical | Active | SCN-LESSONVIDEO-004<br>SCN-LESSONVIDEO-005<br>SCN-LESSONVIDEO-007 | TC-LESSONVIDEO-004 (Not Executed)<br>TC-LESSONVIDEO-005 (Not Executed)<br>TC-LESSONVIDEO-006 (Not Executed)<br>TC-LESSONVIDEO-019 (Not Executed) |  |  |
+| REQ-LESSONVIDEO-003: Access to the bytes is enforced by the backend, not by hiding a button | Critical | Active | SCN-LESSONVIDEO-004<br>SCN-LESSONVIDEO-005<br>SCN-LESSONVIDEO-007 | TC-LESSONVIDEO-004 (Not Executed)<br>TC-LESSONVIDEO-005 (Not Executed)<br>TC-LESSONVIDEO-006 (Not Executed)<br>TC-LESSONVIDEO-019 (Pass) | EXEC-LESSONVIDEO-0011 |  |
 | REQ-LESSONVIDEO-004: A replacement video is a new version, never a silent overwrite | High | Active | SCN-LESSONVIDEO-006<br>SCN-LESSONVIDEO-012 | TC-LESSONVIDEO-007 (Not Executed)<br>TC-LESSONVIDEO-013 (Not Executed) |  |  |
 | REQ-LESSONVIDEO-005: A downloaded lesson plays offline, and the written explanation never depends on video | Critical | Active | SCN-LESSONVIDEO-010<br>SCN-LESSONVIDEO-011<br>SCN-LESSONVIDEO-012<br>SCN-LESSONVIDEO-013 | TC-LESSONVIDEO-011 (Pass)<br>TC-LESSONVIDEO-012 (Not Executed)<br>TC-LESSONVIDEO-013 (Not Executed)<br>TC-LESSONVIDEO-014 (Pass)<br>TC-LESSONVIDEO-015 (Pass) | EXEC-LESSONVIDEO-0006<br>EXEC-LESSONVIDEO-0007<br>EXEC-LESSONVIDEO-0008<br>EXEC-LESSONVIDEO-0005 |  |
 | REQ-LESSONVIDEO-006: A blueprint is stored as the studio's own Lesson JSON, validated at the boundary | High | Active | SCN-LESSONVIDEO-008<br>SCN-LESSONVIDEO-014 | TC-LESSONVIDEO-009 (Blocked)<br>TC-LESSONVIDEO-016 (Pass) | EXEC-LESSONVIDEO-0004<br>EXEC-LESSONVIDEO-0001 |  |
 | REQ-LESSONVIDEO-007: Premium gating has one name and one check point | High | Active | SCN-LESSONVIDEO-009<br>SCN-LESSONVIDEO-013 | TC-LESSONVIDEO-010 (Not Executed)<br>TC-LESSONVIDEO-014 (Pass) | EXEC-LESSONVIDEO-0008 |  |
-| REQ-LESSONVIDEO-008: Where video files live is a configuration choice, not a code change | Critical | Active | SCN-LESSONVIDEO-015<br>SCN-LESSONVIDEO-016 | TC-LESSONVIDEO-017 (Not Executed)<br>TC-LESSONVIDEO-018 (Not Executed)<br>TC-LESSONVIDEO-019 (Not Executed) |  |  |
+| REQ-LESSONVIDEO-008: Where video files live is a configuration choice, not a code change | Critical | Active | SCN-LESSONVIDEO-015<br>SCN-LESSONVIDEO-016 | TC-LESSONVIDEO-017 (Not Executed)<br>TC-LESSONVIDEO-018 (Not Executed)<br>TC-LESSONVIDEO-019 (Pass) | EXEC-LESSONVIDEO-0011 |  |
 | REQ-LESSONVIDEO-009: A lesson can be watched immediately, without downloading first | High | Active | SCN-LESSONVIDEO-017 | TC-LESSONVIDEO-020 (Pass) |  |  |
+| REQ-LESSONVIDEO-010: Accepting a video is what uploads it to the object store | Critical | Active | SCN-LESSONVIDEO-018<br>SCN-LESSONVIDEO-019 | TC-LESSONVIDEO-021 (Pass) | EXEC-LESSONVIDEO-0010 |  |
+| REQ-LESSONVIDEO-011: A failed upload is recorded and can be retried without duplicating | Critical | Active | SCN-LESSONVIDEO-019<br>SCN-LESSONVIDEO-020 | TC-LESSONVIDEO-022 (Pass)<br>TC-LESSONVIDEO-023 (Pass) |  |  |
+| REQ-LESSONVIDEO-012: AI Videos browses the existing exam syllabus, showing topics with and without videos | High | Active | SCN-LESSONVIDEO-021<br>SCN-LESSONVIDEO-022<br>SCN-LESSONVIDEO-023 | TC-LESSONVIDEO-024 (Pass)<br>TC-LESSONVIDEO-025 (Pass)<br>TC-LESSONVIDEO-026 (Not Executed) | EXEC-LESSONVIDEO-0009 |  |
 
 ## MOCK
 
@@ -315,9 +318,9 @@ Shows Requirement -> Scenario -> Test Case -> Execution -> Defect for every requ
 
 | Metric | Value |
 |---|---|
-| Total requirements | 195 |
-| Total scenarios | 361 |
-| Total test cases | 401 |
+| Total requirements | 198 |
+| Total scenarios | 367 |
+| Total test cases | 407 |
 | Requirements with zero scenarios | 0  |
-| Real executions recorded | 130 |
+| Real executions recorded | 133 |
 | Real defects logged | 8 |

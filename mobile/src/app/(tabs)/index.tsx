@@ -302,11 +302,25 @@ export default function Home() {
 
       <SectionLabel label="More ways to prepare" />
       <Card variant="container" style={styles.moreCard}>
-        {/* AI Videos — replaces the old Explore Exams entry point on Home (My Exams, reachable
-            from More, is still the way to browse and follow other exams). Placeholder only:
-            no video functionality exists yet, and this is deliberately styled to look like a
-            real, upcoming feature rather than a broken link. */}
-        <CardRow icon="videocam-outline" label="AI Videos" value="Coming soon" />
+        {/* AI Videos is a real tab now, not a placeholder. This row stays because Home is where
+            a student looks first, and a section called "More ways to prepare" that omits the
+            newest one reads as an oversight. */}
+        <CardRow
+          icon="videocam-outline"
+          label="AI Videos"
+          value="Watch a topic explained"
+          onPress={() => router.push("/ai-videos")}
+        />
+        <View style={styles.cardRowDivider} />
+        {/* Exams gave up its tab slot to AI Videos, so Home is where it is reached from now —
+            the same move Progress made when it left the tab bar. Without this the exam
+            calendar, comparison and eligibility screens would only be findable through More. */}
+        <CardRow
+          icon="school-outline"
+          label="Exams"
+          value="Browse exams, dates and eligibility"
+          onPress={() => router.push("/exams")}
+        />
         <View style={styles.cardRowDivider} />
         <CardRow
           icon="radio-outline"

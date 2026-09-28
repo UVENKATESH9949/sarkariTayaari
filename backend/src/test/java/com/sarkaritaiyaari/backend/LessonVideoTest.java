@@ -17,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -108,20 +109,90 @@ class LessonVideoTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("an uploaded video is READY but not yet visible to a student until published")
-    void uploadIsReadyButUnpublished() {
+    @DisplayName("an uploaded video is staged, not stored, and is invisible to a student")
+    void uploadIsStagedNotStored() {
         ResponseEntity<Map> created = upload(tokenOf(adminAuth()), testTopicId, null, false, fakeMp4());
         assertThat(created.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(created.getBody().get("status")).isEqualTo("READY");
+        // PENDING_UPLOAD, not READY: attaching a file does not send it to the object store.
+        // Publishing is what does that.
+        assertThat(created.getBody().get("status")).isEqualTo("PENDING_UPLOAD");
         assertThat(created.getBody().get("contentStatus")).isEqualTo("DRAFT");
         assertThat(created.getBody().get("contentVersion")).isEqualTo(1);
         assertThat(created.getBody().get("checksumSha256")).isNotNull();
+        assertThat(created.getBody().get("hasStagedFile")).isEqualTo(true);
+        assertThat(created.getBody().get("uploadAttempts")).isEqualTo(0);
+
+        // Nothing has reached storage. This is the assertion that makes "accepting is what
+        // publishes it" a fact rather than a comment - reading the entity directly rather than
+        // trusting the response, since the response is produced by the code under test.
+        UUID videoId = UUID.fromString((String) created.getBody().get("id"));
+        assertThat(lessonVideoRepository.findById(videoId).orElseThrow().getStorageKey()).isNull();
 
         // The student-facing read must not see it yet. This is the check that stops a video
         // reaching learners the moment it is uploaded, before anyone has watched it.
         ResponseEntity<Map> before = topicAvailability(sharedStudentAuth());
         assertThat(before.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(before.getBody().get("available")).isEqualTo(false);
+    }
+
+    @Test
+    @DisplayName("publishing uploads the file to storage and drops the staged copy")
+    void publishUploadsToStorage() {
+        UUID videoId = UUID.fromString((String) upload(tokenOf(adminAuth()), testTopicId, null, false, fakeMp4())
+                .getBody().get("id"));
+
+        ResponseEntity<Map> published = publish(videoId);
+
+        assertThat(published.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(published.getBody().get("status")).isEqualTo("READY");
+        assertThat(published.getBody().get("contentStatus")).isEqualTo("PUBLISHED");
+        assertThat(published.getBody().get("uploadAttempts")).isEqualTo(1);
+        // The staged copy is gone, so a published video is not held twice.
+        assertThat(published.getBody().get("hasStagedFile")).isEqualTo(false);
+
+        var stored = lessonVideoRepository.findById(videoId).orElseThrow();
+        assertThat(stored.getStorageKey()).isNotNull();
+        assertThat(videoStorage.open(stored.getStorageKey())).isPresent();
+    }
+
+    @Test
+    @DisplayName("publishing twice does not upload twice")
+    void publishIsIdempotent() {
+        UUID videoId = UUID.fromString((String) upload(tokenOf(adminAuth()), testTopicId, null, false, fakeMp4())
+                .getBody().get("id"));
+
+        assertThat(publish(videoId).getStatusCode()).isEqualTo(HttpStatus.OK);
+        ResponseEntity<Map> again = publish(videoId);
+
+        assertThat(again.getStatusCode()).isEqualTo(HttpStatus.OK);
+        // Still one attempt. The second publish saw the file was already stored and skipped the
+        // upload entirely, which is what stops a double-click producing a duplicate asset.
+        assertThat(again.getBody().get("uploadAttempts")).isEqualTo(1);
+        assertThat(again.getBody().get("contentStatus")).isEqualTo("PUBLISHED");
+    }
+
+    @Test
+    @DisplayName("the catalog lists published topic videos and omits topics without one")
+    void catalogListsOnlyPublishedTopics() {
+        UUID videoId = UUID.fromString((String) upload(tokenOf(adminAuth()), testTopicId, null, false, fakeMp4())
+                .getBody().get("id"));
+
+        // Before publishing, the topic must not appear at all - the browse screen reads absence
+        // as "no video yet", so a draft showing up here would advertise an unapproved lesson.
+        assertThat(catalogTopicIds()).doesNotContain(testTopicId.toString());
+
+        publish(videoId);
+
+        assertThat(catalogTopicIds()).contains(testTopicId.toString());
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> catalogTopicIds() {
+        ResponseEntity<Map> response = restTemplate.exchange(
+                "/api/lesson-videos/catalog?language=en", HttpMethod.GET, sharedStudentAuth(), Map.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        List<Map<String, Object>> items = (List<Map<String, Object>>) response.getBody().get("items");
+        return items.stream().map(i -> (String) i.get("topicId")).toList();
     }
 
     @Test
@@ -175,7 +246,7 @@ class LessonVideoTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("staff can preview an unpublished video so it can be reviewed before release")
+    @DisplayName("staff can preview an unpublished video - streamed from staging, since it is not in storage yet")
     void staffCanPreviewUnpublished() {
         UUID videoId = UUID.fromString((String) upload(tokenOf(adminAuth()), testTopicId, null, false, fakeMp4())
                 .getBody().get("id"));

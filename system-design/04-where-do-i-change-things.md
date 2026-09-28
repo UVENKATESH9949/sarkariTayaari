@@ -42,9 +42,13 @@ mobile/src/app/
   preparation-radar.tsx    Weakness Radar: which topics need attention, and why (pushed, from Progress/More)
   radar-topic.tsx          one topic's diagnosis + recommended plan (pushed from the radar)
   (tabs)/
-    _layout.tsx            the bottom tab bar (Home/Practice/Mock Test/Exams/Progress-hidden/More)
+    _layout.tsx            the bottom tab bar (Home/Practice/Mock Test/AI Videos/More; Exams and Progress hidden)
     index.tsx              Home
-    exams.tsx              the Exams module's own discovery listing (search/filter/sort/sections)
+    ai-videos/
+      index.tsx            AI Videos: the active exam's real subjects, marked with video counts
+      subject.tsx          that subject's topics — every one of them, with or without a video
+    exams.tsx              the Exams module's discovery listing (href: null since AI Videos took
+                           the tab slot — still reachable from Home, More and the daily plan)
     progress.tsx           Progress (href: null — reachable via Home/More, not a tab button)
     more.tsx               More / settings
     practice/
@@ -84,6 +88,9 @@ Useful specifics:
 | Change how the app knows it's offline | `mobile/src/sync/NetworkStatusContext.tsx` (detection) + `OfflineBanner.tsx` (the message shown) |
 | Change how bookmarks sync to the server | `mobile/src/sync/bookmarkSync.ts` (the sync logic), `mobile/src/db/bookmarks.ts` (local reads/writes), `mobile/src/api/bookmarks.ts` (the network calls) |
 | Change how followed exams sync to the server | `mobile/src/sync/followedExamSync.ts`, `mobile/src/db/followedExams.ts`, `mobile/src/api/followedExams.ts` — line-for-line mirrors the bookmark files above |
+| Add or change the AI Videos browse screens | `mobile/src/app/(tabs)/ai-videos/` (the screens), `mobile/src/data/lessonVideoCatalog.ts` (the cached read), `packages/core/src/api/lessonVideo.ts` (the call). The subject and topic lists come from `getSubjectStats`/`getTopicStats` — the same reads Practice uses. **Never build a second subject/topic list for videos**: it would drift from Practice's and leave a student with two ideas of their syllabus |
+| Change how a video reaches the object store, or the accept/retry flow | `LessonVideoPublisher` (the upload, transactions driven by hand on purpose), `LessonVideoService.publish`/`retryUpload`, `LessonVideoAdminController`, `admin/src/pages/AiVideos.jsx`. Attaching a file stages it in `lesson_video_uploads`; **publishing is what uploads it** |
+| Render a new lesson video | `studio/` — its own npm project, command line only (`studio/README.md`). Then attach the MP4 and its `lessons/<id>.json` on the admin AI Videos page |
 | Change the Exams module's discovery listing (search/sort/filter/sections) | `mobile/src/app/(tabs)/exams.tsx` (the screen), `mobile/src/examsModule/ExamCard.tsx` + `statusLabels.ts` (the card), `mobile/src/api/examDiscovery.ts` (the network call) — backend side is `ExamDiscoveryService`/`ExamController` (`GET /api/exams/discover`) |
 | Change how progress (practice/mock history) syncs | `mobile/src/sync/progressSync.ts`, `mobile/src/practice/authContext.tsx` (when it runs — sign-in, background, sign-out) |
 | Change the Weakness Radar formula | `TopicHealthService.java` **and** `mobile/src/intelligence/topicHealth.ts` — the rules exist twice on purpose (signed-out students' attempts never reach a server), so change both and bump `ALGORITHM_VERSION` in both. `sample-data/weakness-radar-fixtures.json` is the agreed expected output. **Run `node scripts/check-topic-health-parity.js` afterwards** — it fails if the two sides' constants, versions or weight sums have drifted |

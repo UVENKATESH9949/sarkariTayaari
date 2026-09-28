@@ -11,6 +11,9 @@ import { apiBaseUrl, apiFetch } from "./client";
 /** `NOT_AVAILABLE` is absent on purpose — no row is what not-available means. */
 export type LessonVideoStatus =
   | "QUEUED"
+  | "PENDING_UPLOAD"
+  | "UPLOADING"
+  | "UPLOAD_FAILED"
   | "GENERATING"
   | "PROCESSING"
   | "READY"
@@ -67,6 +70,55 @@ export function fetchQuestionLessonVideo(
     `/questions/${questionId}/lesson-video?language=${encodeURIComponent(language)}`,
     { headers: authHeaders(token) },
   );
+}
+
+/**
+ * One published topic video, as the catalog returns it.
+ *
+ * Deliberately has no topic NAME on it. The app already holds the whole exam/subject/topic tree
+ * locally from reference sync, so a name here would be a second copy of something that can go
+ * stale — and the two disagreeing is how a video ends up labelled with a topic's old name.
+ */
+export type TopicVideoCatalogEntry = {
+  topicId: string;
+  /** The topic's subject, so a browse screen can group without mapping ids itself. */
+  subjectId: string | null;
+  videoId: string;
+  contentVersion: number;
+  durationSeconds: number | null;
+  sizeBytes: number | null;
+  languageCode: string;
+  teachingLevel: TeachingLevel;
+  quality: VideoQuality;
+  checksumSha256: string | null;
+  requiresPremium: boolean;
+  entitled: boolean;
+  playbackPath: string;
+};
+
+export type TopicVideoCatalog = { items: TopicVideoCatalogEntry[] };
+
+/**
+ * Every published topic video, optionally narrowed to one subject.
+ *
+ * This is what the AI Videos browse screen reads, and it exists so that screen is ONE request
+ * instead of one per topic — SSC CGL alone has 61 topics, and asking about each separately is the
+ * wrong shape on a slow connection.
+ *
+ * The response is sparse: a topic with no video is simply absent. That absence is what the screen
+ * renders its "no video yet" state from, so no topic is ever hidden for lack of a video.
+ */
+export function fetchLessonVideoCatalog(
+  token: string,
+  options: { subjectId?: string; language?: string } = {},
+): Promise<TopicVideoCatalog> {
+  const params = new URLSearchParams({ language: options.language ?? "en" });
+  if (options.subjectId) {
+    params.set("subjectId", options.subjectId);
+  }
+  return apiFetch<TopicVideoCatalog>(`/lesson-videos/catalog?${params.toString()}`, {
+    headers: authHeaders(token),
+  });
 }
 
 /**

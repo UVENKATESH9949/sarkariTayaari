@@ -42,7 +42,7 @@ public class LocalFilesystemVideoStorage implements VideoStorage {
     }
 
     @Override
-    public String store(String key, byte[] bytes, String mimeType) {
+    public StoredObject store(String key, byte[] bytes, String mimeType) {
         Path target = resolve(key);
         try {
             Files.createDirectories(target.getParent());
@@ -51,7 +51,10 @@ public class LocalFilesystemVideoStorage implements VideoStorage {
             throw new UncheckedIOException("Could not store video at key " + key, e);
         }
         log.info("video.storage stored key={} bytes={}", key, bytes.length);
-        return key;
+        // Nothing here inspects the container, so duration and dimensions stay unknown rather
+        // than being guessed at. Files.write also replaces an existing file, which is the
+        // retry-safety the interface asks for.
+        return StoredObject.of(key);
     }
 
     @Override

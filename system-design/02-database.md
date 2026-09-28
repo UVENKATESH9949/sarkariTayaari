@@ -201,15 +201,26 @@ table at all.
 
 ### Group 6: teaching lessons and the videos that deliver them
 
-Added by V54, for the AI video feature. Two tables, and the split between them is the point.
+Added by V54, for the AI video feature, and extended by V55. The split between the first two is
+the point.
 
 | Table | Holds |
 |---|---|
-| `lesson_blueprints` | **What** should be taught, independent of how it is delivered. `payload` is the AI Video Studio's own Lesson JSON stored verbatim (`{id, title, exam, subject, topic, language, scenes[]}`, scenes being `title/concept/example/formula/summary`). That schema is defined by a zod contract in **a separate repository** (`C:\AIVideos`) and read by both its renderer and its narration synthesis, so it is already the real contract — defining a prettier one here would guarantee the two drift, and the studio's is the one that can be rendered |
+| `lesson_video_uploads` | **An attached file, held until an admin accepts it** (V55). Bytes live here, keyed by video id, and are deleted the moment they reach the object store — so this holds only what is genuinely in flight, never a second copy of every video |
+| `lesson_blueprints` | **What** should be taught, independent of how it is delivered. `payload` is the AI Video Studio's own Lesson JSON stored verbatim (`{id, title, exam, subject, topic, language, scenes[]}`, scenes being `title/concept/example/formula/summary`). That schema is defined by a zod contract in the **AI Video Studio** (`studio/`, until 2026-09-28 a separate repository at `C:\AIVideos`) and read by both its renderer and its narration synthesis, so it is already the real contract — defining a prettier one here would guarantee the two drift, and the studio's is the one that can be rendered |
 | `lesson_videos` | **One rendered delivery** of a blueprint: version, duration, size, checksum, storage reference, review state |
 
 Keeping them apart is what lets the same teaching content later become a text lesson, an
 interactive lesson, or a device-rendered lesson without re-deciding what to teach.
+
+**Publishing is what uploads a video to the object store, not attaching it** (V55). An attached
+file is staged in `lesson_video_uploads` and the row sits at `PENDING_UPLOAD`/`DRAFT`; accepting it
+uploads the bytes and only then marks it `PUBLISHED`. Two consequences worth knowing: an unreviewed
+video is never sitting in Cloudinary, and a row can never claim to be published with no file behind
+it. Staging lives in the database rather than on disk because Cloud Run's filesystem is ephemeral
+and its instances scale to zero — a file attached on one request can be gone before the request
+that reviews it. `upload_attempts` and `last_upload_attempt_at` on `lesson_videos` exist so a
+failed upload is a visible, retryable state rather than a guess.
 
 **Owner is a topic OR a question, never both** — two nullable FKs plus a CHECK, following
 `question_media` (V29) and `ai_content` (V41). Topic is the one carrying real content: the studio
@@ -374,6 +385,7 @@ V51__email_otp.sql                            email_otp_codes — one-time sign-
 V52__study_task_sources.sql                   study_tasks.source relabel PRACTICE -> NEW_TOPIC (five learning purposes, TASK-3501)
 V53__onboarding_completed_at.sql              user_preparation_profiles.onboarding_completed_at — onboarding completion as an account fact, monotonic
 V54__lesson_videos.sql                        lesson_blueprints + lesson_videos — the AI video foundation (teaching blueprint, rendered delivery, review state)
+V55__lesson_video_upload_staging.sql          lesson_video_uploads — an attached video held until an admin accepts it; publishing is what uploads it to the object store
 ```
 
 V8–V24 add whole feature areas ("Epic L" topic intelligence, "Exam Guide", the Exams

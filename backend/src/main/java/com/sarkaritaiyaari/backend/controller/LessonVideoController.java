@@ -1,5 +1,6 @@
 package com.sarkaritaiyaari.backend.controller;
 
+import com.sarkaritaiyaari.backend.dto.LessonVideoDtos.TopicVideoCatalog;
 import com.sarkaritaiyaari.backend.dto.LessonVideoDtos.VideoAvailability;
 import com.sarkaritaiyaari.backend.entity.TeachingLevel;
 import com.sarkaritaiyaari.backend.entity.User;
@@ -43,6 +44,29 @@ public class LessonVideoController {
     public LessonVideoController(LessonVideoService videos, AuthService authService) {
         this.videos = videos;
         this.authService = authService;
+    }
+
+    /**
+     * Every published topic video, optionally narrowed to one subject.
+     *
+     * <p>This is what the AI Videos browse screen reads. It exists so that screen is one request
+     * rather than one per topic: a subject can hold dozens of topics, and asking about each of them
+     * separately is the wrong shape on the connections this product is built for.
+     *
+     * <p>The response is sparse - only topics that have a video appear. The app already holds the
+     * exam, subject and topic list locally from reference sync, so sending the syllabus back would
+     * be sending it data it already has. A topic missing from this response is exactly how the app
+     * knows to show its "no video yet" state.
+     */
+    @GetMapping("/api/lesson-videos/catalog")
+    public TopicVideoCatalog catalog(
+            @RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
+            @RequestParam(required = false) UUID subjectId,
+            @RequestParam(defaultValue = "en") String language,
+            @RequestParam(defaultValue = "STANDARD") TeachingLevel level,
+            @RequestParam(defaultValue = "STANDARD") VideoQuality quality) {
+        User user = authService.requireUser(authorization);
+        return videos.topicCatalog(subjectId, language, level, quality, user);
     }
 
     @GetMapping("/api/topics/{topicId}/lesson-video")

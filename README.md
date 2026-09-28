@@ -9,7 +9,10 @@ offline, pulling only what changed on subsequent opens.
 |---|---|---|
 | `backend/` | Spring Boot 3.3, Java 21, Postgres (Neon) | Question bank, exam structure, reference data, delta-sync API |
 | `admin/` | React 19, Vite | Content admin — questions, exams, structure, syllabus, reference data |
-| `mobile/` | Expo SDK 57, Expo Router, expo-sqlite + Drizzle | The app: Practice, Mock Test, Progress |
+| `mobile/` | Expo SDK 57, Expo Router, expo-sqlite + Drizzle | The app: Practice, Mock Test, AI Videos, Progress |
+| `web/` | React 19, Vite, TypeScript | The student web app (online-only) |
+| `packages/core/` | TypeScript | Logic shared by `mobile/` and `web/` — evaluation, i18n, design tokens, API client |
+| `studio/` | Node, Remotion, local TTS | The AI Video Studio: renders lesson videos from `lessons/<id>.json`. Command-line only, and its own npm project — see [`studio/README.md`](studio/README.md) |
 
 **New to the project, or coming back after a break?** Start with
 [`system-design/`](system-design/) — plain-language notes on how the pieces fit

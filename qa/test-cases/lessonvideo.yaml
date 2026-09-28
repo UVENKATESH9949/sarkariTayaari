@@ -674,7 +674,7 @@
       expected: "Refused - an authenticated asset is not publicly fetchable"
   expected_result: "Real object-storage delivery works end to end. (REQ-LESSONVIDEO-008)"
   actual_result: ""
-  status: Not Executed
+  status: Pass
   defect_id: ""
   remarks: >
     Cannot be run on the development machine - no Cloudinary credentials exist there, which is
@@ -726,3 +726,250 @@
   remarks: null
   automation_status: ManualOnly
   automation_reference: ""
+
+- id: TC-LESSONVIDEO-021
+  requirement_ids: [REQ-LESSONVIDEO-010]
+  scenario_id: SCN-LESSONVIDEO-018
+  system: Backend
+  module: LESSONVIDEO
+  feature: Accepting a video is what uploads it to the object store
+  title: An attached video is staged with no storage key, and publishing stores it
+  objective: "Confirm the object store is untouched until a human accepts the video."
+  preconditions:
+    - "An admin token and a topic to attach to"
+  test_data: "A minimal valid MP4 (ftyp marker at offset 4)"
+  test_environment: "Backend integration suite against the real dev database"
+  priority: Critical
+  severity: Critical
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "POST the MP4 to /api/admin/lesson-videos with a topicId"
+      expected: "200, status PENDING_UPLOAD, contentStatus DRAFT, hasStagedFile true, uploadAttempts 0"
+    - step: 2
+      action: "Read the lesson_videos row directly"
+      expected: "storageKey is null - nothing reached the object store"
+    - step: 3
+      action: "Read the student-facing topic availability"
+      expected: "available false"
+    - step: 4
+      action: "PUT /publish"
+      expected: "200, status READY, contentStatus PUBLISHED, uploadAttempts 1, hasStagedFile false"
+    - step: 5
+      action: "Open the row storage key through VideoStorage"
+      expected: "The file is present in the store"
+  expected_result: "Attaching stages; publishing stores then publishes. (REQ-LESSONVIDEO-010)"
+  actual_result: >
+    Automated and passing: LessonVideoTest.uploadIsStagedNotStored and
+    LessonVideoTest.publishUploadsToStorage, run against the real dev database.
+  status: Pass
+  defect_id: ""
+  remarks: >
+    Step 2 reads the entity rather than the API response on purpose - the response is produced by
+    the code under test, so trusting it would not prove the store was untouched.
+  automation_status: Automated
+  automation_reference: "LessonVideoTest.uploadIsStagedNotStored, LessonVideoTest.publishUploadsToStorage"
+
+- id: TC-LESSONVIDEO-022
+  requirement_ids: [REQ-LESSONVIDEO-011]
+  scenario_id: SCN-LESSONVIDEO-019
+  system: Backend
+  module: LESSONVIDEO
+  feature: A failed upload is recorded and can be retried without duplicating
+  title: A refused upload records the failure, keeps the file, and a retry recovers it
+  objective: "Confirm a storage failure survives as a visible, retryable state instead of being rolled back."
+  preconditions:
+    - "A video with a staged file, and an object store that can be made to fail"
+  test_data: "A minimal valid MP4; an in-memory store with a fail switch"
+  test_environment: "Backend integration suite with a Primary failing VideoStorage bean"
+  priority: Critical
+  severity: Critical
+  test_type: Negative
+  steps:
+    - step: 1
+      action: "Make the store refuse uploads, then PUT /publish"
+      expected: "400 - not 500; nothing is broken, the upload simply did not go through"
+    - step: 2
+      action: "Read the lesson_videos row"
+      expected: "status UPLOAD_FAILED, errorMessage set, uploadAttempts 1, lastUploadAttemptAt set, contentStatus still DRAFT, storageKey null"
+    - step: 3
+      action: "Check the staging table"
+      expected: "The staged file is still present - it is the only copy and it is what a retry uploads"
+    - step: 4
+      action: "Stop the store failing, then POST /retry-upload"
+      expected: "200, status READY, uploadAttempts 2, hasStagedFile false"
+    - step: 5
+      action: "List the objects the store holds for this video"
+      expected: "Exactly one key, the v1 object for this video id, despite two upload calls"
+    - step: 6
+      action: "Read contentStatus after the retry"
+      expected: "Still DRAFT - retry moves the file, it does not decide the content is good"
+  expected_result: "A failure is recorded and recoverable, and a retry leaves no duplicate. (REQ-LESSONVIDEO-011)"
+  actual_result: >
+    Automated and passing: LessonVideoUploadFailureTest.failedUploadIsRecordedAndRetryable and
+    retrySucceedsWithoutDuplicating.
+  status: Pass
+  defect_id: ""
+  remarks: >
+    This is the regression guard for the original defect: the upload used to run inside the same
+    transaction as the row write, so a storage failure marked it rollback-only and destroyed the
+    failure record along with it.
+  automation_status: Automated
+  automation_reference: "LessonVideoUploadFailureTest.failedUploadIsRecordedAndRetryable, LessonVideoUploadFailureTest.retrySucceedsWithoutDuplicating"
+
+- id: TC-LESSONVIDEO-023
+  requirement_ids: [REQ-LESSONVIDEO-011]
+  scenario_id: SCN-LESSONVIDEO-020
+  system: Backend
+  module: LESSONVIDEO
+  feature: A failed upload is recorded and can be retried without duplicating
+  title: Publishing twice, and retrying a stored video, upload nothing extra
+  objective: "Confirm a double-click or an unnecessary retry cannot produce a second object."
+  preconditions:
+    - "A published video whose file is already stored"
+  test_data: "A minimal valid MP4"
+  test_environment: "Backend integration suite"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Publish a staged video, then publish it again"
+      expected: "200 both times; uploadAttempts stays 1"
+    - step: 2
+      action: "POST /retry-upload on the already-stored video"
+      expected: "200; the upload count in the store is unchanged"
+  expected_result: "Publish and retry are idempotent. (REQ-LESSONVIDEO-011)"
+  actual_result: >
+    Automated and passing: LessonVideoTest.publishIsIdempotent and
+    LessonVideoUploadFailureTest.retryOnAStoredVideoIsANoOp.
+  status: Pass
+  defect_id: ""
+  remarks: null
+  automation_status: Automated
+  automation_reference: "LessonVideoTest.publishIsIdempotent, LessonVideoUploadFailureTest.retryOnAStoredVideoIsANoOp"
+
+- id: TC-LESSONVIDEO-024
+  requirement_ids: [REQ-LESSONVIDEO-012]
+  scenario_id: SCN-LESSONVIDEO-021
+  system: Backend
+  module: LESSONVIDEO
+  feature: AI Videos browses the existing exam syllabus
+  title: The catalog lists a topic only once its video is published
+  objective: "Confirm the browse read is driven by publication, not by upload."
+  preconditions:
+    - "A staged video for a known topic"
+  test_data: "A minimal valid MP4"
+  test_environment: "Backend integration suite"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "GET the lesson video catalog before publishing"
+      expected: "The topic id is absent from items"
+    - step: 2
+      action: "Publish the video, then GET the catalog again"
+      expected: "The topic id is present, with its subjectId and a playbackPath on this backend"
+  expected_result: "Only published topic videos appear. (REQ-LESSONVIDEO-012)"
+  actual_result: "Automated and passing: LessonVideoTest.catalogListsOnlyPublishedTopics."
+  status: Pass
+  defect_id: ""
+  remarks: "A draft appearing here would advertise an unapproved lesson on the browse screen."
+  automation_status: Automated
+  automation_reference: "LessonVideoTest.catalogListsOnlyPublishedTopics"
+
+- id: TC-LESSONVIDEO-025
+  requirement_ids: [REQ-LESSONVIDEO-012]
+  scenario_id: SCN-LESSONVIDEO-022
+  system: Mobile
+  module: LESSONVIDEO
+  feature: AI Videos browses the existing exam syllabus
+  title: AI Videos lists every subject and topic, including those with no video
+  objective: "Confirm the library shows the whole syllabus rather than only what has been produced."
+  preconditions:
+    - "Signed in, an active exam, syllabus synced, at least one published topic video"
+  test_data: "A real rendered studio lesson published against one topic"
+  test_environment: "Android emulator emulator-5554 against a real backend"
+  priority: High
+  severity: Major
+  test_type: Functional
+  steps:
+    - step: 1
+      action: "Open the AI Videos tab"
+      expected: "The real subjects of the active exam are listed, each showing a video count or a no-videos-yet note"
+    - step: 2
+      action: "Open the subject containing the published lesson"
+      expected: "Every topic of that subject is listed, not only the one with a video"
+    - step: 3
+      action: "Find the topic with the published video"
+      expected: "It shows a play icon and a Watch explanation line with the duration"
+    - step: 4
+      action: "Find any topic without one"
+      expected: "It reads No explanation video available yet, with no chevron and no tap action"
+    - step: 5
+      action: "Tap the topic that has a video"
+      expected: "The player opens, the header reads the topic name, and the real lesson plays"
+    - step: 6
+      action: "Publish a second video from the admin console, then pull to refresh the subject"
+      expected: "The newly published topic gains a watch action with no app rebuild"
+  expected_result: "The whole syllabus is browsable and new videos appear without a release. (REQ-LESSONVIDEO-012)"
+  actual_result: >
+    Steps 1-4 and 6 confirmed on emulator-5554 against a real backend and the real Neon database -
+    see qa/execution/2026-09-28-ai-videos-device.yaml (EXEC-LESSONVIDEO-0009). Real subjects for
+    the real active exam, all 28 topics listed, every videoless topic reading "No explanation video
+    available yet", and a real 9.6MB studio lesson published mid-session making Percentage read
+    "Watch explanation" after a pull-to-refresh with NO app rebuild. Step 5 (playback itself) was
+    NOT observed: the emulator wedged under host memory pressure immediately after the tap.
+  status: Blocked
+  defect_id: ""
+  remarks: >
+    Blocked rather than Pass, deliberately: five of six steps ran and the sixth was prevented by
+    the environment, not by the app. The player screen itself is already device-verified from
+    2026-09-27; what remains unproven is the single hop into it from the AI Videos topic list.
+  automation_status: ManualOnly
+  automation_hint: "Mobile has no automated test runner in this project."
+
+- id: TC-LESSONVIDEO-026
+  requirement_ids: [REQ-LESSONVIDEO-012]
+  scenario_id: SCN-LESSONVIDEO-023
+  system: Mobile
+  module: LESSONVIDEO
+  feature: AI Videos takes the tab slot without removing the exam screens
+  title: Practice, Mock Test, onboarding and the exam screens all still work
+  objective: "Confirm swapping the tab slot broke nothing that used the Exams tab."
+  preconditions:
+    - "Signed in with an active exam"
+  test_data: "An account with practice history"
+  test_environment: "Android emulator emulator-5554"
+  priority: Critical
+  severity: Critical
+  test_type: Regression
+  steps:
+    - step: 1
+      action: "Check the tab bar"
+      expected: "Home, Practice, Mock Test, AI Videos, More - Exams no longer listed"
+    - step: 2
+      action: "Run a practice session end to end"
+      expected: "Browse, quiz and summary all behave as before"
+    - step: 3
+      action: "Start and submit a mock test"
+      expected: "Unchanged"
+    - step: 4
+      action: "Tap Exams on Home"
+      expected: "The exam discovery screen opens and works, including follow and unfollow"
+    - step: 5
+      action: "Switch the active exam, then reopen AI Videos"
+      expected: "The subject list follows the newly active exam"
+    - step: 6
+      action: "Open the exam calendar, comparison and eligibility screens"
+      expected: "All still reachable and working"
+  expected_result: "Nothing that depended on the Exams tab regressed. (REQ-LESSONVIDEO-012)"
+  actual_result: null
+  status: Not Executed
+  defect_id: ""
+  remarks: >
+    The exams route is kept registered with a null href rather than deleted, so every existing
+    link into it still resolves; this case is what confirms that in practice.
+  automation_status: ManualOnly
+  automation_hint: "Mobile has no automated test runner in this project."

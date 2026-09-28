@@ -11,6 +11,7 @@ const TAB_HREFS: Record<string, TabHref> = {
   index: "/",
   practice: "/practice",
   "mock-test": "/mock-test",
+  "ai-videos": "/ai-videos",
   exams: "/exams",
   progress: "/progress",
   more: "/more",
@@ -119,11 +120,30 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="ai-videos"
+        options={{
+          title: "AI Videos",
+          tabBarLabel: "AI Videos",
+          headerShown: false,
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? "videocam" : "videocam-outline"} size={size} color={color} />
+          ),
+        }}
+      />
+      {/*
+        Exams takes the same treatment Progress already has, and for the same reason: AI Videos
+        takes the fourth tab slot, but the exam screens are not going anywhere. `href: null` keeps
+        the route real - Home's exam card, More, the daily plan and the AI Videos empty state all
+        still push to it - it only stops appearing in the tab bar. Deleting it would break every
+        one of those, plus the calendar, comparison and eligibility screens that live under it.
+      */}
+      <Tabs.Screen
         name="exams"
         options={{
           title: t("nav.exams"),
           tabBarLabel: t("nav.exams"),
           headerShown: false,
+          href: null,
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? "school" : "school-outline"} size={size} color={color} />
           ),
